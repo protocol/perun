@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 27,993 (control) + 28,017 (treatment) = 56,010. The expected split is 28,005 per arm. The difference is only 12 users, which is well within chance variation for this sample size. No SRM.
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate," and the randomization unit is "user id." The reported rates align with orders divided by users: Control 2,239 / 27,993 ≈ 8.0%? Wait, the readout says 5.82%. Let's re-calculate: 2,239 / 38,471 (sessions) ≈ 5.82%. Treatment: 2,355 / 33,034 ≈ 7.13%. The reported conversion rates are calculated using **sessions** as the denominator, but users were randomized by **user id**. This violates the unit of randomization, introducing bias if session counts differ between arms (which they do: 38k vs 33k). This is a DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: 1,435 / 10,936 ≈ 13.12%
+Desktop Treatment Rate: 1,509 / 10,946 ≈ 13.79% (Lift present)
+Mobile Control Rate: 804 / 17,057 ≈ 4.71%
+Mobile Treatment Rate: 846 / 17,071 ≈ 4.95% (Lift present)
+Both segments show a positive lift, consistent with the pooled direction. No Simpson's paradox.
+
+I check for Power (POWER). The baseline used in the report (5.82%) differs from the design baseline (8.0%), but the sample sizes (~28k each) are generally sufficient to detect a 10% lift on these proportions. The primary issue is the metric definition, not the raw count size preventing detection.
+
+I check for Peeking (PEEK). The test ran from May 15 to June 12. This is 28 days exactly (May has 31 days: 31-15+1 = 17 days in May + 12 days in June = 29 days? Or simply May 15 to June 12 is roughly 4 weeks). The planned duration was 28 days. The end date matches the plan. No obvious peeking based on dates alone.
+
+I check for Novelty (NOVELTY). The daily lift starts at 48.7% and trends downward to single digits (2.8%, 7.9%) by the end. The team projects the current reported average (22.5%) for twelve months. Since the effect is clearly fading over the 28 days, projecting the average lift ignores the decay, constituting a Novelty error.
+
+The critical errors are DENOM (wrong denominator) and NOVELTY (ignoring fading lift).
+
+ERRORS: DENOM, NOVELTY
+DECISION: HOLD

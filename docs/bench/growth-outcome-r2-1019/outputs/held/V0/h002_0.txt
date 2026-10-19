@@ -1,0 +1,15 @@
+The readout contains two critical errors. First, PEEK: the test ran for 28 days (July 3–31) but was read on July 31, the final day, yet the daily lift shows fluctuation and the recommendation relies on a single peek at the end without confirming a pre-committed stopping rule was followed strictly; however, the dates match the planned duration, so PEEK is not definitively proven by dates alone. Wait, re-reading: planned 28 days, started July 3, ended July 31 is exactly 28 days inclusive? July 3 to July 31 is 29 days. If planned was 28, reading on day 29 or stopping early/late invalidates the fixed horizon. Actually, July 3 to July 31 is 28 days if counting full days? No, 31-3 = 28 days duration, but inclusive counting often trips this. Let's look closer at the data.
+
+Actually, the primary error is DENOM. Users were randomized by **user id**, but the arms and metrics are reported in **sessions** (133,874 sessions vs 135,261 sessions). If a user generates multiple sessions, the denominator for the conversion rate (orders/sessions) does not match the unit of randomization (users), violating independence assumptions and inflating false positives.
+
+Secondly, SIMPSON: Let's check the segments.
+Desktop Control: 5023/40206 ≈ 12.49%. Desktop Treatment: 5244/40279 ≈ 13.02%. (Lift positive)
+Mobile Control: 2359/52067 ≈ 4.53%. Mobile Treatment: 2462/52160 ≈ 4.72%. (Lift positive)
+The direction is consistent; no Simpson's paradox.
+
+Is there SRM? Total sessions: 269,135. Expected 50/50 is 134,567. Observed: 133,874 vs 135,261. Difference is ~1,400. Chi-square test: (133874-134567.5)^2/134567.5 + ... ≈ small. Likely not SRM based on sessions, but since randomization is by user, we can't verify SRM without user counts.
+
+The fatal flaw is DENOM: analyzing sessions when users were randomized.
+
+ERRORS: DENOM
+DECISION: HOLD

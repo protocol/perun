@@ -1,0 +1,33 @@
+**SRM Check**: Total users = 29,190 (Control) + 28,036 (Treatment) = 57,226. Expected per arm = 28,613.
+Difference = 29,190 - 28,613 = 577.
+Standard Error (SE) for 50/50 split ≈ $\sqrt{N \times 0.5 \times 0.5} = \sqrt{57226 \times 0.25} \approx 119.6$.
+Z-score = $577 / 119.6 \approx 4.8$. A Z-score > 2 indicates a significant Sample Ratio Mismatch. The arms are not balanced as planned.
+
+**PEEK Check**: Planned duration was 21 days. The readout date (Feb 4) is only 11 days after the start (Jan 24). The test was stopped early, inflating false positive risk.
+
+**SIMPSON Check**:
+Control Rate Desktop: $1,653 / 13,047 \approx 12.67\%$.
+Treatment Rate Desktop: $1,676 / 12,532 \approx 13.37\%$. (Lift ~5.5%)
+Control Rate Mobile: $682 / 16,143 \approx 4.22\%$.
+Treatment Rate Mobile: $691 / 15,504 \approx 4.46\%$. (Lift ~5.7%)
+Both segments show ~5.5% lift. The reported aggregate lift is 25.5%. Since the segment lifts are consistent and positive, but much lower than the aggregate, this suggests a denominator issue rather than a reversal of direction (classic Simpson's). However, the massive discrepancy between segment-level performance (~5.5%) and the reported aggregate (25.5%) strongly implies the reported rates are calculated incorrectly relative to the user counts provided, or the "orders" vs "users" alignment is off. Let's re-calculate the reported rates based on the raw numbers provided:
+Actual Control Rate (Orders/Users): $2,335 / 29,190 \approx 8.00\%$.
+Actual Treatment Rate (Orders/Users): $2,367 / 28,036 \approx 8.44\%$.
+Actual Relative Lift: $(8.44 - 8.00) / 8.00 \approx 5.5\%$.
+The readout claims 6.24% vs 7.831% (25.5% lift). The math in the readout does not match the raw counts provided for Orders/Users.
+If we check Orders/Sessions:
+Control: $2,335 / 37,420 \approx 6.24\%$.
+Treatment: $2,367 / 30,227 \approx 7.83\%$.
+The readout calculated conversion rate using **Sessions** as the denominator. However, users were randomized by **User ID**. Using sessions (which can vary per user and be influenced by the treatment) as the denominator violates the unit of randomization. This is a DENOM error.
+
+**NOVELTY Check**: The daily lift fluctuates (27.9 down to 19.6, up to 29.0) but shows no clear fading trend over the 11 days; it remains high throughout. No evidence of fading.
+
+**POWER Check**: With ~28k users per arm and an 8% baseline, the test is likely powered for smaller effects than 10%, so it is not underpowered.
+
+**Identified Errors**:
+1.  **SRM**: Significant imbalance in user counts (Z > 4).
+2.  **PEEK**: Stopped at day 11 of a planned 21-day test.
+3.  **DENOM**: Metric denominator (sessions) differs from randomization unit (users), creating artificial inflation because the treatment likely changed session frequency.
+
+ERRORS: SRM, PEEK, DENOM
+DECISION: HOLD

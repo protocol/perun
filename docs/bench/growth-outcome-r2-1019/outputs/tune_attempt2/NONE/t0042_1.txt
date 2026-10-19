@@ -1,0 +1,25 @@
+**SRM Check**: The planned split is 50/50. Total users = 15,990 + 15,960 = 31,950. Expected per arm = 15,975.
+Control deviation: $|15,990 - 15,975| = 15$.
+Treatment deviation: $|15,960 - 15,975| = 15$.
+Standard Error for difference in proportions $\approx \sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{7987} \approx 89$.
+The deviation (15) is well within 2 standard errors (~178). No SRM.
+
+**PEEK Check**: Planned duration was 14 days. The readout date is 2026-09-08, and the start was 2026-09-02. This is only 6 days of data. The test was stopped early before the planned duration. This inflates false positives. **Flag PEEK**.
+
+**POWER Check**: The smaller arm has ~16k users. With a baseline of 3% and target lift of 10% (to 3.3%), standard power calculations suggest ~15k-20k per arm is usually sufficient for 80% power at alpha 0.05. The sample size appears adequate to detect the *target* lift, even if the *observed* lift is higher. No clear underpowering relative to the design parameters.
+
+**SIMPSON Check**:
+Control Rate Desktop: $323/6117 \approx 5.28\%$. Treatment Rate Desktop: $344/6106 \approx 5.63\%$. (Lift positive)
+Control Rate Mobile: $157/9873 \approx 1.59\%$. Treatment Rate Mobile: $167/9854 \approx 1.70\%$. (Lift positive)
+Pooled rates are also positive (2.27% vs 2.99%). The direction of the effect is consistent across segments and the aggregate. No Simpson's paradox.
+
+**DENOM Check**: Randomization was by user id. The metric is "order conversion rate". The counts provided for the metric calculation (Orders / Users) align with the randomized unit.
+Control: $480/15990 \approx 3.00\%$? Wait, the readout says 2.27%.
+Let's re-calculate based on the readout's reported %: $480 / 21147$ (sessions) $\approx 2.27\%$.
+$511 / 17075$ (sessions) $\approx 2.99\%$.
+The denominator used for the metric is **Sessions**, but the randomization unit was **Users**. Since sessions are not independent and users can have multiple sessions, using sessions as the denominator violates the independence assumption of the test unless properly clustered. This is a denominator mismatch relative to the randomization unit. **Flag DENOM**.
+
+**NOVELTY Check**: Daily lifts: 36.2, 32.3, 33.1, 29.5, 28.2, 32.0. There is slight fluctuation but no clear fading trend (it goes up on day 6). The projection assumes lasting lift, but the data doesn't show significant decay yet. No clear NOVELTY error based solely on these six days.
+
+ERRORS: PEEK, DENOM
+DECISION: HOLD

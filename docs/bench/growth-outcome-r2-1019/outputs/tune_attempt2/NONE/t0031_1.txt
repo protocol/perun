@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 8,581 (control) + 8,451 (treatment) = 17,032. The expected split is 50%, so 8,516 per arm. The difference is roughly 130 users. A quick chi-square approximation: $(130^2 / 8516) \times 2 \approx 3.97$. With 1 degree of freedom, the critical value at $\alpha=0.05$ is 3.84. Since $3.97 > 3.84$, the deviation is statistically significant, indicating broken randomization or logging.
+
+Next, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device segment:
+Desktop Control: $464 / 3,736 \approx 12.42\%$.
+Desktop Treatment: $571 / 5,005 \approx 11.41\%$.
+Here, Control > Treatment (negative lift).
+
+Mobile Control: $222 / 4,845 \approx 4.58\%$.
+Mobile Treatment: $145 / 3,446 \approx 4.21\%$.
+Here, Control > Treatment (negative lift).
+
+In both segments, the treatment performs worse than the control. However, the reported pooled result claims a positive lift (8.47% vs 7.99%). This reversal occurs because the treatment arm has a much higher proportion of Desktop users (who convert at a higher base rate) compared to the control arm, skewing the aggregate. This is a classic Simpson's Paradox driven by the SRM identified above.
+
+Regarding Power (POWER): The target lift was 8%, but the observed lift is 6%. The p-value is 0.2565, which is not significant. While the test failed to find significance, the primary issue is not that the sample size was too small to detect an effect that exists, but rather that the data is corrupted (SRM) and the direction of the effect flips when segmented. The SRM and Simpson's paradox are the definitive errors shown by the numbers.
+
+There is no evidence of PEEK (the test ran the full 21 days), DENOM (users were randomized and counted as the denominator), or NOVELTY (the daily lift is stable, not fading).
+
+ERRORS: SRM, SIMPSON
+DECISION: HOLD

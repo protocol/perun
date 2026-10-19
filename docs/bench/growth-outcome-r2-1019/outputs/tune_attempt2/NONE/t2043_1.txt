@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 17,296 (control) + 17,138 (treatment) = 34,434. The expected split is 50%, so 17,217 per arm. The treatment deviation is $|17,138 - 17,217| = 79$. The standard error for the difference is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{8608} \approx 92.8$. The z-score is $79/92.8 \approx 0.85$, which is well within chance limits (typically $|z| > 2$ or $3$). No SRM.
+
+Next, I check for PEEKing. The planned duration was 14 days, but the readout date is January 25th, starting January 16th. This is exactly 9 days of data ($25 - 16 = 9$). The test was stopped early before the planned 14 days. Stopping early based on interim results inflates false positive rates. This matches the PEEK definition.
+
+Then, I check POWER. The target lift was 8% on an 8% baseline. The observed lift is 6.5% with a p-value of 0.0812. Since the p-value is greater than the alpha of 0.05, the result is not statistically significant. While the test might be underpowered to detect the *observed* smaller effect, the design power calculation was based on the *target* 8% lift. With ~17k users per arm, a standard power calculation for an 8% lift on 8% baseline usually requires roughly 15k-20k users per arm. The sample size looks adequate for the *target*, but the test failed to reach significance. However, the explicit error "POWER" in this context usually refers to the design being insufficient for the target. Given the sample sizes are close to standard requirements for those parameters, and the primary issue is the early stop, I will not flag POWER as a definitive design error based solely on these numbers without a specific power calculator, though the non-significance is noted. The early stop (PEEK) is the clearer procedural error.
+
+I check SIMPSON's paradox.
+Desktop Control Rate: $1040/8313 \approx 12.51\%$. Treatment: $1097/8237 \approx 13.32\%$. Lift is positive.
+Mobile Control Rate: $343/8983 \approx 3.82\%$. Treatment: $362/8901 \approx 4.07\%$. Lift is positive.
+Both segments show a positive lift, consistent with the pooled positive lift. No reversal occurs. No SIMPSON.
+
+I check DENOM. The metric is order conversion rate. The denominator used in the readout calculation appears to be users (e.g., $1383/17296 \approx 7.996\%$). Since users were the randomized unit, the denominator matches the randomization unit. No DENOM error.
+
+I check NOVELTY. The daily lift drops consistently from 13.6% on day 1 to 1.0% on day 9. This indicates a strong decay effect. However, the team's projection applies the *current* reported lift (6.5%) to the next twelve months. They are not explicitly projecting the *fading* trend forward as lasting; they are taking the aggregate average which is already diluted by the fade, or perhaps ignoring the fade. The definition says "lift is fading... but is projected as lasting." The team projects the *reported* lift (the average) forward. If the lift is truly a novelty effect that goes to zero, projecting the current average (6.5%) as a permanent lift is an error of ignoring the novelty decay. The sharp decline suggests the effect is transient. Projecting this average over 12 months ignores the likely convergence to zero. This fits NOVELTY.
+
+Errors identified: PEEK (stopped at day 9 vs 14 planned) and NOVELTY (sharp decay projected as constant).
+
+ERRORS: PEEK, NOVELTY
+DECISION: HOLD

@@ -1,0 +1,23 @@
+**SRM Check**: Total users = 47,718 (Control) + 47,538 (Treatment) = 95,256. Expected per arm = 47,628.
+Difference = |47,718 - 47,628| = 90.
+Standard Deviation ≈ $\sqrt{95256 \times 0.5 \times 0.5} \approx 154$.
+The difference (90) is less than 2 standard deviations (~308). The split is statistically consistent with 50/50. No SRM.
+
+**PEEK Check**: Planned duration was 28 days. The readout date is March 17, and data covers Day 1 to Day 16. The test was stopped early (16/28 days). Stopping before the planned duration based on interim significance inflates false positive rates. This is a clear PEEK error.
+
+**POWER Check**: The test detected a significant result (p=0.0081). While the sample size is slightly smaller than planned due to early stopping, it was sufficient to find significance. The error here is the premature stopping (PEEK), not an inability to detect effect (POWER) in the context of the final decision, though the power calculation was likely violated by the early stop. The primary flag is PEEK.
+
+**SIMPSON Check**:
+Desktop Conversion: Control = 1,670/19,161 ≈ 8.72%; Treatment = 1,791/19,089 ≈ 9.38%. (Lift positive)
+Mobile Conversion: Control = 716/28,557 ≈ 2.51%; Treatment = 767/28,449 ≈ 2.69%. (Lift positive)
+Both segments show positive lift, consistent with the pooled result. No Simpson's paradox.
+
+**DENOM Check**: Randomization was by user ID. The metric is "order conversion rate." Typically, this is Orders/Users or Orders/Sessions. If defined as Orders/Users, the denominator matches the randomization unit. If defined as Orders/Sessions, it is a ratio metric where the denominator (sessions) is post-randomization, which can introduce bias, but "conversion rate" usually implies the event rate per user in this context. Without explicit definition stating the denominator is sessions while randomization is users, we assume standard definition (Orders/Users). However, even if it were sessions, the primary glaring error is the early stop. Let's look closer: Control sessions/user ≈ 1.33, Treatment ≈ 1.35. Slight difference, but DENOM usually refers to using a non-randomized unit as the primary denominator for the *rate* itself in a way that breaks causality. Given the explicit PEEK, that is the definitive error.
+
+**NOVELTY Check**: Daily lift values: 6.9, 9.3, 7.6, 6.6, 7.8, 6.7, 7.9, 7.8, 6.7, 9.0, 7.9, 8.8, 7.4, 7.2, 6.5, 7.5.
+There is no clear fading trend (e.g., high start, low end). The values fluctuate without a monotonic decrease. The projection assumes lasting lift, but the data does not show fading, so NOVELTY is not evidenced by the numbers provided.
+
+The critical error is **PEEK** because the test was analyzed and recommended for rollout at day 16 of a planned 28-day experiment, invalidating the p-value.
+
+ERRORS: PEEK
+DECISION: HOLD

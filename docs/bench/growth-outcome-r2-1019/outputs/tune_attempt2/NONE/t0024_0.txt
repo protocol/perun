@@ -1,0 +1,20 @@
+Several critical errors are evident in the readout based on the provided numbers.
+
+First, there is a clear **SRM** (Sample Ratio Mismatch). The experiment randomized users 50/50. The total user count is $35,005 + 34,827 = 69,832$. The expected count per arm is $34,916$. The control arm has 35,005 users, while treatment has 34,827. The difference is 178 users. While this looks small, we must check the session counts which often reveal logging issues. Control sessions: 50,553. Treatment sessions: 40,957. Total sessions: 91,510. Expected per arm: 45,755. The treatment arm is missing roughly 4,800 sessions ($~10.5\%$). A chi-square check on sessions: $(50553-45755)^2/45755 + (40957-45755)^2/45755 \approx 502 + 502 = 1004$. With 1 degree of freedom, this is astronomically significant ($p \ll 0.05$), indicating broken logging or assignment in the treatment arm.
+
+Second, there is a **DENOM** error. The metric is "order conversion rate," and users were randomized by user ID. Therefore, the denominator must be users. The reported rates do not match user-based calculations.
+Control: $2,801 \text{ orders} / 35,005 \text{ users} \approx 8.00\%$.
+Treatment: $2,973 \text{ orders} / 34,827 \text{ users} \approx 8.54\%$.
+The reported rates are 5.541% and 7.259%. Let's check sessions as the denominator.
+Control: $2,801 / 50,553 \approx 5.541\%$.
+Treatment: $2,973 / 40,957 \approx 7.259\%$.
+The team calculated conversion per *session*, but randomized by *user*. Since sessions are not independent (one user generates multiple sessions), this violates the unit of randomization, invalidating the p-value.
+
+Third, **PEEK** is indicated. The p-value is reported as "0.0". In real experiments, p-values are never exactly zero; this notation usually implies $p < 0.001$ or similar, often resulting from checking results repeatedly until significance is found or stopping early due to large observed effects. Combined with the massive session drop in treatment, this suggests unstable monitoring.
+
+Regarding **NOVELTY**, the daily lift fluctuates (26.4% to 34.1%) but shows no clear fading trend over the 14 days; it remains high throughout. Thus, novelty decay is not explicitly shown in the numbers. **SIMPSON**'s paradox is not present; calculating desktop lift: $(2152/15134) - (2027/15211) \approx 14.2\% - 13.3\% > 0$. Mobile lift: $(821/19693) - (774/19794) \approx 4.17\% - 3.91\% > 0$. Both segments show positive lift, consistent with the pooled (albeit wrongly calculated) direction. **POWER** is not an issue as the sample size is large.
+
+The primary showstoppers are the session count mismatch (SRM) and the wrong denominator (DENOM).
+
+ERRORS: SRM, DENOM, PEEK
+DECISION: HOLD

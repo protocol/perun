@@ -1,0 +1,41 @@
+The arm sizes (185,874 vs 186,180) are nearly identical, ruling out SRM. The test ran exactly 28 days as planned, so PEEK does not apply. The sample sizes are large enough to detect a 5% lift on a 6% baseline, eliminating POWER concerns. The metric (orders/users) matches the randomization unit (user id), so DENOM is correct. Daily lift fluctuates but shows no clear fading trend, so NOVELTY is not indicated.
+
+However, calculating segment conversion rates reveals Simpson's Paradox. Desktop: Control ~10.27%, Treatment ~10.91% (Lift +6.1%). Mobile: Control ~3.48%, Treatment ~3.70% (Lift +6.3%). Since both segments show positive lift consistent with the aggregate, SIMPSON is actually NOT present here either. Wait, let me re-calculate carefully.
+Desktop Control: 7084/68977 = 10.27%. Desktop Treat: 7540/69090 = 10.91%.
+Mobile Control: 4069/116897 = 3.48%. Mobile Treat: 4331/117090 = 3.70%.
+Aggregate Control: 11153/185874 = 6.00%. Aggregate Treat: 11871/186180 = 6.37%.
+All segments and aggregate show positive lift. No paradox.
+Is there any other error? The p-value is reported as "0.0", which is technically impossible (should be <0.001 or similar), but this is a formatting issue, not one of the listed categories.
+Wait, check the dates. Start 2026-10-22, End 2026-11-19. That is 28 days inclusive? Oct has 31 days. 22,23,24,25,26,27,28,29,30,31 (10 days). Nov 1-19 (19 days). Total 29 days. The readout says "planned duration 28 days" and "final readout 2026-11-19". If they stopped early or late? 29 days vs 28 planned. This might be PEEK if they stopped *early*, but they ran *longer*. Or maybe the count is exactly 28 days depending on timezones. This is ambiguous.
+Let's re-read the daily lift. Day 1 to Day 28 are listed. There are 28 data points. So the duration matches.
+What about the p-value "0.0"? This implies a calculation error or rounding error, but isn't a specific category code.
+Let's re-evaluate SIMPSON. Is it possible the weights are different?
+Desktop % of Control: 68977/185874 = 37.1%. Desktop % of Treat: 69090/186180 = 37.1%. Weights are identical. No Simpson's paradox possible with identical weights and same direction of effect.
+Is there a DENOM issue? "Metric: order conversion rate". Denominator: Users. Randomization: Users. Correct.
+POWER: n=186k, base=6%, lift=5%. Required n per arm approx 100k for 80% power. We have 186k. Well powered.
+SRM: 185874 vs 186180. Total 372054. Expected 186027. Diff is tiny. Chi-square would be very low. No SRM.
+NOVELTY: Lifts: 7.1 ... 4.8 ... 7.0. No clear fade.
+PEEK: Ran 28 days, planned 28 days. No peeking.
+
+Wait, did I miss something? "p = 0.0". This is often a sign of a bug, but not a category.
+Let's look at the segment numbers again.
+Control Desktop: 68,977 users. Control Mobile: 116,897 users. Sum = 185,874. Matches.
+Treat Desktop: 69,090 users. Treat Mobile: 117,090 users. Sum = 186,180. Matches.
+Everything seems consistent.
+Perhaps the "p=0.0" is the only anomaly, but it doesn't fit the codes.
+Wait, look at the daily lift again. Is there a trend? 7.1, 6.2, 6.4, 6.3, 6.9, 5.9, 5.6, 6.2, 6.3, 6.0, 5.4, 5.9, 6.1, 6.4, 5.7, 6.0, 7.1, 6.7, 6.2, 6.3, 6.0, 4.8, 6.3, 6.0, 7.8, 7.0, 7.1, 7.0.
+It goes down to 4.8 on day 22, then back up. Not a monotonic fade.
+Is it possible the user counts in segments don't add up? 68977+116897 = 185874. Correct.
+Maybe the error is NONE?
+Let's double check POWER calculation roughly.
+Base 0.06. Lift 5% -> 0.063.
+Effect size = 0.003.
+Pooled p = 0.0615.
+Z = (0.003) / sqrt( 2 * 0.0615 * (1-0.0615) / 186000 ) = 0.003 / sqrt( 0.115 / 186000 ) = 0.003 / sqrt(6.18e-7) = 0.003 / 0.00078 = 3.8.
+Power is definitely fine.
+SRM: (186180-185874)^2 / 372054 = 306^2 / 372054 = 93636 / 372054 = 0.25. Chi-sq(1) critical is 3.84. 0.25 < 3.84. No SRM.
+
+Conclusion: No errors from the list are present. The p=0.0 is sloppy reporting but not a structural flaw defined by the codes.
+
+ERRORS: NONE
+DECISION: SHIP

@@ -1,0 +1,27 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 108,818 (control) + 107,098 (treatment) = 215,916. The expected split is 50%, so 107,958 per arm. The difference is roughly 860 users. A quick approximation of the standard error for a 50/50 split with N≈216k is $\sqrt{N}/2 \approx 232$. The deviation is about 3.7 standard errors ($860/232$), which is statistically significant (p < 0.001). This indicates broken randomization or logging. **SRM is flagged.**
+
+Next, I check for Simpson's Paradox (SIMPSON).
+Control Conversion Rates:
+- Desktop: $3,020 / 47,571 \approx 6.35\%$
+- Mobile: $1,333 / 61,247 \approx 2.18\%$
+- Overall: $4,353 / 108,818 \approx 4.00\%$
+
+Treatment Conversion Rates:
+- Desktop: $3,215 / 52,258 \approx 6.15\%$
+- Mobile: $1,157 / 54,840 \approx 2.11\%$
+- Overall: $4,372 / 107,098 \approx 4.08\%$
+
+In both segments (Desktop and Mobile), the treatment rate is lower than the control rate ($6.15 < 6.35$ and $2.11 < 2.18$). However, the reported overall result claims the treatment is higher ($4.08 > 4.00$). The aggregate result reverses the direction of the segments due to the imbalance in user distribution across devices (treatment has more high-converting desktop users). **SIMPSON is flagged.**
+
+Regarding PEEK: The test ran from March 8 to April 7, which is 30 days. The planned duration was 28 days. Since the test ran longer than planned, not shorter, there is no evidence of early stopping inflating false positives based on the dates provided.
+
+Regarding POWER: With ~107k users per arm and a 4% baseline, the test is well-powered to detect a 5% lift. The lack of significance (p=0.33) is likely due to the true effect being zero or negative, not sample size.
+
+Regarding DENOM: The metric is order conversion rate. Users were randomized. The denominator appears to be users (orders/users), which matches the randomization unit.
+
+Regarding NOVELTY: The daily lift data fluctuates between 1.6% and 2.4% without a clear fading trend over the 30 days.
+
+Because SRM indicates data integrity issues and Simpson's Paradox shows the aggregate result is misleading (the treatment actually performs worse in every segment), the recommendation to roll out is unsafe.
+
+ERRORS: SRM, SIMPSON
+DECISION: HOLD

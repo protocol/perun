@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 160,301 (control) + 156,935 (treatment) = 317,236. The expected split is 50%, so 158,618 per arm. The treatment arm has 1,683 fewer users than expected. The standard deviation for a binomial split is $\sqrt{317236 \times 0.5 \times 0.5} \approx 282$. The difference is $1683 / 282 \approx 6.0$ standard deviations. This is far beyond chance ($p < 0.001$), indicating broken randomization or logging. **SRM is flagged.**
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate," and users were randomized by user ID. The counts provided for the metric calculation (orders) are divided by the user counts (e.g., $4,809 / 160,301 \approx 3.0\%$). Since the denominator matches the randomization unit (users), there is no DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $3,230 / 61,168 \approx 5.28\%$.
+Desktop Treatment Rate: $3,329 / 59,884 \approx 5.56\%$. (Lift positive)
+Mobile Control Rate: $1,579 / 99,133 \approx 1.59\%$.
+Mobile Treatment Rate: $1,627 / 97,051 \approx 1.68\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No Simpson's paradox.
+
+I check for Power (POWER). The treatment arm has ~157k users. With a 3% baseline and 8% target lift, a standard power calculation suggests ~60k–80k users per arm are sufficient for 80% power. The sample size is adequate. No POWER error.
+
+I check for Peeking (PEEK). The test ran from March 12 to April 4. March has 31 days. March 12 to March 31 is 20 days. April 1 to April 4 is 4 days. Total duration is 24 days. The planned duration was 21 days. The test ran *longer* than planned, not shorter. While stopping early inflates false positives, running late does not trigger the specific "stopped before planned duration" definition of PEEK provided, though the SRM makes the p-value unreliable regardless. Based strictly on the definition "stopped... before planned duration," PEEK is not flagged.
+
+I check for Novelty (NOVELTY). The daily lift drops from 13.2% to 0.3% over 23 days. The team projects the final reported lift (5.3%) over the next twelve months. Since the lift is clearly fading to near zero by the end of the test, projecting the average lift as lasting constitutes a novelty error. **NOVELTY is flagged.**
+
+ERRORS: SRM, NOVELTY
+DECISION: HOLD

@@ -1,0 +1,20 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 51,147 (control) + 49,883 (treatment) = 101,030. The expected split is 50,515 per arm. The difference is |51,147 - 50,515| = 632. The standard error for the difference in proportions is $\sqrt{101030 \times 0.5 \times 0.5} \approx 159$. The z-score is $632 / 159 \approx 3.97$. Since 3.97 > 1.96, the split differs significantly from 50/50, indicating broken randomization or logging.
+
+Next, I check the Denominator (DENOM). The metric is "order conversion rate." The readout defines arms by "users" (the randomized unit) but lists sessions and orders. Typically, conversion rate is Orders/Sessions or Orders/Users. If the reported rates (4.0% and 4.276%) were calculated as Orders/Sessions, the denominators would be sessions, not the randomized users.
+Control: 2,046 / 76,313 ≈ 2.68%. This does not match the reported 4.0%.
+Control: 2,046 / 51,147 ≈ 4.00%. This matches.
+Since the calculated rate using users as the denominator matches the reported rate, the denominator aligns with the randomized unit. No DENOM error.
+
+I check for Simpson's Paradox (SIMPSON) by calculating lift within segments.
+Desktop Control Rate: 1,355 / 22,338 ≈ 6.07%. Desktop Treatment Rate: 1,412 / 21,786 ≈ 6.48%. Lift is positive.
+Mobile Control Rate: 691 / 28,809 ≈ 2.40%. Mobile Treatment Rate: 721 / 28,097 ≈ 2.57%. Lift is positive.
+Both segments show positive lift, consistent with the pooled result. No SIMPSON error.
+
+I check for Novelty (NOVELTY). The daily lift starts at 12.9% and trends downward to ~3.6% by day 22. The team projects the current aggregate lift (6.9%) for twelve months. Given the clear fading trend (halving over 3 weeks), projecting the average as a permanent steady-state lift ignores the decay, constituting a novelty effect error.
+
+Regarding Power (POWER) and Peeking (PEEK): The test ran for 22 days against a planned 21. While stopping early is a risk, the readout says "final readout" after the planned duration ended (May 16 + 21 days = June 6; readout June 7). It does not explicitly state they peeked and stopped early; they simply reported after the period. The sample size appears sufficient given the significant p-value, so underpowered status is not evident from the numbers alone.
+
+The critical errors are SRM (invalidating the experiment structure) and NOVELTY (invalidating the projection).
+
+ERRORS: SRM, NOVELTY
+DECISION: HOLD

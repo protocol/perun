@@ -1,0 +1,34 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 173,206 (control) + 172,606 (treatment) = 345,812. The expected split is 50%, so 172,906 per arm. The difference is roughly 300 users. A chi-square check: $(300^2 / 172906) \times 2 \approx 1.04$. With 1 degree of freedom, this is well within chance (p > 0.05). No SRM.
+
+Next, I check for PEEK. The planned duration was 21 days. The readout date is May 26, and the start was May 11. This is exactly 15 days of data. The test was stopped 6 days early. Stopping before the planned duration based on interim results inflates false positives. This is a clear PEEK error.
+
+Then, I check for SIMPSON. I calculate the conversion rates per segment:
+Desktop Control: $4,676 / 74,479 \approx 6.28\%$.
+Desktop Treatment: $5,061 / 83,050 \approx 6.09\%$. (Treatment is lower).
+Mobile Control: $2,252 / 98,727 \approx 2.28\%$.
+Mobile Treatment: $1,983 / 89,556 \approx 2.21\%$. (Treatment is lower).
+In both segments, the treatment performs worse than control. However, the pooled data shows Treatment ($7,044 / 172,606 \approx 4.08\%$ if using orders/users? Wait, the metric is order conversion rate. Let's re-read the reported rates).
+The readout reports: Control 2.732%, Treatment 2.977%.
+Let's re-calculate based on the provided raw numbers to see how they got those rates.
+Control Orders / Control Sessions: $6,928 / 253,633 \approx 2.73\%$.
+Treatment Orders / Treatment Sessions: $7,044 / 236,643 \approx 2.98\%$.
+Ah, the denominator is Sessions, not Users. The randomization unit is User ID. This is a DENOM error (denominator mismatch).
+But let's look at Simpson's paradox with the correct denominators if possible, or just the direction.
+Desktop Control Rate (Orders/Sessions?): We don't have session counts per device. We only have users and orders per device.
+However, we can check the direction of lift in segments using Orders/Users as a proxy, assuming sessions/user is similar, or just look at the counts.
+Desktop: Control $4676/74479 = 6.28\%$, Treat $5061/83050 = 6.09\%$. Lift is negative.
+Mobile: Control $2252/98727 = 2.28\%$, Treat $1983/89556 = 2.21\%$. Lift is negative.
+Pooled (Orders/Users): Control $6928/173206 = 4.00\%$, Treat $7044/172606 = 4.08\%$. Lift is positive.
+Wait, the reported metric uses sessions.
+If we assume the session distribution mirrors the user distribution roughly, the segment analysis using users shows negative lift in both segments, while the aggregate (whether by user or session) shows positive lift.
+Control Users: 173k, Treat Users: 172k.
+Desktop % of users: Control $43\%$, Treat $48\%$.
+Mobile % of users: Control $57\%$, Treat $52\%$.
+The treatment group has a higher proportion of Desktop users (who convert higher). This shift in composition drives the aggregate lift up, even though within each device type, the treatment is worse. This is a classic Simpson's Paradox. The pooled result (positive) is reversed within segments (negative).
+
+So we have PEEK (stopped early) and SIMPSON (reversed segments). Also DENOM because the metric denominator (sessions) differs from the randomization unit (users), which caused the paradox vulnerability, but SIMPSON is the specific manifestation here. The prompt asks to flag if numbers show the error. The reversal is evident.
+
+NOVELTY: The daily lift fluctuates (10.2 down to 8.5) but doesn't show a clear fading trend to zero; it stays high. Hard to flag definitively without more stats, but the other two are solid.
+
+ERRORS: PEEK, SIMPSON, DENOM
+DECISION: HOLD

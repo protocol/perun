@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 128,033 (control) + 128,379 (treatment) = 256,412. The expected split is 50%, so 128,206 per arm. The difference is only 173 users, which is well within random chance for this sample size. No SRM.
+
+Next, I verify the denominator. The metric is "order conversion rate," and users were randomized by user ID. The counts used are orders divided by users (e.g., 3,841 / 128,033 ≈ 3.00%, wait, the report says 2.347%). Let's re-calculate: 3,841 / 128,033 = 0.0300 (3.00%). The reported control rate is 2.347%. If we use sessions as the denominator: 3,841 / 163,623 = 0.02347 (2.347%). The treatment rate: 4,057 / 147,190 = 0.02756 (2.756%). The calculation uses sessions as the denominator, but users were the unit of randomization. Since a user can have multiple sessions, and the session counts differ significantly between arms (163k vs 147k) despite equal user counts, the denominator is mismatched to the randomization unit. This is a DENOM error.
+
+Now checking Simpson's Paradox (SIMPSON).
+Desktop Control Rate: 2,663 / 53,214 ≈ 5.00%
+Desktop Treatment Rate: 2,813 / 53,358 ≈ 5.27% (Lift present)
+Mobile Control Rate: 1,178 / 74,819 ≈ 1.57%
+Mobile Treatment Rate: 1,244 / 75,021 ≈ 1.66% (Lift present)
+Both segments show a positive lift, consistent with the pooled direction. No Simpson's paradox.
+
+Checking Power (POWER). The baseline used in the calculation (session-based) is ~2.35%, not the design baseline of 3.0%. However, the sample size (128k per arm) is massive. Even with a lower baseline, detecting a 17% lift is trivial with this N. The study is not underpowered.
+
+Checking Novelty (NOVELTY). The daily lift fluctuates (13.1% to 20.6%) but shows no clear fading trend over the 21 days; the final days are still high (16.4%, 18.6%, 17.7%). No obvious novelty decay.
+
+Checking Peek (PEEK). The test ran from March 5 to March 26 (21 days), matching the planned duration exactly. No early stopping evident from the dates.
+
+The critical error is DENOM: analyzing session-level conversion when users were randomized, compounded by a massive imbalance in sessions per user between arms (Control: 1.28 sessions/user vs Treatment: 1.15 sessions/user). This biases the result.
+
+ERRORS: DENOM
+DECISION: HOLD

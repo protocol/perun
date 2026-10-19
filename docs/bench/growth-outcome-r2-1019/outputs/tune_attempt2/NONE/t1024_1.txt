@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 107,572 (control) + 107,442 (treatment) = 215,014. The expected split is 50%, so 107,507 per arm. The observed difference is |107,572 - 107,442| = 130 users. For a sample this large, a deviation of 130 is well within the bounds of random chance (roughly 0.12% deviation), so SRM is not flagged.
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate." The readout provides users and orders. Calculating the rates: Control = 8,605 / 107,572 ≈ 8.00%. Treatment = 9,061 / 107,442 ≈ 8.43%. However, the reported rates are 5.418% and 6.493%. Let's check sessions as the denominator: Control = 8,605 / 158,837 ≈ 5.418%. Treatment = 9,061 / 139,553 ≈ 6.493%. The reported metric uses sessions as the denominator, but users were randomized by user ID. Since a single user can have multiple sessions, the unit of analysis (session) does not match the unit of randomization (user). This violates independence assumptions and inflates significance. DENOM is flagged.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: 6,383 / 52,693 ≈ 12.11%.
+Desktop Treatment Rate: 6,721 / 52,630 ≈ 12.77%. (Lift present)
+Mobile Control Rate: 2,222 / 54,879 ≈ 4.05%.
+Mobile Treatment Rate: 2,340 / 54,812 ≈ 4.27%. (Lift present)
+Both segments show a positive lift consistent with the pooled direction. No reversal occurs. SIMPSON is not flagged.
+
+Regarding Power (POWER): The target was a 5% lift on an 8% baseline. The observed lift is much larger (~19% relative on users, or ~20% on sessions). With over 100k users per arm, the test is massively overpowered, not underpowered.
+
+Regarding Peeking (PEEK): The test ran from May 18 to June 8. This is 21 days exactly (May has 31 days: 31-18+1 = 14 days in May + 8 days in June = 22 days? Let's count: 18,19,20,21,22,23,24,25,26,27,28,29,30,31 (14 days) + 1,2,3,4,5,6,7,8 (8 days) = 22 days). The planned duration was 21 days. The readout says "final readout 2026-06-08" and lists 21 data points for daily lift. If there are 21 data points, the test ran for the planned 21 days. There is no evidence in the numbers alone that it was stopped early before the planned date; the end date aligns with the count of days provided.
+
+Regarding Novelty (NOVELTY): The daily lift fluctuates (16.7% to 24.3%) but shows no clear fading trend; the last week values (19.7, 22.5, 21.4) are similar to the start. There is no numerical evidence of fading.
+
+The critical error is DENOM: analyzing sessions instead of users invalidates the p-value and confidence intervals because sessions from the same user are correlated.
+
+ERRORS: DENOM
+DECISION: HOLD

@@ -1,0 +1,37 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 45,473 (control) + 45,173 (treatment) = 90,646. The expected split is 45,323 per arm. The difference is only 150 users. A chi-squared check: $(150^2 / 45323) \times 2 \approx 1.0$, which is well below the critical value of 3.84 for p=0.05. No SRM.
+
+Next, I check for PEEKing. The dates show the test started Jan 16 and ended Jan 30. This is exactly 14 days, matching the planned duration. No PEEK.
+
+Next, I check POWER. The target was an 8% lift on a 6% baseline (to 6.48%). The observed rates are much lower (~4.3%), but the sample size (~45k per arm) is generally sufficient to detect large effects like the observed 12% lift. While the baseline differed from expectations, the current sample detected a significant result (p=0.0), so it is not underpowered for the observed effect. No POWER flag based strictly on the ability to detect the found difference.
+
+Next, I check SIMPSON's paradox. I must compare segment trends to the pooled trend.
+Pooled: Control (2,729/45,473 ≈ 6.00%? Wait, the readout says 4.301%. Let's re-calculate using the provided counts).
+Control Rate: 2,729 orders / 45,473 users = 5.99%.
+Treatment Rate: 2,764 orders / 45,173 users = 6.12%.
+Wait, the readout reports "conversion rate" as 4.301% and 4.841%.
+Let's check the denominator. 2,729 / 63,451 sessions = 4.30%. 2,764 / 57,090 sessions = 4.84%.
+The metric uses **sessions** as the denominator, but randomization was by **user**. This is a DENOM error.
+
+Now check SIMPSON using the user-level counts provided in the segments to see if the direction flips.
+Desktop Control: 1,925 / 18,630 = 10.33%.
+Desktop Treatment: 2,045 / 20,403 = 10.02%.
+Here, Control > Treatment (Negative lift).
+Mobile Control: 804 / 26,843 = 3.00%.
+Mobile Treatment: 719 / 24,770 = 2.90%.
+Here, Control > Treatment (Negative lift).
+Both segments show the treatment is worse than control. However, the aggregated data (using sessions as denominator) shows Treatment (4.84%) > Control (4.30%).
+Even if we aggregate by users: Total Control (2729/45473 = 6.00%) vs Total Treatment (2764/45173 = 6.12%). The user-level aggregate shows a positive lift, consistent with the segments? No.
+Let's re-calculate segment user rates carefully.
+Desktop: C=10.33%, T=10.02% (Control wins).
+Mobile: C=3.00%, T=2.90% (Control wins).
+Aggregate User Level: C=6.00%, T=6.12% (Treatment wins).
+How can Treatment be worse in both segments but better in aggregate?
+Weighting: Desktop is ~41% of Control users, ~45% of Treatment users. Mobile is ~59% of Control, ~55% of Treatment.
+Since Desktop has a much higher conversion rate, and the Treatment arm has a higher proportion of Desktop users (20,403/45,173 = 45.2%) compared to Control (18,630/45,473 = 41.0%), the Treatment arm looks better overall simply because it has more high-converting desktop users, not because the button works better. Within each device type, the button hurts conversion. This is a classic SIMPSON paradox.
+
+Finally, NOVELTY. The daily lift fluctuates (15.3 down to 10.9, up to 15.5) but does not show a clear fading trend to zero; it stays elevated. No clear NOVELTY error.
+
+The primary errors are DENOM (wrong denominator) which likely caused or exacerbated the SIMPSON (reversal of trends).
+
+ERRORS: DENOM, SIMPSON
+DECISION: HOLD

@@ -1,0 +1,26 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 160,002 (control) + 160,276 (treatment) = 320,278. The expected split is 50%, so 160,139 per arm. The treatment deviation is $160,276 - 160,139 = 137$. The standard error for the difference in proportions is $\sqrt{n \cdot p \cdot (1-p)} \approx \sqrt{320278 \cdot 0.5 \cdot 0.5} \approx 283$. The deviation (137) is less than 2 standard errors (~566), so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The reported rates are calculated as orders divided by users:
+Control: $4,800 / 160,002 \approx 0.0300$ (3.00%).
+Treatment: $5,040 / 160,276 \approx 0.0314$ (3.14%).
+However, the readout reports control as 2.304% and treatment as 3.007%.
+Let's check sessions as the denominator:
+Control: $4,800 / 208,355 \approx 0.023037$ (matches 2.304%).
+Treatment: $5,040 / 167,610 \approx 0.030069$ (matches 3.007%).
+The analysis uses sessions as the denominator, but randomization was by user. Since users have different session counts (control avg 1.30, treatment avg 1.05), this biases the result. This is a DENOM error.
+
+Now, checking Simpson's Paradox (SIMPSON). I calculate the conversion rates per device using users as the correct denominator:
+Desktop Control: $3,585 / 73,339 \approx 4.89\%$.
+Desktop Treatment: $3,764 / 73,464 \approx 5.12\%$. (Lift ~4.7%)
+Mobile Control: $1,215 / 86,663 \approx 1.40\%$.
+Mobile Treatment: $1,276 / 86,812 \approx 1.47\%$. (Lift ~5.0%)
+Both segments show a modest ~5% lift. The aggregated user-based lift calculated earlier was $(3.14\% - 3.00\%) / 3.00\% \approx 4.7\%$. The segments align with the aggregate; there is no reversal. No SIMPSON.
+
+Regarding PEEK: The test ran from June 30 to July 21, which is exactly 21 days, matching the planned duration. No PEEK.
+
+Regarding POWER: The sample size (~160k per arm) is massive compared to the baseline (3%) and target lift (8%). With these counts, the test is vastly overpowered, not underpowered. No POWER error.
+
+Regarding NOVELTY: The daily lift fluctuates (24.9% to 38.8%) but shows no clear fading trend; the last few days (24.1%, 26.6%, 28.8%, 35.0%) are not consistently lower than the start. The projection issue stems from the inflated baseline lift caused by the denominator error, not necessarily a novelty fade visible in the data provided. The primary fatal flaw is the denominator mismatch.
+
+ERRORS: DENOM
+DECISION: HOLD

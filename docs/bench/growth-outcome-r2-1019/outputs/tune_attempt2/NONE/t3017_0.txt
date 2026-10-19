@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 21,282 (control) + 21,066 (treatment) = 42,348. The expected split is 50%, so 21,174 per arm. The difference is 108 users. The standard error for the proportion is $\sqrt{0.5 \times 0.5 / 42348} \approx 0.0024$. The observed proportion is $21282/42348 \approx 0.5025$. The z-score is $(0.5025 - 0.5) / 0.0024 \approx 1.04$. This is well within the range of chance (typically $|z| > 1.96$ indicates SRM), so no SRM.
+
+Next, I check for PEEK. The planned duration was 28 days. The final readout date is 2026-03-27, and the start date is 2026-03-06. The duration is 21 days (March 6 to March 27 inclusive is 22 days, but typically "day 21" implies 21 full days of data or stopping early). The daily lift data is provided only up to day 21. Since the test was stopped at day 21 instead of the planned 28 days, this constitutes early stopping without adjustment, which inflates false positives. This is a PEEK error.
+
+Then, I check for POWER. The baseline is 8.0%, target lift 10% (so target rate 8.8%). With ~21k users per arm, we can estimate the detectable effect. Standard error of difference in proportions $\approx \sqrt{2 \times 0.08 \times 0.92 / 21000} \approx 0.0026$. To detect a 0.8% absolute lift (10% relative) with 80% power and alpha 0.05, we need a difference of roughly $2.8 \times SE \approx 0.73\%$. The target is 0.8%, which is close to the detectable limit, but the sample size is likely sufficient given the counts are large. However, since the test was stopped early (PEEK), the effective power for the *actual* duration might be lower, but the primary error defined here is the early stopping itself. The prompt asks to flag POWER if the arm is "too small to detect the target lift". Given 21k users, it's borderline but likely not the primary failure mode compared to the explicit early stop. Let's re-evaluate strictly: Did they fail to detect the target? They saw 4.9% lift, not 10%. But POWER usually refers to the design capacity. With 21k users, the MDE is roughly 0.73% absolute (9.1% relative). So it *was* powered for 10%. No POWER error based on size alone.
+
+Check SIMPSON.
+Desktop Control Rate: $1174/8412 \approx 13.96\%$.
+Desktop Treatment Rate: $1219/8326 \approx 14.64\%$. (Lift positive)
+Mobile Control Rate: $529/12870 \approx 4.11\%$.
+Mobile Treatment Rate: $549/12740 \approx 4.31\%$. (Lift positive)
+Both segments show positive lift. The aggregate shows positive lift. No reversal. No SIMPSON.
+
+Check DENOM. Randomized by user id. Metric is order conversion rate. Usually defined as Orders/Users or Orders/Sessions? The readout lists users and sessions. If the metric is Orders/Users, the denominator matches the randomization unit. If it's Orders/Sessions, it might be DENOM. The reported rates: Control $1703/21282 = 8.002\%$. Treatment $1768/21066 = 8.393\%$. The calculation uses Users as the denominator. Since users were the randomized unit, the denominator matches. No DENOM error.
+
+Check NOVELTY. Daily lift: 4.2, 4.7, ..., 4.5. The values fluctuate between 4.2% and 5.7%. There is no clear fading trend (e.g., starting high and dropping to zero). The projection applies the reported lift to 12 months. Without a fading trend in the data provided, we cannot flag NOVELTY based *only* on the numbers shown.
+
+The clear error is PEEK because the test ran for 21 days instead of the planned 28, and a decision is being made on this incomplete duration.
+
+ERRORS: PEEK
+DECISION: HOLD

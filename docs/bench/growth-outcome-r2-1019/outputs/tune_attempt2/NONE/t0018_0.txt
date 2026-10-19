@@ -1,0 +1,24 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 407,274 (control) + 406,514 (treatment) = 813,788. The expected split is 406,894 per arm. The difference is only 380 users, which is well within statistical noise for this sample size. No SRM.
+
+Next, I verify the metric denominator. The metric is "order conversion rate." The readout lists users and orders. Calculating the reported rates:
+Control: 12,218 orders / 407,274 users ≈ 3.00%.
+Treatment: 12,877 orders / 406,514 users ≈ 3.17%.
+However, the readout reports control at 2.079% and treatment at 2.794%.
+Let's check against sessions:
+Control: 12,218 / 587,775 sessions ≈ 2.079%.
+Treatment: 12,877 / 460,904 sessions ≈ 2.794%.
+The reported percentages match the session-based calculation, not the user-based calculation. Since users were randomized by user ID, the denominator must be users, not sessions. Using sessions as the denominator when treatment users have fewer sessions per user (460k/406k ≈ 1.13) than control users (587k/407k ≈ 1.44) biases the result. This is a DENOM error.
+
+I check for Simpson's Paradox by calculating segment lifts based on users:
+Desktop Control Rate: 7,476/148,340 ≈ 5.04%. Desktop Treatment Rate: 7,879/148,063 ≈ 5.32%. Lift ≈ 5.6%.
+Mobile Control Rate: 4,742/258,934 ≈ 1.83%. Mobile Treatment Rate: 4,998/258,451 ≈ 1.93%. Lift ≈ 5.5%.
+Both segments show ~5.5% lift. The pooled user-based lift is ~5.6%. There is no reversal; the massive reported lift (34.4%) is purely an artifact of the wrong denominator. No SIMPSON.
+
+Regarding PEEK: The test ran from March 11 to April 1 (21 days), matching the planned duration. No PEEK.
+Regarding POWER: The sample size is large (>400k per arm), easily powering a 5% lift detection. No POWER issue.
+Regarding NOVELTY: The daily lift fluctuates but remains high throughout the 21 days without a clear fading trend toward zero. No NOVELTY.
+
+The primary fatal flaw is DENOM. The reported 34.4% lift is illusory, created by dividing orders by sessions instead of users. The true lift is likely near the target 5%, not 34.4%. Rolling out based on inflated metrics is dangerous.
+
+ERRORS: DENOM
+DECISION: HOLD

@@ -1,0 +1,37 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 23,015 (control) + 23,119 (treatment) = 46,134. The expected split is 23,067 per arm. The difference is only 52 users, which is well within the range of random chance for this sample size. No SRM.
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate," and the counts provided are orders divided by users (e.g., 1,841 / 23,015 ≈ 7.999%). Since users were the randomized unit, the denominator matches the randomization unit. No DENOM error.
+
+I check for Simpson's Paradox (SIMPSON) by calculating segment rates:
+Desktop Control: 1,370 / 10,516 ≈ 13.03%
+Desktop Treatment: 1,451 / 10,564 ≈ 13.74% (Lift positive)
+Mobile Control: 471 / 12,499 ≈ 3.77%
+Mobile Treatment: 499 / 12,555 ≈ 3.97% (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON error.
+
+Regarding Power (POWER): The study achieved ~46k users against a plan likely similar given the 14-day execution. While the p-value (0.0886) indicates the result is not statistically significant at the 0.05 level, this is a result of the data, not necessarily an underpowered design *before* the test, unless the sample size was drastically lower than planned. However, the readout states the test ran for the planned 14 days (July 12 to July 28).
+
+This leads to the PEEK error. The readout lists "Daily relative lift... day 1 to day 16." However, the dates show the test ran from July 12 to July 28, which is exactly 17 days inclusive, or 16 full intervals. More critically, the recommendation is to "roll out" despite a p-value of 0.0886 (which is > 0.05). Declaring a result or making a rollout recommendation based on a non-significant p-value often implies the team looked at the data repeatedly or stopped early/late chasing significance, but the specific error code PEEK refers to stopping *before* planned duration. The dates match the planned duration (14 days plus start/end logic). Wait, the daily data goes to day 16, but the planned duration was 14 days. If they analyzed on day 16 when planned for 14, or if the "final readout" date implies they extended it because it wasn't significant, that is a form of peeking/extensions not pre-planned. However, the most glaring issue is the **NOVELTY** check.
+
+The daily lift data shows: 5.3, 5.7, 5.8, 6.3, 5.2, 5.5, 4.7, 5.1, 5.5, 6.0, 5.4, 5.1, 5.5, 4.2, 6.0, 6.7.
+There is no clear fading trend here; the lift fluctuates but ends high (6.7%). The projection applies this to 12 months. Without a fading trend in the numbers, NOVELTY is not strictly evidenced by the provided list, although projecting a non-significant result is risky.
+
+Re-evaluating PEEK: The planned duration was 14 days. The data provided goes to Day 16. The readout date is July 28 (17 days after July 12 inclusive). If they planned for 14 days and analyzed on day 16/17 because they didn't see significance earlier, this is a violation of the fixed horizon, inflating false positives. They effectively extended the test until they got a number they liked (even though it's still not significant), or simply analyzed outside the window. This fits the spirit of PEEK (violating the stopping rule).
+
+However, the most definitive error is that the result is **not significant** (p=0.0886 > 0.05), yet the recommendation is to "roll out." This isn't one of the specific codes unless it falls under PEEK (stopping/calling early/late incorrectly). But wait, is there a calculation error in the readout's significance?
+Control rate: 0.07999. Treatment rate: 0.08435.
+Pooled p ≈ 0.082. Z-score ≈ 1.35. P-value ≈ 0.17 for two-sided? Or maybe they used a different test. The readout says p=0.0886.
+If p > 0.05, we cannot reject the null. Rolling out is a business decision, but statistically, claiming a win is wrong.
+Let's look closer at **POWER**. Baseline 8%, target 10% lift (to 8.8%).
+To detect 8% vs 8.8% with 80% power and alpha 0.05, we need roughly:
+n ≈ 2 * (1.96 + 0.84)^2 * (0.08 * 0.92) / (0.008)^2
+n ≈ 2 * 7.84 * 0.0736 / 0.000064 ≈ 18,000 per arm.
+We have ~23,000 per arm. The test is adequately powered.
+
+Let's re-read the dates. Start 2026-07-12. Planned 14 days. End date should be 2026-07-26. Final readout is 2026-07-28. This is 2 days late. The daily data goes to Day 16. A 14 day test should have 14 days of data. Having 16 days suggests they kept running it. This is **PEEK** (violating the fixed sample size/duration by extending based on results).
+
+Also, the recommendation to roll out when p=0.0886 is statistically unsound, but strictly speaking, if we must choose from the codes:
+The extension from 14 days to 16+ days invalidates the p-value calculation (which assumes a fixed horizon). This is PEEK.
+
+ERRORS: PEEK
+DECISION: HOLD

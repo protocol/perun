@@ -1,0 +1,28 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 59,288 (control) + 59,368 (treatment) = 118,656. The expected split is 59,328 per arm. The treatment has 40 extra users. This difference is negligible and well within random chance for this sample size, so SRM is not flagged.
+
+Next, I check for PEEKing. The planned duration was 14 days, but the readout date (April 24) is only 8 days after the start (April 16). The test was stopped early. While the p-value (0.1177) is not significant, stopping early based on interim looks generally invalidates the statistical guarantees unless specific sequential testing methods were used, which are not mentioned. However, the prompt asks to flag if numbers *show* the error. The dates clearly show early termination (8 days vs 14 planned). This is a procedural violation that inflates false positive risk if they had stopped on a significant number, but here the result is non-significant. Still, the act of stopping early is evident from the dates. Let's look closer at the definition: "stopped or called before its planned duration". The dates confirm this.
+
+Now, checking for SIMPSON's paradox. I calculate the conversion rates per device:
+Desktop Control: 1,443 / 22,432 ≈ 6.43%
+Desktop Treatment: 1,768 / 29,234 ≈ 6.05%
+(Lift is negative: ~ -5.9%)
+
+Mobile Control: 928 / 36,856 ≈ 2.52%
+Mobile Treatment: 713 / 30,134 ≈ 2.37%
+(Lift is negative: ~ -5.9%)
+
+Both segments show a negative lift (treatment worse than control). However, the pooled reported result shows a positive lift (4.179% vs 3.999%).
+Pooled Control Rate: 2,371 / 59,288 ≈ 4.00%
+Pooled Treatment Rate: 2,481 / 59,368 ≈ 4.18%
+Since the direction of the effect reverses when aggregating (positive overall, negative in every segment), this is a clear case of Simpson's Paradox. This usually happens when the treatment group has a disproportionate number of users in the higher-converting segment (Desktop: 29k vs 22k) compared to the control.
+
+Regarding POWER: The p-value is 0.1177, meaning it's not statistically significant. The test was underpowered to detect the lift *if* the true lift was small, but the primary issue here is the paradoxical data aggregation. The sample size seems adequate for the target lift given the baseline, but the paradox makes the aggregate number meaningless.
+
+Regarding DENOM: The metric is order conversion rate. Randomization is by user ID. The counts use users as the denominator (implied by "users" listed and standard CR calculation). 2371/59288 matches the reported 3.999%. No error here.
+
+Regarding NOVELTY: The daily lift fluctuates (4.9 down to 3.6 up to 5.3) but does not show a clear fading trend; it remains relatively stable around 4-5%.
+
+The critical errors are PEEK (early stop) and SIMPSON (reversed segments). The Simpson's paradox is the most damaging, as the aggregate lift is an artifact of uneven segment distribution, not a real improvement.
+
+ERRORS: PEEK, SIMPSON
+DECISION: HOLD

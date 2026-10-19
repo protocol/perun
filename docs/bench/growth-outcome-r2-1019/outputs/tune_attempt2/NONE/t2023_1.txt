@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 90,837 (control) + 90,535 (treatment) = 181,372. The expected split is 50%, so 90,686 per arm. The difference is |90,837 - 90,686| = 151. For this sample size, the standard deviation is $\sqrt{181372 \times 0.5 \times 0.5} \approx 213$. A deviation of 151 is less than 2 standard deviations ($151 < 426$), so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The reported rates are calculated as orders divided by users (e.g., Control: $7,267 / 90,837 \approx 8.0\%$? Wait, the readout says 6.195%. Let's re-calculate: $7,267 / 117,304$ (sessions) $\approx 6.195\%$. The treatment is $7,724 / 106,422$ (sessions) $\approx 7.258\%$. The denominator used is **sessions**, but the randomization unit is **users**. Since users can have multiple sessions, and the session counts differ significantly between arms (117k vs 106k) despite equal user counts, the treatment group has fewer sessions per user. Using sessions as the denominator violates the independence assumption relative to the randomization unit. This is a DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $5,204 / 44,968 \approx 11.57\%$.
+Desktop Treatment Rate: $5,531 / 44,818 \approx 12.34\%$. (Lift positive)
+Mobile Control Rate: $2,063 / 45,869 \approx 4.50\%$.
+Mobile Treatment Rate: $2,193 / 45,717 \approx 4.80\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No Simpson's paradox.
+
+I check Power (POWER). The baseline is stated as 8.0%, but the actual control rate is ~8.0% if using users ($7267/90837$), or ~6.2% if using sessions. The target lift is 5%. The observed lift is 17.2%. With ~90k users per arm, the test is vastly overpowered to detect a 5% lift, not underpowered.
+
+I check Peeking (PEEK). The test ran from March 19 to April 17. March has 31 days. March 19 to 31 is 13 days. April 1 to 17 is 17 days. Total = 30 days. The planned duration was 28 days. The readout includes day 29 data. Stopping one day late or including an extra day does not constitute the harmful "peeking" that inflates false positives (which implies stopping *early* upon seeing significance). The duration is effectively met.
+
+I check Novelty (NOVELTY). The daily lift fluctuates (13.4% to 21.0%) but shows no clear fading trend; it remains high throughout the 29 days.
+
+The primary error is DENOM: the conversion rate is calculated per session, but randomization was per user. This invalidates the p-value and confidence intervals because sessions from the same user are not independent, and the session volume per user differs between arms.
+
+ERRORS: DENOM
+DECISION: HOLD

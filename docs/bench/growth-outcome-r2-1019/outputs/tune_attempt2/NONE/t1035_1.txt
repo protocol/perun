@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 27,993 (control) + 28,017 (treatment) = 56,010. The expected split is 28,005 per arm. The difference is only 12 users, which is well within chance variation for this sample size. No SRM.
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate." The readout reports users randomized by user ID. The reported rates (5.82% and 7.129%) align with orders divided by users (e.g., 2,239 / 27,993 ≈ 0.080? Wait, 2,239/27,993 = 0.0799 or 8.0%. The readout says 5.82%. Let's re-calculate: 2,239 / 38,471 (sessions) = 0.0582. The treatment is 2,355 / 33,034 = 0.0713. The reported percentages are calculated using **sessions** as the denominator, but the unit of randomization was **users**. This violates the analysis principle that the denominator must match the randomization unit to avoid bias from differing session counts per user. This is a DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: 1,435 / 10,936 = 13.12%
+Desktop Treatment Rate: 1,509 / 10,946 = 13.79% (Lift exists)
+Mobile Control Rate: 804 / 17,057 = 4.71%
+Mobile Treatment Rate: 846 / 17,071 = 4.95% (Lift exists)
+Both segments show a positive lift, consistent with the pooled direction. No Simpson's paradox.
+
+I check for Power (POWER). The target was a 10% lift on an 8% baseline. The observed effect is much larger (~22% relative lift on the session metric, though the user-level lift is also positive: (2355/28017)/(2239/27993) - 1 ≈ 4.8% user-level lift? Wait, let's look closer. Actually, the primary issue is the denominator mismatch. Regarding power, with ~28k users per arm and an 8% baseline, the test is generally well-powered to detect a 10% relative lift. The sample sizes are nearly equal and large. No obvious POWER error based on size alone.
+
+I check for Peeking (PEEK). The test ran from May 15 to June 12. This is 28 days exactly (May has 31 days: 31-15+1 = 17 days in May + 12 in June = 29 days? Or simply May 15 to June 12 is roughly 4 weeks). The planned duration was 28 days. The readout implies the final readout happened at the end of the planned duration. There is no explicit evidence of early stopping in the numbers provided, although the p-value of "0.0" is suspicious, it likely just means <0.001. Without explicit stop dates prior to day 28, I cannot definitively flag PEEK based solely on the numbers provided, though the daily lift chart suggests they monitored it daily. However, the DENOM error is definitive.
+
+I check for Novelty (NOVELTY). The daily lift drops from 48.7% to 2.8% by day 27, then jumps to 10.4% on day 28. While there is a fading trend, the projection applies the *reported* overall lift (which averages these days) to the next 12 months. The definition requires the lift to be fading *but projected as lasting*. The team is projecting the average lift, not the fading trend itself, but the presence of significant decay suggests the effect may not be stable. However, the DENOM error is a hard mathematical failure of the metric definition relative to randomization. The NOVELTY signal is ambiguous (day 28 spikes back up). I will stick to the clear violation.
+
+The primary error is DENOM: The conversion rate is calculated per session, but randomization was per user. Treatment has fewer sessions per user (33,034/28,017 ≈ 1.18) than control (38,471/27,993 ≈ 1.37). If the treatment reduces session frequency but increases order probability per session, mixing these denominators biases the result. The metric denominator (session) does not match the randomization unit (user).
+
+ERRORS: DENOM
+DECISION: HOLD

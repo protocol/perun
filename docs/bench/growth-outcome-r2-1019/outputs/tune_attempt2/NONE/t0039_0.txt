@@ -1,0 +1,24 @@
+Several critical analysis errors are evident in the provided readout.
+
+First, there is a clear **SRM** (Sample Ratio Mismatch) regarding sessions. While user counts are nearly balanced (~91k vs ~91k), session counts differ drastically: 122,311 (control) vs 95,944 (treatment). The ratio is roughly 56% to 44%. For ~182k total users, a 50/50 split implies expected sessions should be close if behavior is similar, or at least within chance limits. However, such a massive divergence in session volume per user suggests the treatment may be causing crashes, logging failures, or early exits, breaking the assumption that sessions are representative. More importantly, if randomization was by user, the metric denominator must be users.
+
+This leads to **DENOM**. The metric is "order conversion rate," typically defined as Orders / Sessions or Orders / Users. The reported rates are:
+Control: 4,561 / 122,311 ≈ 3.73% (Matches reported 3.729%)
+Treatment: 4,841 / 95,944 ≈ 5.05% (Matches reported 5.046%)
+The calculation uses *sessions* as the denominator. Since users were randomized by user ID, not session ID, using sessions violates the unit of randomization. If the treatment affects session frequency (which the SRM confirms it does), this metric is biased.
+
+There is also strong evidence of **PEEK**. The planned duration was 28 days, but the readout is from day 13 (Feb 8 to Feb 21). Stopping early because results look significant inflates the false positive rate. The p-value of "0.0" is suspicious in this context.
+
+Finally, **NOVELTY** is indicated by the daily lift trend. The lift starts at 89.3% on day 1 and decays steadily to roughly 9.9% by day 13. Projecting the current aggregate lift (35.3%) over the next twelve months ignores this rapid decay, suggesting the effect is a temporary novelty rather than a sustained improvement.
+
+Regarding **SIMPSON**, let's check the segments using users as the denominator (correcting for DENOM conceptually to check direction):
+Desktop Control: 2984/35713 ≈ 8.35%
+Desktop Treat: 3167/35607 ≈ 8.89% (Lift)
+Mobile Control: 1577/55502 ≈ 2.84%
+Mobile Treat: 1674/55338 ≈ 3.02% (Lift)
+Both segments show a lift, so the pooled result is not reversed. Simpson's paradox is not present.
+
+The test is likely **POWER**ed sufficiently given the large N, so that is not the primary flag.
+
+ERRORS: SRM, PEEK, DENOM, NOVELTY
+DECISION: HOLD

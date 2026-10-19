@@ -1,0 +1,24 @@
+Several analysis errors are evident in the provided readout based on the raw numbers.
+
+First, there is a clear **SRM** (Sample Ratio Mismatch). The experiment randomized users 50/50, yet the final counts are 22,490 (control) and 21,492 (treatment). The total is 43,982, so the expected split is 21,991 per arm. The treatment arm is short by 499 users. A quick chi-square check: $(499^2 / 21991) \times 2 \approx 22.6$. This value is far above the critical threshold (~3.84 for p=0.05), indicating the deviation is not due to chance. Assignment or logging is broken, invalidating the test.
+
+Second, there is a **DENOM** error. The metric is "order conversion rate," which should be orders per user since randomization was by user ID. However, the reported rates imply the wrong denominator.
+Control: $1,125 \text{ orders} / 22,490 \text{ users} = 5.00\%$.
+Treatment: $1,148 \text{ orders} / 21,492 \text{ users} = 5.34\%$.
+The actual relative lift is $(5.34 - 5.00) / 5.00 = 6.8\%$.
+The readout reports 3.635% and 4.49%. If we divide orders by *sessions* instead:
+Control: $1,125 / 30,950 = 3.635\%$.
+Treatment: $1,148 / 25,567 = 4.490\%$.
+The team calculated conversion per session, not per user. Because the treatment arm has fewer sessions per user (likely due to the data loss causing SRM), the session-level rate is artificially inflated. The denominator does not match the randomization unit.
+
+Third, the **PEEK** error is present. The planned duration was 28 days (ending Oct 25), but the daily lift data includes "day 29" (Oct 26). The test ran longer than planned or was analyzed after the cutoff without correction, suggesting potential peeking or protocol deviation.
+
+Regarding **SIMPSON**, the pooled lift is positive. Checking segments:
+Desktop Control: $671/7917 = 8.48\%$; Treatment: $685/7566 = 9.05\%$ (Lift +).
+Mobile Control: $454/14573 = 3.12\%$; Treatment: $463/13926 = 3.32\%$ (Lift +).
+Since both segments show a positive lift, Simpson's paradox is not occurring.
+
+The **POWER** calculation shows the study was designed for an 8% lift. With ~21.5k users, it is adequately powered for the observed effect, though the SRM undermines this. **NOVELTY** cannot be confirmed as the daily lift fluctuates but does not show a consistent fading trend to zero.
+
+ERRORS: SRM, PEEK, DENOM
+DECISION: HOLD

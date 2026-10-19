@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 36,941 (control) + 37,195 (treatment) = 74,136. The expected split is 37,068 per arm. The treatment has 127 extra users. The standard deviation for a 50/50 split is $\sqrt{74136 \times 0.5 \times 0.5} \approx 136$. The difference (127) is less than 2 standard deviations (272), so the split is within chance expectations. No SRM.
+
+Next, I check for PEEKing. The planned duration was 14 days, but the readout date is March 19, and the start was March 10. This is exactly 9 days of data (inclusive). The test was stopped 5 days early. Stopping a test before the planned duration based on interim results inflates the false positive rate. This is a clear PEEK error.
+
+Then, I check the denominator (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The counts provided for the metric calculation appear to be Orders / Users (e.g., $1477 / 36941 \approx 4.0\%$? Wait, the reported rate is 2.893%). Let's re-calculate: $1477 / 51056$ (sessions) $\approx 2.89\%$. The treatment rate is $1584 / 47394 \approx 3.34\%$. The reported rates match Orders divided by Sessions. However, the unit of randomization is the **User**, not the Session. Using sessions as the denominator violates the independence assumption because multiple sessions from one user are correlated. This is a DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $942 / 14413 \approx 6.54\%$.
+Desktop Treatment Rate: $1010 / 14512 \approx 6.96\%$. (Lift positive)
+Mobile Control Rate: $535 / 22528 \approx 2.37\%$.
+Mobile Treatment Rate: $574 / 22683 \approx 2.53\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No Simpson's paradox.
+
+Power (POWER): The sample size (~37k per arm) is large. With a baseline of 4% and target lift of 8%, the required sample size is far smaller than 37k. Even with the wrong denominator, the raw N is sufficient. No POWER error.
+
+Novelty (NOVELTY): The daily lift figures (13.6 to 15.5) fluctuate but do not show a clear fading trend (e.g., starting high and dropping to near zero). The projection assumes lasting lift, but the data doesn't explicitly show fading yet. No NOVELTY error based strictly on the numbers provided.
+
+The critical errors are stopping early (PEEK) and using the wrong denominator (Sessions instead of Users for a User-randomized test).
+
+ERRORS: PEEK, DENOM
+DECISION: HOLD

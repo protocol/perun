@@ -1,0 +1,32 @@
+**SRM**: The difference in users is $|109,277 - 109,649| = 372$. The denominator is $\sqrt{109,277 + 109,649} = \sqrt{218,926} \approx 467.9$. The ratio is $372 / 467.9 \approx 0.79$. This is less than 3.5, so no SRM.
+
+**POWER**: Baseline $p_1 = 0.06$. Target lift 5% means $p_2 = 0.06 \times 1.05 = 0.063$.
+Numerator: $7.85 \times (0.06 \times 0.94 + 0.063 \times 0.937) = 7.85 \times (0.0564 + 0.0590) = 7.85 \times 0.1154 \approx 0.906$.
+Denominator: $(0.063 - 0.06)^2 = 0.003^2 = 0.000009$.
+Required $n = 0.906 / 0.000009 \approx 100,667$.
+Threshold for underpowered: $0.9 \times 100,667 \approx 90,600$.
+The smaller arm (treatment) has 109,277 users, which is above 90,600. No POWER issue.
+
+**PEEK**: Start 2026-10-11 to end 2026-11-09 is 29 days inclusive (Oct has 31 days: $21 + 9 = 30$? Wait. Oct 11 to Oct 31 is 21 days. Nov 1 to Nov 9 is 9 days. Total $21+9=30$ days? Let's count strictly: 11, 12... 31 (21 days). 1, 2... 9 (9 days). Total 30 days. Or simply $Nov 9 - Oct 11 = 29$ days difference, so 30 calendar days involved? The daily data lists 29 values. Let's assume "days actually run" corresponds to the data points provided = 29 days.
+Planned duration = 28 days.
+Threshold: $0.8 \times 28 = 22.4$.
+Actual (29) > 22.4. No PEEK issue. Even if calculated as 29 days difference, it exceeds planned.
+
+**DENOM**: Reported control rate = $6,579 / 162,871 \approx 0.04039$ (4.039%). Reported treatment rate = $6,687 / 149,513 \approx 0.04472$ (4.473%).
+The readout reports these exact percentages. However, the randomized unit is **users**. The calculation used **sessions** as the denominator. This matches the DENOM rule.
+
+**SIMPSON**:
+Pooled lift: Treatment ($6687/109277 \approx 6.12\%$) > Control ($6579/109649 \approx 6.00\%$). Lift is positive.
+Desktop: Control $4868/50311 \approx 9.68\%$. Treatment $5169/55039 \approx 9.39\%$. Lift negative.
+Mobile: Control $1711/59338 \approx 2.88\%$. Treatment $1518/54238 \approx 2.80\%$. Lift negative.
+Pooled is positive, but both segments are negative. This is Simpson's paradox. Flag SIMPSON.
+
+**NOVELTY**:
+First three lifts: 9.5, 10.4, 11.7. Mean = $31.6 / 3 \approx 10.53$. Half = 5.27.
+Last three lifts: 12.4, 11.9, 10.1. Mean = $34.4 / 3 \approx 11.47$.
+11.47 is not below 5.27. No NOVELTY issue.
+
+Errors found: DENOM, SIMPSON. These indicate fundamental flaws in metric definition and aggregation interpretation, requiring investigation before rollout.
+
+ERRORS: DENOM, SIMPSON
+DECISION: HOLD

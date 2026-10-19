@@ -1,0 +1,33 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 46,101 (control) + 45,871 (treatment) = 91,972. The expected split is 45,986 per arm. The observed difference is |46,101 - 45,986| = 115. The standard error for a 50/50 split is $\sqrt{N \times 0.5 \times 0.5} \approx \sqrt{22993} \approx 151$. The difference (115) is less than 2 standard deviations (~302), so the split is within chance expectations. No SRM.
+
+Next, I check for PEEKing. The planned duration was 14 days (Sept 12 to Sept 26). The readout date is Sept 27, and daily data is provided for 15 days. The test ran for its full planned duration plus one day, likely for final aggregation. There is no evidence of early stopping based on interim results. No PEEK.
+
+Then, I check for POWER. The baseline is 6.0%, target lift 5%. The sample size per arm is ~46k. Using a standard approximation, detecting a 5% relative lift (absolute difference 0.003) at 80% power and 5% alpha requires roughly $16 \times p(1-p) / \delta^2$. Here $p=0.06$, $\delta=0.003$. $16 \times 0.0564 / 0.000009 \approx 100,000$ total users. We have ~92,000. This is slightly underpowered, but usually, "underpowered" flags require a more severe deficit or a specific claim of sufficient power that is false. However, the p-value is 0.0907 (not significant), which aligns with an underpowered test failing to find the target. But is it an *error* in analysis? The readout reports the p-value correctly. The design might be optimistic, but the analysis of the result isn't necessarily flawed yet. Let's look closer at other errors.
+
+Check SIMPSON's paradox.
+Desktop conversion:
+Control: 1,693 / 16,371 ≈ 10.34%
+Treatment: 2,023 / 20,790 ≈ 9.73%
+Lift: Negative (Treatment worse).
+
+Mobile conversion:
+Control: 1,073 / 29,730 ≈ 3.61%
+Treatment: 852 / 25,081 ≈ 3.40%
+Lift: Negative (Treatment worse).
+
+Both segments show the treatment performing worse than control. However, the pooled result reports a positive lift (6.268% vs 6.0%).
+Pooled Control: 2,766 / 46,101 ≈ 5.99%
+Pooled Treatment: 2,875 / 45,871 ≈ 6.27%
+Since the direction of the effect reverses when aggregating (positive overall, negative in both segments), this is a classic Simpson's Paradox. This likely stems from a denominator mismatch or weighting issue, but specifically fits the SIMPSON code definition: "pooled result is reversed within the segments."
+
+Check DENOM. Users were randomized by user ID. The metric is "order conversion rate." Usually, this is Orders / Users.
+Control: 2,766 / 46,101 = 5.999% (matches reported 6.0%).
+Treatment: 2,875 / 45,871 = 6.267% (matches reported 6.268%).
+The denominator used is Users, which matches the randomization unit. No DENOM error.
+
+Check NOVELTY. The daily lift fluctuates (4.2 to 5.4) but shows no clear fading trend (e.g., starting high and dropping to zero). The projection applies the reported lift to 12 months. While risky, the daily data doesn't show a distinct "fading" pattern required to flag NOVELTY definitively based *only* on the numbers provided.
+
+The primary error is SIMPSON. The aggregate suggests a benefit, but every segment shows harm. Rolling this out based on the aggregate would be a mistake.
+
+ERRORS: SIMPSON
+DECISION: HOLD

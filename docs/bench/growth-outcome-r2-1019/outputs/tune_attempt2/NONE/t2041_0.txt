@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 59,497 (control) + 58,111 (treatment) = 117,608. The expected split is 50%, so 58,804 per arm. The difference is |59,497 - 58,804| = 693. The standard error for the difference in proportions is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{29402} \approx 171$. The deviation is $693 / 171 \approx 4.05$ standard errors. This exceeds the typical threshold of 2 or 3 standard errors, indicating a significant imbalance in assignment or logging. **SRM is flagged.**
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate." The randomization unit is "user id." The counts provided are users and orders. The reported control rate is $3,570 / 59,497 \approx 0.0600$, which matches the reported 6.0%. The treatment rate is $3,695 / 58,111 \approx 0.06358$, matching 6.359%. The denominator used is users, which matches the randomization unit. **DENOM is not flagged.**
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $2,709 / 29,662 \approx 9.13\%$.
+Desktop Treatment Rate: $2,804 / 28,971 \approx 9.68\%$. (Lift positive)
+Mobile Control Rate: $861 / 29,835 \approx 2.89\%$.
+Mobile Treatment Rate: $891 / 29,140 \approx 3.06\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. **SIMPSON is not flagged.**
+
+I check for Power (POWER). The sample sizes (~58k each) are very large for a baseline of 6% and target lift of 5%. A quick approximation shows this is vastly overpowered, not underpowered. **POWER is not flagged.**
+
+I check for Peeking (PEEK). The dates are May 18 to June 2. This is 15 days inclusive (May 18–31 is 14 days, plus June 1–2? Or simply counting days). May has 31 days. May 18 to May 31 is 14 days. June 1 and June 2 makes it 16 days? Let's count: 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 (14 days). Plus June 1, 2. That is 16 days. The planned duration was 14 days. The readout includes day 15 data. While it ran longer, the error "stopped... before planned duration" implies early stopping. Running longer is conservative, not a PEEK error in the sense of inflating false positives via early stop. However, the daily lift shows a clear decay from 12.1% to 2.1%. The team projects the current reported lift (average ~6%) for 12 months. This ignores the fading trend. **NOVELTY is flagged** because the lift is clearly fading over time, yet the projection assumes the average lift persists.
+
+Regarding PEEK again: The text says "final readout 2026-06-02" and "planned duration 14 days". Start May 18. May 18 + 13 days = May 31 (14 days total). Ending June 2 means they ran *over*, not stopped early. So PEEK is not applicable based on the definition "stopped... before".
+
+The critical errors are SRM (assignment broken) and NOVELTY (fading effect ignored in projection). SRM invalidates the causal inference entirely.
+
+ERRORS: SRM, NOVELTY
+DECISION: HOLD

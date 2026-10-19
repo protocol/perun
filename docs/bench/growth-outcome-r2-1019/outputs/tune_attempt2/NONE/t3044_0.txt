@@ -1,0 +1,25 @@
+**SRM Check**: Total users = 108,818 + 107,098 = 215,916. Expected per arm = 107,958.
+Difference = |108,818 - 107,958| = 860.
+Standard Error ≈ $\sqrt{N \cdot 0.5 \cdot 0.5} = \sqrt{53,979} \approx 232$.
+Z-score = $860 / 232 \approx 3.7$. This exceeds the typical threshold of 2 (p < 0.05), indicating a significant Sample Ratio Mismatch. Assignment or logging is likely broken.
+
+**PEEK Check**: The test ran from March 8 to April 7 (31 days), exceeding the planned 28 days. There is no evidence of early stopping; the readout is final. No PEEK error.
+
+**POWER Check**: The smaller arm (treatment) has 107,098 users. With a 4% baseline and 5% target lift, the required sample size per arm is roughly $1.6 \times 10^5$ for 80% power? Let's approximate: $n \approx \frac{16 \cdot p(1-p)}{\delta^2}$. $\delta = 0.002$. $p=0.04$.
+$n \approx \frac{16 \cdot 0.04 \cdot 0.96}{0.000004} \approx 153,600$.
+The actual sample (~107k) is lower than the theoretical requirement (~154k), suggesting the test might be underpowered to detect the *target* 5% lift. However, the reported p-value (0.33) already reflects the lack of significance. While technically underpowered for the *target*, the primary fatal flaw here is the data integrity issue (SRM). Usually, POWER is flagged if the test claims significance despite low power, or if the design was fundamentally flawed before running. Given SRM is present, the data is untrustworthy regardless of power. However, strictly speaking, $107k < 154k$ fits the definition of underpowered for the stated target. But SRM invalidates the whole test first. I will flag POWER only if the sample is drastically insufficient. Here it is close enough that the main issue is SRM. Wait, the prompt asks to flag if the numbers show the error. 107k is ~70% of the required 154k. That is underpowered. But SRM is the stronger signal. Let's look closer at the prompt's definition: "smaller arm is too small to detect...". Yes, it is. But usually, if SRM exists, we stop there. I will include POWER as a secondary finding if strictly numerical, but SRM is the blocker. Actually, looking at the daily lift, it's stable. Let's stick to the most obvious data integrity failure. The SRM Z-score of 3.7 is definitive.
+
+**SIMPSON Check**:
+Desktop Control Rate: $3020/47571 \approx 6.35\%$. Treatment: $3215/52258 \approx 6.15\%$. (Lift negative)
+Mobile Control Rate: $1333/61247 \approx 2.18\%$. Treatment: $1157/54840 \approx 2.11\%$. (Lift negative)
+Pooled Control: $4353/108818 \approx 4.00\%$. Pooled Treatment: $4372/107098 \approx 4.08\%$. (Lift positive)
+The pooled result shows a positive lift (2.0%), while both segments (Desktop and Mobile) show a negative lift. This is a clear case of Simpson's Paradox, likely driven by the shift in traffic composition (Treatment has more Desktop users who convert higher, despite performing worse within the device).
+
+**DENOM Check**: Randomized by user id. Metric is order conversion rate (orders/users). Denominator matches randomization unit. No error.
+
+**NOVELTY Check**: Daily lift fluctuates between 1.6% and 2.4% with no clear fading trend over the 30 days. Projection assumes constant lift, which matches the stable daily data. No error.
+
+The test has a broken randomization (SRM) and misleading aggregated results due to confounding variables (SIMPSON). The data cannot support a rollout decision.
+
+ERRORS: SRM, SIMPSON, POWER
+DECISION: HOLD

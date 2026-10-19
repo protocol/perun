@@ -1,0 +1,27 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 146,527 (control) + 147,083 (treatment) = 293,610. The expected split is 50%, so 146,805 per arm. The treatment has 278 more users than expected. The standard deviation for a binomial distribution here is $\sqrt{293610 \times 0.5 \times 0.5} \approx 271$. The difference (278) is just barely over 1 standard deviation ($278/271 \approx 1.03$). This is well within the realm of chance (typically we look for >2 or >3 SDs, or a p-value < 0.01). SRM is not flagged.
+
+Next, I check the Denominator (DENOM). The metric is "order conversion rate." The readout provides users and orders. Usually, conversion is Orders/Users or Orders/Sessions. The reported control rate is 6.0%.
+Calculation: $8,791 \text{ orders} / 146,527 \text{ users} \approx 0.0600$.
+Calculation: $8,791 \text{ orders} / 200,593 \text{ sessions} \approx 0.0438$.
+Since the reported 6.0% matches the calculation using Users as the denominator, and users were the randomized unit, the denominator is correct. DENOM is not flagged.
+
+I check for Simpson's Paradox (SIMPSON) by calculating lift in segments.
+Desktop Control Rate: $5,825 / 53,869 \approx 10.81\%$.
+Desktop Treatment Rate: $6,101 / 54,073 \approx 11.28\%$. (Lift is positive).
+Mobile Control Rate: $2,966 / 92,658 \approx 3.20\%$.
+Mobile Treatment Rate: $3,107 / 93,010 \approx 3.34\%$. (Lift is positive).
+Both segments show a positive lift, consistent with the pooled result. SIMPSON is not flagged.
+
+I check for Peeking (PEEK). The planned duration was 14 days. The dates are Feb 14 to Mar 2.
+Feb 14 to Feb 28 is 15 days. Mar 1 is day 16, Mar 2 is day 17? Let's count inclusive: 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27 (14 days). The readout says "final readout 2026-03-02". If started Feb 14, 14 days later is Feb 27. March 2 implies the test ran for 17 days (Feb 14–Mar 2 inclusive). However, the daily lift data lists "day 1 to day 16". If the test ran 16 or 17 days against a 14-day plan, it ran *longer*, not shorter. Stopping early inflates false positives; running late generally does not trigger a PEEK error unless they peeked *during* the 14 days and stopped. The text says "final readout" on Mar 2, and provides 16 days of data. It does not explicitly state they stopped *before* day 14. They seem to have analyzed it after the planned duration. PEEK is not clearly flagged by the numbers alone.
+
+I check Power (POWER). The sample size is huge (~147k per arm). With a 6% baseline and 5% target lift, the required sample size is far smaller than 147k. The test is definitely not underpowered.
+
+I check Novelty (NOVELTY). The prompt defines this as "lift is fading over the test but is projected as lasting."
+Daily lifts: 3.8, 4.7, 4.3, 3.6, 4.6, 4.5, 4.6, 3.4, 4.4, 4.4, 3.9, 4.9, 4.3, 4.1, 4.7, 4.6.
+There is no clear fading trend. The values oscillate between 3.4% and 4.9% throughout the 16 days. The last few days (4.1, 4.7, 4.6) are not lower than the start. NOVELTY is not flagged.
+
+No errors found based strictly on the provided numbers and definitions.
+
+ERRORS: NONE
+DECISION: SHIP

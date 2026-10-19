@@ -1,0 +1,23 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 14,861 (control) + 14,703 (treatment) = 29,564. The expected split is 50%, so 14,782 per arm. The difference is |14,861 - 14,782| = 79. The standard deviation for a binomial distribution here is $\sqrt{29564 \times 0.5 \times 0.5} \approx 86$. The difference is less than 1 standard deviation, which is well within the range of chance. No SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." The readout provides users and orders. Calculating the rates: Control = 743 / 14,861 ≈ 4.999% (matches reported 5.0%). Treatment = 785 / 14,703 ≈ 5.339% (matches reported). The denominator used is users, which matches the randomization unit (user id). No DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: 499 / 5,490 ≈ 9.09%.
+Desktop Treatment Rate: 527 / 5,431 ≈ 9.70%. (Lift present)
+Mobile Control Rate: 244 / 9,371 ≈ 2.60%.
+Mobile Treatment Rate: 258 / 9,272 ≈ 2.78%. (Lift present)
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON error.
+
+I check for Power (POWER). The target lift was 8%, baseline 5%. The observed lift is 6.8%. The p-value is 0.1875, which is > 0.05, so the result is not statistically significant. While the test failed to detect the *target* lift, the "POWER" error code specifically flags if the arm is *too small* to detect the lift given the design parameters. The design planned for 80% power to detect 8%. The actual sample sizes (~14.8k) are very close to the planned equal split. The failure to reach significance is likely due to the true effect being smaller than the target (6.8% vs 8%), not necessarily an underpowered design relative to the *planned* inputs, though it is underpowered for the *observed* effect. However, usually, POWER flags a design flaw where N is insufficient for the *target*. Here N seems appropriate for the target, the target just wasn't met. I will not flag this as a calculation error in the readout, but rather a negative result.
+
+I check for Peeking (PEEK). The start date was 2026-06-25. The planned duration was 28 days. June has 30 days.
+Days in June: 30 - 25 + 1 = 6 days (assuming inclusive start) or just count: 25, 26, 27, 28, 29, 30 (6 days).
+Days in July: 23 days.
+Total duration = 6 + 23 = 29 days.
+The readout says "final readout 2026-07-23". If started on the 25th, 28 days later is July 22nd (June 25 + 28 days = July 23? Let's count carefully. Day 1=Jun 25. Day 28 = Jun 25 + 27 = July 22). The readout is on July 23, which is Day 29. This is effectively the planned duration (±1 day for reporting lag). There is no evidence of early stopping; if anything, it ran one day longer. No PEEK.
+
+I check for Novelty (NOVELTY). The daily lift starts at 17.3% and trends downward to 0.7% by day 28. This is a clear fading pattern. However, the "Projection" section states: "the team applies the reported lift to the next twelve months." The reported lift (6.8%) is an average that includes the high early days. Projecting this average forward ignores the fading trend (the current lift is near 0%). This assumes the lift is permanent despite data showing it vanishing over time. This matches the NOVELTY definition: "lift is fading... but is projected as lasting."
+
+ERRORS: NOVELTY
+DECISION: HOLD

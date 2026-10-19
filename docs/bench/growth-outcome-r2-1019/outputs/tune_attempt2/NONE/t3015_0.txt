@@ -1,0 +1,20 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 21,474 (control) + 21,656 (treatment) = 43,130. The expected split is 50%, so 21,565 per arm. The treatment has 91 extra users. The standard deviation for a binomial split is $\sqrt{43130 \times 0.5 \times 0.5} \approx 104$. The difference (91) is less than 2 standard deviations ($2 \times 104 = 208$), so the split is within chance expectations. No SRM.
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate." The readout provides users and orders. Calculating the reported rates: Control $1,718 / 21,474 \approx 8.0\%$? No, $1718/21474 = 0.0800$. Wait, the reported rate is 5.348%. Let's re-calculate using sessions. Control: $1,718 / 32,127 = 0.05347$ (5.35%). Treatment: $1,820 / 29,279 = 0.06216$ (6.22%). The reported percentages match the calculation using **sessions** as the denominator. However, the randomization unit is **user id**. Using sessions (which can be multiple per user) as the denominator violates the independence assumption because sessions from the same user are correlated. This is a DENOM error.
+
+Now, checking for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $1,286 / (sessions?)$. We don't have session counts by device, only users and orders. We must assume the conversion rate provided in the aggregate applies or calculate based on users if possible. But wait, if we look at orders per user:
+Desktop Control: $1,286 / 10,714 \approx 12.0\%$.
+Desktop Treatment: $1,362 / 10,804 \approx 12.6\%$. (Lift positive)
+Mobile Control: $432 / 10,760 \approx 4.0\%$.
+Mobile Treatment: $458 / 10,852 \approx 4.2\%$. (Lift positive)
+Both segments show a positive lift. The aggregate shows a positive lift. There is no reversal. No SIMPSON.
+
+Check PEEK: The test ran from Sept 25 to Oct 10. That is 15 days inclusive (25, 26, 27, 28, 29, 30, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10? Let's count: Sep has 30 days. 30-25+1 = 6 days in Sep. 10 days in Oct. Total 16 days? Or simply look at the daily data provided: "day 1 to day 15". The planned duration was 14 days. The readout includes day 15. Stopping rules or extending slightly doesn't inherently prove "peeking" unless they stopped *early* because of significance. They ran *longer* than planned (15 days vs 14). This is not PEEK (stopping early).
+
+Check NOVELTY: The daily lift sequence is: 18.9, 15.9, 13.5, 16.6, 16.2, 15.2, 18.4, 18.5, 17.1, 17.3, 14.8, 15.4, 17.6, 14.4, 13.4. While the last day (13.4) is lower than the first (18.9), the data fluctuates up and down (e.g., rises from 13.5 to 16.6, rises from 14.4 to 17.6 then down). There is no clear, monotonic fading trend indicative of a novelty effect wearing off; the variance is high. It is not definitive enough to flag based solely on these numbers.
+
+The primary error is DENOM: The analysis uses sessions as the denominator for a user-randomized test, inflating the sample size artificially and violating statistical assumptions.
+
+ERRORS: DENOM
+DECISION: HOLD

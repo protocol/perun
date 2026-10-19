@@ -1,0 +1,33 @@
+Several critical analysis errors are evident in the provided readout numbers.
+
+**SRM (Sample Ratio Mismatch):**
+The experiment was designed for a 50/50 split.
+Total users = 285,589 (Control) + 285,063 (Treatment) = 570,652.
+Expected per arm = 285,326.
+The observed counts are very close to the expected 50/50 split (difference < 0.1%). A chi-square check confirms this deviation is well within chance limits ($\chi^2 \approx 0.001$, $p \gg 0.05$). **No SRM.**
+
+**DENOM (Denominator Error):**
+The metric is "order conversion rate." The unit of randomization is the **user**.
+Control Rate Calculation: $11,424 \text{ orders} / 285,589 \text{ users} = 4.00\%$.
+Treatment Rate Calculation: $12,078 \text{ orders} / 285,063 \text{ users} = 4.24\%$.
+However, the readout reports: Control 2.704% and Treatment 3.558%.
+Let's check sessions as the denominator:
+Control: $11,424 / 422,501 \text{ sessions} = 2.704\%$.
+Treatment: $12,078 / 339,448 \text{ sessions} = 3.558\%$.
+The reported rates use **sessions** as the denominator, but users were randomized. This violates the unit of analysis, inflating significance due to correlated sessions per user. **Flag DENOM.**
+
+**SIMPSON (Simpson's Paradox):**
+Let's calculate conversion rates by device (orders/users):
+Desktop Control: $7,236 / 103,360 = 7.00\%$.
+Desktop Treatment: $9,011 / 139,960 = 6.44\%$. (Treatment is worse).
+Mobile Control: $4,188 / 182,229 = 2.30\%$.
+Mobile Treatment: $3,067 / 145,103 = 2.11\%$. (Treatment is worse).
+In both segments, the treatment performs worse than control. Yet, the pooled result claims treatment is significantly better (3.558% vs 2.704%). This reversal is caused by the denominator error (sessions) combined with different session-per-user ratios across devices, but strictly speaking, the user-level data shows the effect is reversed in segments compared to the reported pooled metric. **Flag SIMPSON.**
+
+**PEEK, POWER, NOVELTY:**
+- Dates match the planned 21 days (Mar 29 to Apr 19). No PEEK.
+- Sample sizes are large enough for the target lift; power is not an issue.
+- Daily lift fluctuates but does not show a clear fading trend requiring a novelty flag based solely on these numbers.
+
+ERRORS: DENOM, SIMPSON
+DECISION: HOLD

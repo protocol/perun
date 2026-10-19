@@ -1,0 +1,28 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 37,564 (control) + 37,620 (treatment) = 75,184. The expected split is 37,592 per arm. The observed difference is only 56 users, which is well within the bounds of random chance for this sample size. SRM is not present.
+
+Next, I check the test duration for Peeking (PEEK). The test started on 2026-07-31 and the readout is dated 2026-08-21. This covers exactly 21 days, matching the planned duration. There is no evidence of early stopping. PEEK is not present.
+
+I then evaluate the Denominator (DENOM). The metric is "order conversion rate." The readout provides orders (1,127 and 1,180) and users (37,564 and 37,620).
+Control Rate: 1,127 / 37,564 ≈ 2.99%.
+Treatment Rate: 1,180 / 37,620 ≈ 3.14%.
+However, the reported rates are 2.306% and 2.885%.
+Let's check against sessions:
+Control: 1,127 / 48,876 ≈ 2.306%.
+Treatment: 1,180 / 40,908 ≈ 2.885%.
+The reported metric uses sessions as the denominator, but users were randomized by user ID. This violates the unit of randomization, introducing bias if session counts differ between arms (which they do: 48k vs 40k). This is a DENOM error.
+
+Now I check for Simpson's Paradox (SIMPSON) by calculating conversion rates per user within device segments:
+Desktop Control: 846 / 17,651 ≈ 4.79%.
+Desktop Treatment: 965 / 21,414 ≈ 4.51%.
+(Lift is negative: -5.8%)
+Mobile Control: 281 / 19,913 ≈ 1.41%.
+Mobile Treatment: 215 / 16,206 ≈ 1.33%.
+(Lift is negative: -5.7%)
+In both segments, the treatment performs worse than the control. Yet, the aggregated data (using the wrong denominator) shows a massive positive lift. The aggregation reverses the direction of the effect seen in every segment. This is a clear SIMPSON error.
+
+Regarding Power (POWER), the sample size is large (~37k per arm), easily sufficient to detect an 8% lift on a 3% baseline. Novelty (NOVELTY) is not indicated; the daily lift fluctuates but does not show a consistent fading trend toward zero over the 21 days.
+
+The primary issues are the use of the wrong denominator (sessions instead of users) and the resulting Simpson's Paradox, where the aggregated "win" hides that the feature actually lowered conversion rates in both desktop and mobile segments when measured correctly per user.
+
+ERRORS: DENOM, SIMPSON
+DECISION: HOLD

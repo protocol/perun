@@ -1,0 +1,20 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 43,566 (control) + 43,304 (treatment) = 86,870. The expected split is 43,435 per arm. The observed difference is |43,566 - 43,435| = 131. The standard error for the difference in proportions is approx $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{21717} \approx 147$. The deviation is less than 1 standard error, so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check for PEEKing. The test ran from July 30 to August 19, which is 20 days. The planned duration was 28 days. The readout presents a final recommendation based on data collected before the planned end date. Stopping early invalidates the stated alpha and p-value. This is a clear PEEK error.
+
+Then, I check for POWER. The target lift was 8% on a 6% baseline (absolute lift 0.48%). The reported lift is only 2% (absolute 0.12%). While the test is underpowered to detect the *observed* small effect, the design calculation refers to the *target* lift. With ~43k users per arm, a standard power calculation for a 6% baseline and 8% relative lift usually requires roughly 30k-40k users per arm. The sample size appears sufficient for the *design* parameters, even if the result was non-significant. However, the primary issue here is the early stop, not necessarily the initial sample size planning relative to the target.
+
+I check for SIMPSON's paradox by calculating segment conversion rates:
+Desktop Control: $1851/20296 \approx 9.12\%$. Desktop Treatment: $1986/22446 \approx 8.85\%$. (Treatment is lower).
+Mobile Control: $763/23270 \approx 3.28\%$. Mobile Treatment: $664/20858 \approx 3.18\%$. (Treatment is lower).
+Overall Control: $2614/43566 \approx 6.00\%$. Overall Treatment: $2650/43304 \approx 6.12\%$. (Treatment is higher).
+The pooled result shows a positive lift (6.12% > 6.00%), but both segments individually show a negative lift (Treatment < Control). This is a classic reversal caused by the treatment arm having a higher proportion of high-converting desktop users (22,446 vs 20,296) compared to the control. This is a definite SIMPSON error.
+
+I check DENOM: Randomization was by user ID; the metric is orders per user (implied by "users" denominator in my head, though the text says "order conversion rate" and lists users/orders). If the rate is Orders/Users, the denominator matches the randomization unit. No error evident here without evidence of session-level denominators.
+
+I check NOVELTY: The daily lift fluctuates (1.8 to 2.3) but does not show a clear fading trend (e.g., starting high and dropping to zero). It remains stable around 2%. No clear NOVELTY error.
+
+The projection applies a non-significant (p=0.46), paradoxical lift to 12 months. This is dangerous.
+
+ERRORS: PEEK, SIMPSON
+DECISION: HOLD

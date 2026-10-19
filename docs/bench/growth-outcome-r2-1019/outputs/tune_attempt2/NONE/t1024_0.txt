@@ -1,0 +1,28 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 107,572 (control) + 107,442 (treatment) = 215,014. The expected split is 50%, so 107,507 per arm. The observed difference is |107,572 - 107,442| = 130 users. For a sample this large, a deviation of 130 is well within the bounds of random chance (roughly 0.12% deviation). SRM is not present.
+
+Next, I check the Denominator (DENOM). The metric is "order conversion rate." The randomization unit is "user id." The reported rates are calculated as orders divided by users:
+Control: 8,605 / 107,572 ≈ 0.0800 (8.00%).
+Treatment: 9,061 / 107,442 ≈ 0.0843 (8.43%).
+However, the readout reports control as 5.418% and treatment as 6.493%.
+Let's check if they used sessions as the denominator:
+Control: 8,605 / 158,837 ≈ 0.05417 (5.418%).
+Treatment: 9,061 / 139,553 ≈ 0.06493 (6.493%).
+The reported percentages match the calculation using *sessions* as the denominator. Since users were randomized, not sessions, and users can have multiple sessions, the denominator does not match the randomization unit. This is a DENOM error.
+
+I check for Simpson's Paradox (SIMPSON) by calculating lift within segments:
+Desktop Control Rate: 6,383 / 52,693 ≈ 12.11%.
+Desktop Treatment Rate: 6,721 / 52,630 ≈ 12.77%. (Lift is positive).
+Mobile Control Rate: 2,222 / 54,879 ≈ 4.05%.
+Mobile Treatment Rate: 2,340 / 54,812 ≈ 4.27%. (Lift is positive).
+Both segments show a positive lift, consistent with the pooled direction (even though the pooled calculation was flawed by DENOM). No reversal exists.
+
+Regarding Power (POWER): The target lift was 5% on an 8% baseline. The observed effect (~8% to ~8.4% using correct users, or higher using sessions) is large. With ~107k users per arm, the test is adequately powered to detect a 5% lift.
+
+Regarding Peek (PEEK): The test ran from May 18 to June 8. This is 21 days exactly (May has 31 days: 31-18+1 = 14 days in May + 8 days in June = 22 days? Let's count: 18,19,20,21,22,23,24,25,26,27,28,29,30,31 (14 days) + 1,2,3,4,5,6,7,8 (8 days) = 22 days. The plan was 21 days. Running one day over is not "stopping early." The daily lift data shows 21 data points, suggesting analysis might have happened daily, but without explicit evidence of early stopping *before* the planned date causing the call, and since the duration matches the plan closely, PEEK is not definitively proven by the numbers alone compared to the clear DENOM error.
+
+Regarding Novelty (NOVELTY): The daily lift fluctuates (16.7% to 24.3%) but does not show a clear fading trend; the last few days are still high (19.7%, 22.5%, 21.4%).
+
+The primary error is using sessions instead of users for the conversion rate denominator.
+
+ERRORS: DENOM
+DECISION: HOLD

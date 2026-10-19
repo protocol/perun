@@ -1,0 +1,39 @@
+**SRM**: The total users are 285,589 (control) and 285,063 (treatment). The split is effectively 50.05% vs 49.95%. With ~570k users, a deviation of ~500 users is well within statistical noise ($\sqrt{N} \approx 755$; $2\sigma \approx 1500$). No SRM.
+
+**PEEK**: The test ran from March 29 to April 19. This is exactly 21 days, matching the planned duration. No PEEK.
+
+**POWER**: The sample size is massive (~285k per arm). The baseline is 4%, target lift 5%. The observed effect is huge (31.6%). The study is vastly overpowered, not underpowered. No POWER error.
+
+**SIMPSON**: Let's check the segment conversion rates.
+Desktop Control: $7,236 / 103,360 \approx 7.00\%$.
+Desktop Treatment: $9,011 / 139,960 \approx 6.44\%$.
+(Lift is negative: treatment is worse).
+
+Mobile Control: $4,188 / 182,229 \approx 2.30\%$.
+Mobile Treatment: $3,067 / 145,103 \approx 2.11\%$.
+(Lift is negative: treatment is worse).
+
+Both segments show the treatment performing worse than control. However, the pooled report claims a massive positive lift (31.6%).
+Pooled Control Rate: $11,424 / 285,589 \approx 4.00\%$.
+Pooled Treatment Rate: $12,078 / 285,063 \approx 4.24\%$.
+Wait, the readout reports "conversion rate" as 2.704% and 3.558%.
+Let's re-calculate based on the readout's implied denominator.
+Readout Control Rate: $11,424 / 422,501 \text{ (sessions)} \approx 2.70\%$.
+Readout Treatment Rate: $12,078 / 339,448 \text{ (sessions)} \approx 3.56\%$.
+The readout calculates conversion per **session**, but randomization was by **user**. This is a DENOM error (see below).
+
+However, looking strictly at the user-level counts provided for Simpson's check:
+Desktop: Control (7.00%) > Treatment (6.44%).
+Mobile: Control (2.30%) > Treatment (2.11%).
+In both segments, Control > Treatment.
+Yet the aggregated session-based metric shows Treatment > Control.
+While the aggregation method is flawed (DENOM), the reversal of direction between segments (where both are negative) and the aggregate (positive) technically fits the pattern of Simpson's paradox driven by the weighting of sessions vs users, though the primary driver here is the denominator mismatch. But strictly, if we look at the provided "By device" user counts, the treatment loses in both. The aggregate wins. This is Simpson's paradox manifested through the improper aggregation unit.
+
+**DENOM**: The metric is "order conversion rate." Randomization unit is **user**. The calculation used for the reported rates (2.704% and 3.558%) clearly uses **sessions** as the denominator ($11,424/422,501$ and $12,078/339,448$). Treatment has fewer sessions per user ($339k/285k \approx 1.19$) than control ($422k/285k \approx 1.48$). By dividing by a smaller number of sessions in the treatment arm, the rate is artificially inflated. The denominator (session) does not match the randomization unit (user). This is a critical error.
+
+**NOVELTY**: The daily lift fluctuates (22.2% to 38.3%) but does not show a clear, consistent fading trend from start to end (Day 1: 29.6%, Day 21: 28.2%). No obvious NOVELTY error based solely on these numbers.
+
+The primary fatal flaws are DENOM (wrong denominator) and SIMPSON (aggregate direction reverses segment directions due to the weighting/denominator issue).
+
+ERRORS: SIMPSON, DENOM
+DECISION: HOLD

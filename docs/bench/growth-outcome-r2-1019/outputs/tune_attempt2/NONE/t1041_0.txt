@@ -1,0 +1,15 @@
+Several critical analysis errors are evident in the readout based on the provided numbers.
+
+First, there is a clear **SRM** (Sample Ratio Mismatch). The experiment was designed for a 50/50 split. The total user count is $22,490 + 21,492 = 43,982$. The expected count per arm is $21,991$. The control arm has 22,490 users and the treatment has 21,492. The difference is $22,490 - 21,492 = 998$ users. Using a quick chi-square approximation: $\chi^2 \approx \frac{(998)^2}{21,991} + \frac{(-998)^2}{21,991} \approx 45 + 45 = 90$. With 1 degree of freedom, a value of 90 is massively higher than the critical value of 3.84 (for $p=0.05$), indicating the split is not due to chance. Assignment or logging is broken.
+
+Second, there is a **DENOM** error. The metric is "order conversion rate," and users were randomized by user ID. Therefore, the denominator must be users. However, the reported rates imply session-level calculation.
+Control: $1,125 \text{ orders} / 30,950 \text{ sessions} \approx 3.635\%$.
+Treatment: $1,148 \text{ orders} / 25,567 \text{ sessions} \approx 4.490\%$.
+These match the reported percentages exactly. Since sessions were not the unit of randomization (users were), using sessions as the denominator violates the independence assumption of the test, especially since the session-to-user ratio differs significantly between arms ($1.38$ vs $1.19$).
+
+Third, the data indicates **PEEK**. The planned duration was 28 days (Sept 27 to Oct 24/25). The daily lift data is provided for 29 days, and the readout date is Oct 26. While close to the end, the p-value is reported as "0.0". In rigorous testing, reporting exactly 0.0 often implies checking significance repeatedly until a threshold was hit, or simply truncating extreme precision without context. More critically, combined with the SRM, the validity of the stop time is suspect, but the primary evidence here is the mismatch between the planned 28 days and the presentation of 29 days of data leading to an immediate "roll out" recommendation, suggesting the team may have stopped as soon as the numbers looked good rather than adhering strictly to the pre-planned horizon, especially given the SRM invalidates the sequential validity anyway. However, strictly looking at the numbers, the SRM and DENOM are the most mathematically provable errors. The PEEK is less definitive without the exact stopping rule protocol, but the SRM and DENOM are undeniable.
+
+The lift projection assumes the 23.5% lift is real, but since the denominator is wrong and the sample is biased, this projection is invalid.
+
+ERRORS: SRM, DENOM
+DECISION: HOLD

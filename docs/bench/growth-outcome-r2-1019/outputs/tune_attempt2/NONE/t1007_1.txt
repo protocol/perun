@@ -1,0 +1,25 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 179,382 (control) + 179,848 (treatment) = 359,230. The expected split is 50%, so 179,615 per arm. The treatment deviation is $179,848 - 179,615 = 233$. The standard deviation for a binomial split is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{89,807} \approx 300$. The deviation is less than 1 standard deviation ($233 < 300$), so the split is within chance expectations. No SRM.
+
+Next, I check for PEEK. The test started 2026-07-12 and the readout is 2026-07-26. This is exactly 14 days, matching the planned duration. No PEEK.
+
+Then, I check for POWER. The baseline is 5.0%, target lift 5%. The sample size per arm is ~179k. Standard power calculators for these parameters typically require ~30k–50k users per arm to detect a 5% relative lift on a 5% baseline with 80% power. With ~179k, the test is well-powered. No POWER error.
+
+Next, I check for SIMPSON. I calculate the conversion rates per segment:
+Desktop Control: $5,855 / 66,572 \approx 8.79\%$.
+Desktop Treatment: $6,172 / 66,745 \approx 9.25\%$. (Lift positive)
+Mobile Control: $3,114 / 112,810 \approx 2.76\%$.
+Mobile Treatment: $3,282 / 113,103 \approx 2.90\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON.
+
+Next, I check DENOM. The metric is "order conversion rate." The randomization unit is "user id." The counts provided for the metric calculation (orders) are aggregated by users in the arms. While sessions are listed, the conversion rate is typically orders/users or orders/sessions. If the metric is orders/users, the denominator matches the randomization unit. If it is orders/sessions, the denominator (sessions) is not the randomization unit (users), which can bias variance estimates if session counts differ significantly between arms. However, the readout explicitly lists "users" and "orders" and reports a standard conversion rate. Without explicit confirmation that the rate was calculated as orders/sessions, and given that user counts are the primary arm definition, this is ambiguous but not definitively proven wrong by the numbers alone. However, looking closely at the math:
+Control Rate Reported: 5.0%.
+Calculated Control (Orders/Users): $8,969 / 179,382 \approx 5.00\%$.
+Calculated Treatment (Orders/Users): $9,454 / 179,848 \approx 5.26\%$.
+The reported numbers match the Orders/Users calculation perfectly. Since users were the randomization unit, the denominator matches. No DENOM.
+
+Finally, I check NOVELTY. The daily lift values fluctuate (5.2 to 5.6 down to 4.4, back up to 5.6, etc.) but show no clear fading trend over the 14 days; the final days are as high as the start. No NOVELTY.
+
+No errors found based on the provided numbers.
+
+ERRORS: NONE
+DECISION: SHIP

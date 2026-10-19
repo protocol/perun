@@ -1,0 +1,101 @@
+ERRORS: DENOM, SIMPSON, PEEK, NOVELTY
+DECISION: HOLD
+
+The analysis contains four critical errors. First, **DENOM**: users were randomized, but the arm sizes and conversion rates use "sessions" as the denominator, violating the unit of randomization. Second, **SIMPSON**: the pooled data shows Treatment winning (6.29% vs 6.00%), yet within both Desktop (9.7% vs 9.2%) and Mobile (3.6% vs 3.8%? Wait, let me recalculate mobile: Control 669/18543=3.61%, Treatment 699/18478=3.78%. Both segments show Treatment winning. My previous mental check was wrong. Let me re-verify Simpson's condition. 
+Control Desktop: 1269/13773 = 9.21%. Treatment Desktop: 1326/13724 = 9.66%. (Treatment wins)
+Control Mobile: 669/18543 = 3.61%. Treatment Mobile: 699/18478 = 3.78%. (Treatment wins)
+Both segments favor Treatment. The aggregate favors Treatment. There is no reversal. **SIMPSON is NOT present.** I must correct this.
+
+Let's re-evaluate **DENOM**. The text says "41,468 sessions" but the device breakdown says "13,773 users". 13773+18543 = 32,316 users. This does not equal 41,468 sessions. The metric is "order conversion rate". If the denominator is sessions but randomization is by user, and a user has multiple sessions, this is **DENOM** (denominator mismatch).
+
+Let's re-evaluate **PEEK**. Planned 14 days. Readout date July 21, Start July 6. That is 15 days of data (6th to 21st inclusive is 16 days? Or 15 full days?). The daily lift goes to "day 15". The plan was 14 days. They read it out on day 15/16. This might be a slight overrun, not necessarily early stopping. However, the p-value is 0.1232 (not significant). They are recommending rollout despite p > 0.05. This isn't PEEK (stopping early for significance); it's ignoring non-significance. Is there a PEEK error? The prompt says "stopped or called before planned duration". They ran *longer* (15 days vs 14). So **PEEK is likely NOT present** based on duration.
+
+Let's re-evaluate **NOVELTY**. The daily lift drops from 9.5% to ~2.0% and fluctuates near zero. The team projects this fading lift over 12 months. This is a clear **NOVELTY** error (ignoring decay).
+
+Let's re-evaluate **SRM**. Total Users (sum of device users): Control = 13773+18543 = 32,316. Treatment = 13724+18478 = 32,202. Total = 64,518. Expected 50/50 = 32,259. Observed: 32,316 vs 32,202. Difference is 114 users. Chi-square test: (114^2)/64518 ≈ 0.2. P-value is very high. No SRM. Wait, the top line says "41,468 sessions" vs "42,100 sessions". If we treat sessions as the sample size for SRM check (which we shouldn't if randomized by user, but let's check the logging): 41468 vs 42100. Total 83568. Exp 41784. Diff 632. Chi-sq: (632^2)/83568 ≈ 4.8. P < 0.05. This suggests an SRM if sessions are the unit of analysis, but users are the unit of randomization. The mismatch between "sessions" top line and "users" breakdown is the real issue.
+
+Let's look closer at the numbers.
+Top line: Control 41,468 sessions. Treatment 42,100 sessions.
+Breakdown: Control 13,773 + 18,543 = 32,316 users. Treatment 13,724 + 18,478 = 32,202 users.
+Why do sessions not match users? Are there multiple sessions per user? If so, using sessions as the denominator for a user-randomized test is **DENOM**.
+Is there SRM? User split: 32316 vs 32202. Very balanced. No SRM on users.
+Is there PEEK? They ran 15 days, planned 14. Not early.
+Is there POWER? N=32k per arm. Baseline 6%, target 10% lift. Required sample size approx 12k per arm (from standard tables). They have 32k. Well powered.
+Is there SIMPSON?
+Desktop CR: C 9.21%, T 9.66%. Lift +4.8%.
+Mobile CR: C 3.61%, T 3.78%. Lift +4.7%.
+Aggregate CR (using sessions? No, let's use users):
+Control Orders: 1938. Treatment Orders: 2025.
+Control Users: 32316. Treatment Users: 32202.
+Control CR: 1938/32316 = 5.997%. Treatment CR: 2025/32202 = 6.288%.
+Lift is consistent. No Simpson's paradox.
+
+So, what errors are definitely there?
+1. **DENOM**: The top line reports "sessions" (41k/42k) while the breakdown reports "users" (32k/32k) and randomization is by user. The reported conversion rates (5.997% vs 6.288%) match the calculation using *users* (1938/32316 and 2025/32202). However, the header says "41,468 sessions". This is inconsistent labeling, but is it a "denominator error" in the metric calculation? The metric *values* seem to use users. But the text explicitly says "Arms: control: 41,468 sessions". If the analyst thinks N=41k, they are wrong about the sample size. But more importantly, if the metric "order conversion rate" is defined as Orders/Sessions, but randomization is User, that is DENOM. Let's check the math again.
+1938 / 41468 = 4.67%.
+1938 / 32316 = 5.997%.
+The reported rate is 5.997%. So they *did* use users as the denominator for the rate.
+However, they labeled the arm size as "sessions". This is a reporting inconsistency, but maybe not a fatal analytical error affecting the p-value if the p-value was calculated on users.
+BUT, look at the device breakdown sum: 13773+18543 = 32316.
+The top line says 41468 sessions.
+If the p-value (0.1232) was calculated using the correct user counts, the math is fine.
+Is there another error?
+
+Let's re-read the daily lift. "Day 1 to day 15". Planned 14 days. They included day 15.
+The p-value is 0.1232. This is NOT significant (alpha 0.05).
+The recommendation is "roll out to everyone".
+Recommending rollout when p > 0.05 is a statistical error, but is it one of the codes?
+PEEK: "stopped or called before planned duration". They went over.
+POWER: "smaller arm too small". Arm is 32k, need 12k. Not underpowered.
+SRM: User split is fine.
+SIMPSON: No reversal.
+DENOM: "reported metric's denominator is not the unit that was randomized". The reported metric *value* (5.997%) uses users (1938/32316). So the denominator *is* the unit randomized. The label "sessions" is a typo in the readout text, but the math uses users.
+
+Wait, look at the daily lift trend. 9.5 -> 2.0. It's fading fast.
+Projection: "applies the reported lift to the next twelve months".
+This is **NOVELTY** (fading lift projected as lasting).
+
+Is there any other error?
+What if the p-value is wrong?
+Observed: C=1938/32316, T=2025/32202.
+Pooled p = (1938+2025)/(32316+32202) = 3963/64518 = 0.0614.
+SE = sqrt( p(1-p) * (1/n1 + 1/n2) ) = sqrt( 0.0614*0.9386 * (2/32259) ) ≈ sqrt( 0.0576 * 0.000062 ) ≈ sqrt(0.00000357) ≈ 0.00189.
+Diff = 0.06288 - 0.05997 = 0.00291.
+Z = 0.00291 / 0.00189 = 1.54.
+P-value (2-sided) for Z=1.54 is approx 0.123.
+The p-value 0.1232 is correct for the data.
+The result is NOT significant.
+The team recommends rollout.
+This is a "False Positive" decision, but is it a specific error code?
+The prompt asks to flag categories if the *numbers show that error*.
+The numbers show the result is insignificant (p=0.12). The decision ignores this.
+Does "PEEK" cover "calling a test" even if not early? "the test was stopped or called before its planned duration". They ran 15 days, planned 14. They didn't stop early.
+Maybe **NOVELTY** is the only one?
+Or is there a **DENOM** issue I'm missing?
+"Arms: control: 41,468 sessions". "By device: ... users".
+If the randomization is by User, and the data provided for "Arms" is Sessions, but the calculation used Users...
+Actually, if the readout says "41,468 sessions" and then breaks down into "users" that sum to 32k, where did the extra 9k sessions go? Or are they overlapping?
+If the "Arms" line is just a label error, it's sloppy but not an analytical flaw in the result.
+However, if the "order conversion rate" was calculated as Orders/Sessions, the rate would be ~4.7%. The reported rate is ~6.0%. So they used Users.
+So DENOM is not strictly true for the *metric calculation*, though the *label* is wrong.
+
+Let's reconsider **SIMPSON**.
+Desktop: C 1269/13773 = 9.21%. T 1326/13724 = 9.66%. (T > C)
+Mobile: C 669/18543 = 3.61%. T 699/18478 = 3.78%. (T > C)
+Aggregate: T > C.
+No Simpson.
+
+Let's reconsider **SRM**.
+Users: 32316 vs 32202. Perfectly fine.
+Sessions: 41468 vs 42100.
+If the system logged sessions and the split was done on users, the session count can vary if treatment users generate more sessions (which they might if the feature works!). So SRM on sessions is expected if the treatment affects engagement. SRM check must be on the randomization unit (users). Users are balanced. No SRM.
+
+Let's reconsider **POWER**.
+Target lift 10% relative. Baseline 6%. Absolute lift 0.6%.
+Alpha 0.05, Power 80%.
+Required N per arm ≈ 12,000 (standard approximation).
+Actual N ≈ 32,000.
+Overpowered, not underpowered.
+
+So, is it just **NOVELTY**?
+The lift fades from 9.5% to 2.0%. The average is ~4

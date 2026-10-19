@@ -1,0 +1,80 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 46,897 (control) + 47,215 (treatment) = 94,112. The expected split is 47,056 per arm. The observed difference is 318 users. The standard deviation for a 50/50 split is $\sqrt{94112 \times 0.5 \times 0.5} \approx 153$. The Z-score is $318 / 153 \approx 2.08$. While slightly elevated, this is borderline and often acceptable depending on strictness, but let's look closer. A Z-score > 2 usually flags SRM. However, looking at the segments: Desktop (20,206 vs 20,343, diff 137, total 40,549, SD~101, Z=1.36) and Mobile (26,691 vs 26,872, diff 181, total 53,563, SD~116, Z=1.56). The aggregate Z of 2.08 suggests a minor imbalance, but is it "broken"? Usually, Z > 2.5 or 3 is the hard fail threshold. Let's hold on flagging SRM unless other errors are absent, as 2.08 corresponds to p~0.037, which is suspicious but maybe not definitive "broken" assignment without more context. Wait, the prompt says "differ... by more than chance allows". At p<0.05, chance is exceeded. So SRM is a candidate.
+
+Next, Denominator (DENOM). Randomization is by user ID. The metric is "order conversion rate". The counts are 2,344 orders / 46,897 users = 4.998%. The denominator matches the randomization unit (users). No DENOM error.
+
+Simpson's Paradox (SIMPSON).
+Control Desktop Rate: $1660/20206 \approx 8.21\%$. Treatment Desktop: $1749/20343 \approx 8.60\%$. Lift is positive.
+Control Mobile Rate: $684/26691 \approx 2.56\%$. Treatment Mobile: $721/26872 \approx 2.68\%$. Lift is positive.
+Both segments show positive lift, and the aggregate shows positive lift. No reversal. No SIMPSON error.
+
+Power (POWER). The test ran for 28 days as planned. Total users ~94k. Baseline 5%, target 10% lift (to 5.5%).
+Standard error approx $\sqrt{p(1-p)/n}$. Pooled p ~ 0.051. $n \approx 47000$. $SE \approx \sqrt{0.05 \times 0.95 / 47000} \approx 0.001$. Detectable lift at 80% power/5% alpha is roughly $2.8 \times SE \approx 0.28\%$ absolute, which is ~5.6% relative. The target was 10%. The sample size is sufficient to detect 10%. The observed lift is 4.7% (smaller than target), resulting in p=0.1045 (not significant). This is a result of low effect size, not an underpowered *design* relative to the *target*. The design calculated for 10% lift; they got 4.7%. The study wasn't underpowered to detect the *target*, the target just wasn't met. So no POWER error in the analysis sense.
+
+Peeking (PEEK). Started Feb 26, planned 28 days. Readout March 26. Feb 26 to Mar 26 is exactly 28 days (2026 is not a leap year, Feb has 28 days. 26, 27, 28 = 3 days in Feb. 25 days in March. Total 28). The duration matches the plan. No PEEK.
+
+Novelty (NOVELTY). The daily lift values fluctuate: 4.9, 5.4 ... 3.6 ... 6.2 ... 4.4. There is no clear fading trend (e.g., high start, low end). The end values (5.1, 4.4) are similar to the start (4.9, 5.4). No obvious fading.
+
+Re-evaluating SRM: Z=2.08. Is this "more than chance allows"? In strict A/B testing governance, p < 0.05 on SRM is a flag. The difference is 318 users. If the assignment mechanism is truly 50/50, this happens <5% of the time. It suggests potential logging issues or assignment bias. Given the instruction to flag if numbers show the error, and 2.08 sigma is statistically significant (p ~ 0.037), I will flag SRM.
+
+Wait, let's re-read the SRM definition: "differ ... by more than chance allows". Statistically, 5% is the standard cutoff for "chance". Since 0.037 < 0.05, it is unlikely to be chance. SRM is present.
+
+Are there any other issues?
+The p-value is 0.1045. The recommendation is "roll out". The result is not statistically significant (p > 0.05). Rolling out on a non-significant result is a decision error, but is it one of the coded analysis errors?
+The codes are specific: SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY.
+Making a rollout decision on non-significant data isn't one of the codes. However, if SRM is flagged, the data integrity is compromised.
+
+Let's double check the SRM calculation.
+Total N = 94,112. Expected = 47,056.
+Observed Control = 46,897. Diff = -159.
+Observed Treatment = 47,215. Diff = +159.
+Chi-sq = $(159^2 / 47056) + (159^2 / 47056) = 2 \times (25281 / 47056) \approx 1.07$.
+$\sqrt{1.07} \approx 1.03$.
+My previous mental math was wrong.
+Let's re-calculate carefully.
+$N_c = 46897, N_t = 47215$. Total = 94112.
+Expected $E = 47056$.
+$(O-E)^2/E$ for control: $(46897 - 47056)^2 / 47056 = (-159)^2 / 47056 = 25281 / 47056 \approx 0.537$.
+Same for treatment. Total Chi-sq = 1.074.
+P-value for Chi-sq(1) = 1.074 is approx 0.30.
+Z-score is $\sqrt{1.074} \approx 1.04$.
+1.04 sigma is well within chance (p=0.30).
+My initial quick estimate of "318 difference" treated the gap between arms as the deviation from mean, but the deviation from mean is half that (159).
+So, SRM is **NOT** present. The split is fine.
+
+Let's re-scan for other errors.
+PEEK: Dates match. No.
+POWER: Sample size adequate for target. No.
+SIMPSON: Segments agree with total. No.
+DENOM: Users randomized, users in denominator. No.
+NOVELTY: No fading trend. No.
+
+Is there an error I missed?
+The reported p-value is 0.1045. The lift is 4.7%.
+The recommendation is "roll out".
+The prompt asks to flag analysis errors from the list.
+If none of the specific technical errors (SRM, PEEK, etc.) are present in the *numbers*, then the answer is NONE.
+The decision to roll out despite p=0.1045 is a business decision error (ignoring statistical significance), but "IGNORING_PVALUE" is not a code.
+However, look at the Denominator again.
+"Metric: order conversion rate."
+Control: 2,344 orders / 46,897 users = 4.998%. Correct.
+Treatment: 2,470 orders / 47,215 users = 5.231%. Correct.
+Randomization unit: User ID. Denominator: Users. Matches.
+
+What about the "Power" definition again? "the smaller arm is too small to detect the target lift at the stated alpha and power".
+We established the sample size (~47k) is enough to detect 10% lift on 5% baseline.
+Required n per arm for 5% base, 10% lift (0.5% abs), alpha 0.05, power 0.80.
+$p_1=0.05, p_2=0.055$.
+$n \approx 16 \times \bar{p}(1-\bar{p}) / (p_1-p_2)^2$? Rough rule of thumb.
+More precise: $Z_{\alpha/2} + Z_{\beta} = 1.96 + 0.84 = 2.8$.
+$SE_{diff} = \sqrt{2 \times 0.0525 \times 0.9475 / n}$.
+Detectable diff $\delta = 0.005$.
+$0.005 = 2.8 \times \sqrt{0.0995/n}$.
+$0.005/2.8 = 0.00178$.
+$0.00178^2 = 3.18e-6$.
+$3.18e-6 = 0.0995/n \rightarrow n = 0.0995 / 3.18e-6 \approx 31,289$.
+We have 46,897. We are well above the required sample size. Not underpowered.
+
+Conclusion: None of the specific coded errors are supported by the numbers. The SRM calculation was my false alarm; the split is statistically consistent with 50/50. The lack of statistical significance (p=0.10) is a result, not an analysis flaw in the listed categories. The recommendation to ship might be bold, but it doesn't fit the error codes provided.
+
+ERRORS: NONE
+DECISION: SHIP

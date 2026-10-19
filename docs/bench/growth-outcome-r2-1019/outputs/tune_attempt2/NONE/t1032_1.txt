@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 187,698 (control) + 184,712 (treatment) = 372,410. The expected split is 50%, so 186,205 per arm. The treatment deviation is $|184,712 - 186,205| = 1,493$. The standard error for a 50/50 split is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{93,102} \approx 305$. The deviation is $1,493 / 305 \approx 4.9$ standard errors. This is statistically significant ($p < 0.001$), indicating broken randomization or logging. **SRM is flagged.**
+
+Next, I check the denominator. The metric is "order conversion rate," and users were randomized. The readout provides user counts and order counts. The reported rates match the calculation using users as the denominator: Control $9,385 / 187,698 \approx 5.0\%$? Wait, the readout says 3.876%. Let's re-calculate: $9,385 / 242,116$ (sessions) $\approx 3.876\%$. Treatment: $9,698 / 210,122 \approx 4.615\%$. The reported metric uses **sessions** as the denominator, but the unit of randomization was **user id**. This violates the independence assumption of the test because sessions from the same user are correlated. **DENOM is flagged.**
+
+I check for Simpson's Paradox.
+Desktop Control Rate: $6,003 / 66,568 \approx 9.02\%$.
+Desktop Treatment Rate: $6,203 / 65,509 \approx 9.47\%$. (Lift positive)
+Mobile Control Rate: $3,382 / 121,130 \approx 2.79\%$.
+Mobile Treatment Rate: $3,495 / 119,203 \approx 2.93\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled direction. No reversal occurs. **SIMPSON is not flagged.**
+
+Regarding PEEK: The test ran from March 18 to April 3. This is 17 days inclusive, exceeding the planned 14 days. There is no evidence in the numbers that it was stopped *early* based on interim results; it actually ran long. **PEEK is not flagged.**
+
+Regarding POWER: With ~185k users per arm and a baseline of ~5%, the test is vastly overpowered to detect a 5% lift, not underpowered. **POWER is not flagged.**
+
+Regarding NOVELTY: The daily lift data (18.7% to 23.6%) fluctuates but does not show a clear fading trend; if anything, the end values are higher. **NOVELTY is not flagged.**
+
+The presence of SRM and the denominator mismatch invalidates the statistical conclusion.
+
+ERRORS: SRM, DENOM
+DECISION: HOLD

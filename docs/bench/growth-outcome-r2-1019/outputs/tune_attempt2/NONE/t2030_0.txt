@@ -1,0 +1,26 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 128,033 (control) + 128,379 (treatment) = 256,412. The expected split is 50%, so 128,206 per arm. The difference is |128,379 - 128,206| = 173. The standard deviation for a binomial distribution here is $\sqrt{256412 \times 0.5 \times 0.5} \approx 253$. The difference is less than 1 standard deviation, so the split is consistent with random chance. No SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The reported rates are calculated as orders divided by users?
+Control: $3,841 / 128,033 \approx 3.00\%$. Wait, the readout says 2.347%.
+Let's try orders divided by sessions.
+Control: $3,841 / 163,623 \approx 0.02347$ (2.347%).
+Treatment: $4,057 / 147,190 \approx 0.02756$ (2.756%).
+The calculation matches the reported percentages. However, the denominator used is **sessions**, while the unit of randomization is **users**. Since a single user can have multiple sessions, and the treatment might affect session frequency (treatment has fewer sessions per user: $147,190/128,379 \approx 1.15$ vs control $163,623/128,033 \approx 1.28$), using sessions as the denominator biases the result. This is a classic DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $2,663 / 53,214 \approx 5.00\%$.
+Desktop Treatment Rate: $2,813 / 53,358 \approx 5.27\%$. (Lift positive)
+Mobile Control Rate: $1,178 / 74,819 \approx 1.57\%$.
+Mobile Treatment Rate: $1,244 / 75,021 \approx 1.66\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled direction. No Simpson's paradox.
+
+Regarding Power (POWER): The sample size (~128k per arm) is massive compared to the baseline (3%) and target lift (5%). It is not underpowered.
+
+Regarding Peeking (PEEK): The test ran from March 5 to March 26 (21 days), matching the planned duration. No evidence of early stopping.
+
+Regarding Novelty (NOVELTY): The daily lift fluctuates (13.1% to 20.6%) but shows no clear fading trend toward zero over the 21 days. The projection assumes the lift lasts, but the data doesn't explicitly show fading yet.
+
+The critical error is DENOM: analyzing session-level conversion when users were randomized.
+
+ERRORS: DENOM
+DECISION: HOLD

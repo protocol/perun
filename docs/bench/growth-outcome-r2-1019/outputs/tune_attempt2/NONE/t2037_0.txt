@@ -1,0 +1,45 @@
+**SRM Check**: Total users = 36,822 (Control) + 36,568 (Treatment) = 73,390. Expected per arm = 36,695.
+Difference = 36,822 - 36,695 = 127.
+Standard Error (SE) for binomial split $\approx \sqrt{N \cdot 0.5 \cdot 0.5} = \sqrt{18,347.5} \approx 135$.
+The difference (127) is less than 2 SEs (270). The split is within chance expectations. No SRM.
+
+**PEEK Check**: Planned duration was 21 days. The readout covers dates from Oct 31 to Nov 22.
+Oct 31 to Nov 22 inclusive is exactly 23 days? Let's count: Oct (1 day) + Nov (22 days) = 23 days of data collection? Or did it end on the 22nd?
+Start: Oct 31. End: Nov 22.
+Days: Oct 31 (1), Nov 1-22 (22). Total = 23 days.
+Wait, the daily lift lists 22 data points ("day 1 to day 22"). The planned duration was 21 days. The test ran for 22 days.
+Running *longer* than planned does not inflate false positives in the same way stopping early does. PEEK specifically refers to stopping *before* the planned duration or peeking repeatedly without correction. Since the test exceeded the planned 21 days (22 days of data), this is not a premature stop. No PEEK.
+
+**POWER Check**: The test reported a p-value of 0.4179, meaning it was not statistically significant.
+Did the sample size allow detecting the target lift?
+Target lift = 8% relative on 4.0% baseline = 0.32% absolute lift (from 4.0% to 4.32%).
+Approximate sample size per arm needed for 80% power, alpha 0.05, baseline 0.04, detect 0.0432:
+$N \approx 16 \cdot \bar{p}(1-\bar{p}) / \delta^2$. $\bar{p} \approx 0.0416$, $\delta = 0.0032$.
+$N \approx 16 \cdot 0.04 / (0.0032)^2 \approx 0.64 / 0.00001024 \approx 62,500$ per arm.
+Actual N per arm $\approx$ 36,700.
+36,700 < 62,500. The study is underpowered to detect the *target* 8% lift. However, the metric observed was only 3% lift. The error code POWER applies if the arm is too small to detect the *target* lift at stated alpha/power. Since $N_{actual} < N_{required}$ for the design parameters, this fits the definition of an underpowered test relative to its design goals. Flag POWER.
+
+**SIMPSON Check**:
+Desktop Conversion:
+Control: 1,137 / 18,128 $\approx$ 6.27%
+Treatment: 1,231 / 20,539 $\approx$ 6.00% (Treatment < Control)
+Mobile Conversion:
+Control: 336 / 18,694 $\approx$ 1.80%
+Treatment: 275 / 16,029 $\approx$ 1.72% (Treatment < Control)
+Both segments show Treatment < Control (negative lift).
+Pooled result: Control 4.0%, Treatment 4.118% (positive lift).
+Since the pooled result (positive) is reversed compared to both segments (negative), this is a clear case of Simpson's Paradox. This likely stems from the denomination issue (see below) or weighting, but the reversal is present. Flag SIMPSON.
+
+**DENOM Check**: Randomization unit is "user id". The metric is "order conversion rate".
+Usually, conversion rate is Orders / Users or Orders / Sessions?
+If Orders / Users:
+Control: 1,473 / 36,822 = 4.00%. Matches reported.
+Treatment: 1,506 / 36,568 = 4.118%. Matches reported.
+The denominator matches the randomization unit (Users). No DENOM error based on the definition "denominator is not the unit that was randomized". The math works out perfectly with users.
+
+**NOVELTY Check**: Daily lift starts at 6.0% and trends down to 1.5%.
+The team projects the "reported lift" (aggregate 3.0%) for the next 12 months.
+The trend shows a clear decay (novelty effect), yet the projection assumes the average (which includes the high early days) will persist. This ignores the fading lift. Flag NOVELTY.
+
+ERRORS: POWER, SIMPSON, NOVELTY
+DECISION: HOLD

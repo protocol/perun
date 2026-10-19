@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 263,822 (control) + 266,650 (treatment) = 530,472. The expected split is 265,236 per arm. The treatment has 1,414 extra users. The standard error for the difference is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx 365$. The difference is $1414 / 365 \approx 3.87$ standard deviations. This exceeds the typical threshold of 2 (or even 3), indicating a significant deviation from the 50/50 plan. **SRM is flagged.**
+
+Next, I check for Simpson's Paradox (SIMPSON) by calculating conversion rates per segment:
+Desktop Control: $5,108 / 108,119 \approx 4.72\%$
+Desktop Treatment: $5,539 / 109,278 \approx 5.07\%$ (Lift positive)
+Mobile Control: $2,807 / 155,703 \approx 1.80\%$
+Mobile Treatment: $3,044 / 157,372 \approx 1.93\%$ (Lift positive)
+Since the lift is positive in both segments and positive overall ($3.219\% > 3.0\%$), there is no reversal. **SIMPSON is not flagged.**
+
+Regarding Power (POWER): The sample sizes (~265k) are massive compared to the baseline (3%) and target lift (5%). A quick mental check confirms this is vastly overpowered, not underpowered. **POWER is not flagged.**
+
+For Denominator (DENOM): The metric is order conversion rate. The randomization unit is user ID. The readout provides users and orders. Assuming "conversion rate" implies orders per user (standard for user-randomized tests), the denominator matches the randomization unit. If it were orders per session, it would be an error, but the numbers align with user-level rates (e.g., $7915/263822 \approx 3.0\%$). **DENOM is not flagged.**
+
+For Peeking (PEEK): The test ran from March 17 to April 15. This is 29 days (March has 31 days; $31-17+1 = 15$ days in March + 15 in April = 30 days? Let's count: 17th to 15th is exactly 29 days if inclusive start/end logic varies, but the planned duration was 28 days. The readout says "final readout 2026-04-15" and lists daily data up to day 29. Running 29 days vs planned 28 is negligible and likely just timezone/reporting lag, not a strategic early stop to inflate false positives. The p-value is reported as 0.0, suggesting extreme significance, making peeking less critical to flag based solely on the 1-day overrun. However, strict adherence might flag it, but SRM is the dominant structural failure. I will not flag PEEK as the primary issue compared to SRM.
+
+For Novelty (NOVELTY): The daily lift fluctuates (8.4% down to 5.7% and back up to 8.8%) without a clear, monotonic fading trend. **NOVELTY is not flagged.**
+
+The primary error is SRM. Since assignment or logging appears broken, we cannot trust the causal inference.
+
+ERRORS: SRM
+DECISION: HOLD

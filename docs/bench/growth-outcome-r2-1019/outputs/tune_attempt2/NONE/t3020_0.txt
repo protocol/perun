@@ -1,0 +1,41 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 27,082 (control) + 26,942 (treatment) = 54,024. The expected split is 27,012 per arm. The observed difference is |27,082 - 27,012| = 70 users. For a sample this size, a deviation of 70 is well within the bounds of random chance (standard deviation $\approx \sqrt{54024 \times 0.5 \times 0.5} \approx 116$; 70 is less than 1 standard deviation). Thus, SRM is not flagged.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate," and the denominators used in the report (implied by the percentages) are users (e.g., $1,084 / 27,082 \approx 4.003\%$). Since users were the randomized unit, the denominator matches the randomization unit. DENOM is not flagged.
+
+I then examine Simpson's Paradox (SIMPSON).
+Desktop conversion: Control $764/11,702 \approx 6.53\%$; Treatment $807/11,642 \approx 6.93\%$. Lift is positive.
+Mobile conversion: Control $320/15,380 \approx 2.08\%$; Treatment $338/15,300 \approx 2.21\%$. Lift is positive.
+Since the lift is positive in both segments and positive in the aggregate, the direction is consistent. SIMPSON is not flagged.
+
+Regarding Power (POWER): The test ran for 29 days (May 20 to June 18 inclusive), exceeding the planned 28 days. The sample size (~54k) is substantial. While the result is not statistically significant ($p=0.1486 > 0.05$), "underpowered" usually refers to a design flaw preventing detection of the target lift. Given the duration was met and exceeded, and the sample is large, the lack of significance is likely due to the true effect being smaller than the target, not a design failure preventing detection. However, the prompt asks to flag if the arm is *too small* to detect the lift. With ~27k per arm, baseline 4%, target 10% lift (to 4.4%), standard power calculations suggest ~25k-30k per arm is sufficient. The study was adequately powered; it simply failed to find a significant effect. POWER is not flagged.
+
+For PEEK: The readout states the planned duration was 28 days, and the data covers May 20 to June 18 (29 days). The test ran the full duration (and one day extra). There is no evidence of early stopping. PEEK is not flagged.
+
+Finally, NOVELTY: The daily lift data shows fluctuation (6.2% down to 4.9% and back up) but no clear, sustained fading trend (e.g., starting high and decaying to zero). The projection applies the *reported* average lift, not an inflated initial spike. There is no obvious evidence of a novelty effect fading that is being incorrectly projected. NOVELTY is not flagged.
+
+The primary issue is that the result is not statistically significant ($p=0.1486$), yet the recommendation is to "roll out to everyone." While this is a bad decision based on the statistics, it does not fit the specific *analysis error* definitions provided (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY). The errors listed are specific methodological flaws, not simply interpreting a non-significant result as positive. However, strictly adhering to the prompt's instruction to "Flag a category only if the numbers show that error," none of the specific coded errors are present in the numbers.
+
+Wait, let me re-evaluate POWER. The definition says "the smaller arm is too small to detect the target lift at the stated alpha and power." The test *failed* to detect the lift (p=0.14). Was it too small? With 27k users, baseline 4%, detecting a 10% relative lift (0.4% absolute) requires roughly 26,000 users per arm for 80% power at alpha 0.05. The sample size is adequate. The error is in the *decision*, not the power calculation itself.
+
+Is there any other error? The recommendation ignores the p-value. But is that one of the codes? No.
+Let's re-read the daily lift. 6.2, 5.5... 4.9, 5.8. No clear fade.
+Let's re-read the dates. May 20 to June 18. May has 31 days. May 20-31 = 12 days. June 1-18 = 18 days. Total = 30 days? Or inclusive/exclusive? "Day 1 to day 29" is listed in the daily lift data. Planned 28 days. It ran 29 days. Not early stopping.
+
+Actually, looking closely at the recommendation: "Recommendation: roll out to everyone." The p-value is 0.1486. This is not significant. Rolling out based on non-significant data is a mistake, but does it map to a code?
+Perhaps I missed a subtle math error in the segments?
+Desktop: $764/11702 = 0.06528$. $807/11642 = 0.06931$.
+Mobile: $320/15380 = 0.02080$. $338/15300 = 0.02209$.
+Weighted average Control: $(764+320)/(11702+15380) = 1084/27082 = 0.040026$. Correct.
+Weighted average Treatment: $(807+338)/(11642+15300) = 1145/26942 = 0.042498$. Correct.
+Lift: $(4.25 - 4.003)/4.003 = 6.17\%$. Correct.
+
+There are no calculation errors. There are no SRM, PEEK, SIMPSON, DENOM, or NOVELTY errors. The study was adequately powered (POWER is not an error here, the result is just null).
+However, the team is recommending a rollout despite $p > 0.05$. Is this "PEEK"? No, PEEK is stopping early. Is it "POWER"? No, the sample was big enough.
+If none of the specific errors apply, the answer is NONE. But wait, if the result is not significant, should we hold? Yes. But the "ERRORS" line asks for codes. If no codes apply, it's NONE.
+But is it possible the question implies that proceeding with a non-significant result is a failure of the analysis process covered by these tags? No, the tags are specific.
+Let's double check SRM again. 27082 vs 26942. Total 54024. Expected 27012. Diff 70. $Z = 70 / \sqrt{54024 \times 0.25} = 70 / 116.2 = 0.6$. P-value for SRM is huge. No SRM.
+
+Conclusion: The numbers do not demonstrate any of the specific analysis errors listed (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY). The team's *decision* is flawed because the result is not statistically significant, but that is not one of the coded errors to flag. Therefore, no error codes apply. However, the decision must be HOLD because the evidence (p=0.1486) does not support the rollout.
+
+ERRORS: NONE
+DECISION: HOLD

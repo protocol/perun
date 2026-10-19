@@ -1,0 +1,35 @@
+**SRM Check**: Total users = 13,336 + 13,512 = 26,848. Expected per arm = 13,424.
+Observed difference = |13,512 - 13,336| = 176.
+Standard Error (SE) for binomial split ≈ $\sqrt{N \times 0.5 \times 0.5} = \sqrt{26848 \times 0.25} \approx 82$.
+Z-score = $176 / 82 \approx 2.15$. This exceeds the typical threshold of 2 (approx. p < 0.05), indicating the split is statistically significantly different from 50/50. Assignment or logging is likely broken. **Flag SRM.**
+
+**PEEK Check**: Planned duration was 21 days. The readout date is Oct 16, start date Oct 1. Duration = 15 days. The test was stopped 6 days early. While early stopping often inflates false positives, the reported p-value is 0.6416 (not significant). The error definition states PEEK inflates false positives (leading to erroneous rollouts). Since the result is not significant, the team isn't rolling out based on a false positive caused by peeking; they are rolling out despite non-significance based on a projection. However, the act of stopping early violates the design. But strictly, does the *numbers* show the error of "inflated false positive leading to bad decision"? The decision is bad, but the p-value admits no significance. Let's look closer at the definition: "the test was stopped... which inflates false positives." The condition of early stopping is met (15 vs 21 days). Does this constitute the error category? Yes, the protocol was violated.
+
+**POWER Check**: Baseline 8%, target 10% lift (to 8.8%). Alpha 0.05, Power 80%.
+Required sample size per arm (approx) for detecting 10% relative lift on 8% base:
+Using standard approximation $n \approx 16 \times (p_1(1-p_1) + p_2(1-p_2)) / (p_1-p_2)^2$.
+$p_1=0.08, p_2=0.088$. Diff = 0.008.
+$n \approx 16 \times (0.0736 + 0.0802) / 0.000064 \approx 16 \times 0.1538 / 0.000064 \approx 38,450$ per arm.
+Current n ≈ 13,400 per arm. The study is severely underpowered to detect the target lift. **Flag POWER.**
+
+**SIMPSON Check**:
+Desktop CVR: Control = 681/5257 ≈ 12.95%; Treatment = 754/5999 ≈ 12.57%. (Treatment < Control)
+Mobile CVR: Control = 386/8079 ≈ 4.78%; Treatment = 348/7513 ≈ 4.63%. (Treatment < Control)
+Pooled CVR: Control ≈ 8.00%; Treatment ≈ 8.16%. (Treatment > Control)
+The direction reverses in segments vs pooled. **Flag SIMPSON.**
+
+**DENOM Check**: Randomized by user id. Metric is order conversion rate (Orders/Users). Denominator matches randomization unit. No error.
+
+**NOVELTY Check**: Daily lift values: 1.9, 1.8, 1.9, 2.1, 1.8, 1.9, 1.9, 2.0, 1.6, 1.9, 2.3, 1.6, 1.8, 1.9, 2.3.
+There is no visible fading trend; values fluctuate around ~1.9% throughout. No error.
+
+**Summary**:
+SRM is present (Z > 2).
+POWER is present (N too small for target).
+SIMPSON is present (reversal in segments).
+PEEK is present (stopped early), though the primary driver of the bad decision here is the misinterpretation of non-significant data and the paradox. However, the prompt asks to flag if the numbers show the error. The numbers show 15 days vs 21 planned.
+
+The presence of SRM invalidates the randomization assumption, making any causal inference unreliable. Simpson's paradox indicates a confounding variable (device) distribution shift or interaction that makes the pooled number misleading. Power issues mean the non-significant result doesn't prove equivalence, but the team is projecting a lift anyway.
+
+ERRORS: SRM, PEEK, POWER, SIMPSON
+DECISION: HOLD

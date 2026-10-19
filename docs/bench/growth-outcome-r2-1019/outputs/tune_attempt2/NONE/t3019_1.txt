@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 35,820 (control) + 34,868 (treatment) = 70,688. The expected split is 35,344 per arm. The difference is 476 users. Using the chi-square approximation $\chi^2 \approx \frac{(O-E)^2}{E} + \frac{(O-E)^2}{E}$, we get $\frac{476^2}{35344} \times 2 \approx 12.8$. With 1 degree of freedom, a value > 3.84 indicates significance at p<0.05. The split is statistically significantly different from 50/50, indicating broken randomization or logging. **SRM is flagged.**
+
+Next, I check for Underpowered (POWER) issues. The design targeted a 10% relative lift (from 5.0% to 5.5%). The observed rates are 5.0% ($1791/35820$) and 5.2% ($1813/34868$). While the test did not find significance (p=0.2277), the sample sizes (~35k per arm) are generally sufficient to detect a 10% lift with 80% power given a 5% baseline (standard calculators suggest ~30k-35k per arm is adequate for this effect size). The failure to detect significance is likely due to the true effect being smaller than the target, not necessarily an underpowered design *a priori*. However, since SRM is present, the power calculation based on the planned split is technically invalid, but the primary error is the mismatch itself. I will not double-flag POWER solely based on the non-significant result when the sample size is close to the requirement.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Conversion: Control $1283/16791 \approx 7.64\%$, Treatment $1299/16345 \approx 7.95\%$. (Treatment > Control)
+Mobile Conversion: Control $508/19029 \approx 2.67\%$, Treatment $514/18523 \approx 2.77\%$. (Treatment > Control)
+Both segments show a positive lift, consistent with the pooled result. No reversal exists. **SIMPSON is not flagged.**
+
+I check Denominator (DENOM). The metric is order conversion rate. The randomization unit is user id. The counts provided are users and orders. The rates reported (5.0% and 5.2%) align with Orders/Users ($1791/35820 = 0.0500$, $1813/34868 = 0.0520$). The denominator matches the randomization unit. **DENOM is not flagged.**
+
+I check Peeking (PEEK). The test ran from Jan 10 to Jan 31 (21 days), matching the planned duration. There is no evidence of early stopping. **PEEK is not flagged.**
+
+I check Novelty (NOVELTY). The daily lift fluctuates between 3.4% and 4.8% with no clear fading trend over the 21 days. The projection assumes the lift lasts, but the data does not show the specific "fading" pattern required to flag this error based *only* on the numbers provided. **NOVELTY is not flagged.**
+
+Since SRM is detected, the integrity of the experiment is compromised. The assignment mechanism or logging is broken, making the p-value and lift estimates unreliable. The team cannot make a rollout decision on broken data.
+
+ERRORS: SRM
+DECISION: HOLD

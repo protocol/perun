@@ -1,0 +1,24 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 56,045 (control) + 58,091 (treatment) = 114,136. The expected split is 57,068 per arm. The treatment has 1,023 more users than expected. A chi-square check: $(1023^2 / 57068) \times 2 \approx 36.6$. With 1 degree of freedom, a value > 3.84 indicates significant mismatch ($p < 0.05$). The arms differ significantly from 50/50, suggesting broken randomization or logging. **SRM flagged.**
+
+Next, I check for Peeking (PEEK). The planned duration was 21 days, but the readout date is January 16th, only 9 days after the January 7th start. The test was stopped early based on significant results. **PEEK flagged.**
+
+I check Power (POWER). The smaller arm (control) has 56,045 users. With a baseline of ~8% and target lift of 8%, standard calculators suggest ~20k-30k users per arm are sufficient for 80% power. The sample size here exceeds requirements, so it is not underpowered. **POWER not flagged.**
+
+I check Simpson's Paradox (SIMPSON).
+Control Desktop Rate: $3,278 / 25,987 \approx 12.61\%$.
+Treatment Desktop Rate: $3,571 / 26,935 \approx 13.26\%$. (Lift positive)
+Control Mobile Rate: $1,205 / 30,058 \approx 4.01\%$.
+Treatment Mobile Rate: $1,313 / 31,156 \approx 4.21\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. **SIMPSON not flagged.**
+
+I check Denominator (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The rates appear calculated as Orders/Users (e.g., $4,483 / 56,045 \approx 7.99\%$, wait, the reported rate is 5.76%).
+Let's re-calculate: $4,483 / 77,831$ (sessions) $\approx 5.76\%$.
+$4,884 / 65,612$ (sessions) $\approx 7.44\%$.
+The reported rates use **sessions** as the denominator, but the unit of randomization was **users**. This violates the independence assumption of the test because sessions are not independent within a user. **DENOM flagged.**
+
+I check Novelty (NOVELTY). The daily lift fluctuates (29.2% down to 25.9%, up to 34.9%) but shows no clear fading trend toward zero over the 9 days. **NOVELTY not flagged.**
+
+Errors found: SRM, PEEK, DENOM. These invalidate the statistical validity of the result.
+
+ERRORS: SRM, PEEK, DENOM
+DECISION: HOLD

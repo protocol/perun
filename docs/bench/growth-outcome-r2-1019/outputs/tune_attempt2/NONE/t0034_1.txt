@@ -1,0 +1,29 @@
+**SRM**: The total users are 56,853 (control) and 56,747 (treatment). The split is nearly perfect 50/50. However, looking at the segments by device reveals a massive imbalance.
+Desktop: 28,280 (C) vs 37,616 (T). Ratio ≈ 43% / 57%.
+Mobile: 28,573 (C) vs 19,131 (T). Ratio ≈ 60% / 40%.
+While the total count balances, the distribution across devices does not match the randomized 50/50 expectation within strata, suggesting a logging or assignment issue correlated with device type. More critically, the sum of users in segments equals the total, but the allocation within those segments is skewed. Let's check the total split again: 56,853 vs 56,747 is fine. But the device split is impossible under simple 50/50 randomization unless device type is influenced by treatment (unlikely) or there is severe sampling bias.
+Actually, the definition of SRM usually applies to the primary assignment. 56,853 vs 56,747 is well within chance ($p \approx 0.7$). But the device breakdown shows the treatment group has vastly more desktop users and fewer mobile users than control. If randomization was by user ID, device distribution should be similar.
+Chi-square check on device split:
+Expected Desktop T: (28280+37616)/2 = 32,948. Observed: 37,616. Diff is huge.
+Expected Mobile T: (28573+19131)/2 = 23,852. Observed: 19,131.
+This indicates **SRM** within segments or a correlation between assignment and device, breaking the randomization assumption.
+
+**SIMPSON**: Let's calculate conversion rates per device.
+Desktop Control: $3,311 / 28,280 \approx 11.71\%$.
+Desktop Treatment: $4,050 / 37,616 \approx 10.77\%$. (Treatment is worse).
+Mobile Control: $1,237 / 28,573 \approx 4.33\%$.
+Mobile Treatment: $762 / 19,131 \approx 3.98\%$. (Treatment is worse).
+In both segments, the treatment performs worse than control. Yet the aggregated result claims a lift (8.48% vs 8.0%). This is a classic **SIMPSON** paradox caused by the treatment group having a higher proportion of high-converting desktop users.
+
+**NOVELTY**: The daily lift starts at 14.3% and trends downward to near 0% (0.4%, 1.6%) by the end of the 23 days. The team projects this fading lift over 12 months. This ignores the decay pattern, fitting the **NOVELTY** error definition.
+
+**PEEK**: The test ran from Aug 27 to Sep 19. This is 23 days. The planned duration was 21 days. The readout says "final readout" on day 23. While it ran slightly longer, the error "stopped... before planned duration" does not apply; it ran over. However, the daily tracking suggests monitoring, but without evidence of an early stop *before* day 21, we cannot confirm PEEK solely from these numbers.
+
+**POWER**: With ~56k users per arm and an 8% baseline, the sample size is sufficient to detect an 8% lift. Not underpowered.
+
+**DENOM**: Randomized by user ID. Metric is order conversion rate (Orders/Users). Denominator matches randomization unit.
+
+Errors identified: SRM (due to segment imbalance indicating broken randomization integrity), SIMPSON (reversal of direction), NOVELTY (fading lift projected as constant).
+
+ERRORS: SRM, SIMPSON, NOVELTY
+DECISION: HOLD

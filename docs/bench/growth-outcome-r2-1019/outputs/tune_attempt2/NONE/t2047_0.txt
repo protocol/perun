@@ -1,0 +1,22 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 42,512 (control) + 43,676 (treatment) = 86,188. The expected split is 50%, so 43,094 per arm. The treatment has 582 extra users. The standard deviation for a binomial split is $\sqrt{86188 \times 0.5 \times 0.5} \approx 147$. The difference is $582 / 147 \approx 3.96$ standard deviations. This is far beyond the threshold for chance (usually 2 SDs), indicating broken randomization or logging. **SRM is flagged.**
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate," and users were randomized by user ID. The reported rates are calculated as orders divided by users:
+Control: $3,401 / 42,512 \approx 0.0800$ (8.00%).
+Treatment: $3,684 / 43,676 \approx 0.0843$ (8.43%).
+However, the readout reports control as 6.167% and treatment as 7.352%.
+If we divide orders by sessions instead:
+Control: $3,401 / 55,150 \approx 0.06167$ (6.167%).
+Treatment: $3,684 / 50,108 \approx 0.07352$ (7.352%).
+The reported percentages match the session-based calculation, not the user-based calculation. Since the unit of randomization is the user, using sessions as the denominator violates the independence assumption and biases the result. **DENOM is flagged.**
+
+I check for Simpson's Paradox (SIMPSON) by calculating segment lifts:
+Desktop Control: $2,359/19,548 \approx 12.07\%$. Treatment: $2,556/20,084 \approx 12.73\%$. Lift is positive.
+Mobile Control: $1,042/22,964 \approx 4.54\%$. Treatment: $1,128/23,592 \approx 4.78\%$. Lift is positive.
+Since both segments show a positive lift consistent with the pooled direction, there is no reversal. SIMPSON is not flagged.
+
+Regarding Power (POWER) and Peeking (PEEK): While the sample size is sufficient for the target lift, the SRM invalidates the power calculation assumptions. The dates show the test ran exactly 30 days (Jan 10 to Feb 9), matching a ~28 day plan closely enough that PEEK isn't definitively proven by dates alone without knowing the specific stopping rule trigger. However, the SRM and DENOM errors are definitive based on the numbers provided.
+
+Novelty cannot be confirmed as the daily lift fluctuates (13.9% to 25.0%) without a clear, monotonic decay trend toward zero.
+
+ERRORS: SRM, DENOM
+DECISION: HOLD

@@ -1,0 +1,27 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 27,204 (control) + 27,036 (treatment) = 54,240. The expected split is 27,120 per arm. The observed difference is 84 users. The standard error for the difference in proportions is roughly $\sqrt{N \cdot 0.5 \cdot 0.5} \approx 116$. The deviation (84) is less than 2 standard errors, so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The counts provided for the metric calculation appear to be Orders / Users (e.g., $1,088 / 27,204 \approx 4.00\%$). Since the denominator (users) matches the randomization unit, there is no DENOM error.
+
+Now, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device segment:
+Desktop Control: $716 / 11,368 \approx 6.30\%$.
+Desktop Treatment: $777 / 12,714 \approx 6.11\%$.
+Lift (Desktop): Treatment is lower than Control ($-3.0\%$).
+
+Mobile Control: $372 / 15,836 \approx 2.35\%$.
+Mobile Treatment: $326 / 14,322 \approx 2.28\%$.
+Lift (Mobile): Treatment is lower than Control ($-3.0\%$).
+
+In both segments, the treatment performs worse than the control. However, the reported aggregate result claims a positive lift ($4.08\%$ vs $3.999\%$).
+Let's re-verify the aggregate math from the raw counts:
+Total Control Rate: $1,088 / 27,204 = 3.9994\%$.
+Total Treatment Rate: $1,103 / 27,036 = 4.0797\%$.
+The aggregate shows a positive lift, while both sub-segments show a negative lift. This is a classic reversal of direction when pooling data, indicating Simpson's Paradox. This usually occurs due to improper weighting or a confounding variable (like device type) having different distributions and baseline rates across arms. Here, the treatment arm has a higher proportion of Desktop users (who have higher conversion rates) compared to the control arm ($12,714/27,036 \approx 47\%$ vs $11,368/27,204 \approx 41\%$), artificially inflating the treatment's aggregate performance despite performing worse within each device type.
+
+Regarding PEEK: The test ran from Feb 1 to Feb 17 (17 days) against a planned 14 days. While it ran longer, the error definition specifies stopping *before* planned duration. Running late does not fit the specific "PEEK" definition provided.
+Regarding POWER: The p-value is 0.63, indicating no significance, but the sample sizes are large (~27k per arm). With a 4% baseline and 27k users, the detectable lift at 80% power is roughly $1.9 \cdot \sqrt{(0.04 \cdot 0.96) \cdot (2/27000)} \approx 0.3\%$. The target was 10%, so the study is definitely not underpowered to detect the target; it simply found no effect (or a reversed one).
+Regarding NOVELTY: The daily lift fluctuates but does not show a clear fading trend from 2.5% down to near zero; it stays relatively stable around 2%.
+
+The critical error is SIMPSON: the aggregate conclusion (positive lift) contradicts the stratified reality (negative lift in all segments). Rolling this out would likely decrease overall conversions.
+
+ERRORS: SIMPSON
+DECISION: HOLD

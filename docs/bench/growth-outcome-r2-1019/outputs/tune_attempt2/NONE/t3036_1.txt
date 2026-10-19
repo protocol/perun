@@ -1,0 +1,25 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 109,649 (control) + 109,277 (treatment) = 218,926. The expected split is 50%, so 109,463 per arm. The treatment deviation is $|109,277 - 109,463| = 186$. The standard error for the difference is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{54,731} \approx 234$. The deviation (186) is less than 2 standard errors, so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check for Simpson's Paradox (SIMPSON) by calculating conversion rates per device segment.
+Desktop Control: $4,868 / 50,311 \approx 9.68\%$.
+Desktop Treatment: $5,169 / 55,039 \approx 9.39\%$.
+Here, Control > Treatment (Control wins).
+
+Mobile Control: $1,711 / 59,338 \approx 2.88\%$.
+Mobile Treatment: $1,518 / 54,238 \approx 2.80\%$.
+Here, Control > Treatment (Control wins).
+
+In both segments, the control group has a higher conversion rate than the treatment group. However, the reported aggregate result claims the treatment is better (4.473% vs 4.039%). Since the direction of the effect reverses when pooling the data (Treatment appears better overall, but worse in every segment), this is a clear case of Simpson's Paradox. This usually indicates a weighting issue where the treatment arm received disproportionately more traffic from the high-converting segment (Desktop: 55k vs 50k) compared to the control arm.
+
+I check Power (POWER). The target was a 5% lift on 6%. The observed sample sizes (~109k each) are massive compared to what is needed for a 5% lift detection (usually a few thousand per arm). The test is not underpowered.
+
+I check Denominator (DENOM). The metric is order conversion rate. Randomization was by user ID. The counts provided for the calculation (Orders / Users) match the randomization unit. No error here.
+
+I check Novelty (NOVELTY). The daily lift fluctuates between 8.4% and 13.4% with no clear downward trend over the 29 days. There is no evidence of fading lift.
+
+I check Peeking (PEEK). The test ran from Oct 11 to Nov 9 (29 days), which matches the "planned duration 28 days" (allowing for start/end day inclusion). There is no evidence of early stopping based on the text provided.
+
+The critical error is SIMPSON. The aggregate result is misleading because the treatment group performed worse in both desktop and mobile segments individually. Rolling out based on the pooled number would be a mistake.
+
+ERRORS: SIMPSON
+DECISION: HOLD

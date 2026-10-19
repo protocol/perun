@@ -1,0 +1,22 @@
+**SRM Check**: Total users = 26,848. Expected per arm = 13,424. Observed: Control 13,336, Treatment 13,512. Difference is small (~1.3% relative to expected). A rough chi-square estimate: $(13336-13424)^2/13424 + (13512-13424)^2/13424 \approx 0.58 + 0.58 = 1.16$. With 1 degree of freedom, critical value at $\alpha=0.05$ is 3.84. $1.16 < 3.84$, so no significant Sample Ratio Mismatch.
+
+**PEEK Check**: Planned duration 21 days; readout at day 16. The test stopped early. However, the reported p-value is 0.6416, which is not significant. Peeking inflates false positives (Type I error), but here we have a false negative (non-significant result). While early stopping is a protocol violation, it did not lead to a premature "win" claim based on inflated significance. The decision to roll out is based on projection, not a significant p-value. But strictly, was it "called" early? The recommendation is to roll out despite non-significance. This isn't classic PEEK where a significant result is found early. However, the prompt defines PEEK as "stopped or called before planned duration, which inflates false positives." Since the result is insignificant, the inflation of false positives didn't cause a false "ship" signal via p-value. But the *decision* to ship is happening early. Let's look closer. The definition says "inflates false positives". Since $p > 0.05$, we didn't get a false positive. So PEEK is not the cause of an erroneous *positive* finding here.
+
+**POWER Check**: Baseline 8%, target lift 10% (to 8.8%). Total users ~26.8k. Standard error for difference in proportions $\approx \sqrt{2 \times 0.08 \times 0.92 / 13400} \approx 0.0033$. Detectable lift at 80% power, $\alpha=0.05$ is roughly $2.8 \times SE \approx 0.9\%$ relative? Wait, absolute lift needed is $0.08 \times 0.10 = 0.008$. $Z_{\beta} + Z_{\alpha/2} \approx 0.84 + 1.96 = 2.8$. $2.8 \times 0.0033 \approx 0.0092$ (absolute). Target is 0.008. The study is slightly underpowered to detect exactly 10% lift, but close. However, the observed lift is only 1.9% relative (0.15% absolute), far below target. The lack of significance is real, not just power. But is the *smaller arm* too small? Arms are nearly equal. Power calculations usually assume the target lift. If the true lift is small, you need more power. The issue here isn't that the arm is too small to detect the *target* if it existed, but that the effect isn't there. Actually, let's re-read the POWER definition: "smaller arm is too small to detect the target lift". With ~13.4k per arm, can we detect 10% lift? $n = 2 \times (1.96+0.84)^2 \times p(1-p) / (p \times lift)^2$. $n \approx 2 \times 7.84 \times 0.0736 / (0.008)^2 \approx 1.15 / 0.000064 \approx 18,000$ per arm? Wait. $p_1=0.08, p_2=0.088$. Pooled $p \approx 0.084$. $SD \approx \sqrt{0.084 \times 0.916 \times (2/13400)} \approx 0.0034$. Diff = 0.008. $Z = 0.008/0.0034 = 2.35$. Power for $Z=2.35$ against null is high? Wait, critical value is 1.96. $2.35 > 1.96$, so yes, 13.4k is enough to detect 10% lift. Power is fine.
+
+**SIMPSON Check**:
+Control Rate: Desktop $681/5257 \approx 12.95\%$. Mobile $386/8079 \approx 4.78\%$.
+Treatment Rate: Desktop $754/5999 \approx 12.57\%$. Mobile $348/7513 \approx 4.63\%$.
+Desktop Lift: $12.57 - 12.95 < 0$ (Negative).
+Mobile Lift: $4.63 - 4.78 < 0$ (Negative).
+Pooled Lift: $8.156\% - 8.001\% > 0$ (Positive).
+Both segments show a decrease, but the pooled result shows an increase. This is a clear case of Simpson's Paradox, likely due to the shift in mix (Treatment has more high-converting Desktop users: $5999/13512 \approx 44\%$ vs Control $5257/13336 \approx 39\%$).
+
+**DENOM Check**: Randomized by user id. Metric is order conversion rate. Denominator is users (implied by "users" counts and standard conversion rate definition). Orders/Users matches the reported rates ($1067/13336 \approx 8.00\%$). Denominator matches randomization unit.
+
+**NOVELTY Check**: Daily lift is stable (1.6% to 2.3%), no fading trend visible in the 15 days. Projection assumes it lasts, but no fading is observed yet to flag "fading".
+
+The primary error is SIMPSON. The aggregate positive lift is an artifact of mix shift; both segments perform worse. Rolling out would likely hurt performance.
+
+ERRORS: SIMPSON
+DECISION: HOLD

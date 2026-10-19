@@ -1,0 +1,36 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 25,058 (control) + 24,996 (treatment) = 50,054. The expected split is 25,027 per arm. The difference is only 31 users, which is well within random chance for this sample size. No SRM.
+
+Next, I check the denominators (DENOM). The metric is "order conversion rate," and the readout provides orders per users (e.g., 751/25,058). Since users were the randomized unit, using users as the denominator is correct. No DENOM error.
+
+I check for Simpson's Paradox (SIMPSON) by calculating segment conversion rates:
+Desktop Control: 518 / 10,946 ≈ 4.73%
+Desktop Treatment: 558 / 10,919 ≈ 5.11% (Lift present)
+Mobile Control: 233 / 14,112 ≈ 1.65%
+Mobile Treatment: 251 / 14,077 ≈ 1.78% (Lift present)
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON error.
+
+I check Power (POWER). The design targets an 8% lift on a 3% baseline. The reported lift is exactly 8.0%. However, the p-value is 0.1232, which is greater than the alpha of 0.05. This means the result is not statistically significant. While the test failed to reject the null, this is a result of the data, not necessarily an design error like "underpowered" in the sense of impossible detection, though the sample size clearly wasn't large enough to achieve significance for this specific variance. However, the prompt defines POWER as the arm being "too small to detect... at stated alpha and power." Since the observed effect size matched the target but significance wasn't reached, the variance was likely higher than anticipated or the sample slightly insufficient, but usually, this flag is for clear miscalculation of required N. Let's look closer at the definition: "smaller arm is too small to detect." With ~25k users, standard calculators for 3% baseline, 8% lift, 80% power, alpha 0.05 usually require ~60k-70k *total* users. Here we have ~50k. It is plausible the test was underpowered. However, the most glaring issue is often PEEK or NOVELTY.
+
+Let's re-evaluate PEEK. The dates are Feb 28 to Mar 14. This is exactly 14 days (including start/end or close enough). The planned duration was 14 days. They stopped exactly when planned. No PEEK.
+
+Let's re-evaluate NOVELTY. The daily lift fluctuates: 7.4, 9.0, 7.4, 9.2, 7.2, 7.6, 9.0, 6.9, 9.3, 8.6, 7.2, 7.5, 6.8, 8.7. There is no clear fading trend; it oscillates around the mean. No NOVELTY.
+
+Re-evaluating POWER strictly: Did they calculate the sample size correctly? For 3% baseline, 8% relative lift (to 3.24%), alpha 0.05, power 0.80.
+Required N per arm ≈ 13,500 to 15,000 depending on the exact test statistic (proportions). Wait, let's do a quick rough calc.
+$p_1 = 0.03, p_2 = 0.0324$. Pooled $p \approx 0.0312$.
+Effect size is small. Actually, standard rules of thumb suggest ~20k-30k per arm might be needed for such small absolute differences (0.0024).
+If the team *planned* for 80% power and got 25k users, and the result was non-significant (p=0.12), it implies the actual power achieved was lower than 80% for the observed variance, or the effect wasn't real. But the prompt asks to flag if the arm is "too small to detect".
+Actually, looking at the numbers: 25k users is generally sufficient for an 8% lift on 3% baseline.
+Let's re-calculate required sample size roughly: $N = 16 * (p(1-p)) / (p_1-p_2)^2$.
+$p \approx 0.03$. $diff = 0.0024$.
+$N \approx 16 * 0.03 / (0.0024)^2 = 0.48 / 0.00000576 \approx 83,333$ per arm?
+Ah, my mental math was off. For small conversion rates and small relative lifts, you need massive samples.
+$0.03 * 0.97 \approx 0.029$.
+$N \approx 2 * (1.96+0.84)^2 * 0.03 / (0.0024)^2$
+$N \approx 2 * 7.84 * 0.03 / 0.00000576 \approx 0.47 / 0.00000576 \approx 81,000$ per arm.
+The test has only ~25,000 per arm. The test is severely underpowered to detect an 8% lift on a 3% baseline with 80% power. The team likely miscalculated the required sample size. The current sample cannot reliably detect the target lift.
+
+Therefore, POWER is the error. The p-value of 0.12 confirms we couldn't distinguish signal from noise, and the arithmetic shows the sample size is far below the ~80k/arm needed for the stated parameters.
+
+ERRORS: POWER
+DECISION: HOLD

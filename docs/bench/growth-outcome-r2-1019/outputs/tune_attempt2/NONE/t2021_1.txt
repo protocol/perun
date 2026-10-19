@@ -1,0 +1,66 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 23,865 (control) + 23,785 (treatment) = 47,650. The expected split is 50%, so 23,825 per arm. The difference is only 40 users. A quick approximation of the standard error for a 50/50 split with N≈48k is $\sqrt{47650 \times 0.5 \times 0.5} \approx 109$. The deviation (40) is well within 2 standard deviations (~218), so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The reported rates are calculated as Orders / Users (e.g., $955 / 23,865 \approx 4.002\%$). Since the denominator (users) matches the randomization unit, there is no DENOM error.
+
+I examine Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $684 / 11,079 \approx 6.17\%$.
+Desktop Treatment Rate: $733 / 11,042 \approx 6.64\%$. (Lift is positive).
+Mobile Control Rate: $271 / 12,786 \approx 2.12\%$.
+Mobile Treatment Rate: $291 / 12,743 \approx 2.28\%$. (Lift is positive).
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON.
+
+Regarding Power (POWER): The test ran for 29 days against a plan of 28. The sample size (~48k) is substantial. With a baseline of 4% and target lift of 10% (to 4.4%), standard calculators suggest ~30k-40k total users are needed for 80% power. We have 47k. The p-value is 0.0968, which is not significant, but this indicates a lack of *observed* effect, not necessarily that the study was *designed* to be underpowered to detect the target if it existed. The sample size appears sufficient for the design parameters.
+
+For Peeking (PEEK): The test ran from July 31 to August 29 (29 days), exceeding the planned 28 days. Stopping *after* the planned duration does not inflate false positives in the way early stopping does. No PEEK.
+
+Finally, Novelty (NOVELTY): The daily lift fluctuates (5.6% to 9.4%) but shows no clear fading trend over the 29 days; the end values (~7.0-7.5%) are similar to the start (~7.7-9.0%). The projection applies the current observed lift (which is not statistically significant, p=0.0968) to the next year. While projecting a non-significant result is risky, the specific "Novelty" error defined as "lift is fading... but projected as lasting" is not supported by the daily data trend provided.
+
+However, the primary issue is that the result is not statistically significant (p = 0.0968 > 0.05). While this isn't one of the specific error codes (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY), rolling out a change based on a non-significant p-value is generally incorrect. But strictly adhering to the prompt's instruction to "Flag a category only if the numbers show that error," none of the specific structural errors listed are present. The test simply failed to reject the null hypothesis.
+
+Wait, let me re-evaluate POWER. The definition says "the smaller arm is too small to detect the target lift at the stated alpha and power." If the test was designed correctly (which the sample size suggests it was), but the result was insignificant, it doesn't mean the design was underpowered *a priori*. It means the effect wasn't there or was smaller than target. The sample size (23k per arm) is adequate for 4% baseline and 10% lift.
+
+Let's re-read the NOVELTY definition: "the lift is fading over the test but is projected as lasting." The daily lifts are: 7.7, ..., 9.4 (day 11), ..., 5.7 (day 18), ..., 7.5 (day 29). There is noise, but no monotonic fade.
+
+Is there a hidden DENOM issue? "30,745 sessions" vs "23,865 users". If the metric was sessions-based but users randomized, that would be DENOM. But the calculation $955/23865 = 4.002\%$ confirms they used users as the denominator.
+
+Conclusion: None of the specific labeled errors are demonstrated by the numbers. The result is just inconclusive (p > 0.05). However, the recommendation is to "roll out." Rolling out on p=0.09 is a decision error, but is it one of the coded analysis errors? No.
+
+Wait, look closely at the dates. Started 2026-07-31. Planned 28 days. End date should be 2026-08-27 (31 days in July, so 1 day in July + 27 in Aug = 28 days?). Or simply 28 days duration. July 31 to Aug 29 is 29 days. This is effectively the planned duration.
+
+Let's reconsider the "Power" definition. Sometimes "underpowered" is flagged if the confidence interval is so wide it includes negative values even with a positive point estimate, implying the sample wasn't big enough to distinguish signal from noise *given the observed variance*. But usually, POWER refers to the pre-experiment calculation. With 23k users, power should be fine.
+
+Actually, there is no error code for "Not Significant." The prompt asks to flag specific errors. If none apply, the answer is NONE. But should we SHIP? The decision logic says: "HOLD if at least one flagged error... otherwise SHIP". This is a trap. If I find no *coded* errors, I must say SHIP? That seems dangerous for a p=0.09 test.
+
+Let's look closer at the daily lift. Is there a fade?
+Days 1-5: 7.7, 7.9, 9.0, 5.6, 8.6. Avg ~7.7.
+Days 25-29: 7.0, 7.4, 7.4, 7.0, 7.5. Avg ~7.26.
+The lift is stable.
+
+Is it possible the user counts imply SRM?
+Total 47650. Expected 23825. Observed 23865, 23785.
+Chi-square: $(40^2 + 40^2) / 23825 = 3200 / 23825 = 0.13$. P-value is huge. Not SRM.
+
+Perhaps the error is that they are projecting a non-significant result? But there is no code for "False Positive Risk due to non-significance".
+
+Let's re-read the POWER definition carefully: "the smaller arm is too small to detect the target lift at the stated alpha and power".
+Target lift 10% on 4% = 0.4% absolute difference.
+$p_1 = 0.04, p_2 = 0.044$.
+$n = 2 \times (1.96 + 0.84)^2 \times (0.04 \times 0.96 + 0.044 \times 0.956) / (0.004)^2$
+$n \approx 2 \times 7.84 \times 0.08 / 0.000016 \approx 1.25 / 0.000016 \approx 78,000$?
+Wait, rough calc:
+Standard error of diff $\approx \sqrt{2 \times 0.04 \times 0.96 / 23800} \approx \sqrt{0.0768/23800} \approx \sqrt{3.2e-6} \approx 0.0018$.
+Detectable diff at 80% power (Z=0.84) and alpha 0.05 (Z=1.96):
+Diff = $(1.96+0.84) \times 0.0018 \approx 2.8 \times 0.0018 \approx 0.005$ (0.5%).
+Target lift is 0.4% (10% of 4%).
+The detectable lift with this sample size is ~0.5%, but the target is 0.4%.
+Therefore, the sample size (23k) is **too small** to detect the 10% relative lift (0.4% absolute) with 80% power. The study is underpowered for the stated target.
+Calculation verification:
+Required $n$ per arm for $p=0.04$, $\delta=0.004$:
+$n = \frac{(Z_{\alpha/2} + Z_{\beta})^2 \cdot 2 \cdot p(1-p)}{\delta^2}$
+$n = \frac{(1.96 + 0.84)^2 \cdot 2 \cdot 0.04 \cdot 0.96}{0.004^2} = \frac{7.84 \cdot 0.0768}{0.000016} = \frac{0.602}{0.000016} \approx 37,625$.
+We have ~23,800.
+37,625 > 23,800.
+The arm is too small. This is a POWER error.
+
+ERRORS: POWER
+DECISION: HOLD

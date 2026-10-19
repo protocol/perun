@@ -1,0 +1,21 @@
+First, checking for Sample Ratio Mismatch (SRM). The total user count is 37,564 (control) + 37,620 (treatment) = 75,184. The expected split is 37,592 per arm. The observed difference is only 56 users. A standard deviation check ($\sqrt{N \cdot 0.5 \cdot 0.5} \approx 137$) shows the deviation is less than 1 standard deviation. This is well within chance; no SRM.
+
+Next, checking for Denominator Error (DENOM). The metric is "order conversion rate." The readout reports: Control $1,127 / 37,564 \approx 3.00\%$? No, the reported rate is 2.306%. Let's re-calculate: $1,127 / 48,876$ (sessions) $\approx 2.306\%$. The treatment rate is $1,180 / 40,908 \approx 2.885\%$. The calculation uses **sessions** as the denominator, but users were randomized by **user id**. Since one user can have multiple sessions, and the session counts differ significantly between arms (48k vs 41k) despite equal user counts, the unit of analysis (session) does not match the unit of randomization (user). This is a classic DENOM error.
+
+Checking for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $846 / 17,651 \approx 4.79\%$.
+Desktop Treatment Rate: $965 / 21,414 \approx 4.51\%$.
+(Lift is negative: treatment is worse).
+Mobile Control Rate: $281 / 19,913 \approx 1.41\%$.
+Mobile Treatment Rate: $215 / 16,206 \approx 1.33\%$.
+(Lift is negative: treatment is worse).
+Both segments show the treatment performing worse than control, yet the pooled data shows a massive positive lift (25.1%). This reversal confirms Simpson's Paradox, driven here by the denominator mismatch where the control arm had disproportionately more sessions per user.
+
+Checking Power (POWER) and Peeking (PEEK). The test ran for the planned 21 days (July 31 to Aug 21). No evidence of early stopping. The sample size is large, so it is not underpowered for the observed effect, though the effect is artificial.
+
+Checking Novelty (NOVELTY). The daily lift fluctuates (25.9% down to 17.3% and back up) but does not show a consistent fading trend to zero; it remains high throughout. No clear novelty decay pattern.
+
+The primary fatal flaws are using sessions instead of users (DENOM) and the resulting paradoxical reversal (SIMPSON).
+
+ERRORS: DENOM, SIMPSON
+DECISION: HOLD

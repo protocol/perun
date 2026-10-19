@@ -1,0 +1,24 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 13,418 (control) + 13,454 (treatment) = 26,872. The expected split is 13,436 per arm. The difference is only 18 users, which is well within random chance for this sample size. No SRM.
+
+Next, I check the Denominator (DENOM). The metric is "order conversion rate." The readout reports rates derived from orders divided by users (e.g., Control: 1,073 / 13,418 ≈ 8.0%, wait, the reported rate is 6.396%? Let's re-calculate).
+Control Rate Calculation: 1,073 orders / 13,418 users = 0.0799 (7.99%).
+Treatment Rate Calculation: 1,152 orders / 13,454 users = 0.0856 (8.56%).
+The readout claims: Control 6.396%, Treatment 8.104%.
+Where do these numbers come from?
+Control: 1,073 / 16,775 (sessions) = 0.06396 (6.396%).
+Treatment: 1,152 / 14,216 (sessions) = 0.08104 (8.104%).
+The analysis divides orders by *sessions*, but users were randomized by *user id*. Since sessions are a post-randomization event and likely differ between arms (as seen in the raw counts: 16,775 vs 14,216), using sessions as the denominator biases the result. This is a clear DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate (users): 752/5,669 = 13.26%. Desktop Treatment: 807/5,684 = 14.20%. (Lift ~7%)
+Mobile Control Rate (users): 321/7,749 = 4.14%. Mobile Treatment: 345/7,770 = 4.44%. (Lift ~7%)
+Both segments show a positive lift consistent with the user-based calculation (~8% lift). The paradox only appears because the session-based denominator distorts the aggregate. Since the segment analysis (if done correctly on users) aligns with the corrected aggregate, there is no inherent Simpson's paradox in the user data itself, though the reported numbers are flawed due to DENOM.
+
+Regarding Power (POWER): The target was 8% lift on 8% baseline. We observed ~8% lift on users (7.99% vs 8.56%). The sample size (~13k per arm) is generally sufficient for this effect size at 80% power. No obvious underpowering given the result was detected.
+
+Regarding Peek (PEEK) or Novelty (NOVELTY): The test ran from Feb 18 to Mar 1 (11 days), short of the planned 21 days. Stopping early based on significance is PEEK. However, without the specific stopping rule confirmation, the most glaring mathematical error is the denominator. But wait, the duration is explicitly stated as "planned 21 days; final readout... Mar 1" (11 days later). Stopping almost exactly at the halfway point because "p=0.0" strongly implies PEEK.
+
+However, the DENOM error is fatal and indisputable based on the arithmetic: 1073/16775 matches the reported % exactly. The metric denominator (session) does not match the randomization unit (user).
+
+ERRORS: DENOM, PEEK
+DECISION: HOLD

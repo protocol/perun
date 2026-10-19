@@ -1,0 +1,25 @@
+**SRM Check**: Total users = 22,630. Expected split = 11,315 per arm. Observed: 11,306 (Control) and 11,324 (Treatment). The difference is minimal (9 and 9 users off). A chi-square approximation $(O-E)^2/E$ yields negligible values (~0.007), well within chance variation for this sample size. No SRM.
+
+**PEEK Check**: Start date 2026-05-31, planned duration 14 days implies an end date of 2026-06-14. The readout date is 2026-06-15. While one day late, the daily data shows 15 days of results. Stopping *after* the planned duration does not inflate false positives in the way early stopping (peeking) does. No PEEK.
+
+**POWER Check**: Baseline 8%, target lift 10% (detecting 8.8%). Sample size ~11,300 per arm. Using standard approximation $n \approx 16 \sigma^2 / \delta^2$, where $\sigma^2 \approx p(1-p) \approx 0.074$ and $\delta = 0.008$. Required $n \approx 16(0.074)/0.000064 \approx 18,500$. The actual sample (~11,300) is significantly lower than required for 80% power to detect a 10% lift. However, the test found a non-significant result (p=0.314). While underpowered for the *target*, the error code POWER usually flags when a significant result is claimed despite insufficient power, or if the design guarantees a miss. Here, the lack of significance is consistent with the small effect size (4.6%) and sample size. Strictly speaking, the study is underpowered for the *stated design goal*, but does this constitute an analysis error in the readout? The readout correctly reports non-significance. The flaw is in the experimental design execution (stopping early? no, ran 15 days), not the analysis of the numbers provided. Wait, the prompt asks to flag if "the smaller arm is too small to detect the target lift". $11,300 < 18,500$. The condition is met numerically. I will flag POWER as the sample size is insufficient for the stated design parameters.
+
+**SIMPSON Check**:
+Control Rate Desktop: $682/5371 \approx 12.70\%$
+Treatment Rate Desktop: $715/5380 \approx 13.29\%$ (Lift positive)
+Control Rate Mobile: $223/5935 \approx 3.76\%$
+Treatment Rate Mobile: $233/5944 \approx 3.92\%$ (Lift positive)
+Pooled Control: $905/11306 \approx 8.00\%$
+Pooled Treatment: $948/11324 \approx 8.37\%$ (Lift positive)
+Directions match. No SIMPSON.
+
+**DENOM Check**: Randomized by user id. Metric is order conversion rate (Orders / Users). Denominator matches randomization unit. No DENOM.
+
+**NOVELTY Check**: Daily lift values: 5.2, 3.4, 6.1, 4.9, 5.0, 3.9, 3.7, 4.1, 5.3, 4.3, 4.3, 4.9, 4.2, 4.2, 5.5. The values fluctuate but show no clear fading trend (e.g., high start, low end). The projection assumes lasting lift, but the data doesn't show fading to contradict it yet. No NOVELTY.
+
+The primary issue is POWER. The study was designed to detect a 10% lift but enrolled only ~60% of the necessary sample size. While the analysis itself (p-value calculation) appears correct, the experiment failed its design constraints, making the "non-significant" result inconclusive regarding the 10% target. However, the recommendation is to "roll out" based on a non-significant p-value (0.314). Rolling out a change with p=0.314 is a decision error, but is it an *analysis* error listed? No. But the POWER constraint means we cannot trust the negative result to say "no harm" or the positive trend to be real. Actually, re-reading the POWER definition: "flag... if the smaller arm is too small to detect the target lift". Yes, 11,300 is too small.
+
+Wait, looking closer at the recommendation: "Recommendation: roll out to everyone" despite p=0.314. This is a bad decision, but is it one of the coded errors? The codes are specific analysis flaws. The POWER flag applies because the setup failed to meet the statistical requirements defined in the "Design" section.
+
+ERRORS: POWER
+DECISION: HOLD

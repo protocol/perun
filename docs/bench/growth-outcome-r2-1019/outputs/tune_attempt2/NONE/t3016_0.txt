@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 32,683 (control) + 33,587 (treatment) = 66,270. The expected split is 33,135 per arm. The treatment arm has 452 more users than expected. The standard deviation for a 50/50 split is $\sqrt{66270 \times 0.5 \times 0.5} \approx 128.7$. The difference is $452 / 128.7 \approx 3.5$ standard deviations. This exceeds the typical threshold of 2 or 3 standard deviations, indicating a significant imbalance likely due to assignment or logging issues. SRM is present.
+
+Next, I check for PEEKing. The test started July 15 and ended August 5. The duration is 21 days (July 15 to Aug 4 inclusive is 21 days; Aug 5 is the readout date). The planned duration was 21 days. The test ran for the full planned duration. There is no evidence of early stopping based on the dates provided.
+
+I check for POWER. The smaller arm (control) has 32,683 users. With a baseline of 8% and target lift of 8%, the required sample size per arm for 80% power at alpha 0.05 is approximately $2 \times (1.96+0.84)^2 \times (0.08 \times 0.92) / (0.08 \times 0.08)^2 \approx 26,000$ (rough estimate). The actual sample size exceeds this, so it is not underpowered.
+
+I check for SIMPSON's paradox.
+Desktop Control Rate: $1923/15362 \approx 12.52\%$. Desktop Treatment Rate: $2086/15787 \approx 13.21\%$. Lift is positive.
+Mobile Control Rate: $692/17321 \approx 4.00\%$. Mobile Treatment Rate: $751/17800 \approx 4.22\%$. Lift is positive.
+Both segments show a positive lift, consistent with the pooled result. No reversal occurred.
+
+I check for DENOM. The metric is order conversion rate. The randomization unit is user id. The counts provided for the metric calculation (orders) are aggregated by users in the arms. While sessions are listed, the conversion rate is typically orders/users or orders/sessions. If the metric is orders/users, the denominator matches the randomization unit. If it is orders/sessions, it might be an issue, but "order conversion rate" usually implies per user or per session where session is the analysis unit. However, without explicit definition saying the denominator is *not* the randomized unit (users), and given users are the primary count, this is not clearly violated by the numbers alone unless we assume session-based calculation which isn't explicitly stated as the denominator mismatch. But wait, if the metric is defined as orders/sessions, and randomization is by user, that is a DENOM error. The readout lists users and sessions. Usually, conversion rate is orders/sessions in e-commerce. If so, DENOM applies. However, often "user conversion rate" is the standard. Let's look closer. The prompt says "Metric: order conversion rate". It doesn't specify per user or per session. But usually, if randomized by user, the metric should be per user to avoid correlation issues. If they calculated orders/sessions, that's a denominator mismatch. Given the ambiguity, I will stick to the clearest error. SRM is definitive.
+
+I check for NOVELTY. The daily lift fluctuates (6.8 down to 4.2, up to 6.7, etc.) but does not show a clear, monotonic fading trend from high to low over the 21 days. The last few days are 5.7, 5.4, 6.3, 4.5. There is no obvious decay pattern suggesting a novelty effect that is being incorrectly projected.
+
+The primary clear error is SRM due to the significant deviation in user counts.
+
+ERRORS: SRM
+DECISION: HOLD

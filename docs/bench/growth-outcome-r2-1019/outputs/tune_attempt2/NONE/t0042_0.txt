@@ -1,0 +1,22 @@
+Several analysis errors are evident from the provided numbers.
+
+First, **PEEK**: The test started on 2026-09-02 with a planned duration of 14 days, but the final readout is dated 2026-09-08. This is only 6 days into the experiment. Stopping early to check results inflates the false positive rate.
+
+Second, **DENOM**: The metric is "order conversion rate," and users were randomized by user ID. However, the reported rates do not match orders divided by users.
+Control calculation: $480 \text{ orders} / 15,990 \text{ users} \approx 3.00\%$.
+Treatment calculation: $511 \text{ orders} / 15,960 \text{ users} \approx 3.20\%$.
+The readout reports 2.27% and 2.993%. These figures correspond to orders divided by *sessions* (Control: $480/21,147 \approx 2.27\%$; Treatment: $511/17,075 \approx 2.99\%$). Since sessions were not the unit of randomization, this is a denominator error.
+
+Third, **SIMPSON**: The pooled data suggests a massive lift, but looking at the segments reveals a discrepancy in magnitude that warrants checking for reversal or distortion, though here the direction holds, the denominators are inconsistent across the board. Let's re-evaluate Simpson's strictly.
+Desktop Control Rate (orders/users): $323/6,117 \approx 5.28\%$.
+Desktop Treatment Rate: $344/6,106 \approx 5.63\%$.
+Mobile Control Rate: $157/9,873 \approx 1.59\%$.
+Mobile Treatment Rate: $167/9,854 \approx 1.70\%$.
+Both segments show a positive lift. The pooled user-based lift is $(3.20 - 3.00)/3.00 \approx 6.7\%$. The reported session-based lift is 31.9%. While the direction isn't reversed, the metric definition error (DENOM) is the primary driver of the discrepancy. Simpson's paradox specifically requires the trend to reverse in subgroups, which is not happening here (both subgroups go up). So SIMPSON is not flagged.
+
+Fourth, **NOVELTY**: The daily relative lift shows a clear downward trend: 36.2%, 32.3%, 33.1%, 29.5%, 28.2%, ending at 32.0% (with a dip). While not a perfect monotonic decay, the drop from ~36% to ~28% suggests a fading effect. However, the team projects the current high lift (31.9%) for twelve months. Given the short duration (6 days) and the dip in daily performance, projecting this as a permanent steady state ignores potential novelty effects where users initially react strongly to a new prompt before habituating. The drop from day 1 (36.2) to day 5 (28.2) is significant (~22% relative drop in the lift itself).
+
+The most definitive errors are PEEK (stopped at day 6 of 14) and DENOM (using sessions instead of users).
+
+ERRORS: PEEK, DENOM
+DECISION: HOLD

@@ -1,0 +1,28 @@
+**SRM Check**: Total users = 34,539 (Control) + 34,723 (Treatment) = 69,262. Expected per arm = 34,631.
+Difference = 34,723 - 34,631 = 92.
+Standard Deviation $\approx \sqrt{69262 \times 0.5 \times 0.5} \approx 131.6$.
+Z-score = $92 / 131.6 \approx 0.7$. This is well within chance limits (typically $|Z| > 1.96$). No SRM.
+
+**PEEK Check**: Planned duration was 14 days. The readout date is 2026-08-24, and the start date was 2026-08-14. This is exactly 10 days of data. The test was stopped 4 days early. Stopping before the planned duration based on observed significance inflates false positives. **PEEK flagged.**
+
+**POWER Check**: The smaller arm (Control) has 34,539 users. With a 5% baseline and 10% target lift, standard power calculations usually require ~30k-40k users per arm for 80% power at $\alpha=0.05$. Since the observed sample size exceeds typical requirements for these parameters, and the result is significant, underpowering is not the primary error evident here.
+
+**SIMPSON Check**:
+Control Rate Desktop: $1,132 / 12,721 \approx 8.90\%$.
+Treatment Rate Desktop: $1,207 / 12,789 \approx 9.44\%$. (Lift positive)
+Control Rate Mobile: $595 / 21,818 \approx 2.73\%$.
+Treatment Rate Mobile: $634 / 21,934 \approx 2.89\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No Simpson's paradox.
+
+**DENOM Check**: Randomization was by user ID. The metric is "order conversion rate." The counts provided for the calculation imply orders per user ($1,727 / 34,539 \approx 5.0\%$? Wait, the reported rate is 3.795%).
+Let's re-calculate based on the text: $1,727 / 34,539 = 5.0\%$. The reported rate is 3.795%.
+Perhaps the denominator is sessions? $1,727 / 45,507 \approx 3.795\%$.
+The metric uses **sessions** as the denominator, but randomization was by **user ID**. Sessions are not independent; one user generates multiple sessions. This violates the independence assumption of the test unit vs analysis unit. **DENOM flagged.**
+
+**NOVELTY Check**: Daily lifts: 15.8, 15.4, 14.1, 16.6, 17.8, 15.3, 18.0, 13.4, 19.9, 12.8.
+The data fluctuates but does not show a clear, consistent fading trend (e.g., starting high and dropping to near zero). The final day is lower than the peak, but not definitively fading compared to day 1. Insufficient evidence to flag strictly on numbers alone without a clearer decay pattern.
+
+The critical errors are stopping early (PEEK) and using the wrong denominator (DENOM), which invalidates the p-value and the lift calculation reliability.
+
+ERRORS: PEEK, DENOM
+DECISION: HOLD

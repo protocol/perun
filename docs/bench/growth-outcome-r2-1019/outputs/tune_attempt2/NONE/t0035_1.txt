@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 61,691 (control) + 59,599 (treatment) = 121,290. Expected per arm is 60,645. The difference is |61,691 - 60,645| = 1,046. The standard error for a 50/50 split is $\sqrt{121290 \times 0.5 \times 0.5} \approx 174$. The z-score is $1046 / 174 \approx 6.0$. Since $6.0 > 1.96$, the split differs significantly from 50/50 by more than chance allows. This indicates broken assignment or logging.
+
+Next, I check for PEEK. The planned duration was 28 days, but the readout date (Feb 22) is only 13 days after the start (Feb 9). The test was stopped early before the planned duration. This inflates false positives.
+
+I check POWER. The target lift was 10%, but the observed lift is 4.7%. While the test might be underpowered to detect the *observed* small lift, the error code definition specifies being too small to detect the *target* lift. With ~60k users per arm, a baseline of 5%, and target 10% lift, the required sample size is roughly 30k per arm. The current sample size exceeds this, so it is not underpowered for the *target* lift, even if the result is non-significant.
+
+I check SIMPSON.
+Desktop Control Rate: $2180/26217 \approx 8.31\%$. Desktop Treatment Rate: $2206/25328 \approx 8.71\%$. (Lift positive)
+Mobile Control Rate: $905/35474 \approx 2.55\%$. Mobile Treatment Rate: $916/34271 \approx 2.67\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No Simpson's paradox.
+
+I check DENOM. The metric is order conversion rate. The denominator should be users or sessions. The readout lists users and sessions. Usually, conversion is orders/sessions or orders/users. The randomization unit is user id. If the metric is orders/users, the denominator matches the randomization unit. If it is orders/sessions, it might be an issue, but "order conversion rate" typically implies per session or per user. Without explicit contradiction that the denominator is something else (like pageviews), and given users were randomized, this is not clearly flagged by the numbers alone compared to the obvious SRM and PEEK.
+
+I check NOVELTY. The daily lift fluctuates (4.5 to 5.4) but does not show a clear fading trend (e.g., starting high and dropping to near zero). The projection assumes lasting lift, but the data doesn't explicitly show fading yet.
+
+The clear errors are SRM (significant imbalance) and PEEK (early stop).
+
+ERRORS: SRM, PEEK
+DECISION: HOLD

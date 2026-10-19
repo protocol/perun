@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 92,924 (control) + 90,370 (treatment) = 183,294. The expected split is 50%, so 91,647 per arm. The difference is |92,924 - 91,647| = 1,277. The standard error for the difference in proportions is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{45,823} \approx 214$. The observed deviation is $1,277 / 214 \approx 5.97$ standard deviations. This is far beyond the threshold for chance (typically >3 SD), indicating a broken randomization or logging issue. **SRM is flagged.**
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate," and users were randomized by user ID. The counts provided for the metric calculation (orders/users) align with the randomized unit. 4,646/92,924 ≈ 5.0% and 4,768/90,370 ≈ 5.276%. The denominator matches the randomization unit. No DENOM error.
+
+Regarding Power (POWER): The treatment arm has ~90k users. With a 5% baseline and 8% target lift, the required sample size per arm is roughly $16 \cdot (p_1(1-p_1) + p_2(1-p_2)) / (p_2-p_1)^2$. Approximating, we need ~15k-20k per arm for this effect size. We have 90k. The test is not underpowered.
+
+Simpson's Paradox (SIMPSON):
+Desktop Control Rate: 3,410 / 42,625 ≈ 8.00%
+Desktop Treatment Rate: 3,499 / 41,454 ≈ 8.44% (Lift positive)
+Mobile Control Rate: 1,236 / 50,299 ≈ 2.46%
+Mobile Treatment Rate: 1,269 / 48,916 ≈ 2.59% (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON error.
+
+Peeking (PEEK): The test ran from March 3 to March 17, which is exactly 14 days, matching the planned duration. No PEEK error.
+
+Novelty (NOVELTY): The daily lift drops from 15.4% to near 0% (1.0%) by day 14. However, the team projects the *current reported average* (5.5%) over the next twelve months. While the lift is fading, the error definition requires the lift to be "projected as lasting" despite fading. The team is projecting the *average* lift, not necessarily claiming the day 1 spike will last, but applying the net result. However, the drastic fade suggests the 5.5% average is inflated by early novelty and will not last 12 months. But strictly, is the *projection* claiming the fade won't happen? The prompt says "applies the reported lift to the next twelve months." If the reported lift (5.5%) is driven by novelty that has already vanished (day 14 is 1.0%), projecting 5.5% forward is an error of assuming the novelty persists. **NOVELTY is flagged.**
+
+The SRM is the most critical failure; the groups are not comparable, making the p-value invalid. The NOVELTY issue further invalidates the long-term projection.
+
+ERRORS: SRM, NOVELTY
+DECISION: HOLD

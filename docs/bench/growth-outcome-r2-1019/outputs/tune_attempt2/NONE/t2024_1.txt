@@ -1,0 +1,34 @@
+**SRM Check**: Total users = 23,562 + 23,388 = 46,950. Expected per arm = 23,475.
+Difference = |23,562 - 23,475| = 87.
+Standard Error (SE) for 50/50 split ≈ $\sqrt{N \times 0.5 \times 0.5} = \sqrt{11,737.5} \approx 108$.
+The deviation (87) is less than 2 SEs (216). The split is statistically consistent with 50/50. No SRM.
+
+**PEEK Check**: Start date 2026-03-26, end date 2026-04-09.
+Duration = 14 days inclusive. This matches the planned duration of 14 days. No PEEK.
+
+**POWER Check**: Baseline 8%, target lift 10% (absolute diff 0.8%).
+Sample size per arm ~23,400.
+Using standard approximation, detecting a 0.8% lift from 8% baseline at 80% power/0.05 alpha requires roughly $16 \times p(1-p) / \delta^2$.
+$16 \times 0.08 \times 0.92 / (0.008)^2 \approx 1.1776 / 0.000064 \approx 18,400$ users per arm.
+Actual users (~23,400) > Required (~18,400). The test is adequately powered. No POWER error.
+
+**SIMPSON Check**:
+Desktop Control Rate: $1,235 / 8,322 \approx 14.84\%$.
+Desktop Treatment Rate: $1,369 / 9,652 \approx 14.18\%$. (Lift is negative).
+Mobile Control Rate: $650 / 15,240 \approx 4.27\%$.
+Mobile Treatment Rate: $559 / 13,736 \approx 4.07\%$. (Lift is negative).
+Both segments show a negative lift (Treatment < Control), yet the pooled result reports a positive lift (8.244% > 8.0%).
+Pooled Control: $1,885 / 23,562 \approx 8.00\%$.
+Pooled Treatment: $1,928 / 23,388 \approx 8.24\%$.
+Since the direction reverses from negative in all segments to positive in the aggregate, this is Simpson's Paradox. This likely stems from the treatment group having a higher proportion of high-converting desktop users (9,652 vs 8,322) compared to the control, skewing the aggregate. Flag SIMPSON.
+
+**DENOM Check**: Randomized by user ID. Metric is order conversion rate.
+Usually, conversion rate is Orders / Users or Orders / Sessions.
+If Orders/Users: Control $1885/23562 = 8.0\%$. Treatment $1928/23388 = 8.24\%$. Matches reported.
+Denominator is Users, which matches the randomization unit. No DENOM error.
+
+**NOVELTY Check**: Daily lift values: 3.3, 2.8, 3.3, 2.9, 3.6, 2.6, 2.7, 3.0, 3.1, 3.0, 3.2, 2.5, 3.3, 2.6.
+The values fluctuate but do not show a clear fading trend (e.g., starting high and dropping to near zero). The projection applies the *reported* average lift, not an inflated early lift. No NOVELTY error.
+
+ERRORS: SIMPSON
+DECISION: HOLD

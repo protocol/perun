@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 11,840 (control) + 11,746 (treatment) = 23,586. The expected split is 50%, so 11,793 per arm. The difference is $|11,840 - 11,793| = 47$. The standard error for the difference in proportions is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{5896} \approx 76.8$. The deviation is less than 1 standard error ($47 < 76.8$), so the split is within chance expectations. No SRM.
+
+Next, I check for PEEKing. The planned duration was 21 days (June 8 to June 28). The readout date is June 30, and daily data is provided for 22 days. Since the analysis includes data beyond the planned 21 days and does not indicate an early stop based on interim significance, there is no evidence of premature stopping inflating false positives. No PEEK.
+
+Then, I check POWER. The smaller arm has 11,746 users. With a 6% baseline and 10% target lift, standard sample size calculators usually require ~15k-20k per arm for 80% power at alpha 0.05. However, the observed effect size (21.6%) is much larger than the target (10%), and the p-value is extremely low (0.0001). While the design might have been underpowered for a *10%* lift, the test successfully detected a *21.6%* lift with high significance. "Underpowered" usually flags when a non-result cannot be trusted; here the result is definitive. I will not flag POWER as the primary error source preventing decision, as the statistical significance is clear.
+
+Now, I check DENOM. The metric is "order conversion rate." Users were randomized by user ID. The counts show: Control (710 orders / 11,840 users = 6.0%) vs Reported (4.704%). Wait, $710/11840 = 0.0599$ (6.0%). The reported rate is 4.704%. Let's check sessions: $710 / 15,092 = 0.04704$ (4.704%). The treatment reported rate: $751 / 13,133 = 0.05718$ (5.718%). The reported metric divides orders by *sessions*, but the randomization unit is *users*. Since users can have multiple sessions, the denominator (sessions) is not the unit of randomization. This violates the independence assumption of standard tests unless corrected for clustering. This is a DENOM error.
+
+Finally, SIMPSON.
+Desktop Control: $469/4383 = 10.7\%$. Desktop Treat: $496/4348 = 11.4\%$. (Lift ~6.5%)
+Mobile Control: $241/7457 = 3.2\%$. Mobile Treat: $255/7398 = 3.4\%$. (Lift ~6.2%)
+Both segments show positive lift. The pooled result shows positive lift. No reversal. No SIMPSON.
+
+NOVELTY: The daily lift fluctuates (16.6% to 24.3%) but does not show a clear fading trend to zero; the last day is 16.6%, still high. No clear NOVELTY error based solely on numbers.
+
+The critical error is DENOM: using sessions as the denominator when users were randomized creates pseudoreplication, invalidating the p-value.
+
+ERRORS: DENOM
+DECISION: HOLD

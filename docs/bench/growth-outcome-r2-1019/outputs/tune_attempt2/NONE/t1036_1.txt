@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 79,761 (control) + 79,879 (treatment) = 159,640. The expected split is 50%, so 79,820 per arm. The observed difference is only 118 users. A standard deviation check ($\sqrt{N \times 0.5 \times 0.5} \approx 200$) shows this deviation is well within normal chance variation (less than 1 standard deviation). No SRM.
+
+Next, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device segment:
+- Desktop Control: $1,422 / 28,592 \approx 4.97\%$
+- Desktop Treatment: $1,749 / 37,431 \approx 4.67\%$ (Lift is negative here).
+- Mobile Control: $971 / 51,169 \approx 1.90\%$
+- Mobile Treatment: $757 / 42,448 \approx 1.78\%$ (Lift is negative here).
+Both segments show a negative lift (treatment performs worse), yet the pooled report claims a positive 4.6% lift. This is a clear reversal of direction between segments and the aggregate. Simpson's Paradox is present.
+
+I check Power (POWER). The target was a 10% lift on a 3% baseline. The observed lift is ~4.6% with a p-value of 0.1125. While the test did not reach significance, the "underpowered" error usually refers to the design phase preventing detection of the *target* lift. However, the primary issue here is the data integrity revealed by Simpson's paradox, not just sample size. The sample sizes are roughly equal and large (~80k each), likely sufficient for the target, but the aggregation is broken.
+
+I check Denominator (DENOM). The metric is order conversion rate. Randomization was by user ID. The calculation uses Orders / Users. This matches the randomization unit. No DENOM error.
+
+I check Peek (PEEK). The test ran from Jan 22 to Jan 30 (8 days) against a planned 14 days. Stopping early based on results inflates false positives. The readout says "final readout" on day 8, implying early termination. This is a PEEK error.
+
+I check Novelty (NOVELTY). The daily lift numbers (4.1 to 4.9) fluctuate but do not show a consistent fading trend; they remain stable or slightly increase. No clear evidence of novelty decay in the provided numbers.
+
+The critical errors are stopping early (PEEK) and the aggregated metric masking negative performance in all segments (SIMPSON). Because the aggregate lift is mathematically impossible given the segment data (both segments are negative, sum cannot be positive unless weighted incorrectly or data is flawed), the result is invalid.
+
+ERRORS: PEEK, SIMPSON
+DECISION: HOLD

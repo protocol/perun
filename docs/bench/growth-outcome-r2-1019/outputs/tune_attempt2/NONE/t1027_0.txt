@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 310,202 (control) + 310,748 (treatment) = 620,950. The expected split is 310,475 per arm. The observed difference is only 546 users. The standard deviation for a 50/50 split is $\sqrt{620950 \times 0.5 \times 0.5} \approx 394$. The difference is $546 / 394 \approx 1.4$ standard deviations, which is well within the range of chance (typically < 1.96 for 95% confidence). No SRM.
+
+Next, I check for PEEKing. The planned duration was 14 days, but the readout date is June 15, and the start was June 7. This is only 8 days of data. Stopping early based on a significant p-value (0.0025) before the planned duration inflates the false positive rate. This is a clear PEEK error.
+
+Then, I check for Simpson's Paradox. I calculate the conversion rates per device:
+Desktop Control: $5,753 / 110,331 \approx 5.21\%$
+Desktop Treatment: $6,879 / 140,152 \approx 4.91\%$ (Lift is negative here).
+Mobile Control: $3,553 / 199,871 \approx 1.78\%$
+Mobile Treatment: $2,855 / 170,596 \approx 1.67\%$ (Lift is negative here).
+Both segments show a negative lift (treatment is worse), yet the pooled result reports a positive lift of 4.4%. This reversal indicates Simpson's Paradox, likely driven by the shift in traffic mix between high-converting desktop and low-converting mobile users across arms. This is a SIMPSON error.
+
+Regarding POWER: The sample sizes are large (>300k per arm), and a significant result was found, so it is not underpowered for the observed effect.
+Regarding DENOM: The metric is order conversion rate, and users were randomized by user ID. The counts use users as the denominator context (orders per user implied or sessions aggregated correctly to user level). There is no obvious mismatch where sessions were randomized but users analyzed or vice versa in a way that breaks the ratio given the data provided.
+Regarding NOVELTY: The daily lift values (4.9, 3.6, ... 5.2) fluctuate but do not show a clear fading trend; they remain stable or increase slightly.
+
+The critical errors are stopping early (PEEK) and the aggregated result contradicting every segment (SIMPSON). The positive overall lift is an artifact of the data aggregation and early stopping, not a real improvement.
+
+ERRORS: PEEK, SIMPSON
+DECISION: HOLD

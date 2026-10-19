@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 74,697 (control) + 75,087 (treatment) = 149,784. The expected split is 50%, so 74,892 per arm. The treatment has 195 more users than expected. The standard error for the difference in proportions is roughly $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{37446} \approx 193$. The deviation (195) is approximately 1 standard deviation away from the mean. This is well within the range of chance (typically we look for >3 or 4 standard deviations, or a p-value < 0.001). Thus, SRM is not flagged.
+
+Next, I check for PEEK. The planned duration was 21 days, but the readout date is July 16, starting July 7. This is only 9 days of data. Stopping the test early (less than half the planned duration) because the results look significant is a classic "peeking" error that inflates false positives. The daily lift data is provided day-by-day, suggesting monitoring occurred. This flags PEEK.
+
+I check POWER. The sample sizes (~75k per arm) are large. With a baseline of 4% and target lift of 10% (to 4.4%), a quick approximation suggests ~150k total users is often sufficient for 80% power at alpha 0.05. Since we have ~150k users and a significant p-value (0.002), the test does not appear underpowered in a way that invalidates the positive result (though the early stop complicates this, the specific "underpowered" error usually refers to failing to detect an effect due to small N).
+
+I check SIMPSON.
+Desktop Control Rate: $2277/35689 \approx 6.38\%$. Treatment: $2471/35875 \approx 6.89\%$. Lift is positive.
+Mobile Control Rate: $711/39008 \approx 1.82\%$. Treatment: $772/39212 \approx 1.97\%$. Lift is positive.
+Both segments show a positive lift, consistent with the pooled result. No paradox.
+
+I check DENOM. The metric is order conversion rate. The randomization unit is user ID. The counts provided for the metric calculation (orders) are aggregated by users in the arms. While sessions are listed, the conversion rate is typically orders/users or orders/sessions. If it's orders/users, the denominator matches the randomization unit. If it's orders/sessions, it might be an issue, but "conversion rate" in booking often implies per session or per user. However, without explicit contradiction in the text stating the metric was calculated per session while randomizing per user in a way that biases the result (e.g., bot traffic skewing sessions), and given the user counts align with the arm splits, this is less clearly an error than the time violation. Usually, DENOM is flagged if the denominator is clearly mismatched (e.g., pageviews vs users). Here, the ambiguity isn't sufficient to flag over the clear time violation.
+
+I check NOVELTY. The daily lift fluctuates (5.7 to 10.1) but ends at 8.0. There is no clear fading trend to zero; it remains stable around the average. The projection assumes it lasts, but the data doesn't show the specific "fading" pattern required to flag NOVELTY based solely on the numbers provided.
+
+The primary error is stopping the test at day 9 instead of the planned 21 days because the p-value looked good.
+
+ERRORS: PEEK
+DECISION: HOLD

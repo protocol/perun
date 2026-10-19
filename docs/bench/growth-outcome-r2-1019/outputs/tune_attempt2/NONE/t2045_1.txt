@@ -1,0 +1,27 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 35,319 (control) + 35,573 (treatment) = 70,892. The expected split is 35,446 per arm. The difference is only 127 users (~0.36%), which is well within random chance for this sample size. No SRM.
+
+Next, I check for PEEKing. The test started Oct 12 and ended Oct 26. This is 14 days. The planned duration was 21 days. The team stopped the test 7 days early. Stopping before the planned duration based on interim results inflates false positives. This is a clear PEEK error.
+
+Then, I check for POWER. The smaller arm has ~35k users. With a baseline of 8% and target lift of 8%, standard calculators suggest ~30k-40k users per arm are needed for 80% power at alpha 0.05. Since the actual sample size (~35k) is near the requirement and the p-value (0.235) simply indicates non-significance rather than an inability to calculate, strict underpowering relative to the *target* is borderline, but the early stop (PEEK) is the primary cause of the inconclusive result. However, looking closely at the segments reveals a deeper issue.
+
+I check for SIMPSON's paradox by calculating conversion rates per device.
+Desktop Control: 1,852 / 13,107 ≈ 14.13%
+Desktop Treatment: 2,090 / 15,471 ≈ 13.51%
+(Lift is negative: -4.4%)
+
+Mobile Control: 973 / 22,212 ≈ 4.38%
+Mobile Treatment: 842 / 20,102 ≈ 4.19%
+(Lift is negative: -4.3%)
+
+Both segments show a negative lift (treatment is worse). Yet, the pooled report claims a positive lift of 3.0% (8.242% vs 7.999%).
+Let's re-verify the pooled math provided in the readout:
+Control Rate: 2,825 / 35,319 = 7.9985% (Matches reported 7.999%)
+Treatment Rate: 2,932 / 35,573 = 8.2422% (Matches reported 8.242%)
+The arithmetic in the report is consistent internally, but the aggregation hides that both segments performed worse. This occurs because the treatment group had a much higher proportion of high-converting Desktop users (15,471/35,573 ≈ 43.5%) compared to the control group (13,107/35,319 ≈ 37.1%). The shift in composition artificially inflated the overall average despite the treatment failing in both groups. This is a classic SIMPSON error.
+
+Regarding NOVELTY: The daily lift drops from 6.4% to near 0% by day 13, yet the team projects this transient lift for 12 months. While suggestive, the SIMPSON and PEEK errors are definitive mathematical contradictions in the analysis logic.
+
+Regarding DENOM: The metric is order conversion rate. The denominator should be users (randomized unit). The counts used (Orders/Users) align with the randomized user IDs. No DENOM error.
+
+ERRORS: PEEK, SIMPSON
+DECISION: HOLD

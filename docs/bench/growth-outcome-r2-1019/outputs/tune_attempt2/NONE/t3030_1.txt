@@ -1,0 +1,36 @@
+**SRM Check**: Total users = 90,162 (Control) + 89,744 (Treatment) = 179,906. Expected per arm = 89,953.
+Difference = 209 users.
+Standard Error for proportion $p=0.5$ is $\sqrt{0.5 \times 0.5 / 179906} \approx 0.00118$.
+Observed proportion for Control = $90162 / 179906 \approx 0.50116$.
+Z-score = $(0.50116 - 0.5) / 0.00118 \approx 0.98$.
+This is well within normal chance variation (typically $|Z| > 1.96$ indicates SRM). No SRM.
+
+**PEEK Check**: Planned duration was 14 days. The readout date is March 27, and the start date was March 17. This is exactly 10 days of data. The test was stopped 4 days early. Stopping before the planned duration based on interim results inflates false positive rates. This is a clear PEEK error.
+
+**POWER Check**: We must verify if the sample size is sufficient for the target lift.
+Baseline $p = 0.03$, Target lift = 8% relative $\rightarrow p_{treat} = 0.0324$.
+Using standard approximation for sample size per arm $n \approx \frac{16 \cdot p(1-p)}{(p_{treat}-p)^2}$ (for 80% power, 5% alpha).
+Difference $\delta = 0.0024$.
+$n \approx \frac{16 \cdot 0.03 \cdot 0.97}{0.0024^2} = \frac{0.4656}{0.00000576} \approx 80,833$.
+Actual users per arm are ~89,900, which exceeds the required ~80,833. The study is adequately powered. No POWER error.
+
+**SIMPSON Check**: Calculate conversion rates by segment.
+Desktop Control: $2024 / 44365 \approx 4.56\%$. Desktop Treatment: $2153 / 48647 \approx 4.43\%$. (Lift is negative).
+Mobile Control: $681 / 45797 \approx 1.49\%$. Mobile Treatment: $592 / 41097 \approx 1.44\%$. (Lift is negative).
+Both segments show a negative lift, yet the pooled result reports a positive lift (3.059% vs 3.0%).
+Wait, let's re-calculate the pooled rates from raw counts to ensure the readout numbers are consistent.
+Control Total Orders: $2024 + 681 = 2705$. Rate: $2705/90162 \approx 3.00\%$.
+Treatment Total Orders: $2153 + 592 = 2745$. Rate: $2745/89744 \approx 3.06\%$.
+The pooled math is correct. However, looking at the segments:
+Desktop Lift: $4.43 - 4.56 = -0.13\%$.
+Mobile Lift: $1.44 - 1.49 = -0.05\%$.
+Both segments decreased, but the total increased. This is the definition of Simpson's Paradox. The treatment group had a much higher proportion of Desktop users (who convert higher) compared to the control group ($48.6k/89.7k \approx 54\%$ vs $44.4k/90.2k \approx 49\%$), skewing the aggregate result upward despite the feature performing worse in both groups. This is a SIMPSON error.
+
+**DENOM Check**: Randomized by user ID. Metric is order conversion rate (Orders/Users). Denominator matches randomization unit. No DENOM error.
+
+**NOVELTY Check**: Daily lift values are stable (1.8% to 2.6%) with no fading trend visible in the 10 days. The projection assumes longevity, but the data does not show fading. No NOVELTY error evident from the numbers provided.
+
+Errors identified: PEEK (early stop) and SIMPSON (reversed segments).
+
+ERRORS: PEEK, SIMPSON
+DECISION: HOLD

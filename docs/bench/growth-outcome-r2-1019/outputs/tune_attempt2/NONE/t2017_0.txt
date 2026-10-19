@@ -1,0 +1,48 @@
+**SRM Check**: Total users = 35,904 + 36,040 = 71,944. Expected per arm = 35,972.
+Difference = |36,040 - 35,972| = 68.
+Standard Deviation ≈ $\sqrt{71944 \times 0.5 \times 0.5} \approx 134$.
+Z-score = $68 / 134 \approx 0.51$. This is well within chance (typically < 1.96 for 95% confidence). No SRM.
+
+**PEEK Check**: Started 2026-03-31, ended 2026-04-14. Duration is exactly 14 days, matching the planned duration. No PEEK.
+
+**POWER Check**: Baseline 4.0%, target lift 8% (absolute 0.32%).
+Observed counts are large (~36k per arm). With 80% power and alpha 0.05, the required sample size per arm for these parameters is roughly 20k–25k. The actual sample (~36k) exceeds this. No POWER issue.
+
+**SIMPSON Check**:
+Desktop Control Rate: $917 / 13,270 \approx 6.91\%$.
+Desktop Treatment Rate: $973 / 13,320 \approx 7.30\%$. (Lift positive)
+Mobile Control Rate: $519 / 22,634 \approx 2.29\%$.
+Mobile Treatment Rate: $551 / 22,720 \approx 2.43\%$. (Lift positive)
+Both segments show a positive lift; the direction does not reverse. No SIMPSON.
+
+**DENOM Check**: Randomization unit is "user id". The metric is "order conversion rate".
+Control: 1,436 orders / 35,904 users = 4.00%.
+Treatment: 1,524 orders / 36,040 users = 4.23%.
+The denominator used (users) matches the randomization unit. No DENOM.
+
+**NOVELTY Check**: The daily lift values fluctuate (5.5, 4.4, 6.2... 6.3) but show no clear fading trend over the 14 days. The projection applies the *reported* aggregate lift, not an inflated early spike. No NOVELTY.
+
+The p-value is 0.1219, which is greater than the alpha of 0.05. The result is not statistically significant. While this suggests the test failed to prove the change works, it is not one of the specific *analysis errors* listed (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY). The analysis itself appears methodologically sound based on the provided numbers; the outcome is simply inconclusive. However, rolling out a change with a non-significant result (p=0.12) based on a projection of unproven lift is a bad business decision, but strictly speaking, no *calculation error* from the specific list is present in the readout's construction.
+
+Wait, re-reading the prompt: "Flag a category only if the numbers show that error." Since the result is not significant, projecting this lift as fact for 12 months assumes the noise is signal. Is this NOVELTY? No, NOVELTY is specifically "lift is fading... but projected as lasting." The lift isn't fading. Is it another error? The prompt asks to check *only* for the listed codes. None of the specific definitions fit the situation of a non-significant result being recommended for rollout, except perhaps implicitly implying the analysis is flawed for recommending a ship on non-significant data. But strictly adhering to the definitions:
+- SRM: No.
+- PEEK: No.
+- POWER: No.
+- SIMPSON: No.
+- DENOM: No.
+- NOVELTY: No (no fading trend).
+
+Since none of the specific defined errors are present in the *analysis mechanics*, but the recommendation is to ship despite p=0.12, the decision logic is flawed, but the *analysis categories* provided are not triggered. However, usually, a "HOLD" is required if the test is inconclusive. But the instruction says: "HOLD if at least one flagged error must be fixed". If no error code is flagged, the logic dictates "SHIP" based on the strict constraints, even though real-world logic says "don't ship non-significant results".
+
+Let's re-evaluate POWER. "The smaller arm is too small to detect the target lift". The test *failed* to detect the lift (p=0.12). Does this mean it was underpowered? The observed lift was 5.7%, target was 8%. The test was powered for 8%. It found 5.7%. It is possible the true lift is 5.7% and the test was correctly unable to distinguish it from 0 with high confidence, or it was underpowered for 5.7%. But the definition says "too small to detect the *target* lift". It was sized for the target. The fact that it didn't reach significance doesn't mean the *design* was underpowered for the *target*.
+
+Let's re-evaluate DENOM. "order conversion rate". Orders / Users. Correct.
+
+Let's re-evaluate the recommendation. The recommendation is "roll out". The p-value is 0.12. This is a false positive risk if shipped. But is it PEEK? No, they ran the full 14 days.
+
+Actually, looking closely at the daily lift: 5.5, 4.4, 6.2, 5.2, 6.7, 5.9, 5.7, 7.0, 5.3, 6.0, 5.0, 5.3, 5.4, 6.3. There is no fade.
+
+Conclusion: None of the specific error codes apply to the numbers provided. The team is making a risky business decision on non-significant data, but that is not one of the labeled analysis errors (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY).
+
+ERRORS: NONE
+DECISION: SHIP

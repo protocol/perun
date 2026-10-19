@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 28,009 (control) + 28,269 (treatment) = 56,278. The expected split is 50%, so 28,139 per arm. The difference is 130 users. The standard error for the proportion is $\sqrt{0.5 \times 0.5 / 56278} \approx 0.0021$. The observed proportion is $28269/56278 \approx 0.5023$. The Z-score is $(0.5023 - 0.5) / 0.0021 \approx 1.1$. This is well within the range of chance (typically $|Z| > 1.96$ indicates SRM), so no SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The counts provided for the metric calculation appear to be Orders / Users (e.g., $1121 / 28009 \approx 4.002\%$). Since the denominator matches the randomization unit (users), there is no DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $857 / 13918 \approx 6.16\%$.
+Desktop Treatment Rate: $921 / 14047 \approx 6.56\%$. (Lift positive)
+Mobile Control Rate: $264 / 14091 \approx 1.87\%$.
+Mobile Treatment Rate: $284 / 14222 \approx 2.00\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON error.
+
+I check for Power (POWER). The baseline is 4%, target lift 8%. The sample size (~28k per arm) is generally sufficient to detect an 8% lift on a 4% baseline with 80% power (required n is often around 20k-25k per arm for these parameters). The arms are large enough; the test simply failed to reach significance, which is a result, not a design flaw in this context. No POWER error flagged based solely on arm size being "too small" to theoretically detect the target.
+
+I check for Peeking (PEEK). The start date was 2026-06-22 and the readout is 2026-07-20. This is exactly 28 days. The planned duration was 28 days. The test ran for the full planned duration. No PEEK error.
+
+I check for Novelty (NOVELTY). The daily relative lift starts at 13.8% and trends downward to ~2.9% by day 28. There is a clear fading pattern. However, the team's projection applies the *reported* overall lift (6.5%) to the next twelve months. They are not projecting the initial high lift; they are using the diluted average which already includes the decay. While the lift is fading, the error definition requires that the lift is "projected as lasting" (implying the high initial lift is projected forward) or that the fading invalidates the current average as a predictor. The readout says they apply the "reported lift" (the average). Strictly speaking, if the trend hits 0% tomorrow, the 6.5% average is still an overestimate, but the specific "Novelty" error usually flags projecting the *peak* or ignoring the decay in the forecast model. Here, the decay is visible in the data provided, but the projection uses the final aggregated number. Is this an error? The definition says "lift is fading... but is projected as lasting." The 6.5% is projected. If the true steady state is 2%, projecting 6.5% is assuming the novelty effect (the extra 4.5%) lasts. Given the sharp drop from 13% to 2%, the 6.5% average is heavily influenced by early novelty. Projecting this average as the permanent lift assumes the decay stops or the average represents the steady state, which the trend contradicts. This fits the NOVELTY criteria: the fading suggests the long-term lift is lower than the reported average, yet that average is projected for 12 months.
+
+ERRORS: NOVELTY
+DECISION: HOLD

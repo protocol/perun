@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 20,887 (control) + 20,981 (treatment) = 41,868. The expected split is 50%, so 20,934 per arm. The difference is only 47 users. A standard deviation approximation for a binomial distribution here is $\sqrt{41868 \times 0.5 \times 0.5} \approx 102$. The deviation is less than 0.5 standard deviations, which is well within chance. No SRM.
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate." The randomization unit is "user id." The counts provided for the metric calculation appear to be Orders / Users (e.g., Control: $1,671 / 20,887 \approx 8.0\%$? Wait, the reported rate is 5.92%. Let's re-calculate: $1,671 / 28,226$ (sessions) $\approx 5.92\%$. The treatment is $1,806 / 26,456 \approx 6.83\%$. The calculation uses **sessions** as the denominator, but users were randomized by **user id**. This violates the unit of randomization, introducing bias if session counts differ between arms (which they do: 28k vs 26k). This is a DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $1,003 / 7,771 \approx 12.9\%$.
+Desktop Treatment Rate: $1,084 / 7,806 \approx 13.9\%$. (Lift positive)
+Mobile Control Rate: $668 / 13,116 \approx 5.1\%$.
+Mobile Treatment Rate: $722 / 13,175 \approx 5.5\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No Simpson's paradox.
+
+Regarding Power (POWER): The sample size (~21k per arm) is large. With a baseline of 8% and target lift of 10%, standard power calculations suggest ~15k-20k users per arm are sufficient for 80% power. The study is not underpowered.
+
+Regarding Peeking (PEEK): The test ran from Feb 22 to Mar 24. This is roughly 30 days. The planned duration was 28 days. The test ran slightly longer than planned, not shorter. There is no evidence of early stopping based on the dates provided.
+
+Regarding Novelty (NOVELTY): The daily lift data fluctuates (12.0% to 18.8%) but does not show a clear fading trend over the 30 days; the end values (~14.6%) are similar to the middle values. There is no obvious decay pattern suggesting a novelty effect that is being ignored.
+
+The critical error is DENOM: calculating conversion per session when randomization was per user.
+
+ERRORS: DENOM
+DECISION: HOLD

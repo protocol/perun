@@ -1,0 +1,26 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 29,190 (control) + 28,036 (treatment) = 57,226. Expected per arm is 28,613. The treatment arm has 577 fewer users than expected. A rough chi-square check: $(577^2 / 28613) \times 2 \approx 23.3$. With 1 degree of freedom, a value > 3.84 is significant at p<0.05. 23.3 is massive, indicating the 50/50 split is broken. **SRM flagged.**
+
+Next, I check the analysis denominator. The metric is "order conversion rate," and users were randomized. The reported rates are calculated as Orders / Users?
+Control: $2,335 / 29,190 \approx 0.0800$ (8.00%).
+Treatment: $2,367 / 28,036 \approx 0.0844$ (8.44%).
+However, the readout reports control 6.24% and treatment 7.831%.
+Let's check Orders / Sessions:
+Control: $2,335 / 37,420 \approx 0.0624$ (6.24%).
+Treatment: $2,367 / 30,227 \approx 0.0783$ (7.83%).
+The reported metric uses sessions as the denominator, but randomization was by user ID. This violates the unit of analysis. **DENOM flagged.**
+
+Now, checking Simpson's Paradox. I calculate conversion rates (Orders/Users) per segment:
+Desktop Control: $1,653 / 13,047 \approx 12.67\%$.
+Desktop Treatment: $1,676 / 12,532 \approx 13.37\%$. (Lift ~5.5%)
+Mobile Control: $682 / 16,143 \approx 4.22\%$.
+Mobile Treatment: $691 / 15,504 \approx 4.46\%$. (Lift ~5.7%)
+Both segments show ~5.5% lift. The reported aggregate lift (using wrong denominator) is 25.5%. Even using the correct user-based aggregate ($8.44\% / 8.00\% - 1$), the lift is only 5.5%. The discrepancy is due to the denominator error, not a reversal of direction within segments. The direction (positive lift) is consistent across segments and the correct aggregate. **SIMPSON not flagged** (the issue is the denominator, not a paradoxical reversal).
+
+Checking PEEK: Planned 21 days, ran 11 days (Jan 24 to Feb 4). Stopping early inflates false positives. **PEEK flagged.**
+
+Checking POWER: The treatment arm (28k) is slightly smaller than control but close to the planned 50/50 split (ignoring SRM for a moment). With ~28k users and 8% baseline, detecting a 10% lift is usually feasible, but the SRM makes power calculations unreliable. However, the primary failure modes here are SRM, DENOM, and PEEK.
+
+Checking NOVELTY: Daily lift fluctuates (27.9 down to 19.6, up to 29.0) but shows no clear fading trend; it ends high (28.2). **NOVELTY not flagged.**
+
+ERRORS: SRM, PEEK, DENOM
+DECISION: HOLD

@@ -1,0 +1,50 @@
+**SRM Check**: Total users = 37,323 (Control) + 37,619 (Treatment) = 74,942. Expected per arm = 37,471.
+Difference = |37,323 - 37,471| = 148.
+Standard Deviation ≈ $\sqrt{74942 \times 0.5 \times 0.5} \approx 137$.
+Z-score ≈ $148 / 137 \approx 1.08$. This is well within normal chance variation (typically < 1.96 for 95% confidence). No SRM.
+
+**PEEK Check**: Planned duration was 14 days. The readout date is 2026-06-27, which is 15 days after the start (June 12). Daily data is provided for 15 days. The test ran for the full planned duration (and one extra day), so it was not stopped early based on interim results. No PEEK.
+
+**POWER Check**: The test detected a 5.3% lift with a p-value of 0.1417. While not statistically significant, the sample sizes are large (~37k per arm). The failure to reach significance suggests the true effect is smaller than the target 8%, not necessarily that the study was underpowered to detect *any* meaningful difference, though it failed to confirm the specific target. However, "underpowered" usually refers to design flaw before running. Given the large N, the primary issue is lack of effect, not sample size insufficiency for the baseline rate. More critically, the result is not significant, so rolling out is risky, but is it a "POWER" error in analysis? The analysis correctly reports p=0.14. The error would be claiming success. The prompt asks to flag if the *smaller arm is too small*. Both arms are nearly equal and large. No POWER flag based on arm size imbalance or obvious undersizing for the baseline.
+
+**SIMPSON Check**:
+Control Conversion:
+Desktop: $997 / 14,238 \approx 7.00\%$
+Mobile: $496 / 23,085 \approx 2.15\%$
+Treatment Conversion:
+Desktop: $1,058 / 14,351 \approx 7.37\%$ (Lift ~5.3%)
+Mobile: $527 / 23,268 \approx 2.26\%$ (Lift ~5.1%)
+Both segments show positive lift consistent with the pooled lift (~5.3%). No reversal. No SIMPSON.
+
+**DENOM Check**: Randomization unit is User ID. Metric is Order Conversion Rate.
+Denominator used in readout: Users (37,323 and 37,619).
+Orders / Users = Conversion per user. This matches the randomization unit. No DENOM.
+
+**NOVELTY Check**: Daily lift values: 5.2, 4.9, 5.4, 5.5, 6.0, 5.6, 5.3, 4.4, 3.9, 6.2, 5.4, 5.2, 5.9, 4.5, 6.1.
+The values fluctuate but do not show a consistent fading trend (e.g., starting high and dropping to zero/negative). The projection applies the *reported* average lift, not an inflated early lift. No NOVELTY.
+
+**Conclusion**: The analysis contains no methodological errors from the list. The result is simply not statistically significant (p=0.1417 > 0.05). The recommendation to "roll out" despite a non-significant p-value is a decision error, not one of the specific analysis flaws listed (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY). However, since the result is not significant, rolling out is unjustified by the data. But strictly adhering to the flagging codes provided: none of the specific technical analysis errors are present in the numbers.
+
+Wait, if the p-value is 0.14, the team recommending rollout is ignoring the statistical test. Is there a hidden error?
+Let's re-read POWER: "the smaller arm is too small to detect the target lift".
+Target lift 8%. Observed 5.3%.
+If the true lift was 8%, would this sample size detect it?
+Baseline 4%. Target 4.32%.
+With N=37k, standard error of difference $\approx \sqrt{\frac{0.04(0.96)}{37000} + \frac{0.04(0.96)}{37000}} \approx 0.0014$.
+Detectable lift (80% power, alpha 0.05) $\approx 2.8 \times SE \approx 0.4\%$.
+Relative lift detectable $\approx 0.4/4.0 = 10\%$? Wait.
+$Z_{\beta} + Z_{\alpha/2} \approx 0.84 + 1.96 = 2.8$.
+$2.8 \times 0.0014 = 0.0039$ (absolute).
+Relative: $0.0039 / 0.04 \approx 9.8\%$.
+The target was 8%. The minimum detectable effect (MDE) for this sample size is roughly 9.8%.
+Therefore, the study was indeed **underpowered** to detect the target lift of 8%. The sample size was insufficient to distinguish an 8% lift from noise with 80% power. The design claimed 80% power for 8% lift, but the achieved sample size (or the calculation based on it) suggests otherwise. Actually, let's re-calc MDE properly.
+$p_1=0.04, p_2=0.0432$.
+Pooled $p \approx 0.0416$.
+$SE = \sqrt{2 \times 0.0416 \times 0.9584 / 37471} \approx 0.00146$.
+Diff = 0.0032.
+$Z = 0.0032 / 0.00146 = 2.19$.
+Power for 8% lift: $2.19 - 1.96 = 0.23$. Power is very low (~59%).
+The readout claims the design *was* 80% power for 8% lift, but the resulting N (~37k/arm) is too small for that claim (needs ~50k/arm for 8% lift at 4% baseline). Thus, the realized test is underpowered relative to the design goals.
+
+ERRORS: POWER
+DECISION: HOLD

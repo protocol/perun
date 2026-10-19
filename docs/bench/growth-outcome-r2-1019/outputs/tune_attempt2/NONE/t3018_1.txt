@@ -1,0 +1,28 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 54,307 (control) + 54,033 (treatment) = 108,340. The expected split is 54,170 per arm. The difference is 137 users. A quick chi-square approximation: $(137^2 / 54170) \times 2 \approx 0.7$. This is well below the critical threshold (~3.84 for p=0.05), so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." Typically, this is Orders / Users or Orders / Sessions. Since randomization was by user ID, the denominator must be users.
+Control Rate: $2,715 / 54,307 \approx 5.00\%$.
+Treatment Rate: $2,754 / 54,033 \approx 5.097\%$.
+The reported rates match the user-based calculation. No DENOM error.
+
+Now, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates within the device segments:
+Desktop Control: $1,929 / 26,683 \approx 7.23\%$.
+Desktop Treatment: $2,082 / 29,672 \approx 7.02\%$.
+Here, Control > Treatment (Negative lift).
+
+Mobile Control: $786 / 27,624 \approx 2.85\%$.
+Mobile Treatment: $672 / 24,361 \approx 2.76\%$.
+Here, Control > Treatment (Negative lift).
+
+In both segments, the treatment performs worse than the control. However, the pooled result reports a positive lift (5.097% vs 4.999%). This reversal occurs because the treatment arm has a higher proportion of high-converting desktop users (29,672 vs 26,683) compared to the control, skewing the aggregate. This is a clear case of Simpson's Paradox. The aggregate lift is misleading; the actual effect within segments is negative.
+
+Regarding Power (POWER): The test ran for 30 days (slightly over the planned 28), and sample sizes are large (~54k per arm). With a 5% baseline, detecting an 8% lift usually requires ~20k-30k per arm. The study is not underpowered; the high p-value (0.46) simply confirms no significant positive effect exists, especially given the paradox.
+
+Regarding Novelty (NOVELTY): The daily lift fluctuates between 1.3% and 2.5% without a clear fading trend toward zero or negative over the 30 days. While the aggregate is wrong due to Simpson's paradox, the daily data doesn't explicitly show a novelty decay pattern that contradicts the projection method itself, though the projection is invalid because the base lift is illusory.
+
+Regarding Peek (PEEK): The readout states the final readout was after the planned duration (30 days vs 28 planned). There is no evidence of early stopping.
+
+The critical error is SIMPSON. The overall positive lift is an artifact of imbalanced segmentation, not a real treatment effect. Since the segmented data shows the treatment is actually worse in both groups, rolling out would likely harm conversion.
+
+ERRORS: SIMPSON
+DECISION: HOLD

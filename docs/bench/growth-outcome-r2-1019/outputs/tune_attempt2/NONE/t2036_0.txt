@@ -1,0 +1,17 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 18,454 (control) + 19,244 (treatment) = 37,698. The expected split is 50%, so 18,849 per arm. The treatment arm has 395 more users than expected. The standard deviation for a binomial distribution here is $\sqrt{37698 \times 0.5 \times 0.5} \approx 97$. The difference is $395 / 97 \approx 4.07$ standard deviations. This is far beyond the threshold for chance (typically >2 or 3 SDs), indicating a broken randomization or logging issue. **SRM is flagged.**
+
+Next, I check for PEEKing. The planned duration was 28 days (Oct 3 to Oct 31). The readout covers exactly this period (Day 1 to Day 28 data is present). There is no evidence the test was stopped early based on the provided dates. **PEEK is not flagged.**
+
+For POWER, the treatment arm (the larger one) has 19,244 users. With a baseline of 5% and target lift of 10%, the required sample size per arm is roughly 14,000–15,000 users for 80% power. Both arms exceed this. **POWER is not flagged.**
+
+Checking SIMPSON's paradox, I calculate conversion rates by segment:
+Desktop Control: $641/7525 \approx 8.52\%$. Desktop Treatment: $711/7848 \approx 9.06\%$. (Lift positive)
+Mobile Control: $282/10929 \approx 2.58\%$. Mobile Treatment: $313/11396 \approx 2.75\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. **SIMPSON is not flagged.**
+
+Regarding DENOM, the metric is order conversion rate. The denominator should be users or sessions depending on definition, but the randomization unit is User ID. The data provides users and orders. If the metric is Orders/Users, the denominator matches the randomization unit. If it is Orders/Sessions, it might be an issue, but "order conversion rate" usually implies Orders per Session or Orders per User. However, since SRM is already critical, and the user counts are explicitly given as the randomized unit, without explicit formula contradiction in the text, this is less clear than SRM. But strictly, if the rate is calculated on sessions (25k/28k) while randomization is by user, and users have multiple sessions, this could be DENOM. However, the prompt asks to flag only if numbers *show* the error. The SRM is definitive. The daily lift shows fluctuation (7.0 down to 4.9) but no clear fading trend to zero that would invalidate the whole test immediately as NOVELTY without more statistical testing of the trend slope, though the last day is lower. The primary, undeniable error is SRM.
+
+Because the assignment mechanism is broken (SRM), the comparison between control and treatment is invalid. We cannot trust the p-value or the lift estimate. The rollout decision must be halted until the randomization integrity is verified.
+
+ERRORS: SRM
+DECISION: HOLD

@@ -1,0 +1,26 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 13,418 (control) + 13,454 (treatment) = 26,872. The expected split is 13,436 per arm. The difference is only 18 users, which is well within random chance for this sample size. No SRM.
+
+Next, I check the denominator. Users were randomized by user ID, and the metric is order conversion rate. The readout provides user counts and order counts. Assuming "order conversion rate" means orders per user, the denominator matches the randomization unit. No DENOM error.
+
+Now, I verify the reported conversion rates against the raw counts to check for calculation errors or Simpson's Paradox.
+Control Rate: 1,073 orders / 13,418 users ≈ 8.00%.
+Treatment Rate: 1,152 orders / 13,454 users ≈ 8.56%.
+The readout reports Control at 6.396% and Treatment at 8.104%. These reported percentages do not match the raw user counts provided.
+Let's check if they used sessions as the denominator (DENOM error).
+Control Sessions: 1,073 / 16,775 ≈ 6.396%.
+Treatment Sessions: 1,152 / 14,216 ≈ 8.104%.
+The reported rates match the session-based calculation exactly. Since users were randomized, not sessions, using sessions as the denominator is invalid because the treatment arm has fewer sessions per user (14,216/13,454 ≈ 1.06) than the control arm (16,775/13,418 ≈ 1.25). This discrepancy in session density biases the metric. This is a clear DENOM error.
+
+Because the denominator is wrong, the reported lift of 26.7% is incorrect. The actual user-based lift is (8.56% - 8.00%) / 8.00% ≈ 7.0%. This is below the target lift of 8%.
+
+Regarding PEEK: The test ran from Feb 18 to Mar 1, which is 12 days. The planned duration was 21 days. Stopping early (12 vs 21 days) suggests PEEKing, especially since the result looks significant only due to the denominator error. However, the DENOM error is the primary driver of the false positive. Even without PEEK, the result is invalid.
+
+Regarding SIMPSON: Let's check segment rates (orders/users).
+Desktop Control: 752/5669 ≈ 13.26%. Desktop Treatment: 807/5684 ≈ 14.20%. (Lift ~7%)
+Mobile Control: 321/7749 ≈ 4.14%. Mobile Treatment: 345/7770 ≈ 4.44%. (Lift ~7%)
+Both segments show ~7% lift. The pooled user-based rate also shows ~7% lift. The paradox only appears when incorrectly using sessions. Thus, no true Simpson's paradox in the correct metric, just the denominator issue.
+
+The projection assumes the 26.7% lift lasts, but the real lift is likely ~7%, which is underpowered to detect reliably given the design parameters (target 8%). However, the definitive error is the denominator mismatch.
+
+ERRORS: DENOM, PEEK
+DECISION: HOLD

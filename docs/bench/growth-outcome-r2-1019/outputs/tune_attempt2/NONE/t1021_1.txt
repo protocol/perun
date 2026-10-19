@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 17,488 (control) + 17,552 (treatment) = 35,040. The expected split is 50%, so 17,520 per arm. The treatment deviation is $17,552 - 17,520 = 32$. The standard deviation for a binomial split is $\sqrt{35040 \times 0.5 \times 0.5} \approx 93.6$. The z-score is $32 / 93.6 \approx 0.34$, which is well within chance limits. No SRM.
+
+Next, I check for PEEKing. The test started March 21 and ended April 5. This duration is exactly 15 days (inclusive), exceeding the planned 14 days. Since the test ran longer than planned rather than stopping early, there is no evidence of early stopping inflating false positives. No PEEK.
+
+For POWER, the reported p-value is 0.3971, which is not significant. While the test failed to detect the target lift, "underpowered" usually refers to a design flaw where the sample size was insufficient *a priori*. Here, the sample sizes (~17.5k) are large, and the lack of significance is likely due to the true effect being smaller than the target, not necessarily a design error in sample calculation visible from these counts alone. However, strictly speaking, the test did not achieve significance, but without the pre-calculated minimum sample size, we cannot definitively flag a design error versus a null result. I will not flag this based solely on the outcome.
+
+Checking SIMPSON's paradox:
+Desktop Control Rate: $519 / 8107 \approx 6.40\%$
+Desktop Treatment Rate: $544 / 8137 \approx 6.69\%$ (Lift positive)
+Mobile Control Rate: $180 / 9381 \approx 1.92\%$
+Mobile Treatment Rate: $189 / 9415 \approx 2.01\%$ (Lift positive)
+Both segments show a positive lift, consistent with the pooled positive lift. No reversal occurs. No SIMPSON.
+
+Regarding DENOM: The metric is order conversion rate. The randomization unit is `user id`. The counts provided for the metric calculation (orders) are aggregated by users (implied by the context of "users" and "orders" without session-level conversion rates explicitly claimed as the primary metric denominator mismatch). The readout lists users and orders. If conversion is Orders/Users, the denominator matches the randomization unit. No obvious DENOM error.
+
+For NOVELTY: The daily lift data shows fluctuation (4.3% to 5.1%, dipping to 3.3% on day 11, then back up). There is no clear, monotonic fading trend indicating a novelty effect that disappears over time; the lift remains relatively stable around 4-5%. The projection applies the *reported* lift, not an inflated early lift. No NOVELTY.
+
+The primary issue is that the result is not statistically significant (p = 0.3971), yet the recommendation is to roll out. However, none of the specific *analysis error* codes (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY) are strictly triggered by the numbers provided. The "POWER" code is defined as the arm being "too small to detect the target lift," but with ~35k users and a 4% baseline, the detectable lift is usually small. The failure to find significance suggests the effect isn't there, not that the math was wrong. Wait, re-reading the POWER definition: "the smaller arm is too small to detect the target lift at the stated alpha and power." With 17k users, alpha 0.05, power 80%, baseline 4%, the detectable relative lift is roughly 13-15%. The target was 10%. Therefore, the sample size *was* actually too small to guarantee detection of a 10% lift if it existed (underpowered design). Let's verify roughly: $n \approx 16 \times (p(1-p)) / (p \times \text{lift})^2$. For 10% lift on 4% (diff 0.004), $n \approx 16 \times 0.04 / 0.000016 \approx 40,000$ per arm. We have only ~17,500. The study is indeed underpowered for the stated target.
+
+ERRORS: POWER
+DECISION: HOLD

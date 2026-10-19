@@ -1,0 +1,28 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 27,204 (control) + 27,036 (treatment) = 54,240. The expected split is 27,120 per arm. The difference is only 84 users, which is well within random chance for this sample size. No SRM.
+
+Next, I check for Peeking (PEEK). The test started Feb 1 and the readout is Feb 17. This is 16 days of data. The planned duration was 14 days. Since the analysis occurred after the planned duration ended, not before, this is not early stopping. No PEEK.
+
+Now, I check for Power (POWER). The baseline is ~4%. The target lift is 10% (to 4.4%). The observed lift is only 2%. While the test might be underpowered to detect a *smaller* lift, the design calculation targets a 10% lift. With ~27k users per arm, a standard power calculation for a 4% baseline and 10% lift usually requires roughly 10k–15k users per arm. The sample size (27k) exceeds the requirement for the *target* lift. The test simply found no significant effect. No POWER error based on the design parameters provided.
+
+I check for Simpson's Paradox (SIMPSON).
+Control Desktop Rate: 716 / 11,368 ≈ 6.30%
+Treatment Desktop Rate: 777 / 12,714 ≈ 6.11%
+(Lift is negative: -3.0%)
+
+Control Mobile Rate: 372 / 15,836 ≈ 2.35%
+Treatment Mobile Rate: 326 / 14,322 ≈ 2.28%
+(Lift is negative: -3.0%)
+
+Both segments show a negative lift (treatment worse than control). However, the reported aggregate result claims a positive lift of 2.0% (4.08% vs 3.999%).
+Aggregate Control: 1088 / 27204 ≈ 3.999%
+Aggregate Treatment: 1103 / 27036 ≈ 4.080%
+Since the direction of the effect reverses when pooling the data (negative in segments, positive in aggregate), this is a clear case of Simpson's Paradox, likely driven by the treatment arm having a higher proportion of high-converting desktop users (12,714 vs 11,368) compared to the control.
+
+I check Denominator (DENOM). Randomization is by user ID. The metric is order conversion rate (orders/users). The denominator matches the randomization unit. No DENOM error.
+
+I check Novelty (NOVELTY). The daily lift data shows fluctuation between 1.5% and 2.5% with no clear fading trend over the 16 days. The projection applies the *reported* (aggregate) lift, which is already suspect due to Simpson's paradox, but the daily data itself does not show a fading pattern characteristic of novelty effects wearing off. No NOVELTY error evident from the trend line provided.
+
+The critical error is SIMPSON. The aggregate positive lift is an artifact of imbalanced segment sizes, while every actual user segment performed worse in treatment. Rolling out based on the aggregate number would be a mistake.
+
+ERRORS: SIMPSON
+DECISION: HOLD

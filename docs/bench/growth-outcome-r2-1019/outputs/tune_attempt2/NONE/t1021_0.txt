@@ -1,0 +1,23 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 17,488 (control) + 17,552 (treatment) = 35,040. The expected split is 17,520 per arm. The observed difference is 32 users. The standard deviation for a binomial split is $\sqrt{35040 \times 0.5 \times 0.5} \approx 93.6$. The difference (32) is well within 2 standard deviations ($2 \times 93.6 = 187.2$), so the allocation is consistent with random chance. No SRM.
+
+Next, I check for PEEKing. The test started March 21 and ended April 5. This is exactly 15 days inclusive (or 14 full days depending on timezones), matching the "planned duration 14 days" closely enough that stopping early is not evident from the dates alone. The daily lift data shows 15 data points, consistent with the duration. No clear evidence of PEEK.
+
+I check for POWER issues. The baseline is ~4%, target lift 10% (to 4.4%). With ~17,500 users per arm, we have sufficient sample size to detect a 10% lift with 80% power (standard calculators suggest ~15k-16k per arm for these parameters). The test is not underpowered for the *target* lift, even though the *observed* lift was smaller and non-significant. No POWER error in design.
+
+I check for SIMPSON's paradox by calculating segment conversion rates:
+Desktop Control: $519/8107 \approx 6.40\%$. Desktop Treatment: $544/8137 \approx 6.69\%$. (Lift positive)
+Mobile Control: $180/9381 \approx 1.92\%$. Mobile Treatment: $189/9415 \approx 2.01\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled positive lift. No reversal occurs. No SIMPSON.
+
+I check DENOM. The metric is "order conversion rate." The randomization unit is "user id." The counts provided for the metric calculation (orders) are aggregated by users (implied by the context of conversion rates usually being orders/users). However, the readout lists "sessions" which are not the randomized unit. If the rate was calculated as Orders/Sessions, that would be an error. But the reported rates ($699/17488 \approx 3.997\%$) match the user counts, not session counts ($699/23850 \approx 2.9\%$). The denominator matches the randomization unit. No DENOM error.
+
+I check NOVELTY. The daily lift values are: 4.3, 4.2, 4.9, 4.2, 4.7, 4.6, 4.0, 5.1, 5.0, 5.0, 3.3, 3.8, 5.1, 4.5, 4.7. There is no clear fading trend; the values fluctuate without a consistent downward slope over time. The projection applies the current lift to 12 months, but without evidence of fading in the data provided, we cannot flag NOVELTY based strictly on the numbers showing a fade.
+
+However, the p-value is 0.3971, which is not significant. The recommendation is to "roll out" based on a non-significant result. While this is a bad decision, it is not one of the specific analysis *errors* defined in the codes (like SRM, PEEK, etc.). The prompt asks to flag categories *only if the numbers show that error*. None of the specific structural errors (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY) are present in the numbers. The decision to ship is risky due to lack of significance, but the *analysis errors* listed are not triggered.
+
+Wait, re-reading the NOVELTY definition: "the lift is fading over the test but is projected as lasting." The data does not show fading. Re-reading PEEK: "stopped... before planned duration". March 21 to April 5 is 15 days. Planned 14. It ran longer or exactly as planned. No PEEK.
+
+Since none of the specific error conditions are met by the numbers:
+
+ERRORS: NONE
+DECISION: SHIP

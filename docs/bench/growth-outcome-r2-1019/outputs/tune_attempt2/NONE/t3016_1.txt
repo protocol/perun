@@ -1,0 +1,24 @@
+**SRM Check**: Total users = 32,683 + 33,587 = 66,270. Expected per arm = 33,135.
+Observed difference = |33,587 - 33,135| = 452.
+Standard deviation for binomial split $\approx \sqrt{66270 \times 0.5 \times 0.5} \approx 129$.
+Z-score $\approx 452 / 129 \approx 3.5$. A Z-score > 1.96 indicates a significant deviation from 50/50. The split is statistically imbalanced, suggesting assignment or logging issues. **Flag SRM.**
+
+**PEEK Check**: Start date 2026-07-15, planned duration 21 days implies an end date of 2026-08-04 (inclusive) or 2026-08-05. The readout date is 2026-08-05. The test ran for the full planned duration (21 days of data likely included). There is no evidence in the numbers that the test was stopped early based on interim results. **No flag.**
+
+**POWER Check**: Baseline 8%, target lift 8% (to 8.64%).
+Control orders: 2,615; Treatment orders: 2,837.
+Using standard approximation, required sample size per arm for 80% power at alpha 0.05 to detect 8% relative lift on 8% baseline is roughly 33,000 users per arm (or ~2,640 events). We have ~33k users and >2,600 events per arm. The study appears adequately powered. **No flag.**
+
+**SIMPSON Check**:
+Desktop Control Rate: $1923/15362 \approx 12.52\%$. Desktop Treat Rate: $2086/15787 \approx 13.21\%$. Lift > 0.
+Mobile Control Rate: $692/17321 \approx 4.00\%$. Mobile Treat Rate: $751/17800 \approx 4.22\%$. Lift > 0.
+Both segments show positive lift, consistent with the pooled positive lift. No reversal observed. **No flag.**
+
+**DENOM Check**: Randomization unit is User ID. Metric is Order Conversion Rate (Orders / Users). The denominator matches the randomization unit. **No flag.**
+
+**NOVELTY Check**: Daily lift values: 6.8, 6.5, 4.6... ending at 4.5. The values fluctuate (4.2 to 6.8) but do not show a clear, monotonic fading trend (e.g., starting high and dropping to near zero). The final day (4.5) is similar to days 3, 7, 8, 16. Projecting the average lift is not clearly erroneous based on a "fading" pattern in these specific numbers. **No flag.**
+
+The primary error is SRM. When the sample ratio is significantly off, p-values and confidence intervals are invalid because the randomization assumption is broken. This must be fixed before rollout.
+
+ERRORS: SRM
+DECISION: HOLD

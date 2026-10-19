@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 37,232 (control) + 37,424 (treatment) = 74,656. The expected split is 50%, so 37,328 per arm. The treatment deviation is 37,424 - 37,328 = +96 users. The standard error for the difference in proportions is roughly $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{18664} \approx 136$. A deviation of 96 is well within 2 standard errors (~272), so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The counts provided are orders per users (e.g., 1,117 orders / 37,232 users). The denominator matches the randomization unit. No DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Control Desktop Rate: $757 / 15,846 \approx 4.78\%$.
+Treatment Desktop Rate: $801 / 15,928 \approx 5.03\%$. (Lift positive)
+Control Mobile Rate: $360 / 21,386 \approx 1.68\%$.
+Treatment Mobile Rate: $381 / 21,496 \approx 1.77\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON error.
+
+I check Power (POWER). The baseline is stated as 3.0%, but the observed control rate is $1,117/37,232 \approx 3.0\%$. Wait, the readout says "Reported conversion rate: control 2.188%". Let's re-calculate: $1,117 / 37,232 = 0.02999 \approx 3.0\%$. The readout claims the rate is 2.188%. This is a discrepancy. $1,117 / 51,043$ (sessions) = 2.188%. The reported metric uses **sessions** as the denominator, but users were randomized by **user ID**. This is a denominator mismatch. The analysis compares session-level conversion while randomizing users, violating independence assumptions if sessions are correlated, or simply misaligning the unit of analysis. This flags DENOM.
+
+Regarding PEEK: The test ran from June 21 to July 14. That is 23 days (June has 30 days: 30-21+1 = 10 days in June + 14 in July = 24 days? Or simply counting the daily lift data points provided: there are 23 data points). The planned duration was 21 days. Running 23 days instead of 21 is slightly over, not stopped early. No PEEK.
+
+Regarding NOVELTY: The daily lift fluctuates (28.9 down to 20.5, up to 30.2, etc.) but does not show a clear, monotonic fading trend indicative of novelty wear-off that contradicts the projection. The projection assumes the lift lasts 12 months; while risky, the numbers themselves don't explicitly show the "fading" pattern required to flag NOVELTY based strictly on the provided list.
+
+The critical error is DENOM. The randomization unit is User, but the metric calculated is Orders/Sessions (2.188% = 1117/51043). Using sessions as the denominator when users are randomized inflates the sample size artificially and ignores within-user correlation, invalidating the p-value.
+
+ERRORS: DENOM
+DECISION: HOLD

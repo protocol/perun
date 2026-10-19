@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 28,578 (control) + 28,734 (treatment) = 57,312. The expected split is 28,656 per arm. The difference is 78 users. The standard error for a 50/50 split is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx 120$. The deviation is less than 1 standard error, so the allocation is consistent with chance. No SRM.
+
+Next, I check for PEEK. The test started July 23 and ended August 12. This is 20 days. The planned duration was 28 days. The team stopped the test 8 days early because the p-value (0.0604) was approaching significance or they wanted to make a decision. Stopping before the planned duration based on interim results inflates false positives. This is a clear PEEK error.
+
+Then, I check POWER. The baseline is 6.0%, target lift 8%. The sample size per arm is ~28,600. Using standard approximations, detecting an 8% relative lift (absolute change from 0.06 to 0.0648) with 80% power and alpha 0.05 typically requires roughly 25,000–30,000 users per arm. The current sample size is sufficient to detect the target lift had the effect been present and stable. The test is not obviously underpowered based on the counts alone.
+
+I check SIMPSON.
+Desktop Control Rate: $1,225 / 13,798 \approx 8.88\%$.
+Desktop Treatment Rate: $1,309 / 13,873 \approx 9.44\%$. (Lift positive)
+Mobile Control Rate: $490 / 14,780 \approx 3.32\%$.
+Mobile Treatment Rate: $524 / 14,861 \approx 3.53\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No Simpson's paradox.
+
+I check DENOM. The metric is order conversion rate. The randomization unit is user id. The counts provided for the metric calculation (orders) are aggregated by users in the arms. While sessions are listed, the conversion rate is typically orders/users or orders/sessions. If the metric is orders/users, the denominator matches the randomization unit. If it is orders/sessions, there is a mismatch. However, the text says "Metric: order conversion rate" and lists users and orders. Usually, if the denominator isn't the randomization unit, it's explicitly flagged by session vs user discrepancy causing bias. But here, the most glaring issue is the early stop. Let's look closer at the rates reported: Control $1,715/28,578 = 6.001\%$. Treatment $1,833/28,734 = 6.379\%$. The calculation uses users as the denominator. Since users were randomized, the denominator matches the randomization unit. No DENOM error.
+
+I check NOVELTY. The daily lift data shows a clear decay: starting at 11.6% and dropping to ~2.8–4.1% by the end. The team projects the current reported average lift (6.3%) for the next twelve months. Given the fading trend, projecting the average lift rather than the stabilized (lower) recent lift ignores the novelty effect wearing off. This is a NOVELTY error.
+
+Errors identified: PEEK (stopped early), NOVELTY (fading lift projected as constant).
+
+ERRORS: PEEK, NOVELTY
+DECISION: HOLD

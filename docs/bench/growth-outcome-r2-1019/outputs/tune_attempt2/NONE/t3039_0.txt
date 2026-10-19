@@ -1,0 +1,15 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 27,840 (control) + 28,692 (treatment) = 56,532. The expected split is 50%, so 28,266 per arm. The treatment has 426 more users than expected. Using a quick chi-square approximation: $\chi^2 \approx \frac{(426)^2}{28266} + \frac{(-426)^2}{28266} \approx 6.4 + 6.4 = 12.8$. With 1 degree of freedom, a value > 3.84 is significant at p<0.05. 12.8 is highly significant, indicating the randomization or logging is broken.
+
+Next, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device:
+Desktop Control: $777 / 11,474 \approx 6.77\%$. Desktop Treatment: $858 / 13,083 \approx 6.56\%$. (Treatment is lower).
+Mobile Control: $337 / 16,366 \approx 2.06\%$. Mobile Treatment: $312 / 15,609 \approx 2.00\%$. (Treatment is lower).
+In both segments, the treatment performs worse than the control. However, the pooled reported rates are Control 4.001% and Treatment 4.078%, where treatment appears better. Since the direction of the effect reverses when aggregating, this is a clear case of Simpson's Paradox, likely driven by the imbalance in device traffic between arms (treatment has more high-converting desktop users).
+
+Regarding Power (POWER): The sample sizes (~28k) are sufficient to detect a 10% lift on a 4% baseline. The issue here isn't underpowering, but the validity of the estimate itself due to SRM and Simpson's paradox.
+
+Regarding PEEK, NOVELTY, and DENOM: The test ran for the planned duration (Jan 27 to Feb 19 is ~23 days, covering the 21-day plan). The daily lift is stable, not fading. The denominator (users) matches the randomization unit.
+
+The presence of SRM invalidates the p-value and confidence intervals. The presence of Simpson's Paradox confirms that the aggregate result is misleading and driven by covariate imbalance (which shouldn't happen in a valid randomization, reinforcing the SRM finding). Because the assignment mechanism appears broken, the results cannot be trusted for a rollout decision.
+
+ERRORS: SRM, SIMPSON
+DECISION: HOLD

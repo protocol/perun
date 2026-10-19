@@ -1,0 +1,20 @@
+Several critical analysis errors are evident in the provided readout.
+
+First, there is a clear **DENOM** error. The experiment randomized users by user ID (50/50 allocation), yet the reported metric is "order conversion rate" calculated against sessions, not users. The control arm has 48,643 users but 70,038 sessions, while the treatment arm has 48,543 users but only 62,261 sessions. The treatment group has significantly fewer sessions per user (~1.28) compared to the control (~1.44). By using sessions as the denominator, the metric penalizes the control group for generating more sessions per user, artificially inflating the treatment's conversion rate. The correct denominator must be the randomized unit: users.
+
+Second, the data indicates **SIMPSON** paradox. Let's calculate the user-level conversion rates for the segments:
+*   **Desktop Control:** 920 orders / 17,527 users ≈ 5.25%
+*   **Desktop Treatment:** 978 orders / 17,491 users ≈ 5.59% (Lift ~6.5%)
+*   **Mobile Control:** 539 orders / 31,116 users ≈ 1.73%
+*   **Mobile Treatment:** 573 orders / 31,052 users ≈ 1.85% (Lift ~6.9%)
+
+Both segments show a consistent lift of roughly 6.5–7%. However, the reported overall lift is 19.6%. This massive discrepancy arises because the aggregated calculation incorrectly uses sessions as the denominator (as noted in DENOM), distorting the pooled result so severely that it no longer reflects the weighted average of the segments. The segments tell one story (~7% lift), while the flawed pooled metric tells another (~20% lift).
+
+Regarding **SRM**, the user split is 48,643 vs 48,543. Total users = 97,186. Expected per arm = 48,593. The difference is negligible and well within chance limits for this sample size, so SRM is not flagged based on user counts.
+
+Regarding **NOVELTY**, the daily lift fluctuates between 14.6% and 24.1% but does not show a consistent fading trend over the 29 days; it remains high throughout. Thus, novelty decay is not clearly demonstrated by the numbers provided.
+
+The primary issues are the incorrect denominator and the resulting paradoxical aggregation.
+
+ERRORS: DENOM, SIMPSON
+DECISION: HOLD

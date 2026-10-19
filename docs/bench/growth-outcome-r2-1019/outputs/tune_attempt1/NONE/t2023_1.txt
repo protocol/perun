@@ -1,0 +1,35 @@
+**SRM**: The difference in users is $|90,535 - 90,837| = 302$. The denominator is $\sqrt{90,535 + 90,837} = \sqrt{181,372} \approx 425.9$. The ratio is $302 / 425.9 \approx 0.71$. Since $0.71 < 3.5$, there is no Sample Ratio Mismatch.
+
+**POWER**: Baseline $p_1 = 0.08$. Target $p_2 = 0.08 \times 1.05 = 0.084$.
+Numerator: $7.85 \times (0.08 \times 0.92 + 0.084 \times 0.916) = 7.85 \times (0.0736 + 0.076944) \approx 1.1818$.
+Denominator: $(0.084 - 0.08)^2 = 0.000016$.
+Required $n = 1.1818 / 0.000016 \approx 73,863$.
+Threshold for underpowered: $0.9 \times 73,863 \approx 66,477$.
+The smaller arm (treatment) has 90,535 users. Since $90,535 > 66,477$, the test is not underpowered.
+
+**PEEK**: Duration from March 19 to April 17 is 30 days inclusive (or 29 days elapsed). Planned duration is 28 days.
+Threshold: $0.8 \times 28 = 22.4$ days.
+Actual days (29 or 30) exceed 22.4. The test was not stopped early.
+
+**DENOM**: The rule checks if reported rate = orders / sessions.
+Control: $7,267 / 117,304 \approx 0.06195$ (6.195%). Matches reported.
+Treatment: $7,724 / 106,422 \approx 0.07258$ (7.258%). Matches reported.
+Since randomization was by user, but rates were calculated by sessions, the denominator is wrong. Flag **DENOM**.
+
+**SIMPSON**: Check pooled vs segment lifts using users as denominator.
+Pooled Control: $7,267 / 90,837 \approx 7.99\%$.
+Pooled Treatment: $7,724 / 90,535 \approx 8.53\%$.
+Pooled Lift: Positive ($8.53\% > 7.99\%$).
+Desktop Control: $5,204 / 44,968 \approx 11.57\%$. Desktop Treatment: $5,531 / 44,818 \approx 12.34\%$. Lift: Positive.
+Mobile Control: $2,063 / 45,869 \approx 4.50\%$. Mobile Treatment: $2,193 / 45,717 \approx 4.79\%$. Lift: Positive.
+Lift is positive in all segments. No Simpson's paradox.
+
+**NOVELTY**:
+First 3 days: 17.4, 17.4, 18.0. Mean = $52.8 / 3 = 17.6$. Half mean = 8.8.
+Last 3 days (days 27-29): 17.5, 16.8, 16.6. Mean = $50.9 / 3 \approx 16.97$.
+Is $16.97 < 8.8$? No. The lift is not fading significantly by this rule.
+
+Only DENOM is flagged. Using sessions instead of users invalidates the statistical inference because the variance calculation assumes independent users, not sessions (which are correlated within users). This must be fixed.
+
+ERRORS: DENOM
+DECISION: HOLD

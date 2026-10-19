@@ -1,0 +1,23 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 58,375 (control) + 58,719 (treatment) = 117,094. The expected split is 58,547 per arm. The observed difference is |58,719 - 58,375| = 344 users. For a sample this large, a deviation of 344 is well within the bounds of random chance (roughly 0.3% deviation), so SRM is not flagged.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." The readout calculates this as orders divided by users (e.g., 2,335 / 58,375 ≈ 4.0%). Since users were the randomized unit, using users as the denominator is correct. No DENOM error.
+
+Then, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device segment:
+Desktop Control: 1,638 / 24,795 ≈ 6.61%
+Desktop Treatment: 1,906 / 30,685 ≈ 6.21%
+(Lift is negative: -6.1%)
+
+Mobile Control: 697 / 33,580 ≈ 2.08%
+Mobile Treatment: 547 / 28,034 ≈ 1.95%
+(Lift is negative: -6.2%)
+
+In both segments, the treatment performs worse than the control. However, the pooled result reports a positive lift of 4.4% (4.178% vs 4.0%). Since the direction of the effect reverses when aggregating the data (negative in segments, positive in total), this is a clear case of Simpson's Paradox. This usually indicates an imbalance in high-value segments (here, the treatment has far more desktop users, who convert higher, skewing the total).
+
+I check Power (POWER). The target lift was 10%, but the observed lift is ~4.4%. The test was not underpowered for the *observed* effect in a way that invalidates the null result; rather, the effect size is smaller than targeted. The p-value (0.1251) correctly indicates non-significance. No specific POWER calculation error is evident in the reporting logic itself, though the test failed to find significance.
+
+I check Peeking (PEEK). The test ran from May 8 to May 29 (21 days), matching the planned duration. No PEEK error.
+
+I check Novelty (NOVELTY). The daily lift figures fluctuate between 3.5% and 5.1% with no clear fading trend toward zero over the 21 days. The projection assumes the current lift lasts, but since the current lift is statistically insignificant (p=0.1251) and likely an artifact of the composition bias (Simpson's), the primary error is the aggregation, not necessarily a novelty fade misinterpretation. However, projecting a non-significant, paradox-driven lift is dangerous. The root cause is SIMPSON.
+
+ERRORS: SIMPSON
+DECISION: HOLD

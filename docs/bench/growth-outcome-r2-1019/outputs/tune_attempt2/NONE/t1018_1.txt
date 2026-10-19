@@ -1,0 +1,28 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 109,632 (control) + 109,376 (treatment) = 219,008. The expected split is 50%, so 109,504 per arm. The treatment deviation is $|109,376 - 109,504| = 128$. The standard error for the difference is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{54,752} \approx 234$. The deviation (128) is well within 2 standard errors (~468 for 95% confidence), so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device segment:
+Desktop Control: $6,322 / 52,960 \approx 11.94\%$.
+Desktop Treatment: $7,392 / 65,955 \approx 11.21\%$.
+Here, Control > Treatment (Negative lift).
+
+Mobile Control: $2,449 / 56,672 \approx 4.32\%$.
+Mobile Treatment: $1,761 / 43,421 \approx 4.05\%$.
+Here, Control > Treatment (Negative lift).
+
+In both segments, the treatment performs worse than the control. However, the reported aggregate result claims the treatment is better (8.368% vs 8.0%).
+Aggregate Control: $8,771 / 109,632 \approx 8.00\%$.
+Aggregate Treatment: $9,153 / 109,376 \approx 8.37\%$.
+Since the direction of the effect reverses when pooling the data (negative in segments, positive in aggregate), this is a clear case of Simpson's Paradox. This likely occurred because the treatment arm received significantly more desktop users (who have higher baseline conversion) than the control arm, skewing the pooled average despite the treatment underperforming in both specific groups.
+
+Regarding PEEK: The test ran from Jan 22 to Feb 13. This is 23 days inclusive, or 22 full days of data shown. The planned duration was 21 days. The readout presents final numbers, not an early stop declaration, and the duration slightly exceeds the plan. There is no evidence of premature stopping inflating results here.
+
+Regarding POWER: The sample size is large (~110k per arm), far exceeding what is needed for an 8% baseline and 5% lift.
+
+Regarding DENOM: The metric is orders/users. Users were randomized. The denominator matches the randomization unit.
+
+Regarding NOVELTY: The daily lift fluctuates between 4.0% and 5.3% with no clear fading trend over the 22 days.
+
+The critical error is SIMPSON. The aggregate lift is an artifact of imbalanced segment sizes, not a true treatment effect. Since the treatment actually loses in both desktop and mobile segments, rolling it out would likely decrease overall conversion.
+
+ERRORS: SIMPSON
+DECISION: HOLD

@@ -1,0 +1,33 @@
+**SRM Check**: Total users = 21,675 (Control) + 21,739 (Treatment) = 43,414. Expected per arm = 21,707.
+Difference = |21,675 - 21,707| = 32.
+Standard Error ≈ $\sqrt{43414 \times 0.5 \times 0.5} \approx 104$.
+The difference (32) is well within 2 standard deviations (~208). The split is consistent with 50/50 randomization. No SRM.
+
+**PEEK Check**: Start date 2026-09-23, End date 2026-10-15.
+Duration = 7 days (Sept) + 15 days (Oct) = 22 days.
+Planned duration was 21 days. The test ran slightly longer than planned, not shorter. No evidence of early stopping inflating false positives. No PEEK.
+
+**POWER Check**: The test reported a p-value of 0.6177, indicating no statistical significance. While the test failed to detect the target 10% lift (observed 2.1%), "underpowered" usually implies the sample size was insufficient *before* running or that the non-significant result is inconclusive due to small N. Here, the sample sizes (~21k each) are substantial. With a baseline of 5%, detecting a 10% lift (to 5.5%) requires roughly 30k per arm for 80% power. We are close, but the primary issue is the lack of effect, not necessarily a fatal design flaw preventing detection if a large effect existed. However, strictly speaking, if the true effect was 10%, this sample size might be slightly underpowered, but the readout doesn't prove the *design* was flawed enough to flag as an error over simply "no result." More critically, the prompt asks to flag if numbers *show* the error. The numbers show a non-significant result, which is a valid outcome, not necessarily a power calculation error in the analysis itself. I will not flag POWER as the primary failure mode compared to clear paradoxes or denominator issues, as the test simply found no signal.
+
+**SIMPSON Check**:
+Control Conversion:
+Desktop: $828 / 10,599 \approx 7.81\%$
+Mobile: $255 / 11,076 \approx 2.30\%$
+Treatment Conversion:
+Desktop: $883 / 11,637 \approx 7.59\%$
+Mobile: $226 / 10,102 \approx 2.24\%$
+Segment Analysis:
+Desktop Lift: $7.59\% - 7.81\% = -0.22\%$ (Negative)
+Mobile Lift: $2.24\% - 2.30\% = -0.06\%$ (Negative)
+Both segments show a negative lift (Treatment worse than Control).
+However, the reported pooled result shows a positive lift ($5.101\% > 4.997\%$).
+Since the direction reverses from negative in all segments to positive in the aggregate, this is a classic Simpson's Paradox. This occurs because the treatment group has a much higher proportion of high-converting Desktop users ($11,637/21,739 \approx 53.5\%$) compared to the control group ($10,599/21,675 \approx 48.9\%$).
+
+**DENOM Check**: Metric is order conversion rate. Randomization is by user id. The counts provided are "users" and "orders". The rate is likely Orders/Users. This matches the randomization unit. No DENOM error.
+
+**NOVELTY Check**: Daily lift fluctuates between 1.6% and 2.6% with no clear fading trend over the 22 days. The projection assumes the reported (insignificant) lift lasts, but the daily data doesn't show a sharp decay characteristic of novelty wear-off that contradicts the average. No NOVELTY error evident from the numbers alone.
+
+The critical error is SIMPSON: the aggregate suggests improvement while every segment suggests harm. Rolling this out based on the pooled number would be a mistake.
+
+ERRORS: SIMPSON
+DECISION: HOLD

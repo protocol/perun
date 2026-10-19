@@ -1,0 +1,34 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 109,649 (control) + 109,277 (treatment) = 218,926. The expected split is 50%, so 109,463 per arm. The difference is only 186 users, which is well within the range of chance for this sample size. No SRM.
+
+Next, I check for PEEKing. The test started 2026-10-11 and ended 2026-11-09. This duration is 29 days (Oct has 31 days: 20 days in Oct + 9 days in Nov). The planned duration was 28 days. Running one day extra does not constitute stopping early; if anything, they ran slightly longer. No PEEK.
+
+Now, I check for DENOM (denominator mismatch). The metric is "order conversion rate." Users were randomized by user ID. The reported rates are calculated as orders divided by users?
+Control: 6,579 orders / 109,649 users = 6.00%.
+Treatment: 6,687 orders / 109,277 users = 6.12%.
+However, the readout reports: Control 4.039%, Treatment 4.473%.
+Let's check sessions as the denominator.
+Control: 6,579 / 162,871 sessions = 4.039%.
+Treatment: 6,687 / 149,513 sessions = 4.473%.
+The reported metric uses **sessions** as the denominator, but the randomization unit was **users**. Since a user can have multiple sessions, and the session counts differ significantly between arms (162k vs 149k) despite equal user counts, the denominator is not the unit of randomization. This is a DENOM error.
+
+Let's check SIMPSON's paradox.
+Desktop Control Rate: 4,868 / 50,311 = 9.68%.
+Desktop Treatment Rate: 5,169 / 55,039 = 9.39%.
+(Lift is negative here: Treatment is worse).
+Mobile Control Rate: 1,711 / 59,338 = 2.88%.
+Mobile Treatment Rate: 1,518 / 54,238 = 2.80%.
+(Lift is negative here too: Treatment is worse).
+Wait, let me re-calculate carefully.
+Desktop Control: 4868/50311 = 0.09676.
+Desktop Treat: 5169/55039 = 0.09391. (Treat < Control).
+Mobile Control: 1711/59338 = 0.02883.
+Mobile Treat: 1518/54238 = 0.02799. (Treat < Control).
+In both segments, the treatment conversion rate (by user) is lower than control. Yet the aggregate reported result (by session) shows a massive positive lift (10.7%). The direction of the effect reverses when pooling the data because the treatment group has a higher proportion of high-converting desktop users (55k/109k ≈ 50.4%) compared to control (50k/109k ≈ 45.9%), and the metric denominator (sessions) is skewed. This is a classic SIMPSON error.
+
+Regarding POWER: The sample size is large (~110k per arm), baseline is ~6%, target 5% lift. With 80% power and alpha 0.05, the required sample size is far smaller than 110k. It is not underpowered.
+NOVELTY: The daily lift fluctuates (9.5% to 13.4%) but shows no clear fading trend over the 29 days; the last few days are still high (12.0%, 12.4%, 11.9%). No obvious novelty decay.
+
+The critical errors are using sessions instead of users for the metric (DENOM) and the resulting reversal of trends in segments versus the aggregate (SIMPSON).
+
+ERRORS: DENOM, SIMPSON
+DECISION: HOLD

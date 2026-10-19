@@ -1,0 +1,24 @@
+**SRM**: The total users are 44,526 (control) and 44,238 (treatment). Total $N = 88,764$. Expected per arm is 44,382. The difference is $|44,526 - 44,382| = 144$. The standard error for the split is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx 149$. The deviation is $< 1$ standard error, which is well within chance. No SRM.
+
+**PEEK**: The test started April 28 and ended May 6. This is 9 days inclusive (28, 29, 30, 1, 2, 3, 4, 5, 6). The planned duration was 14 days. Stopping at day 9 instead of day 14 constitutes early stopping, which inflates false positive rates. **PEEK flagged.**
+
+**POWER**: Both arms have ~44k users. With a baseline of 8% and target lift of 8%, the required sample size per arm is roughly 33k (using standard approximation $n \approx 16 \cdot p(1-p) / (p \cdot \text{lift})^2$). Since 44k > 33k, the test is adequately powered. No POWER error.
+
+**SIMPSON**: Let's check the conversion rates by segment.
+Desktop Control: $2,303 / 18,416 \approx 12.51\%$.
+Desktop Treatment: $2,760 / 23,484 \approx 11.75\%$.
+Lift is negative (~ -6%).
+Mobile Control: $1,259 / 26,110 \approx 4.82\%$.
+Mobile Treatment: $941 / 20,754 \approx 4.53\%$.
+Lift is negative (~ -6%).
+However, the pooled result reports a positive lift of 24.9%. Since the effect is negative in both segments but positive in the aggregate, this is a classic case of Simpson's Paradox (likely driven by the treatment group having a much higher proportion of high-converting desktop users). **SIMPSON flagged.**
+
+**DENOM**: The metric is order conversion rate. The readout implies orders per user (orders/users). Control: $3,562/44,526 \approx 8.0\%$? Wait, the reported rate is 6.186%.
+Let's check the math: $3,562 / 57,579$ (sessions) $\approx 6.186\%$.
+$3,701 / 47,914$ (sessions) $\approx 7.724\%$.
+The reported rates are calculated per **session**, but randomization was by **user**. Users in the treatment arm have fewer sessions per user ($47,914/44,238 \approx 1.08$) than control ($57,579/44,526 \approx 1.29$). Using sessions as the denominator when users are randomized violates the unit of analysis assumption. **DENOM flagged.**
+
+**NOVELTY**: The daily lift values (26.5, 22.1, 25.6, 19.7, 25.1, 28.6, 26.1, 25.5) fluctuate but do not show a consistent fading trend. No NOVELTY error evident from numbers alone.
+
+ERRORS: PEEK, SIMPSON, DENOM
+DECISION: HOLD

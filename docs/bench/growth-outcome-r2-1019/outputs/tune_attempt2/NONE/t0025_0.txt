@@ -1,0 +1,30 @@
+**SRM Check**: Total users = 30,459 (Control) + 30,531 (Treatment) = 60,990. Expected per arm = 30,495.
+Difference = |30,531 - 30,495| = 36.
+Standard Deviation for binomial split $\approx \sqrt{60990 \times 0.5 \times 0.5} \approx 123.5$.
+The difference (36) is well within 2 standard deviations (~247). The split is statistically consistent with 50/50. No SRM.
+
+**DENOM Check**: Randomization unit is "user id". The reported metric is "order conversion rate".
+Control Rate Calculation: $1,827 \text{ orders} / 30,459 \text{ users} \approx 6.00\%$.
+Treatment Rate Calculation: $1,907 \text{ orders} / 30,531 \text{ users} \approx 6.25\%$.
+Reported Rates: Control 4.326%, Treatment 5.603%.
+The reported rates do not match orders/users.
+Let's check orders/sessions:
+Control: $1,827 / 42,232 \approx 4.326\%$.
+Treatment: $1,907 / 34,037 \approx 5.603\%$.
+The reported metric uses **sessions** as the denominator, but users were randomized. Since session counts differ significantly between arms (42k vs 34k) despite equal user counts, the treatment likely affects session generation. Using sessions as the denominator biases the result. This is a DENOM error.
+
+**PEEK Check**: Planned duration 14 days. Readout date 2026-04-30, start 2026-04-14. This is exactly 16 days. The test ran longer than planned, not shorter. No PEEK.
+
+**NOVELTY Check**: Daily lift values fluctuate (33.7% down to 22.5% and back up to 33.1%) but show no clear fading trend over the 16 days. The projection assumes lasting lift, but the data does not show the specific "fading" pattern required to flag NOVELTY based solely on these numbers.
+
+**POWER Check**: With ~30k users per arm and a baseline of ~6%, the test is sufficiently powered to detect a 5% lift. The observed lift is massive (29.5%), so lack of power is not the issue preventing detection.
+
+**SIMPSON Check**:
+Desktop Control Rate (users): $1,201/12,557 \approx 9.56\%$. Treatment: $1,253/12,587 \approx 9.95\%$. (Lift positive)
+Mobile Control Rate (users): $626/17,902 \approx 3.50\%$. Treatment: $654/17,944 \approx 3.64\%$. (Lift positive)
+Both segments show positive lift; the aggregate shows positive lift. No reversal. No SIMPSON.
+
+The primary error is using sessions instead of users as the denominator (DENOM), which invalidates the causal claim because the treatment appears to alter the number of sessions per user.
+
+ERRORS: DENOM
+DECISION: HOLD

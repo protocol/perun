@@ -1,0 +1,30 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 37,105 (control) + 36,993 (treatment) = 74,098. The expected split is 37,049 per arm. The difference is only 56 users, which is well within the bounds of random chance for this sample size. No SRM.
+
+Next, I check the denominator. Users were randomized by user ID, and the metric is order conversion rate calculated per user (orders/users). The denominator matches the randomization unit. No DENOM error.
+
+Now, I verify the reported conversion rates against the raw counts.
+Control: 2,968 orders / 37,105 users = 0.07999 (~8.0%).
+Treatment: 3,152 orders / 36,993 users = 0.08520 (~8.5%).
+The readout reports control at 5.417% and treatment at 6.432%. These reported percentages do not match the raw counts provided (which yield ~8.0% and ~8.5%). Furthermore, the reported lift of 18.7% is inconsistent with the raw count lift: (8.52% - 8.00%) / 8.00% ≈ 6.5%. The readout's internal math is broken or the denominators used for the percentages differ from the user counts listed, suggesting a calculation error or a mismatch in how the metric was aggregated versus how the arms were counted. However, looking closer at the "By device" breakdown:
+Desktop Control: 2,232/17,694 = 12.6%.
+Mobile Control: 736/19,411 = 3.8%.
+The pooled control rate is indeed ~8.0%. The readout's reported 5.417% seems to derive from dividing orders by *sessions*?
+Control sessions: 2,968 / 54,789 = 5.417%.
+Treatment sessions: 3,152 / 49,005 = 6.432%.
+The readout calculates conversion per *session*, but users were randomized by *user ID*. Sessions are not the unit of randomization; a single user can have multiple sessions, violating independence assumptions if analyzed at the session level without correction. This is a clear DENOM error: the denominator (sessions) is not the unit that was randomized (users).
+
+Regarding PEEK: The test ran from July 11 to July 25, which is exactly 14 days, matching the planned duration. No PEEK.
+
+Regarding POWER: The sample size (~37k per arm) is large. With a baseline of 8% and target lift of 8% (detecting 8.64%), standard calculators confirm this is sufficiently powered. No POWER issue.
+
+Regarding SIMPSON:
+Desktop Lift: (2,370/17,640) - (2,232/17,694) = 13.44% - 12.61% = +0.83% (Positive).
+Mobile Lift: (782/19,353) - (736/19,411) = 4.04% - 3.79% = +0.25% (Positive).
+Both segments show a positive lift. The aggregate (using correct user denominators) is also positive. No reversal occurs. No SIMPSON.
+
+Regarding NOVELTY: The daily lift fluctuates (18.4% down to 14.9% up to 20.5%) but shows no clear fading trend; the last few days are comparable to the start. No obvious NOVELTY error based on the provided numbers.
+
+The primary fatal flaw is DENOM: analyzing sessions instead of users when randomization was by user.
+
+ERRORS: DENOM
+DECISION: HOLD

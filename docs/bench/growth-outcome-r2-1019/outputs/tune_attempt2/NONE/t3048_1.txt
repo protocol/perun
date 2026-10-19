@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 22,446 (control) + 22,276 (treatment) = 44,722. The expected split is 22,361 per arm. The difference is 85 users. The standard deviation for a 50/50 split is $\sqrt{44722 \times 0.5 \times 0.5} \approx 105.8$. The observed difference (85) is less than 2 standard deviations ($2 \times 105.8 = 211.6$), so the split is within chance expectations. No SRM.
+
+Next, I check for PEEKing. The test started Oct 22 and ended Nov 6. This is exactly 15 days (Oct has 31 days: 31-22+1 = 10 days in Oct + 6 days in Nov = 16 days? Let's count: 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 (10 days) + 1, 2, 3, 4, 5, 6 (6 days) = 16 days). The planned duration was 21 days. The readout includes daily lift data only up to day 15, and the test stopped early on day 16 vs planned 21. Stopping before the planned duration based on interim results inflates false positives. The p-value is 0.186 (not significant), but the act of stopping early violates the design protocol regardless of the outcome, constituting a PEEK error in methodology.
+
+Now, checking POWER. The smaller arm is ~22,276. Baseline 5%, target lift 10% (absolute 0.5%). Using standard approximation, required sample size per arm for 80% power at alpha 0.05 is roughly $16 \times (p(1-p)) / \delta^2$. $p=0.05, \delta=0.005$. $16 \times (0.05 \times 0.95) / 0.000025 \approx 30,400$. The actual sample (~22k) is lower than required (~30k), suggesting the test is underpowered to detect the *target* lift, though it detected a smaller 5.5% lift with p=0.186. However, the error definition specifies "too small to detect the target lift". Since 22k < 30k, this flags POWER.
+
+Checking SIMPSON.
+Desktop Control Rate: $699/8460 \approx 8.26\%$. Treatment: $732/8396 \approx 8.72\%$. Lift is positive.
+Mobile Control Rate: $423/13986 \approx 3.02\%$. Treatment: $443/13880 \approx 3.19\%$. Lift is positive.
+Both segments show positive lift, matching the pooled direction. No Simpson's paradox.
+
+Checking DENOM. Randomization is by user id. Metric is order conversion rate. Usually defined as orders/users or orders/sessions? The readout lists users and sessions. If the metric is orders/sessions, the denominator is sessions, not the randomized unit (users). However, "order conversion rate" typically implies orders per user in user-randomized tests unless specified as "per session". The counts show sessions > users, implying multiple sessions. If the rate calculated was $1122/31160 = 3.6\%$, that doesn't match the reported 4.999%. If calculated as $1122/22446 = 5.00\%$, it matches. Thus, the denominator is users. No DENOM error.
+
+Checking NOVELTY. Daily lift drops from 9.2% to 2.3% over 15 days. The team projects the current reported average (5.5%) for 12 months despite this clear fading trend. This ignores the novelty effect wearing off. Flags NOVELTY.
+
+Errors identified: PEEK (stopped day 16 vs 21 planned), POWER (sample size < required for target lift), NOVELTY (fading lift projected as constant).
+
+ERRORS: PEEK, POWER, NOVELTY
+DECISION: HOLD

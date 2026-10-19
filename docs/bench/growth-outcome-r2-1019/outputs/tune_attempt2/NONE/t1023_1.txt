@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 123,015 (control) + 120,615 (treatment) = 243,630. Expected per arm is 121,815. The difference is |123,015 - 121,815| = 1,200. Using the standard deviation for a binomial split $\sqrt{N \cdot 0.5 \cdot 0.5} = \sqrt{243630 \cdot 0.25} \approx 247$. The Z-score is $1200 / 247 \approx 4.86$. A Z-score > 1.96 indicates a significant deviation. The split is not 50/50; assignment or logging is broken. **SRM flagged.**
+
+Next, I check for PEEKing. The planned duration was 28 days. The readout date is 2026-09-20, and the start was 2026-08-21. August has 31 days. Days in August: 31 - 21 + 1 = 11. Days in September: 20. Total duration = 31 days. The test ran longer than the planned 28 days, so it was not stopped early. **PEEK not flagged.**
+
+Next, I check POWER. The smaller arm is treatment (120,615 users). With a baseline of 3% and target lift of 8%, the required sample size per arm is roughly $16 \cdot (p_1(1-p_1) + p_2(1-p_2)) / (p_2-p_1)^2$. Approximating, we need ~100k users per arm for these parameters. 120k is sufficient. **POWER not flagged.**
+
+Next, SIMPSON's paradox.
+Control Desktop Rate: $2541 / 57621 \approx 4.41\%$.
+Treatment Desktop Rate: $2673 / 56497 \approx 4.73\%$. (Lift positive)
+Control Mobile Rate: $1149 / 65394 \approx 1.76\%$.
+Treatment Mobile Rate: $1208 / 64118 \approx 1.88\%$. (Lift positive)
+Both segments show a positive lift, matching the pooled result. **SIMPSON not flagged.**
+
+Next, DENOM. Randomization is by user ID. The metric is order conversion rate. The readout implies orders per user (orders/users). If it were orders/sessions, the denominator would be wrong. However, the calculated rates match orders/users (e.g., $3690/123015 = 0.030$). The denominator matches the randomization unit. **DENOM not flagged.**
+
+Next, NOVELTY. The daily lift fluctuates (5.7% to 8.6%) but shows no clear fading trend over the 30 days; the last few days are 7.6%, 8.1%, 6.9%. There is no evidence of the lift decaying to zero. **NOVELTY not flagged.**
+
+The critical error is SRM. When the user split deviates significantly from 50/50 (Z ≈ 4.9), the randomization assumption is violated. This invalidates the p-value and the causal claim, regardless of the reported significance. We cannot trust the result until the data integrity issue is resolved.
+
+ERRORS: SRM
+DECISION: HOLD

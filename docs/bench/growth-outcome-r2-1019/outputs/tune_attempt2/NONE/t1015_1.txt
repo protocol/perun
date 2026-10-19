@@ -1,0 +1,25 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 58,375 (control) + 58,719 (treatment) = 117,094. The expected split is 50%, so 58,547 per arm. The difference is |58,719 - 58,547| = 172. The standard error for a 50/50 split is $\sqrt{N \times 0.5 \times 0.5} \approx \sqrt{29,273} \approx 171$. The deviation is roughly 1 standard error, which is well within the range of chance (typically < 1.96 SE for 95% confidence). SRM is not flagged.
+
+Next, I check for PEEKing. The test started May 8 and ended May 29. This is 21 days inclusive. The planned duration was 21 days. The test ran for the full planned duration. PEEK is not flagged.
+
+Next, I check for POWER. The baseline is 4.0%, target lift 10% (to 4.4%). With ~58k users per arm, the standard error for the difference in proportions is roughly $\sqrt{\frac{0.04(0.96)}{58000} + \frac{0.04(0.96)}{58000}} \approx 0.00115$. The detectable effect at 80% power and alpha 0.05 is roughly $2.8 \times SE \approx 0.32\%$ absolute, or 8% relative. The sample size is sufficient to detect a 10% lift. POWER is not flagged.
+
+Next, I check for SIMPSON's paradox.
+Desktop Control Rate: $1,638 / 24,795 \approx 6.61\%$.
+Desktop Treatment Rate: $1,906 / 30,685 \approx 6.21\%$. (Treatment is worse).
+Mobile Control Rate: $697 / 33,580 \approx 2.08\%$.
+Mobile Treatment Rate: $547 / 28,034 \approx 1.95\%$. (Treatment is worse).
+Both segments show the treatment performing worse than control. However, the pooled data shows Treatment (4.18%) > Control (4.00%).
+Pooled Control: $2,335 / 58,375 = 4.00\%$.
+Pooled Treatment: $2,453 / 58,719 = 4.18\%$.
+Since the direction reverses when aggregating (negative in segments, positive in aggregate), this is Simpson's Paradox. This likely occurred because the treatment group had more desktop users (higher baseline conversion) than the control group, despite randomization aiming for 50/50 overall, the device split skewed heavily.
+Desktop % in Control: $24,795/58,375 \approx 42.5\%$.
+Desktop % in Treatment: $30,685/58,719 \approx 52.3\%$.
+The imbalance in high-converting devices drives the false positive aggregate lift. SIMPSON is flagged.
+
+Next, DENOM. The metric is order conversion rate. Randomization is by user. The denominator used in my segment check was users. The readout implies user-level conversion (orders/users). If they used sessions, it would be different, but the numbers provided (orders/users) align with the reported percentages ($2335/58375 = 4.0\%$). DENOM is not flagged.
+
+Next, NOVELTY. The daily lift fluctuates between 3.5% and 5.1% with no clear fading trend over the 21 days. NOVELTY is not flagged.
+
+ERRORS: SIMPSON
+DECISION: HOLD

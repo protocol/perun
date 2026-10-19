@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 43,721 (control) + 44,777 (treatment) = 88,498. The expected split is 50%, so 44,249 per arm. The treatment has 528 more users than expected. The standard deviation for a binomial distribution here is $\sqrt{88498 \times 0.5 \times 0.5} \approx 148.7$. The difference is $528 / 148.7 \approx 3.55$ standard deviations. This exceeds the typical threshold of 2 (or even 3) for chance variation, indicating a broken randomization or logging issue. **SRM is flagged.**
+
+Next, I check for PEEKing. The planned duration was 14 days, but the final readout date (June 19) is only 10 days after the start date (June 9). The test was stopped 4 days early. Stopping early based on significance inflates false positive rates. **PEEK is flagged.**
+
+I check for POWER. The smaller arm (control) has 43,721 users. With a 4% baseline and 10% target lift, the required sample size per arm for 80% power at $\alpha=0.05$ is roughly calculated using the formula $n \approx 16 \times p(1-p) / (p \times \text{lift})^2$. Here, $p=0.04$, lift=0.004. $n \approx 16 \times 0.0384 / 0.000016 \approx 38,400$. Since 43,721 > 38,400, the test is adequately powered. No POWER error.
+
+I check for SIMPSON's paradox by calculating segment conversion rates.
+Desktop Control: $1193/18983 \approx 6.28\%$. Desktop Treatment: $1309/19441 \approx 6.73\%$. Lift is positive.
+Mobile Control: $556/24738 \approx 2.25\%$. Mobile Treatment: $610/25336 \approx 2.41\%$. Lift is positive.
+Since both segments show a positive lift consistent with the pooled result, there is no reversal. No SIMPSON error.
+
+I check for DENOM. The metric is order conversion rate. The denominator implied is users (orders/users). Randomization was by user ID. The units match. No DENOM error.
+
+I check for NOVELTY. The daily lift values (7.8, 7.0, 8.2, 5.8, 6.5, 6.1, 8.0, 7.0, 6.3, 8.4) fluctuate but do not show a clear fading trend over the 10 days. The projection assumes lasting lift, but the data doesn't explicitly show fading yet. No NOVELTY error based strictly on the numbers provided.
+
+The critical errors are SRM (invalidating the experiment integrity) and PEEK (invalidating the statistical significance). Both must be addressed before rolling out.
+
+ERRORS: SRM, PEEK
+DECISION: HOLD

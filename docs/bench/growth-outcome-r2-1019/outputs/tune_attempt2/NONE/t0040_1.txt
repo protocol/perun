@@ -1,0 +1,30 @@
+Several analysis errors are evident in the readout based on the provided numbers.
+
+**SRM (Sample Ratio Mismatch):**
+The planned allocation was 50/50.
+Total users = 77,145 (control) + 74,787 (treatment) = 151,932.
+Expected per arm = 151,932 / 2 = 75,966.
+Observed difference = |77,145 - 75,966| = 1,179.
+Standard deviation for binomial split $\approx \sqrt{n \cdot p \cdot (1-p)} = \sqrt{151932 \cdot 0.5 \cdot 0.5} \approx 195$.
+The difference is $1,179 / 195 \approx 6.05$ standard deviations away from expected. This is far beyond chance limits, indicating broken assignment or logging.
+
+**DENOM (Denominator Error):**
+Users were randomized by user ID, but the reported metric uses sessions as the denominator.
+Control rate calculation: 3,086 orders / 109,063 sessions = 2.83%.
+Treatment rate calculation: 3,132 orders / 85,669 sessions = 3.66%.
+The readout reports these session-based rates as the primary result. Since the unit of randomization is the user, analyzing at the session level violates independence assumptions unless specifically adjusted, constituting a denominator mismatch error.
+
+**NOVELTY (Novelty Effect):**
+The daily relative lift shows a clear downward trend.
+Day 1 lift: 77.0%.
+Day 14 lift: 21.6%.
+Day 29 lift: 5.1%.
+The lift decays significantly over time, yet the team projects the current aggregate lift (29.2%) for the next twelve months. This ignores the fading effect, falsely assuming the initial spike is sustainable.
+
+**PEEK (Peeking):**
+The planned duration was 28 days. The data includes "day 29" (started Jan 19, readout Feb 17 is 30 days inclusive, or 29 days elapsed). While close, the more glaring issue is the p-value of "0.0". Combined with the SRM and the decaying lift, it suggests the test may have been monitored and called early during the peak novelty phase before stabilizing, though the date discrepancy is minor. However, SRM, DENOM, and NOVELTY are definitively proven by the numbers.
+
+Because the assignment mechanism appears broken (SRM) and the metric calculation is flawed (DENOM), the results are unreliable.
+
+ERRORS: SRM, DENOM, NOVELTY
+DECISION: HOLD

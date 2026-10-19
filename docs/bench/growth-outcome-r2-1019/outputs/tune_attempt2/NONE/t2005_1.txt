@@ -1,0 +1,102 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 101,905 (control) + 101,733 (treatment) = 203,638. The expected split is 101,819 per arm. The difference is only 86 users, which is well within the bounds of random chance for this sample size. No SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." The readout provides orders and users. Assuming the rate is Orders/Users: Control = 3,057 / 101,905 ≈ 3.00%. Treatment = 3,197 / 101,733 ≈ 3.14%. These match the reported rates. The denominator (users) matches the randomization unit (user id). No DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: 1,903 / 36,145 ≈ 5.26%.
+Desktop Treatment Rate: 1,990 / 36,084 ≈ 5.51%. (Lift is positive).
+Mobile Control Rate: 1,154 / 65,760 ≈ 1.75%.
+Mobile Treatment Rate: 1,207 / 65,649 ≈ 1.84%. (Lift is positive).
+Since both segments show a positive lift, the pooled result is not reversed. No SIMPSON error.
+
+I check for Power (POWER). The study detected a ~4.8% lift with a p-value of 0.062. While not statistically significant at the 0.05 level, the sample size was sufficient to detect a signal close to the target. The issue here is significance, not necessarily that the arm was "too small to detect" in a way that invalidates the analysis method itself, though it failed to reach the threshold. However, the prompt defines POWER as being too small to detect the *target* lift at stated alpha/power. Since the result is borderline (p=0.062), the test essentially ran its course without confirming the hypothesis. This is a negative result, not necessarily a design flaw in the readout analysis itself, unless the sample size was grossly inadequate. Given the large N, it's likely adequately powered but the effect size was smaller than targeted. I will not flag this as an analysis *error* in the readout, but rather an inconclusive result.
+
+I check for Peeking (PEEK). The planned duration was 14 days (Feb 25 to Mar 10/11). The final readout date is Mar 13, and daily data is provided for 16 days. The test ran *longer* than planned, not shorter. Stopping late does not inflate false positives in the same way stopping early does. No PEEK error.
+
+I check for Novelty (NOVELTY). The daily lift values are: 4.7, 5.9, 3.9, 4.4, 4.4, 4.7, 4.8, 4.3, 4.5, 5.9, 4.9, 4.5, 5.9, 4.3, 5.4, 4.3. There is no clear fading trend; the lift fluctuates between roughly 3.9% and 5.9% throughout the 16 days. The projection applies the current lift to the future. Since there is no evidence of fading in the data provided, the NOVELTY error is not demonstrated by the numbers.
+
+However, the p-value is 0.062, which is greater than the design alpha of 0.05. The recommendation is to "roll out." Rolling out a change that has not achieved statistical significance (p > 0.05) is a decision error, but is it one of the specific categories?
+Let's re-evaluate POWER. The definition says: "the smaller arm is too small to detect the target lift at the stated alpha and power." If the test completed and p=0.062, it means we failed to reject the null. If the true lift was 8%, we should have seen significance. If the true lift is ~4.8%, the test might have been underpowered for *that* specific observed effect if the target was higher, but the definition specifies "target lift". With N~100k and baseline 3%, detecting 8% is usually easy. Detecting 4.8% is harder.
+Actually, looking closely at the dates: Started Feb 25. Planned 14 days. End date should be ~Mar 10. Readout Mar 13. Data has 16 days.
+Is there a hidden error?
+Let's re-read the NOVELTY definition: "the lift is fading over the test but is projected as lasting." The data does not show fading.
+Let's re-read PEEK: "stopped... before planned duration". It ran longer.
+Let's re-read SRM: Counts are fine.
+Let's re-read DENOM: Counts match.
+Let's re-read SIMPSON: Directions match.
+
+Wait, is the p-value calculation correct?
+Control: 3057/101905 = 0.03000
+Treatment: 3197/101733 = 0.03142
+Diff = 0.00142. Pooled p = (3057+3197)/(203638) = 0.03071.
+SE = sqrt( p*(1-p)*(1/n1 + 1/n2) ) = sqrt( 0.03071*0.96929*(2/101800) ) ≈ sqrt( 0.0297 * 0.0000196 ) ≈ sqrt(5.8e-7) ≈ 0.00076.
+Z = 0.00142 / 0.00076 ≈ 1.87.
+Two-sided p-value for Z=1.87 is approx 0.061. The reported p=0.062 is correct.
+
+The team recommends rolling out despite p=0.062. This is a bad decision, but does it fit a category?
+Perhaps I missed something in the dates. Feb 25 to Mar 13 is 17 days inclusive? Feb has 28 days in 2026 (not a leap year, 2024 was). Feb 25, 26, 27, 28 (4 days). March 1-13 (13 days). Total 17 days. The data lists 16 days. Maybe one day missing?
+If the test was planned for 14 days and they analyzed it at 16 days, that's not peeking.
+If the recommendation is to ship on a non-significant result, that's just a bad decision, not necessarily one of the labeled *analysis* errors unless "POWER" implies the test was useless. But the test gave a precise estimate.
+
+Let's reconsider the "POWER" definition carefully. "the smaller arm is too small to detect the target lift at the stated alpha and power".
+Target lift 8%. Baseline 3%. New rate 3.24%.
+With N=100k, standard error is ~0.00076.
+Difference for 8% lift = 0.0024.
+Z = 0.0024 / 0.00076 = 3.15. P-value would be < 0.002.
+The test WAS powered to detect 8%. The observed lift was only 4.8%. The test correctly failed to find an 8% lift because the lift wasn't there. The test was not underpowered; the effect size was smaller.
+
+Is it possible the user counts vs session counts imply DENOM?
+"Metric: order conversion rate." Usually Orders/Sessions or Orders/Users.
+If metric is Orders/Sessions:
+Control: 3057/128554 = 2.38%
+Treatment: 3197/130397 = 2.45%
+Reported says 3.0% and 3.14%.
+3057/101905 = 3.00%.
+So the denominator IS users. Randomization was by user. So DENOM is correct.
+
+What about the recommendation? "Recommendation: roll out to everyone."
+The p-value is 0.062. Alpha is 0.05.
+Strictly speaking, you cannot reject the null. Rolling out is risky.
+But is there a specific error code?
+Maybe the "16 days" of data vs "14 days" planned implies they kept looking? But the definition of PEEK is stopping *before*.
+Could it be NOVELTY? "Lift is fading".
+Day 1: 4.7. Day 3: 3.9. Day 8: 4.3. Day 16: 4.3.
+It goes up and down. 5.9 appears on day 2, 10, 13. No clear fade.
+
+Let's look at the counts again.
+Control Users: 101,905. Treatment Users: 101,733.
+Total 203,638.
+Expected 101,819.
+Diff 86.
+Std Dev for binomial n=203638, p=0.5 is sqrt(203638*0.25) = sqrt(50909) = 225.
+86 is less than 1 SD. Not SRM.
+
+Is it possible the error is NONE?
+The team is making a decision to ship on p=0.062. This is a "false positive" risk, but the analysis itself (calculating p=0.062) seems correct based on the numbers. The error might be in the *decision*, not the *analysis categories* listed.
+However, often in these puzzles, "POWER" is flagged if the result is inconclusive due to sample size, but here the sample size is huge.
+Wait, look at the daily lift again.
+4.7, 5.9, 3.9, 4.4, 4.4, 4.7, 4.8, 4.3, 4.5, 5.9, 4.9, 4.5, 5.9, 4.3, 5.4, 4.3.
+There is no trend.
+
+Let's reconsider the definition of POWER. If the test is underpowered, you can't trust the negative (or near-negative) result. But here they want to ship a positive (but non-sig) result.
+Actually, if p=0.062, and they ship, they are accepting a higher false positive rate.
+Is there any other discrepancy?
+Dates: Feb 25 to Mar 13.
+Feb 25, 26, 27, 28 (4 days).
+Mar 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 (13 days).
+Total 17 days.
+Data has 16 points. One day missing? Or maybe the start day isn't full?
+If they planned 14 days and ran 16/17, and the result is borderline, maybe they peeked and decided to stop when it looked "good enough" but then kept running? No, that doesn't fit PEEK definition.
+
+Let's assume the question implies that shipping on p>0.05 is an error covered by one of these.
+If the test was underpowered (POWER), then the result is unreliable. But with N=100k, it's not underpowered for 8%. It just didn't find 8%.
+Maybe the "target lift" in the power calculation was 8%, but they are acting on 4.8%?
+If the test was designed for 8% lift, and the true lift is 4.8%, the power to detect 4.8% is low.
+Power to detect 4.8%: Effect size 0.00144. SE 0.00076. Z ~ 1.9 for significance.
+To get 80% power for 4.8% lift, you need larger N.
+Current N gives ~50% power for 4.8% lift.
+So if the true lift is 4.8%, the test is underpowered to detect it at 80%.
+But the *design* targeted 8%. The design was correct for 8%. The outcome was just that the lift is smaller.
+Does "POWER" flag apply if the *observed* effect requires more power? The definition says "detect the **target** lift". The target was 8%. The test could detect 8%. So POWER is not the error.
+
+Is it possible the answer is NONE? The analysis numbers are consistent. The decision is aggressive, but maybe not a

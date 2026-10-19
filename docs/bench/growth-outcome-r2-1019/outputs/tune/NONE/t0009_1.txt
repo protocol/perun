@@ -1,0 +1,69 @@
+The arm sizes (160,301 vs 160,531) are nearly identical, ruling out SRM. The test ran for the full planned 14 days, so PEEK is not indicated. Daily lift fluctuates slightly but shows no clear fading trend, making NOVELTY unsupported. Segment-level calculations confirm the treatment outperforms control in both desktop and mobile, so SIMPSON is absent. The metric (orders/users) matches the randomization unit, avoiding DENOM.
+
+However, a power check reveals an issue. With ~160k users per arm, a 3% baseline, 80% power, and 5% alpha, the Minimum Detectable Effect (MDE) is approximately 4.5%. The target was 8%, but the observed lift is only 5.9%. While the result is statistically significant (p=0.0036), the test was powered to detect an 8% lift. Detecting a smaller effect (5.9%) with high confidence usually requires a larger sample size than calculated for the 8% target, suggesting the test might be underpowered for the *actual* observed effect size relative to the original design parameters, or conversely, the "POWER" flag applies if the smaller arm (though here they are equal) couldn't detect the *target* lift. Wait, re-reading the definition: "smaller arm is too small to detect the *target* lift". The target was 8%. The sample size *was* calculated to detect 8%. Since we found a significant result for a *smaller* lift (5.9%), the sample was actually *larger* than needed for the target. Therefore, POWER is not the error.
+
+Let's re-evaluate DENOM. Randomization is by user. Metric is order conversion rate (orders/users). This is correct.
+
+Let's re-evaluate SIMPSON.
+Desktop Control: 3690/78392 = 4.71%
+Desktop Treat: 3914/78505 = 4.99% (Lift)
+Mobile Control: 1119/81909 = 1.37%
+Mobile Treat: 1187/82026 = 1.45% (Lift)
+Both segments show lift. No Simpson.
+
+Let's re-evaluate POWER definition strictly: "the smaller arm is too small to detect the target lift at the stated alpha and power".
+The design specified power 80% to detect 8% lift.
+Sample size needed for 8% lift from 3% baseline is approx 105k per arm.
+We have 160k per arm. We have *more* than enough power to detect the target. So POWER is not flagged.
+
+Is there any error?
+Dates: May 15 to May 29 is exactly 14 days. No PEEK.
+SRM: Chi-square on 160301 vs 160531 (Total 320832). Expected 160416. Diff is 115. Std dev ~ sqrt(N*p*q) = sqrt(320832*0.25) = 283. Z = 115/283 = 0.4. Not significant. No SRM.
+
+Wait, look at the conversion rates reported vs raw numbers.
+Control: 4809 / 160301 = 0.03000 (3.00%)
+Treatment: 5101 / 160531 = 0.03177 (3.18%)
+Reported: 3.0% and 3.178%. Matches.
+Relative lift: (3.178 - 3.0)/3.0 = 5.93%. Reported 5.9%. Matches.
+
+Is it possible the error is NONE?
+Let's check the denominators again. "Metric: order conversion rate". "Users were randomized by user id".
+Denominator is users. Numerator is orders. This is User-Level Conversion. Correct.
+
+What about the projection? "Projection: the team applies the reported lift to the next twelve months".
+NOVELTY definition: "the lift is fading over the test but is projected as lasting."
+Daily lifts: 6.2, 6.1, 6.5, 5.2, 5.6, 6.0, 6.0, 6.1, 5.8, 5.8, 5.4, 5.5, 7.0, 5.5.
+There is no clear fading trend. It oscillates. Day 13 is 7.0%. Day 14 is 5.5%. No obvious decay.
+
+Perhaps I missed a subtle math error in the readout's claim of "target relative lift 8%" vs the power calculation.
+If the test was designed for 8% lift, and we observed 5.9% with p=0.0036, the test was actually *over*-powered for the target, not under-powered.
+
+Is it possible the error is DENOM because of sessions vs users?
+"160,301 users, 204,332 sessions".
+If the metric was calculated as Orders/Sessions, the rate would be different.
+Control: 4809/204332 = 2.35%.
+Treatment: 5101/206727 = 2.47%.
+The readout says "conversion rate: control 3.0%". This matches Orders/Users. So DENOM is correct.
+
+Let's reconsider POWER. "the smaller arm is too small to detect the target lift".
+Maybe the prompt implies that since the observed lift (5.9%) is less than the target (8%), and the test was only powered for 8%, we can't trust the 5.9%? No, that's not how power works. If you have enough power to detect 8%, you have a specific sample size. If you observe 5.9% and it's significant, your sample size was sufficient to detect 5.9% (which requires *more* power/sample than 8%). Since we found significance, the sample was large enough.
+
+Is there an error in the segment sums?
+Desktop users: 78392 + 78505 = 156897.
+Mobile users: 81909 + 82026 = 163935.
+Total users: 156897 + 163935 = 320832.
+Readout total: 160301 + 160531 = 320832.
+Sums match.
+
+Orders:
+Desktop: 3690 + 3914 = 7604.
+Mobile: 1119 + 1187 = 2306.
+Total: 9910.
+Readout total: 4809 + 5101 = 9910.
+Sums match.
+
+Everything seems numerically consistent. The daily data doesn't show fading. The split is fine. The denominators match. The power was sufficient (since we got significance on a smaller effect).
+Conclusion: No errors found based on the provided definitions and numbers.
+
+ERRORS: NONE
+DECISION: SHIP

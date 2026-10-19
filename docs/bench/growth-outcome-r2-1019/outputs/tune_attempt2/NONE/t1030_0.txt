@@ -1,0 +1,29 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 39,472 (control) + 39,392 (treatment) = 78,864. The expected split is 39,432 per arm. The observed difference is 80 users. The standard deviation for a 50/50 split is $\sqrt{78864 \times 0.5 \times 0.5} \approx 140$. The difference (80) is less than 2 standard deviations (280), so the split is within chance expectations. No SRM.
+
+Next, I check the test duration for Peeking (PEEK). The test started 2026-10-28 and ended 2026-11-08. Counting inclusively (Oct 28, 29, 30, 31 + Nov 1 through 8), the duration is 12 days. The planned duration was 21 days. Stopping at 12 days when 21 were planned constitutes early stopping, which inflates false positive rates. This is a PEEK error.
+
+I check for Power (POWER). The smaller arm has ~39k users. With a 6% baseline and 10% target lift, standard calculators usually require ~30k–40k users per arm for 80% power at alpha 0.05. Since the sample size is near the requirement and the result is significant, it is not clearly underpowered based solely on these counts.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Conversion: Control $1630/17143 \approx 9.51\%$; Treatment $1722/17108 \approx 10.07\%$. Lift is positive.
+Mobile Conversion: Control $739/22329 \approx 3.31\%$; Treatment $780/22284 \approx 3.50\%$. Lift is positive.
+Since both segments show a positive lift, the aggregate positive lift is consistent. No SIMPSON error.
+
+I check Denominator (DENOM). Randomization was by user ID. The metric is order conversion rate (orders/users). The denominator matches the randomization unit. No DENOM error.
+
+I check Novelty (NOVELTY). The daily lift drops from 13.6% to 1.6% over 11 days, showing a clear fading trend. However, the recommendation states: "the team applies the reported lift to the next twelve months." This projects the current average (which includes the fading effect) or the final state as a lasting constant without adjusting for the decay or acknowledging the novelty effect might vanish completely. While the trend exists, the specific error definition requires the lift to be "projected as lasting" despite fading. The team is projecting the *reported* lift (5.8%) forward. Given the sharp decline to 1.6%, assuming 5.8% will last is a projection error driven by the novelty fading. However, strictly speaking, the definition flags if the *lift* (the effect) is fading but projected as lasting. The team is projecting the *average* result. Is this NOVELTY? The prompt says "lift is fading... but is projected as lasting." The team projects the *reported* lift (5.8%). Since the actual lift on day 11 is 1.6%, projecting 5.8% as the lasting effect ignores the fade. This fits the NOVELTY criteria.
+
+However, let's re-read carefully: "NOVELTY: the lift is fading over the test but is projected as lasting." The data shows fading (13.6 -> 1.6). The projection applies the "reported lift" (5.8%) to the future. This assumes the 5.8% is the lasting effect, ignoring the fade to near zero. This is a NOVELTY error.
+
+Wait, looking closer at the prompt constraints: "Flag a category only if the numbers show that error."
+PEEK is definite (12 days vs 21 planned).
+NOVELTY is strongly indicated by the numbers (trend 13.6->1.6) and the text (projecting reported lift).
+
+Let's re-evaluate PEEK vs NOVELTY priority. The prompt asks to flag if numbers show the error.
+1. PEEK: Planned 21, Ran 12. Numbers confirm early stop.
+2. NOVELTY: Daily lift declines monotonically after day 1. Projection uses aggregate. Numbers confirm fade.
+
+Both errors are present.
+
+ERRORS: PEEK, NOVELTY
+DECISION: HOLD

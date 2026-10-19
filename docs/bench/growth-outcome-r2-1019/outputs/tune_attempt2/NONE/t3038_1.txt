@@ -1,0 +1,28 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 142,110 (control) + 141,998 (treatment) = 284,108. The expected split is 50%, so 142,054 per arm. The difference is only 56 users, which is well within chance variation for this sample size. No SRM.
+
+Next, I check for PEEKing. The test started March 23 and ended April 7. This is exactly 15 days. The planned duration was 21 days. The test was stopped 6 days early. Stopping before the planned duration inflates false positives. This is a PEEK error.
+
+Then, I check for POWER. The baseline is 3.0%, target lift 5%. The final sample size is ~284k users. A quick mental check suggests this sample is large enough to detect a 5% lift with 80% power at alpha 0.05. The reported p-value is 0.36, indicating no significance, but the sample size itself isn't the issue preventing detection if the effect existed; rather, the effect wasn't there. However, stopping early (PEEK) invalidates the power calculation assumptions. But strictly looking at "underpowered" due to small arm size: the arms are ~142k each. For a 3% baseline and 5% lift, required sample per arm is roughly 300k-400k *if* looking for very small effects, but for 5% relative lift on 3% baseline (absolute diff 0.15%), standard calculators suggest ~100k-150k per arm is sufficient. So POWER is likely not the primary flag compared to PEEK.
+
+Now, SIMPSON's paradox. I calculate conversion rates by device.
+Desktop Control: 3,008 / 61,064 ≈ 4.93%
+Desktop Treatment: 3,221 / 67,359 ≈ 4.78%
+Lift Desktop: (4.78 - 4.93)/4.93 ≈ -3.0% (Negative)
+
+Mobile Control: 1,255 / 81,046 ≈ 1.55%
+Mobile Treatment: 1,122 / 74,639 ≈ 1.50%
+Lift Mobile: (1.50 - 1.55)/1.55 ≈ -3.2% (Negative)
+
+Both segments show a negative lift (~ -3%). However, the pooled reported result shows a positive lift (+1.9%).
+Pooled Control Rate: 4,263 / 142,110 ≈ 3.00%
+Pooled Treatment Rate: 4,343 / 141,998 ≈ 3.06%
+The aggregate shows a gain, while every segment shows a loss. This is a classic Simpson's Paradox. The treatment group had more desktop users (higher baseline conversion) than the control group, skewing the aggregate up despite performing worse in both segments. This is a SIMPSON error.
+
+DENOM: The metric is order conversion rate. Randomization is by user. The counts provided for conversion (orders) are divided by users in my segment check? The readout says "control 61,064 users / 3,008 orders". If the metric is orders per user, the denominator is correct. If it's orders per session, it would be wrong. The reported rate 3.0% matches 4263/142110. So the denominator matches the randomization unit (users). No DENOM error.
+
+NOVELTY: The daily lift fluctuates between 1.7% and 2.3% over 15 days. There is no clear fading trend; it looks stable. No NOVELTY error.
+
+Errors found: PEEK (stopped early), SIMPSON (aggregate positive, segments negative).
+
+ERRORS: PEEK, SIMPSON
+DECISION: HOLD

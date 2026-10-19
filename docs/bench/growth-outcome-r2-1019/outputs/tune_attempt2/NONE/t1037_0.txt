@@ -1,0 +1,18 @@
+Several critical errors are evident in the readout based on the provided numbers.
+
+First, there is a clear **SRM** (Sample Ratio Mismatch). The experiment was designed for a 50/50 split. The total user count is 44,634 (control) + 44,378 (treatment) = 89,012. The expected count per arm is 44,506. The treatment arm has 44,378 users, a deviation of only 128 users. While this looks close, we must check the segments. In the "By device" breakdown, Desktop users are 22,263 (control) vs 27,848 (treatment). Mobile users are 22,371 (control) vs 16,530 (treatment). The split within devices is severely broken (e.g., Desktop is ~44% vs 56%). This indicates broken assignment or logging logic correlated with device type, invalidating the randomization.
+
+Second, there is **SIMPSON** (Simpson's Paradox). Let's calculate the conversion rates per segment:
+*   **Desktop Control:** 2,573 / 22,263 ≈ 11.56%
+*   **Desktop Treatment:** 3,020 / 27,848 ≈ 10.84% (Lift is negative)
+*   **Mobile Control:** 998 / 22,371 ≈ 4.46%
+*   **Mobile Treatment:** 692 / 16,530 ≈ 4.19% (Lift is negative)
+
+In both segments, the treatment performs worse than the control. However, the reported pooled result claims a massive positive lift (24.0%). This reversal occurs because the treatment arm accidentally received far more high-converting Desktop users (who convert at ~11%) and fewer low-converting Mobile users, skewing the aggregate average upward despite the feature actually hurting performance in both groups.
+
+Third, there is a **DENOM** error. The metric is "order conversion rate," and users were randomized by user ID. The readout lists "users" and "sessions." If the rate is calculated as Orders/Sessions (e.g., 3,712/49,962 ≈ 7.43%), the denominator is sessions, not the randomized unit (users). This violates the independence assumption of the test unless sessions per user are identical across arms, which they are not (Control: 1.33 sessions/user; Treatment: 1.13 sessions/user).
+
+Finally, **PEEK** is likely present as the test ran for 8 days instead of the planned 14, and the p-value is reported as "0.0", suggesting early stopping based on significance.
+
+ERRORS: SRM, SIMPSON, DENOM, PEEK
+DECISION: HOLD

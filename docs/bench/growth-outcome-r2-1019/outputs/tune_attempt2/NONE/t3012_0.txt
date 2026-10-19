@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 52,919 (control) + 52,583 (treatment) = 105,502. The expected split is 50%, so 52,751 per arm. The difference is |52,919 - 52,751| = 168. For ~105k users, the standard deviation of the binomial distribution is $\sqrt{105502 \times 0.5 \times 0.5} \approx 162$. The observed difference (168) is roughly 1.04 standard deviations away from the mean. This is well within the range of chance (typically < 1.96 SD for 95% confidence), so SRM is not flagged.
+
+Next, I check Power (POWER). The design targets an 8% relative lift on a 5% baseline (absolute lift of 0.4%). The observed lift is 5.4%, which is lower than the target, but the test achieved significance (p=0.0472). Since the test detected a significant result, it was not underpowered for the effect size that actually occurred, though it might have been underpowered to detect the *target* if the true effect was smaller. However, the specific error definition requires the arm to be "too small to detect the target lift." With ~52k users per arm, a standard power calculation for 5% baseline, 8% lift, 80% power, and 5% alpha usually requires roughly 40k-50k users per arm. The sample sizes (52k+) appear sufficient for the design parameters. Thus, POWER is not clearly flagged based on the success of the test.
+
+I check for Simpson's Paradox (SIMPSON).
+Control Desktop Rate: $1,876 / 25,044 \approx 7.49\%$
+Treatment Desktop Rate: $1,965 / 24,885 \approx 7.89\%$ (Lift positive)
+Control Mobile Rate: $770 / 27,875 \approx 2.76\%$
+Treatment Mobile Rate: $806 / 27,698 \approx 2.91\%$ (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No paradox.
+
+I check Denominator (DENOM). The metric is order conversion rate. The randomization unit is user id. The counts provided for conversion are orders per users (e.g., 2,646 orders / 52,919 users). This implies the denominator is users, matching the randomization unit. If the denominator were sessions, the rates would be much lower (~3.6%). The reported 5.0% matches orders/users ($2646/52919 \approx 5.0\%$). So DENOM is correct.
+
+I check Novelty (NOVELTY). The daily lift data shows fluctuation between 4.4% and 6.3% over 30 days. There is no clear fading trend; the last few days (5.7, 5.4, 5.9, 6.2, 5.5) are not systematically lower than the start. The projection applies the reported lift forward, which is standard if no novelty decay is evident.
+
+I check Peeking (PEEK). The test ran from May 26 to June 25. This is exactly 30 days. The planned duration was 28 days. The test ran *longer* than planned, not shorter. Stopping early inflates false positives; running late does not trigger this specific error code regarding early stopping.
+
+No errors found.
+
+ERRORS: NONE
+DECISION: SHIP

@@ -1,0 +1,17 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 48,639 (control) + 49,929 (treatment) = 98,568. The expected split is 49,284 per arm. The treatment arm has 645 more users than expected. The standard deviation for a binomial split is $\sqrt{98568 \times 0.5 \times 0.5} \approx 157$. The difference is $645 / 157 \approx 4.1$ standard deviations. This is far beyond the threshold for chance (typically 2 or 3 SDs), indicating a broken assignment or logging mechanism. **SRM is flagged.**
+
+Next, I check for PEEKing. The planned duration was 14 days, but the final readout date (July 4) is only 9 days after the start (June 25). The test was stopped early. Furthermore, the daily lift shows a clear decay from 15.3% to 1.5%, suggesting the team may have stopped as soon as significance was hit while the effect was still large. **PEEK is flagged.**
+
+I check for POWER. The smaller arm (control) has 48,639 users. With a 4% baseline and 10% target lift, the required sample size per arm is roughly $16 \times (p(1-p)) / (0.004)^2 \approx 15,000$. The actual sample size is well above this threshold, so the test is not underpowered.
+
+I check for SIMPSON's paradox.
+Desktop conversion: Control $1435/23993 \approx 5.98\%$, Treatment $1578/24629 \approx 6.41\%$. Lift is positive.
+Mobile conversion: Control $511/24646 \approx 2.07\%$, Treatment $562/25300 \approx 2.22\%$. Lift is positive.
+Since both segments show a positive lift consistent with the pooled result, there is no reversal. **No SIMPSON error.**
+
+I check for DENOM. The metric is order conversion rate. The randomization unit is user ID. The counts provided are orders per users. While sessions are listed, the rate calculation implies orders/users. Unless "conversion" was defined as orders/sessions in the hidden logic, the numbers provided (orders and users) align with the randomization unit. Without evidence of session-based denominators being used for the rate calculation, this is not clearly flagged by the numbers alone, though SRM makes all metrics suspect.
+
+I check for NOVELTY. The daily lift drops consistently from 15.3% to 1.5% over 9 days. However, the recommendation projects the *current reported* average lift (7.1%) for twelve months. Ignoring the fading trend to project a stable long-term lift is a classic novelty error. **NOVELTY is flagged.**
+
+ERRORS: SRM, PEEK, NOVELTY
+DECISION: HOLD

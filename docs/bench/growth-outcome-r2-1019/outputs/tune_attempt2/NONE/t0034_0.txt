@@ -1,0 +1,25 @@
+**SRM**: The total users are 113,600 (56,853 + 56,747). Expected per arm is 56,800. The observed difference is tiny (~50 users), well within chance for this sample size. No SRM.
+
+**PEEK**: The test ran from Aug 27 to Sept 19. This is 24 days inclusive (Aug 27–31 = 5 days; Sept 1–19 = 19 days). The planned duration was 21 days. The readout includes data up to day 23 (implied by the 23 daily lift points). While it ran slightly longer, there is no evidence it was *stopped early* based on interim looks. The duration matches or exceeds the plan. No PEEK.
+
+**POWER**: Baseline 8%, target lift 8% (absolute 0.64%). With ~56k users per arm, the standard error for difference in proportions is approx $\sqrt{2 \times 0.08 \times 0.92 / 56800} \approx 0.0016$. The detectable effect at 80% power ($Z_{\beta}=0.84$) and $\alpha=0.05$ ($Z_{\alpha/2}=1.96$) requires a difference of $(1.96+0.84) \times 0.0016 \approx 0.0045$ (0.45%). The target (0.64%) is larger than the minimum detectable effect. The test is adequately powered. No POWER issue.
+
+**SIMPSON**: Let's check the segments.
+Control Rate: $4548/56853 \approx 8.00\%$. Treatment Rate: $4812/56747 \approx 8.48\%$. Overall lift is positive.
+Desktop Control: $3311/28280 \approx 11.71\%$. Desktop Treatment: $4050/37616 \approx 10.77\%$. Lift is negative (~ -8%).
+Mobile Control: $1237/28573 \approx 4.33\%$. Mobile Treatment: $762/19131 \approx 3.98\%$. Lift is negative (~ -8%).
+Both segments show a negative lift, yet the pooled result shows a positive lift. This is a classic reversal. The treatment group has a much higher proportion of Desktop users (high baseline conversion) compared to the control group, skewing the aggregate.
+Arithmetic check on split:
+Control: 28,280 Desktop / 28,573 Mobile (~50/50 split).
+Treatment: 37,616 Desktop / 19,131 Mobile (~66% Desktop).
+The randomization by user ID failed to balance the device mix between arms, or the device assignment changed mid-test, causing Simpson's Paradox. **SIMPSON** is flagged.
+
+**DENOM**: Metric is order conversion rate. Randomized by user. Denominator should be users.
+Control: 4548 orders / 56853 users = 8.00%. Matches reported.
+Treatment: 4812 orders / 56747 users = 8.48%. Matches reported.
+The denominator is users, which matches the randomization unit. No DENOM error.
+
+**NOVELTY**: Daily lift starts at 14.3% and trends down to 0.4%/1.6% by the end. The team projects this fading lift for 12 months. This assumes the initial high lift (driven perhaps by novelty) persists, ignoring the clear decay trend. **NOVELTY** is flagged.
+
+ERRORS: SIMPSON, NOVELTY
+DECISION: HOLD

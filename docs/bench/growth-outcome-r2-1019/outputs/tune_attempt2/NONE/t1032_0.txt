@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 187,698 (control) + 184,712 (treatment) = 372,410. The expected split is 50%, so 186,205 per arm. The treatment arm has 1,493 fewer users than expected. A rough z-score approximation: $Z \approx \frac{|184712 - 186205|}{\sqrt{372410 \times 0.5 \times 0.5}} = \frac{1493}{305} \approx 4.9$. Since $4.9 > 1.96$, the split differs significantly from 50/50 by chance alone. This indicates broken assignment or logging. **SRM is flagged.**
+
+Next, I check the Denominator (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The reported rates are calculated as orders divided by users (e.g., Control: $9,385 / 187,698 \approx 5.0\%$? Wait, the readout says 3.876%. Let's re-calculate: $9,385 / 242,116 \text{ (sessions)} \approx 3.876\%$. The treatment rate is $9,698 / 210,122 \approx 4.615\%$. The calculation uses **sessions** as the denominator, but the randomization unit is **users**. This violates the unit of analysis assumption, inflating significance due to correlated sessions per user. **DENOM is flagged.**
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $6,003 / 66,568 \approx 9.02\%$.
+Desktop Treatment Rate: $6,203 / 65,509 \approx 9.47\%$. (Lift positive)
+Mobile Control Rate: $3,382 / 121,130 \approx 2.79\%$.
+Mobile Treatment Rate: $3,495 / 119,203 \approx 2.93\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled direction. No reversal observed. **SIMPSON is not flagged.**
+
+Regarding Power (POWER): The sample sizes are large (~185k per arm). With a 5% baseline and target 5% lift, these samples are easily sufficient to detect the effect. The issue is not under-powering. **POWER is not flagged.**
+
+Regarding Peeking (PEEK): The test ran from March 18 to April 3. This is 17 days inclusive, or 16 full days of data shown. The planned duration was 14 days. The test ran *longer* than planned, not shorter. While stopping rules aren't explicitly detailed, the data shows the test exceeded the planned duration, so calling it early is not supported by the dates provided. **PEEK is not flagged.**
+
+Regarding Novelty (NOVELTY): The daily lift values fluctuate (14.5% to 23.6%) but do not show a clear fading trend over the 16 days; the final days remain high (17.8%, 23.6%). There is no evidence of fading. **NOVELTY is not flagged.**
+
+The primary errors are the significant imbalance in user assignment (SRM) and the incorrect denominator usage (sessions vs. users), which invalidates the p-value and lift calculation.
+
+ERRORS: SRM, DENOM
+DECISION: HOLD

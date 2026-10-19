@@ -1,0 +1,5 @@
+### Added
+- `docs/bench/growth-outcome-r2-1019`: round 2 of the growth-analytics outcome bench, replacing the ceiling pilot. Readouts are built from raw numbers (arm counts, device table, dates, design inputs, daily lift) and plant 0 to 3 of six analysis errors that must be computed, with the gold set recomputed from the numbers; difficulty was calibrated on a separate tune split with the no-skill arm only (two earlier versions were too easy and are kept as disclosed history), then 96 fresh readouts were generated and answered once. Result by the preregistered rule: LOSS against the rival on planted-error recall (shipped 0.756 [0.685, 0.824], rival 0.800 [0.736, 0.861], no skill 0.748 [0.678, 0.816]; shipped minus rival -0.044 [-0.088, -0.002]; shipped minus no skill +0.008 [-0.062, +0.073]). All arms over-flag (false-alarm rate 0.32 to 0.37, benign readouts shipped 0.00 to 0.02), so the recall gap is weak evidence; no SKILL.md change. Tests: `scripts/test_growth_outcome_r2_1019.py`, registered in `scripts/ci-tests.d/growth-outcome-r2-1019.sh`.
+
+### Changed
+- `docs/perun-vs-rivals.md`: one outcome-metric audit row for `growth-outcome-r2-1019`.

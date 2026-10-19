@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 14,861 (control) + 14,703 (treatment) = 29,564. The expected split is 50%, so 14,782 per arm. The difference is $|14,861 - 14,782| = 79$. The standard error for the difference in proportions is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{7391} \approx 86$. The deviation is less than 1 standard error ($79 < 86$), so the split is within chance expectations. No SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The reported rates align with orders divided by users: Control $743 / 14,861 \approx 0.050$ (5.0%); Treatment $785 / 14,703 \approx 0.0534$ (5.34%). The denominator matches the randomization unit. No DENOM.
+
+I check for Simpson's Paradox (SIMPSON).
+Desktop Control Rate: $499 / 5,490 \approx 9.09\%$.
+Desktop Treatment Rate: $527 / 5,431 \approx 9.70\%$. (Lift positive)
+Mobile Control Rate: $244 / 9,371 \approx 2.60\%$.
+Mobile Treatment Rate: $258 / 9,272 \approx 2.78\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON.
+
+I check for Power (POWER). The baseline is 5.0%, target lift 8%. The sample size per arm is ~14,800. Standard rules of thumb or quick approximation suggest that detecting an 8% relative lift on a 5% baseline (absolute difference 0.4%) requires roughly $16 \cdot (p(1-p)) / \delta^2$. With $p \approx 0.05$ and $\delta = 0.004$, $n \approx 16 \cdot 0.0475 / 0.000016 \approx 47,500$ per arm for 80% power? Wait, let's re-evaluate simply. The study ran for 28 days as planned (June 25 to July 23 is 28 days), so no PEEK. However, the p-value is 0.1875, which is not significant. The question is whether the arm is *too small* to detect the target. If the target was 8% and observed was 6.8%, failing to reject null is expected if underpowered or if true effect is smaller. But usually, "underpowered" flags occur when the sample size is drastically insufficient for the *design* parameters. Let's look closer at the daily lift.
+
+I check for Novelty (NOVELTY). The daily relative lift starts at 17.3% on Day 1 and trends downward consistently to 0.7% on Day 28. This clear fading pattern suggests a novelty effect where users initially engage more with the new feature, but the effect dissipates over time. The team's recommendation projects the current reported lift (which averages these fading numbers) over the next twelve months. This ignores the fading trend, assuming the lift is permanent when the data suggests it may vanish entirely. This fits the definition of NOVELTY: "the lift is fading over the test but is projected as lasting."
+
+The test duration matches the plan (28 days), so no PEEK. The sample size seems reasonable for a rough check, but the fading effect is the most glaring analytical error in the projection logic.
+
+ERRORS: NOVELTY
+DECISION: HOLD

@@ -1,0 +1,44 @@
+Several critical analysis errors are evident in the readout based on the provided numbers.
+
+**SRM (Sample Ratio Mismatch):**
+The experiment randomized users 50/50.
+Total users = 35,005 (Control) + 34,827 (Treatment) = 69,832.
+Expected per arm = 34,916.
+Difference = |35,005 - 34,916| = 89 users.
+Standard Deviation (SD) for binomial split ≈ $\sqrt{69832 \times 0.5 \times 0.5} \approx 132$.
+The difference (89) is less than 2 SDs (264). The user split is statistically consistent with 50/50.
+*However*, look at sessions: Control has 50,553 sessions vs Treatment 40,957.
+Ratio Control/Treatment Users = 1.005.
+Ratio Control/Treatment Sessions = 1.23.
+While SRM usually refers to randomized units (users), a massive divergence in session counts per user suggests a logging issue or that the metric denominator is misaligned with the randomization unit. But strictly checking the *user* split for SRM: $Z = 89/132 = 0.67$. No SRM on users.
+
+**DENOM (Denominator Mismatch):**
+The metric is "order conversion rate."
+Reported Control Rate: $2,801 / 50,553 = 5.54\%$.
+Reported Treatment Rate: $2,973 / 40,957 = 7.26\%$.
+The calculation uses **sessions** as the denominator. The randomization unit was **user id**.
+Conversion rate should be Orders / Users (or defined as session conversion, but then the unit of analysis must match). If the metric is per-session conversion, but users were randomized, multiple sessions per user violate the independence assumption unless aggregated to the user level first. More critically, the session counts are vastly different (50k vs 41k) despite equal user counts. This implies the treatment group generated significantly fewer sessions per user, or logging failed. Using sessions as the denominator when randomization is by user, especially with unequal session volumes, invalidates the p-value and lift calculation. This is a clear DENOM error (wrong unit of analysis for the reported stat).
+
+**POWER:**
+Baseline 8%, Target 10% relative lift (to 8.8%).
+Actual sample size ~35k per arm is sufficient for this detection. The test is not underpowered; it found a massive effect. No POWER error.
+
+**PEEK:**
+Dates: July 3 to July 17 is exactly 14 days. Planned duration: 14 days.
+The test ran for the full planned duration. No PEEK error.
+
+**SIMPSON:**
+Desktop Control Rate (Orders/Users): $2027/15211 = 13.3\%$.
+Desktop Treat Rate: $2152/15134 = 14.2\%$. (Lift positive)
+Mobile Control Rate: $774/19794 = 3.9\%$.
+Mobile Treat Rate: $821/19693 = 4.2\%$. (Lift positive)
+Both segments show positive lift. The aggregate shows positive lift. No reversal. No SIMPSON error.
+
+**NOVELTY:**
+Daily lift fluctuates between 26.4% and 34.1%. There is no clear fading trend (e.g., starting high and dropping to near zero). The projection assumes persistence, but the data doesn't show fading yet. No NOVELTY error confirmed by numbers alone.
+
+**Conclusion:**
+The primary error is **DENOM**. The reported conversion rates are calculated using sessions as the denominator, while randomization occurred at the user level. Furthermore, the session volume disparity (50k vs 41k) despite equal user counts indicates a fundamental data integrity issue or a violation of the unit-of-analysis assumption, making the p-value ($p=0.0$) and lift unreliable.
+
+ERRORS: DENOM
+DECISION: HOLD

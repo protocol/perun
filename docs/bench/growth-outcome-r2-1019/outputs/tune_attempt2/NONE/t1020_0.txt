@@ -1,0 +1,50 @@
+Let's evaluate the readout against the specified error categories using only the provided numbers.
+
+**SRM (Sample Ratio Mismatch):**
+Total users = 11,501 (control) + 11,553 (treatment) = 23,054.
+Expected split (50/50) = 11,527 per arm.
+Observed difference = |11,553 - 11,501| = 52 users.
+Standard deviation for binomial split $\approx \sqrt{N \cdot 0.5 \cdot 0.5} = \sqrt{23054 \cdot 0.25} \approx 76$.
+The difference (52) is less than 2 standard deviations (~152). This is within chance variation. No SRM.
+
+**PEEK (Peeking):**
+Start date: 2026-06-19. End date: 2026-07-17.
+Duration: June has 30 days. From June 19 to June 30 is 12 days. July 1 to July 17 is 17 days. Total = 29 days.
+Planned duration was 28 days. The test ran for 29 days, meeting and slightly exceeding the plan. There is no evidence of early stopping. No PEEK.
+
+**POWER (Underpowered):**
+Baseline = 6.0%, Target lift = 10% (detecting 6.6%).
+Sample size per arm $\approx$ 11,500.
+Using standard approximation for proportions, detecting a 10% relative lift (0.6% absolute) at 80% power/5% alpha typically requires ~20,000–25,000 users *per arm* depending on variance, or roughly 15k if variance is low. However, the detected lift is only 4.5% with p=0.3977. The test failed to find significance, but was it underpowered to detect the *target*?
+Rough check: Standard Error (SE) $\approx \sqrt{\frac{p(1-p)}{n}} \approx \sqrt{\frac{0.06 \cdot 0.94}{11500}} \approx 0.0022$.
+Minimum Detectable Effect (MDE) for 80% power $\approx 2.8 \cdot SE \approx 0.0062$ (0.62% absolute, or ~10.3% relative).
+The study design matches the sample size closely enough to the target (10% lift). It simply didn't find the effect. This is a negative result, not necessarily a "POWER" error in the sense of a flawed setup preventing detection of the *target* if it existed; the sample size aligns with the design parameters provided. No clear POWER flag based solely on counts vs design specs.
+
+**SIMPSON (Paradox):**
+Control Desktop Rate: $492/5203 \approx 9.46\%$. Treatment Desktop: $517/5226 \approx 9.89\%$. (Lift positive)
+Control Mobile Rate: $198/6298 \approx 3.14\%$. Treatment Mobile: $207/6327 \approx 3.27\%$. (Lift positive)
+Both segments show positive lift. The aggregate shows positive lift. No reversal. No SIMPSON.
+
+**DENOM (Denominator Mismatch):**
+Randomized by User ID. Metric is Order Conversion Rate.
+Usually, conversion rate is Orders / Users or Orders / Sessions.
+If defined as Orders/Users: Control $690/11501 = 5.999\%$. Treatment $724/11553 = 6.267\%$.
+These match the reported rates exactly. The denominator (Users) matches the randomization unit (User ID). No DENOM.
+
+**NOVELTY (Fading Lift):**
+Daily lift data provided for 28 days.
+Values: 4.2, 4.6, 5.1 ... 3.7, 3.7, 4.5, 4.6.
+There is no clear monotonic fade. The last few days (3.7, 3.7) are slightly lower, but day 28 is 4.6%. The average is stable around 4.5%. There is no strong evidence of a fading trend that invalidates the projection based strictly on these numbers. No NOVELTY.
+
+The p-value (0.3977) indicates the result is not statistically significant. The recommendation to "roll out to everyone" based on a non-significant p-value is a decision error, but not one of the specific analysis *calculation* errors listed (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY). However, rolling out a change without statistical significance is risky. But strictly adhering to the prompt's defined error codes: none of the specific numerical anomalies defining those codes are present.
+
+Wait, re-reading the decision rule: "Flag a category only if the numbers show that error."
+Is there an error? The p-value is high. The recommendation is to ship. This is a bad decision, but is it a flagged *category*?
+Let's re-evaluate POWER. If the test is underpowered, it might miss real effects, but here we have a specific target. The sample size calculated earlier suggests the test *was* powered for the 10% target. The fact that the observed lift (4.5%) was smaller than the target (10%) and non-significant is a valid outcome, not an analysis error.
+
+However, consider the recommendation itself. If the analysis claims significance when there is none, that's a false positive. Here, they report p=0.3977 (not significant) but recommend rollout. This isn't a calculation error in the metrics, but a logic error in the decision. The prompt asks to flag analysis errors from the list. None of the list items (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY) describe "ignoring p-values."
+
+Therefore, no specific codes from the provided list apply to the numerical data.
+
+ERRORS: NONE
+DECISION: SHIP

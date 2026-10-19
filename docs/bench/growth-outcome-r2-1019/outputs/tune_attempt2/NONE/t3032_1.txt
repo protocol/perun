@@ -1,0 +1,22 @@
+**SRM Check**: Total users = 267,248. Expected per arm = 133,624. Observed: Control 133,687, Treatment 133,561. Difference is negligible (~0.09%), well within chance variation for this sample size. No SRM.
+
+**PEEK Check**: Start 2026-10-15, End 2026-10-31. Duration is exactly 16 days. Planned duration was 14 days. The test ran *longer* than planned, not shorter. While stopping early inflates false positives, running late does not trigger the PEEK error definition provided. No PEEK.
+
+**POWER Check**: Baseline 5%, target lift 5% (absolute 0.25%). Alpha 0.05, Power 80%. Required sample size per arm ≈ 2 * (1.96+0.84)^2 * (0.05*0.95) / (0.0025)^2 ≈ 118,000. Observed ~133,000 per arm. The study is adequately powered. No POWER error.
+
+**SIMPSON Check**:
+Control Rate Desktop: 4,898 / 64,579 ≈ 7.58%
+Treatment Rate Desktop: 5,255 / 71,414 ≈ 7.36% (Lift negative)
+Control Rate Mobile: 1,787 / 69,108 ≈ 2.59%
+Treatment Rate Mobile: 1,559 / 62,147 ≈ 2.51% (Lift negative)
+Both segments show a negative lift (Treatment < Control), yet the pooled result reports a positive lift (5.102% > 5.0%).
+Pooled Control: 6,685 / 133,687 ≈ 5.00%
+Pooled Treatment: 6,814 / 133,561 ≈ 5.10%
+Since the direction reverses from negative in all segments to positive in the aggregate, this is Simpson's Paradox. Likely caused by the treatment group having a much higher proportion of high-converting desktop users (71k vs 64k) compared to the control. Flag SIMPSON.
+
+**DENOM Check**: Randomized by user id. Metric is order conversion rate. Usually defined as Orders/Users or Orders/Sessions. If Orders/Users: Control 5.0%, Treatment 5.1%. Denominator matches randomization unit (users). If Orders/Sessions, denominator is sessions, not users. However, the text says "Metric: order conversion rate" and lists users and sessions. Standard practice often uses sessions for conversion, but without explicit confirmation that the rate was calculated as Orders/Sessions, we cannot definitively flag DENOM based solely on the numbers provided, especially since the user counts align closely with the percentages (6685/133687 = 5.00%). The calculation 6685/133687 = 0.05000 exactly matches the reported 5.0%. Thus, the denominator is Users. No DENOM error.
+
+**NOVELTY Check**: Daily lift drops from 3.6% to 0.8%. There is a clear fading trend. The team projects this reported (average) lift for 12 months. This ignores the decay, assuming the initial novelty effect persists. Flag NOVELTY.
+
+ERRORS: SIMPSON, NOVELTY
+DECISION: HOLD

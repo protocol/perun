@@ -1,0 +1,47 @@
+**SRM**: The total users are 47,996 (control) and 47,844 (treatment). Total $N = 95,840$. Expected per arm is 47,920. The difference is small ($|47,996 - 47,844| = 152$). A chi-square check: $\chi^2 = (152)^2 / 95,840 \approx 0.24$. With 1 degree of freedom, the critical value for $\alpha=0.05$ is 3.84. Since $0.24 < 3.84$, the split is statistically consistent with 50/50. No SRM.
+
+**PEEK**: The test started 2026-06-12 and the readout is 2026-07-12. This is exactly 30 days. The planned duration was 28 days. The test ran *longer* than planned, not shorter. Stopping late does not inflate false positives in the same way peeking does; if anything, it increases power. No PEEK error based on "stopped before planned duration."
+
+**POWER**: Both arms have ~48k users. With a 5% baseline and 10% target lift, standard calculators require roughly 30k–40k users per arm for 80% power at $\alpha=0.05$. Since $48k > 40k$, the test is adequately powered. No POWER error.
+
+**SIMPSON**: Let's check the segment conversion rates.
+Desktop Control: $1,655 / 20,234 \approx 8.18\%$.
+Desktop Treatment: $1,919 / 24,929 \approx 7.70\%$.
+Lift Desktop: Negative (~ -5.9%).
+
+Mobile Control: $745 / 27,762 \approx 2.68\%$.
+Mobile Treatment: $579 / 22,915 \approx 2.53\%$.
+Lift Mobile: Negative (~ -5.6%).
+
+Both segments show a negative lift (treatment is worse), yet the pooled result reports a positive 20.7% lift.
+Pooled Control Rate: $2,400 / 47,996 \approx 5.00\%$ (Wait, the readout says 3.751%? Let's re-read the metric definition).
+The readout says "Metric: order conversion rate" but the reported rates (3.751% and 4.527%) do not match Orders/Users ($2400/47996 = 5.0\%$).
+However, looking at Orders/Sessions:
+Control: $2,400 / 63,977 \approx 3.751\%$.
+Treatment: $2,498 / 55,175 \approx 4.527\%$.
+The metric denominator is **Sessions**, but randomization was by **User ID**. This is a DENOM error (see below).
+
+Does Simpson's paradox hold for the reported metric (Orders/Sessions)?
+We need session counts per segment to verify. They are not provided. We cannot calculate segment-level session conversion rates without session counts per device. Therefore, we cannot definitively prove Simpson's paradox from the numbers provided, although the reversal of direction between user-based counts (negative) and session-based counts (positive) strongly suggests the aggregation is misleading. However, strict adherence to "deciding from the numbers" means we lack the session split to calculate the conditional probabilities. But wait, we can infer the issue is primarily the denominator mismatch causing the illusion. Let's look closer at DENOM.
+
+**DENOM**: Randomization unit: User ID. Metric denominator used in calculation: Sessions (derived above: $2400/63977 = 3.751\%$). Since users were randomized but the metric divides by sessions (which can be correlated with treatment if the treatment changes session frequency), this violates the unit of randomization. The treatment has fewer sessions per user ($55,175/47,844 \approx 1.15$) than control ($63,977/47,996 \approx 1.33$). If the treatment reduces session count but increases order probability per session, dividing by sessions inflates the rate. This is a clear DENOM error.
+
+**NOVELTY**: Daily lift drops from 43.6% to 6.1% over 30 days. The trend is clearly fading. The projection applies the current aggregate lift (or final lift) to the next 12 months. While the lift is fading, the readout doesn't explicitly state they projected the *initial* high lift; it says "applies the reported lift" (the aggregate 20.7%). However, projecting a 20.7% lift when the most recent data shows ~6% and falling implies ignoring the decay. Is this a "NOVELTY" flag? The definition says "lift is fading... but is projected as lasting." The projection assumes the current aggregate (heavily weighted by early high lift) lasts forever, ignoring the fade. This fits the definition.
+
+So we have DENOM and NOVELTY. What about SIMPSON? Without session splits, we can't calculate the exact math for Simpson's on the session metric. But the fact that User-based analysis (Orders/Users) shows negative lift while Session-based shows positive lift is the definition of the paradox induced by the wrong denominator. However, the specific code SIMPSON usually refers to segments reversing the aggregate. We saw Orders/Users reversed (Segments negative, Aggregate positive).
+Control Users Orders: 2400. Treatment: 2498.
+Control Users: 47996. Treatment: 47844.
+Rate Control (Users): 5.00%. Rate Treatment (Users): 5.22%. Lift +4.4%.
+Wait, my previous manual calc for user-based lift was wrong.
+Desktop User Rate C: $1655/20234 = 8.18\%$. T: $1919/24929 = 7.70\%$. (T < C)
+Mobile User Rate C: $745/27762 = 2.68\%$. T: $579/22915 = 2.53\%$. (T < C)
+Aggregate User Rate C: $2400/47996 = 5.00\%$. T: $2498/47844 = 5.22\%$. (T > C)
+Yes! Within both segments (Desktop, Mobile), Treatment is worse. In aggregate, Treatment is better. This is **SIMPSON**'s paradox, calculable purely from the user counts provided. The session metric is a red herring for the paradox itself, though related to DENOM. The paradox exists on the natural "Orders per User" metric too.
+
+Errors identified:
+1. **SIMPSON**: Segment lifts are negative, aggregate lift (on users) is positive.
+2. **DENOM**: Reported metric uses Sessions as denominator, but randomization was by User.
+3. **NOVELTY**: Lift fades from 43% to 6%, yet the aggregate (skewed by early days) is projected for 12 months.
+
+ERRORS: SIMPSON, DENOM, NOVELTY
+DECISION: HOLD

@@ -1,0 +1,31 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 93,489 (control) + 93,795 (treatment) = 187,284. The expected split is 50%, so 93,642 per arm. The treatment has 153 more users than expected. The standard deviation for a binomial distribution here is $\sqrt{187284 \times 0.5 \times 0.5} \approx 216$. The difference (153) is less than 2 standard deviations ($153 < 432$), so the split is within chance expectations. No SRM.
+
+Next, I check for Peeking (PEEK). The test started 2026-08-11 and ended 2026-09-03. Counting the days inclusive: August has 31 days. From Aug 11 to Aug 31 is 21 days. September 1 to September 3 is 3 days. Total duration = 24 days. The planned duration was 21 days. The test ran longer than planned, not shorter. There is no evidence it was stopped early to capture a spike; it actually overshot the timeline. No PEEK.
+
+Next, Power (POWER). The sample sizes (~93k per arm) are very large. With a baseline of 5% and target lift of 8%, the required sample size is far smaller than 93k. The test is well-powered. No POWER issue.
+
+Next, Simpson's Paradox (SIMPSON). I calculate the conversion rates per segment.
+Desktop Control: $3460 / 46716 \approx 7.41\%$. Desktop Treatment: $3643 / 46869 \approx 7.77\%$. Lift is positive.
+Mobile Control: $1214 / 46773 \approx 2.60\%$. Mobile Treatment: $1278 / 46926 \approx 2.72\%$. Lift is positive.
+Since both segments show a positive lift, the pooled result (positive) is not reversed. No SIMPSON.
+
+Next, Denominator (DENOM). Randomization was by user id. The metric is "order conversion rate." The readout provides users and orders. The calculation implies orders/users ($4674/93489 \approx 4.99\%$). The denominator matches the randomization unit (users). No DENOM error.
+
+Next, Novelty (NOVELTY). The daily lift values fluctuate between 4.1% and 6.2% over 23 days. There is no clear fading trend (e.g., starting high and dropping to near zero). The projection applies the observed lift to 12 months. While long-term projections are risky, the data does not show the specific "fading over the test" pattern required to flag NOVELTY based strictly on the numbers provided.
+
+Finally, I re-evaluate the dates for PEEK. The readout says "final readout 2026-09-03" but lists daily data for "day 1 to day 23". If the plan was 21 days, and they analyzed it at day 23, they didn't peek early. However, if they checked results daily and stopped as soon as $p < 0.05$, that is peeking. The p-value is 0.0153. Without logs of when they checked, we cannot confirm PEEK solely from the final snapshot unless the duration itself proves early stopping. Since they ran *over* the duration, early stopping is not evident from the end date.
+
+Wait, let's re-read the daily lift. It ends at day 23. The plan was 21 days. They did not stop early.
+
+Is there any other error? The projection assumes the lift lasts 12 months. This is an assumption, not necessarily a calculation error visible in the numbers, unless the daily data shows fading. The daily data is noisy but stable around 5%.
+
+Let's double check the arithmetic on the reported conversion rate.
+Control: $4674 / 93489 = 0.049995$ (5.0%).
+Treatment: $4921 / 93795 = 0.052465$ (5.25%).
+Relative lift: $(0.052465 - 0.049995) / 0.049995 = 0.0494$ (4.9%).
+The math in the readout is correct.
+
+Conclusion: None of the specific error patterns defined (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY) are demonstrably present in the provided numbers. The test ran longer than planned, segments agree, ratios are fine, and denominators match.
+
+ERRORS: NONE
+DECISION: SHIP

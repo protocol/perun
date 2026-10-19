@@ -1,0 +1,20 @@
+SRM: The split is 71,193 vs 75,857 sessions (48.4% vs 51.6%). With ~147k total users, the standard deviation for a 50/50 split is ~191. The difference (4,664) is ~24 standard deviations away, indicating a severe Sample Ratio Mismatch.
+
+DENOM: Randomization was by user ID, but the metric denominator is sessions. Since users can have multiple sessions, this violates the unit of randomization, invalidating the statistical test.
+
+SIMPSON: Desktop shows a positive lift (7.23% vs 7.02%), and mobile shows a positive lift (2.84% vs 2.85% - wait, mobile control is 786/27624=2.845%, treatment is 672/24361=2.758%, which is negative). Control mobile: 2.85%, Treatment mobile: 2.76% (negative). Control desktop: 7.23%, Treatment desktop: 7.02% (negative). Wait, let me re-calculate carefully.
+Desktop Control: 1929/26683 = 7.23%. Desktop Treatment: 2082/29672 = 7.02%. (Treatment is lower).
+Mobile Control: 786/27624 = 2.85%. Mobile Treatment: 672/24361 = 2.76%. (Treatment is lower).
+Both segments show negative lift, yet the aggregate reports positive lift (5.097% vs 4.999%). This is mathematically impossible unless I misread the numbers or there is a calculation error in the readout itself. 
+Re-reading: Control Total Orders 2715 / 71193 = 3.81%? No. 2715/71193 = 0.0381. The readout says 4.999%. 
+Ah, the readout says "2,715 orders" out of "71,193 sessions". 2715/71193 = 3.81%. The reported rate is 4.999%. There is a discrepancy in the provided text's internal consistency or my quick math. 
+Let's trust the counts for SRM and DENOM. SRM is clear. DENOM is clear (sessions vs users). 
+Simpson check again: 
+Desktop Ctrl: 1929/26683 ≈ 7.23%. Trt: 2082/29672 ≈ 7.02%. (Trt < Ctrl)
+Mobile Ctrl: 786/27624 ≈ 2.85%. Trt: 672/24361 ≈ 2.76%. (Trt < Ctrl)
+Aggregate Ctrl: (1929+786)/(26683+27624) = 2715/54307 ≈ 5.00%? Wait, the total sessions in arms are 71k and 75k. The sum of device sessions (26k+27k=54k) does not equal the arm total (71k). There are missing segments (e.g., tablet). 
+Without full segment data, SIMPSON cannot be definitively proven from these numbers alone, though the device split is suspicious. 
+However, SRM and DENOM are definite.
+
+ERRORS: SRM, DENOM
+DECISION: HOLD

@@ -1,0 +1,50 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 37,323 (control) + 37,619 (treatment) = 74,942. The expected split is 37,471 per arm. The observed difference is |37,619 - 37,471| = 148 users. The standard error for the difference in proportions is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{18735} \approx 137$. The z-score is $148 / 137 \approx 1.08$. This is well within the range of chance (typically < 1.96 for 95% confidence), so SRM is not flagged.
+
+Next, I check for PEEKing. The planned duration was 14 days starting June 12. The final readout date is June 27. The duration from June 12 to June 27 inclusive is 16 days, or at minimum 15 full days if counting intervals. The daily data lists 15 data points ("day 1 to day 15"). Since the test ran for at least the planned 14 days (data exists for day 15), there is no evidence it was stopped early based on the provided dates and data points. PEEK is not flagged.
+
+I check POWER. The baseline is 4.0%, target lift 8%. The sample sizes are ~37k per arm. A quick rule of thumb or standard power calculation for these parameters usually requires roughly 30k-40k users per arm to detect an 8% lift on a 4% baseline with 80% power. Since the actual sample (~37k) meets the design requirement implied by the "planned duration" which was presumably calculated to meet power, and the result is not significant (p=0.14), the test simply failed to find significance, it isn't necessarily "underpowered" in design unless the variance was vastly higher than expected. However, the prompt asks to flag if the *smaller arm is too small*. Given the design parameters were set for this duration and we reached the duration, the sample size matches the design. No clear POWER error in the numbers themselves relative to the plan.
+
+I check SIMPSON's paradox.
+Control Desktop Rate: $997 / 14,238 \approx 7.00\%$
+Treatment Desktop Rate: $1,058 / 14,351 \approx 7.37\%$ (Lift positive)
+Control Mobile Rate: $496 / 23,085 \approx 2.15\%$
+Treatment Mobile Rate: $527 / 23,268 \approx 2.26\%$ (Lift positive)
+Both segments show a positive lift. The aggregate shows a positive lift (4.0% vs 4.213%). The direction is consistent. SIMPSON is not flagged.
+
+I check DENOM. The metric is "order conversion rate". Users were randomized by user ID. The counts provided for the rate calculation are Orders / Users (e.g., 1493/37323 = 4.0%). The denominator matches the randomization unit (users). DENOM is not flagged.
+
+I check NOVELTY. The daily lift values are: 5.2, 4.9, 5.4, 5.5, 6.0, 5.6, 5.3, 4.4, 3.9, 6.2, 5.4, 5.2, 5.9, 4.5, 6.1. There is no clear fading trend; the values fluctuate without a consistent downward slope over time (e.g., day 15 is 6.1%, higher than day 1). The projection applies the reported lift to 12 months. Since the daily data does not show fading, flagging NOVELTY based on "fading" is not supported by the numbers.
+
+However, let's re-evaluate the PEEK condition carefully. Planned: 14 days. Start: June 12. End of 14 days is June 25. Readout: June 27. The test ran *longer* than planned, not shorter. So PEEK is definitely out.
+
+Wait, looking closer at the DENOM definition. "Order conversion rate" usually implies Orders / Sessions or Orders / Users. If the metric is defined as conversion per session but randomized by user, that's an issue. But the readout says "Metric: order conversion rate" and lists users and orders. 1493/37323 = 0.0400. 1585/37619 = 0.0421. The math works out perfectly using Users as the denominator. So DENOM is fine.
+
+Let's re-read the NOVELTY criterion: "the lift is fading over the test but is projected as lasting." The daily lifts are volatile. Day 9 is 3.9%, but Day 10 jumps to 6.2%. Day 14 is 4.5%, Day 15 is 6.1%. There is no sustained fade.
+
+Is there an error I missed?
+Let's re-calculate the aggregate rates vs segment rates to ensure no arithmetic trickery.
+Total Control Orders: 997 + 496 = 1493. Correct.
+Total Treatment Orders: 1058 + 527 = 1585. Correct.
+Total Control Users: 14238 + 23085 = 37323. Correct.
+Total Treatment Users: 14351 + 23268 = 37619. Correct.
+The numbers are internally consistent.
+
+The p-value is 0.1417, which is > 0.05. The result is not statistically significant. The team recommends rolling out anyway. Is "rolling out a non-significant result" one of the errors? The list of errors is specific: SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY. None of these codes correspond to "ignoring statistical significance" or "false positive due to low power" (unless POWER means the test was underpowered to detect the lift, but we established the sample size matched the plan).
+
+Wait, could POWER be flagged because the result was not significant? No, POWER refers to the design being insufficient *before* the test or the arm being too small to detect the *target* lift. With 37k users, 4% base, 8% target, alpha 0.05, power 0.8:
+Required N per arm $\approx \frac{16 \cdot p(1-p)}{(p \cdot \text{lift})^2}$.
+$p=0.04$, lift=0.08. Effect size = 0.0032.
+$N \approx \frac{16 \cdot 0.04 \cdot 0.96}{0.0032^2} = \frac{0.6144}{0.00001024} \approx 60,000$.
+Ah, the standard approximation $16 \sigma^2 / \delta^2$ suggests we need ~60k per arm.
+Let's try the precise formula: $n = (Z_{\alpha/2} + Z_{\beta})^2 \cdot (p_1(1-p_1) + p_2(1-p_2)) / (p_1-p_2)^2$.
+$Z_{0.025} = 1.96$, $Z_{0.2} = 0.84$. Sum = 2.8. Squared = 7.84.
+$p_1 = 0.04$, $p_2 = 0.0432$.
+$p_1(1-p_1) \approx 0.0384$. $p_2(1-p_2) \approx 0.0384$. Sum = 0.0768.
+Diff = 0.0032. Squared = $1.024 \times 10^{-5}$.
+$n = 7.84 \cdot 0.0768 / 1.024e-5 = 0.602 / 1.024e-5 \approx 58,800$.
+The study has only ~37,000 users per arm. The planned duration (14 days) apparently yielded insufficient sample size for the stated power and target lift. The "Design" section claims power 80%, but the resulting sample size (dictated by the 14 day duration) is too small to achieve that power for the target lift. Thus, the test is underpowered. The smaller arm (37k) is indeed too small to detect the target lift (8%) at the stated alpha and power.
+
+Therefore, POWER is flagged.
+
+ERRORS: POWER
+DECISION: HOLD

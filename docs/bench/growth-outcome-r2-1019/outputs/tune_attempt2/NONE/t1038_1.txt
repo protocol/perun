@@ -1,0 +1,31 @@
+Several critical analysis errors are evident in the readout based on the provided numbers.
+
+**SRM (Sample Ratio Mismatch):** The experiment randomized users 50/50. Total users are 232,556 (control) and 233,244 (treatment), totaling 465,800. The expected count per arm is 232,900. The observed difference is minimal (~650 users), which is well within the bounds of chance for this sample size. However, looking at **sessions**, the split is 333,261 vs 288,195. While sessions aren't the randomization unit, a massive drop in sessions for treatment could indicate logging issues, but strictly checking user randomization: $|232,556 - 233,244| = 688$. This is not an SRM on users. Wait, let's re-evaluate the segments.
+Desktop users: 105,103 (C) + 131,315 (T) = 236,418. Expected 50% is 118,209. Difference is ~13k.
+Mobile users: 127,453 (C) + 101,929 (T) = 229,382. Expected 50% is 114,691. Difference is ~12.7k.
+The segment splits are heavily skewed (Desktop favors Treatment, Mobile favors Control), yet the total user split is balanced. This suggests the *segmentation logic* or logging of device type is broken, but the primary randomization (User ID) holds. Thus, strict SRM on the primary unit is **not** flagged, but the data integrity is suspicious. However, looking closer at the prompt's definition: "arm sizes differ from planned 50/50". The total users are effectively 50/50. No SRM on the primary metric denominator.
+
+**DENOM (Denominator Error):** The metric is "order conversion rate". The randomization unit is **user id**. The reported rates are likely calculated as Orders / Sessions or Orders / Users?
+Control Rate: $9,302 / 232,556 = 4.00\%$.
+Treatment Rate: $9,759 / 233,244 = 4.18\%$.
+The readout reports: Control 2.791%, Treatment 3.386%.
+Let's check Orders / Sessions:
+Control: $9,302 / 333,261 = 2.791\%$.
+Treatment: $9,759 / 288,195 = 3.386\%$.
+The reported metric uses **sessions** as the denominator. Since users were randomized by **user id**, using sessions violates the unit of randomization (one user can have multiple sessions, creating correlation). This is a clear **DENOM** error.
+
+**SIMPSON (Simpson's Paradox):** Let's calculate lift by device using Users as the denominator (correct unit).
+Desktop Control: $6,517 / 105,103 = 6.20\%$.
+Desktop Treatment: $7,663 / 131,315 = 5.84\%$. (Lift is negative: -5.8%)
+Mobile Control: $2,785 / 127,453 = 2.19\%$.
+Mobile Treatment: $2,096 / 101,929 = 2.06\%$. (Lift is negative: -5.9%)
+Both segments show a **negative** lift (treatment is worse). However, the pooled result reports a **positive** 21.3% lift. The aggregate result reverses the direction of the effect seen in every segment. This is a classic **SIMPSON** paradox, driven here by the denominator error (sessions) and the skewed session distribution per user across devices.
+
+**PEEK:** The test ran from Aug 13 to Aug 28 (15 days) against a planned 28 days. Stopping early because results look significant ("p=0.0") inflates false positives. This is **PEEK**.
+
+**NOVELTY:** The daily lift fluctuates (16.8% to 24.4%) but shows no clear fading trend; it ends at 19.4%, similar to the start. There is insufficient evidence in the numbers alone to claim fading.
+
+**POWER:** With ~230k users per arm, baseline 4%, and target 5% lift, the sample is massive compared to what is needed for 80% power. It is not underpowered.
+
+ERRORS: PEEK, SIMPSON, DENOM
+DECISION: HOLD

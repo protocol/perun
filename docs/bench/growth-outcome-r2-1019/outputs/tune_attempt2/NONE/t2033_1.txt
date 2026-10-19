@@ -1,0 +1,35 @@
+**SRM Check**: Total users = 39,192 (Control) + 39,234 (Treatment) = 78,426. Expected per arm = 39,213.
+Difference = |39,234 - 39,213| = 21 users.
+Standard Deviation ≈ $\sqrt{78426 \times 0.5 \times 0.5} \approx 140$.
+The difference (21) is well within 2 standard deviations (~280). No Sample Ratio Mismatch.
+
+**PEEK Check**: Planned duration was 21 days. The readout covers dates from June 30 to July 23, which is exactly 24 days inclusive, or 23 full days of data as indicated by the "day 1 to day 23" lift list. The test ran for the planned duration (actually slightly longer). No early stopping evident.
+
+**POWER Check**: Both arms have ~39k users. With a 5% baseline and 10% target lift, 39k users per arm is generally sufficient for 80% power at alpha 0.05. The p-value (0.0001) confirms significance. Not underpowered.
+
+**SIMPSON Check**: Let's calculate conversion rates by segment.
+Desktop Control: $1,389 / 17,351 \approx 8.01\%$.
+Desktop Treatment: $1,547 / 20,208 \approx 7.66\%$. (Treatment is lower).
+Mobile Control: $571 / 21,841 \approx 2.61\%$.
+Mobile Treatment: $475 / 19,026 \approx 2.50\%$. (Treatment is lower).
+Both segments show a negative lift (Control > Treatment), yet the pooled result reports a positive lift (Treatment > Control). This is a clear reversal.
+Arithmetic verification of pool:
+Control Total Orders = $1,389 + 571 = 1,960$. Matches readout.
+Treatment Total Orders = $1,547 + 475 = 2,022$. Matches readout.
+The aggregation hides that treatment performed worse in both desktop and mobile. This is Simpson's Paradox, likely driven by the shift in user mix (Treatment has more high-converting desktop users: 51.5% vs 44.3% in control).
+
+**DENOM Check**: Metric is order conversion rate. Randomization was by user id. The counts provided for the metric calculation (orders) are aggregated by users in the arms. Unless "conversion rate" is defined per session (sessions differ significantly: 49k vs 45k), this might be an issue. However, usually "order conversion rate" implies orders/users. If it were orders/sessions, the denominators would be sessions.
+Control Rate (users): $1,960/39,192 = 5.00\%$.
+Treatment Rate (users): $2,022/39,234 = 5.15\%$.
+The readout reports 3.954% and 4.474%.
+Let's check sessions as denominator:
+Control: $1,960 / 49,576 = 3.954\%$.
+Treatment: $2,022 / 45,198 = 4.474\%$.
+The reported rates use **sessions** as the denominator. Users were randomized, not sessions. Using sessions violates the unit of randomization, introducing bias if session counts differ per user between arms. This is a DENOM error.
+
+**NOVELTY Check**: The daily lift fluctuates (10.7% to 16.6%) but shows no clear fading trend over the 23 days. The final day is 10.7%, not drastically lower than the start. No obvious novelty decay.
+
+Errors found: SIMPSON (reversal in segments) and DENOM (wrong denominator).
+
+ERRORS: SIMPSON, DENOM
+DECISION: HOLD

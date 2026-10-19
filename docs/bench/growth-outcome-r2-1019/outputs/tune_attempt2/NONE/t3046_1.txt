@@ -1,0 +1,23 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 83,039 (control) + 83,411 (treatment) = 166,450. The expected split is 50%, so 83,225 per arm. The difference is $|83,411 - 83,225| = 186$. The standard error for the difference in proportions is roughly $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{41612} \approx 204$. A difference of 186 is less than one standard deviation, so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check for Simpson's Paradox (SIMPSON) by calculating conversion rates per segment.
+Desktop Control: $4,163 / 29,990 \approx 13.88\%$.
+Desktop Treatment: $4,554 / 33,809 \approx 13.47\%$.
+Here, Control > Treatment (negative lift).
+
+Mobile Control: $2,480 / 53,049 \approx 4.67\%$.
+Mobile Treatment: $2,250 / 49,602 \approx 4.54\%$.
+Here, Control > Treatment (negative lift).
+
+In both segments, the control group outperforms the treatment group. However, the reported pooled result claims the treatment is better (6.49% vs 6.085%). Since the direction of the effect reverses when aggregating the data compared to the stratified data, this is a clear case of Simpson's Paradox. This usually indicates a confounding variable (here, device type distribution differs between arms: treatment has more high-converting desktop users).
+
+I check Power (POWER). The target was a 5% lift on 8%. The sample sizes are ~83k per arm. With a baseline of 8%, detecting a 5% relative lift (0.4% absolute) requires roughly 30k-40k users per arm for 80% power at alpha 0.05. The actual sample size is double this requirement. The test is not underpowered.
+
+I check Denominator (DENOM). Users were randomized by user ID. The metric is order conversion rate. The readout implies orders per user ($6,643/83,039$). If the metric were orders per session, the denominator would be sessions. The numbers provided ($6,643/83,039 \approx 8.0\%$) do not match the reported 6.085%. Let's re-calculate: $6,643 / 109,172$ (sessions) $\approx 6.08\%$. The reported rate matches orders/sessions. Since randomization was by user, but the denominator is sessions, this is a DENOM error. The unit of analysis (session) does not match the unit of randomization (user), violating independence assumptions unless sessions per user are identical across arms (which they are not: 1.31 vs 1.26).
+
+I check Novelty (NOVELTY). The daily lift drops from ~11% to ~3.7% by day 22. The team projects the current average lift for 12 months despite this fading trend. This fits the definition of a Novelty error.
+
+PEEK is possible given the p-value and duration, but the other errors are definitive based on the numbers.
+
+ERRORS: SIMPSON, DENOM, NOVELTY
+DECISION: HOLD

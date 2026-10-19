@@ -1,0 +1,31 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 23,865 (control) + 23,785 (treatment) = 47,650. The expected split is 50%, so 23,825 per arm. The observed difference is |23,865 - 23,785| = 80 users. For a sample size of ~48k, the standard deviation of the difference under a 50/50 binomial distribution is $\sqrt{N \cdot p \cdot (1-p) \cdot 4} \approx \sqrt{47650 \cdot 0.25 \cdot 4} \approx 218$. A difference of 80 is well within 2 standard deviations (~0.37 SD), so SRM is not present.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The reported rates are calculated as Orders / Users (e.g., 955 / 23,865 ≈ 4.00%). Since the denominator (users) matches the randomization unit, there is no DENOM error.
+
+I check for Simpson's Paradox (SIMPSON).
+Control Desktop Rate: 684 / 11,079 ≈ 6.17%
+Treatment Desktop Rate: 733 / 11,042 ≈ 6.64% (Lift positive)
+Control Mobile Rate: 271 / 12,786 ≈ 2.12%
+Treatment Mobile Rate: 291 / 12,743 ≈ 2.28% (Lift positive)
+Both segments show a positive lift, and the aggregate shows a positive lift. There is no reversal; SIMPSON is not present.
+
+I check for Power (POWER). The baseline is 4.0%, target lift 10% (to 4.4%). With ~24k users per arm, the standard error for the difference in proportions is roughly $\sqrt{\frac{0.04(0.96)}{24000} + \frac{0.04(0.96)}{24000}} \approx 0.0018$. The detectable effect at 80% power and alpha 0.05 (Z ≈ 2.8) would be roughly $2.8 \times 0.0018 \approx 0.5\%$. The target lift is 0.4% absolute. While tight, the sample size is very close to the requirement, and usually "underpowered" flags require a glaring deficit. However, the p-value is 0.0968, which is not significant. This isn't an analysis *error* in the readout itself, just a non-significant result.
+
+I check for Peeking (PEEK). The test ran from July 31 to August 29. This is exactly 29 days inclusive, matching the "planned duration 28 days" (likely 4 weeks). The readout is labeled "final readout." There is no evidence in the numbers that it was stopped early based on interim significance.
+
+I check for Novelty (NOVELTY). The daily lift fluctuates (5.6% to 9.4%) but shows no clear fading trend from start (7.7%) to end (7.5%). The projection applies the *reported* lift (7.6%), not an inflated early spike. No fading pattern is evident.
+
+The p-value is 0.0968, which is greater than alpha 0.05. The result is not statistically significant. The recommendation to "roll out" based on a non-significant p-value is a decision error, but does it fit the specific codes? No code covers "ignoring p-value." However, looking closer at POWER: The target lift was 10% (0.4% absolute). The observed lift is 7.6%. The study failed to reach significance. Is it underpowered? With N=24k, SE_diff ≈ 0.0018. To detect 0.004 (10% of 4%) with 80% power, we need $Z_{\beta} = \frac{0.004}{0.0018} - 1.96 \approx 2.22 - 1.96 = 0.26$. This corresponds to very low power (~60%). The design claimed 80% power, but the actual N achieved provides less than that for the target effect. Wait, the calculation for required N for 4% baseline, 10% lift, 80% power, 5% alpha is approx 15k per arm. We have 24k. It is adequately powered.
+
+Re-evaluating the "Decision" logic. The p-value is 0.0968. The team recommends rollout. This is a false positive risk if they ignore the p-value. But strictly looking for the listed errors:
+SRM: No.
+PEEK: No.
+POWER: No (N is sufficient).
+SIMPSON: No.
+DENOM: No.
+NOVELTY: No.
+
+There are no technical analysis errors from the provided list. The team is making a business decision to ship despite non-significance, or perhaps they consider p=0.0968 "directionally correct." But strictly, none of the specific error codes apply to the numbers provided.
+
+ERRORS: NONE
+DECISION: SHIP

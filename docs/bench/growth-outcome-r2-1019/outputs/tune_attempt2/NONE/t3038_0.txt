@@ -1,0 +1,32 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 142,110 (control) + 141,998 (treatment) = 284,108. The expected split is 50%, so 142,054 per arm. The difference is only 56 users, which is well within random chance for this sample size. No SRM.
+
+Next, I check for PEEKing. The test started March 23 and ended April 7. This is exactly 15 days. The planned duration was 21 days. The team stopped the test 6 days early and made a recommendation based on this incomplete data. Stopping before the planned duration inflates false positive rates. This is a clear PEEK error.
+
+Then, I check for POWER. The baseline is 3.0% and the target lift is 5% (to 3.15%). With ~142k users per arm, the standard error for the difference in proportions is roughly $\sqrt{\frac{0.03(0.97)}{142000} + \frac{0.03(0.97)}{142000}} \approx 0.00064$. The detectable lift at 80% power and alpha 0.05 requires a difference of about $1.96 \times SE + 0.84 \times SE \approx 0.0018$ (0.18% absolute, or ~6% relative). While close, the sample size is likely sufficient to detect a 5% lift if it existed, though the p-value (0.36) indicates no significance. However, the primary issue here is the early stop, not necessarily that the final N is too small to have ever detected the effect had it run full term. But strictly speaking, stopping early reduces power. The prompt asks to flag if the *smaller arm* is too small. The arms are nearly equal. The issue is the duration, covered by PEEK.
+
+Next, I check for SIMPSON's paradox.
+Desktop Conversion:
+Control: $3,008 / 61,064 \approx 4.93\%$
+Treatment: $3,221 / 67,359 \approx 4.78\%$
+(Lift is negative on Desktop)
+
+Mobile Conversion:
+Control: $1,255 / 81,046 \approx 1.55\%$
+Treatment: $1,122 / 74,639 \approx 1.50\%$
+(Lift is negative on Mobile)
+
+Overall Reported Conversion:
+Control: $4,263 / 142,110 \approx 3.00\%$
+Treatment: $4,343 / 141,998 \approx 3.06\%$
+(Lift is positive overall)
+
+The overall result shows a positive lift (3.06% > 3.00%), but both segments (Desktop and Mobile) show a negative lift (Treatment < Control). This is a classic reversal caused by the treatment group having a higher proportion of high-converting Desktop users (67k vs 61k) compared to the control. This is definitely SIMPSON's paradox.
+
+Regarding DENOM: The metric is order conversion rate. Users were randomized. The denominator appears to be users (orders/users), which matches the randomization unit. No DENOM error.
+
+Regarding NOVELTY: The daily lift fluctuates between 1.7% and 2.3% with no clear fading trend over the 15 days. No NOVELTY error evident from the numbers.
+
+The analysis contains fatal flaws: the test was stopped early (PEEK), and the aggregated result contradicts the segment results (SIMPSON), making the reported positive lift misleading (the true effect in segments is negative).
+
+ERRORS: PEEK, SIMPSON
+DECISION: HOLD

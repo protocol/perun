@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 32,195 (control) + 31,201 (treatment) = 63,396. The expected split is 31,698 per arm. The treatment arm has 497 fewer users than expected. The standard deviation for a binomial distribution here is $\sqrt{63396 \times 0.5 \times 0.5} \approx 126$. The difference is $497 / 126 \approx 3.9$ standard deviations. This is far beyond the threshold for chance (typically 2 SDs), indicating a broken assignment or logging mechanism. **SRM is flagged.**
+
+Next, I check the Denominator (DENOM). The metric is "order conversion rate," and users were randomized by user ID. The rates are calculated as Orders / Users (e.g., $1,931 / 32,195 \approx 6.0\%$). Since the denominator matches the randomization unit (users), there is no DENOM error.
+
+Regarding Power (POWER): The treatment arm has ~31k users. With a 6% baseline and 10% target lift, the required sample size per arm is roughly 15k–20k for 80% power. The actual sample size exceeds this, so the test is not underpowered despite the non-significant result.
+
+For Simpson's Paradox (SIMPSON):
+Desktop Control Rate: $1,249 / 11,540 \approx 10.82\%$
+Desktop Treatment Rate: $1,262 / 11,184 \approx 11.28\%$ (Lift positive)
+Mobile Control Rate: $682 / 20,655 \approx 3.30\%$
+Mobile Treatment Rate: $690 / 20,017 \approx 3.45\%$ (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No reversal exists.
+
+For Peeking (PEEK): The test ran from June 7 to July 6 (29 days), meeting the planned 28-day duration. The daily lift data shows stability, not a specific early stop signal in the text provided.
+
+For Novelty (NOVELTY): The daily lift fluctuates between 3.0% and 5.4% with no clear downward trend over the 29 days. There is no evidence of fading lift.
+
+The critical failure is SRM. When the population sizes differ significantly from the randomization plan, the assumption that the groups are comparable is violated. Any observed difference (or lack thereof) could be due to the bias causing the mismatch rather than the treatment. We cannot trust the p-value or the lift estimate until the data integrity issue is resolved.
+
+ERRORS: SRM
+DECISION: HOLD

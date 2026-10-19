@@ -1,0 +1,28 @@
+**SRM**: The planned split is 50/50. Total users = 233,136 + 237,254 = 470,390. Expected per arm = 235,195.
+Control deviation: |233,136 - 235,195| = 2,059.
+Standard Error (SE) for difference ≈ $\sqrt{N \times 0.5 \times 0.5} \times \sqrt{2}$? No, SE for count in one arm is $\sqrt{N \times p \times (1-p)} = \sqrt{470390 \times 0.25} \approx 343$.
+The difference (2,059) is ~6 standard errors away from the mean. This is statistically impossible by chance alone, indicating broken randomization or logging. **Flag SRM.**
+
+**PEEK**: Planned duration was 21 days. The readout date is June 13, start date June 4. Duration = 9 days. The test was stopped early (9 vs 21 days) while results were significant. This is peeking. **Flag PEEK.**
+
+**POWER**: The target lift was 5%. The observed lift is 36.4%. With ~230k users per arm, the test is massively overpowered to detect a 5% lift, not underpowered. Do not flag.
+
+**SIMPSON**: Let's check segment rates.
+Desktop Control: 8,770 / 111,403 ≈ 7.87%. Desktop Treatment: 9,537 / 113,371 ≈ 8.41%. (Lift positive)
+Mobile Control: 2,886 / 121,733 ≈ 2.37%. Mobile Treatment: 3,139 / 123,883 ≈ 2.53%. (Lift positive)
+Pooled Control: 11,656 / 233,136 ≈ 5.00%. Pooled Treatment: 12,676 / 237,254 ≈ 5.34%.
+Wait, the reported aggregate rates in the text (3.48% and 4.745%) do not match the raw counts provided (11,656/233,136 = 5.0%).
+If we use the raw counts: Aggregate Lift = (5.34 - 5.00)/5.00 = 6.8%.
+The text reports 3.48% and 4.745%. Where did these denominators come from?
+Control Rate reported: 3.48%. Raw Orders/Users = 5.0%.
+Treatment Rate reported: 4.745%. Raw Orders/Users = 5.34%.
+The reported rates are significantly lower than the user-level conversion.
+Sessions: Control 334,910, Treatment 267,141.
+Control Rate (Orders/Sessions) = 11,656 / 334,910 ≈ 3.48%.
+Treatment Rate (Orders/Sessions) = 12,676 / 267,141 ≈ 4.74%.
+The metric used (Orders/Sessions) has a denominator (Sessions) that is NOT the unit of randomization (Users). Furthermore, the session counts are severely imbalanced (334k vs 267k), likely due to the SRM or a behavioral change affecting session generation, making "per session" metrics invalid for causal inference when users are randomized. **Flag DENOM.**
+
+**NOVELTY**: Daily lift: 33.1, 35.0, 33.0, 29.9, 43.8, 40.4, 37.0, 38.7, 36.8. There is no clear fading trend; values fluctuate but remain high. Do not flag.
+
+ERRORS: SRM, PEEK, DENOM
+DECISION: HOLD

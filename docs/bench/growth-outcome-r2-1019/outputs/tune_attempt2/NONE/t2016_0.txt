@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 32,195 (control) + 31,201 (treatment) = 63,396. The expected split is 50%, so 31,698 per arm. The difference is 32,195 - 31,698 = 497 users. The standard deviation for a binomial distribution here is $\sqrt{63396 \times 0.5 \times 0.5} \approx 126$. The observed difference is $497 / 126 \approx 3.9$ standard deviations away from the mean. This is highly significant (p < 0.001), indicating the randomization or logging is broken. SRM is present.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate," and users were randomized by user ID. The counts provided for the metric calculation appear to be Orders / Users (e.g., $1,931 / 32,195 \approx 6.0\%$). Since the denominator matches the randomization unit (users), there is no DENOM error.
+
+Regarding Power (POWER): The treatment arm has 31,201 users. With a baseline of 6% and target lift of 10% (to 6.6%), a standard power calculation suggests roughly 25,000–30,000 users per arm are needed for 80% power at alpha 0.05. The sample size here is sufficient to detect the target lift, even though the observed lift was smaller. Thus, it is not underpowered for the design parameters.
+
+For Simpson's Paradox (SIMPSON):
+Desktop Control Rate: $1,249 / 11,540 \approx 10.82\%$
+Desktop Treatment Rate: $1,262 / 11,184 \approx 11.28\%$ (Lift positive)
+Mobile Control Rate: $682 / 20,655 \approx 3.30\%$
+Mobile Treatment Rate: $690 / 20,017 \approx 3.45\%$ (Lift positive)
+Both segments show a positive lift, consistent with the pooled positive lift. No reversal exists.
+
+For Peeking (PEEK): The test ran from June 7 to July 6, which is 29 days. The planned duration was 28 days. Stopping one day late does not constitute early stopping that inflates false positives.
+
+For Novelty (NOVELTY): The daily lift fluctuates between 3.0% and 5.4% with no clear downward trend over the 29 days. There is no evidence of fading.
+
+The critical failure is SRM. When assignment probabilities are not equal to the planned ratio (or logging is biased), the causal link between treatment and outcome is broken. Any calculated p-values or lifts are invalid because the groups are not comparable. We cannot trust the result until the data integrity issue is resolved.
+
+ERRORS: SRM
+DECISION: HOLD

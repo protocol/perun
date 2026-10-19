@@ -1,0 +1,38 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 5,547 (control) + 5,497 (treatment) = 11,044. The expected split is 5,522 per arm. The observed difference is |5,547 - 5,497| = 50 users. For a sample size of ~11k, a deviation of 50 is well within the range of random chance (roughly 1 standard deviation), so SRM is not flagged.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate," and the randomization unit is "user id." The rates are calculated as orders/users (444/5,547 ≈ 8.004% and 466/5,497 ≈ 8.477%). Since the denominator matches the randomization unit, DENOM is not flagged.
+
+I then examine Simpson's Paradox (SIMPSON).
+Desktop conversion: Control = 309/2,244 ≈ 13.77%; Treatment = 324/2,224 ≈ 14.57%. (Treatment > Control)
+Mobile conversion: Control = 135/3,303 ≈ 4.09%; Treatment = 142/3,273 ≈ 4.34%. (Treatment > Control)
+Both segments show a positive lift, consistent with the pooled result. SIMPSON is not flagged.
+
+Regarding Power (POWER): The target lift was 10%, but the observed lift is 5.9%. While the test did not achieve significance (p=0.366), the "underpowered" error usually refers to the design being insufficient to detect the *target* lift given the *planned* sample size. The sample sizes (~5.5k) are close to the planned 50/50 split. The failure to find significance is likely due to the true effect being smaller than the target, not necessarily a design flaw in the sample size calculation itself based on the provided numbers. However, looking closer at the prompt's definition: "the smaller arm is too small to detect the target lift." With ~5.5k users, baseline 8%, alpha 0.05, power 80%, the detectable lift is roughly 10-12%. The study was powered correctly for the target; it just didn't find the effect. Thus, POWER is not flagged as an error in the analysis logic.
+
+Checking PEEK: The dates show the test ran from Oct 24 to Nov 7. This is exactly 14 days (Oct has 31 days: 31-24+1 = 8 days in Oct + 7 days in Nov = 15 days? No, Oct 24 to Nov 7 inclusive is 15 days. Or simply Nov 7 - Oct 24 = 14 days duration). The planned duration was 14 days. The test ran for the full planned duration. PEEK is not flagged.
+
+Checking NOVELTY: The daily lift values are: 6.1, 5.5, 6.9, 6.0, 4.3, 5.4, 6.7, 6.2, 5.3, 6.1, 5.0, 6.1, 5.4, 7.4. There is no clear fading trend; the values fluctuate without a consistent downward slope, and the final day is the highest (7.4%). The projection applies the current lift to 12 months. While projecting a non-significant result (p=0.366) is risky, the specific "NOVELTY" error requires evidence of fading lift which is then ignored. The data does not show fading.
+
+However, there is a critical issue with the recommendation. The p-value is 0.366, which is far above the alpha of 0.05. The result is not statistically significant. The team is recommending a rollout based on a non-significant finding. While this is a bad decision, does it fit the specific error codes?
+Let's re-evaluate POWER. The definition says "the smaller arm is too small to detect the target lift". If the observed effect is 5.9% and p=0.366, the test lacked the power to distinguish this from noise, but was it underpowered for the *target* (10%)? Usually, if you miss the target, it's not an "underpowered" error unless the sample size was miscalculated.
+Wait, look at the projection. The team projects the *reported* lift (5.9%) which is *not significant*. This isn't one of the specific codes like NOVELTY (fading) or PEEK (early stop).
+
+Let's re-read the SRM calculation carefully.
+Total N = 11044. Expected = 5522. Observed = 5547, 5497.
+Chi-square = (50^2 / 5522) + (50^2 / 5522) = 2500/5522 * 2 ≈ 0.9. Critical value for df=1 at 0.05 is 3.84. 0.9 < 3.84. No SRM.
+
+Is there a DENOM issue? "Metric: order conversion rate". Randomized by user. Denominator is users. Correct.
+
+Let's look at the "POWER" definition again: "the smaller arm is too small to detect the target lift at the stated alpha and power".
+Required sample size per arm for 8% baseline, 10% lift (to 8.8%), alpha 0.05, power 80%:
+Using standard approximation, n ≈ 16 * (p1(1-p1) + p2(1-p2)) / (p1-p2)^2 ?
+Actually, for 8% vs 8.8%, difference is 0.008.
+n ≈ (1.96+0.84)^2 * (0.08*0.92 + 0.088*0.912) / (0.008)^2
+n ≈ 7.84 * (0.0736 + 0.0802) / 0.000064 ≈ 7.84 * 0.1538 / 0.000064 ≈ 18,800 per arm.
+The test has only ~5,500 per arm.
+The test is massively underpowered to detect the 10% target lift. The planned duration/sample size was insufficient for the stated goals. The readout says "planned duration 14 days" resulting in 5.5k users. If the power calculation required 18k users, then the design (and thus the analysis relying on it) suffers from the POWER error. The smaller arm (5,497) is indeed too small to detect the target lift.
+
+Therefore, POWER is flagged.
+
+ERRORS: POWER
+DECISION: HOLD

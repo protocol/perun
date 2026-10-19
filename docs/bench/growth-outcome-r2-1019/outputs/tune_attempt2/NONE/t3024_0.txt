@@ -1,0 +1,52 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 71,492 (control) + 71,720 (treatment) = 143,212. The expected split is 71,606 per arm. The difference is only 114 users, which is well within random chance for this sample size. No SRM.
+
+Next, I check the denominator (DENOM). The metric is "order conversion rate." The readout provides users and orders. Calculating the rates: Control = 4,289 / 71,492 ≈ 6.00%. Treatment = 4,478 / 71,720 ≈ 6.24%. These match the reported percentages exactly. The denominator is the randomized unit (users). No DENOM error.
+
+I check for Simpson's Paradox (SIMPSON) by calculating segment rates.
+Desktop Control: 2,921 / 27,733 ≈ 10.53%. Desktop Treatment: 3,050 / 27,821 ≈ 10.96%. (Lift positive).
+Mobile Control: 1,368 / 43,759 ≈ 3.13%. Mobile Treatment: 1,428 / 43,899 ≈ 3.25%. (Lift positive).
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON error.
+
+I check Power (POWER). The target was a 5% lift on a 6% baseline. The observed lift is 4.1%. While the result is not statistically significant (p=0.0537 > 0.05), the sample sizes (~71k each) are massive. A quick approximation of the standard error for the difference in proportions shows the study was sufficiently powered to detect a 5% lift had it existed; it simply didn't reach significance for the smaller 4.1% observed effect. This is a negative result, not necessarily an underpowered design error based on the numbers provided.
+
+I check Peeking (PEEK). The test started July 3 and ended July 18. This is exactly 15 days inclusive, or 14 days duration as planned. The dates align with the plan. No PEEK error.
+
+I check Novelty (NOVELTY). The daily lift figures are: 4.4, 3.8, 4.3, 4.0, 3.6, 4.7, 4.1, 3.4, 3.8, 3.9, 3.9, 4.6, 4.1, 4.2, 4.7. There is no clear fading trend; the values fluctuate around 4% throughout the period, ending high at 4.7%. The projection applies the current observed lift, not an inflated early spike. No NOVELTY error.
+
+The primary issue is that the p-value (0.0537) exceeds the alpha (0.05). The test failed to find a statistically significant effect. Rolling out a change that hasn't proven superior to control is a business risk, but strictly speaking, none of the specific *analysis errors* listed (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY) are demonstrated by the numbers. The analysis correctly identified a non-significant result. However, recommending a rollout despite a non-significant p-value is a decision error, not one of the flagged analysis categories. Wait, re-reading the prompt: "Flag a category only if the numbers show that error." Since the p-value is > 0.05, the result is inconclusive. Is there an error in the *recommendation* logic? The prompt asks to flag analysis errors. The analysis seems mathematically consistent, even if the business recommendation is aggressive.
+
+However, let's re-evaluate POWER. The target was 5% lift. Observed 4.1%. The p-value is 0.0537. This is a "false negative" risk if we stop here, but the sample size was calculated for 5%. Did they stop early? No, dates match. Is it underpowered for 4.1%? Yes, but that's expected. The definition says "too small to detect the *target* lift". It was sized for 5%. It failed to confirm 5% (because true lift might be lower). This isn't an analysis error in the setup.
+
+Actually, look closely at the decision. The p-value is 0.0537. The threshold is 0.05. The result is NOT significant. The recommendation is "roll out". This ignores the statistical test result. But is that one of the codes? No.
+
+Let's re-read the NOVELTY definition: "lift is fading... but projected as lasting." The daily data does not show fading.
+Let's re-read PEEK: "stopped... before planned duration". Duration 14 days. July 3 to July 18 is 15 days inclusive, often counted as 14 full days of data or 15 days including start. If planned 14 days, and they ran 15, they didn't stop early.
+
+Is there a hidden DENOM issue? "order conversion rate". Usually orders/sessions or orders/users. They used users. Randomization was by user. This is correct.
+
+Wait, look at the daily lift again. Day 1 to 15. The test ran 14 days planned. Readout July 18 (start July 3). 3rd to 18th is 16 days inclusive? 3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18. That is 16 days. The data shows 15 days of lifts. Maybe they excluded day 1? Or maybe the "planned duration 14 days" means 14 days of data. If they have 15 days of data, they might have peeked and extended? Or just ran longer. Extending isn't PEEK (stopping early).
+
+Let's reconsider the "POWER" definition: "smaller arm is too small to detect the target lift".
+Required sample size for 6% baseline, 5% lift (to 6.3%), alpha 0.05, power 80%.
+Using standard approx: $n \approx 16 \times \sigma^2 / \delta^2$.
+$p_1=0.06, p_2=0.063$. Pooled $p \approx 0.0615$.
+$\sigma^2 \approx 2 \times 0.0615 \times 0.9385 \approx 0.115$.
+$\delta = 0.003$.
+$n \approx 16 \times 0.115 / 0.000009 \approx 204,444$ per arm?
+Wait, $16 \times p(1-p) / (p_2-p_1)^2$.
+$16 \times 0.06 \times 0.94 / (0.003)^2 = 0.09024 / 0.000009 \approx 10,026$ per arm?
+Let's re-calculate properly.
+$Z_{\alpha/2} = 1.96, Z_{\beta} = 0.84$.
+$n = (1.96 \sqrt{2\bar{p}\bar{q}} + 0.84 \sqrt{p_1 q_1 + p_2 q_2})^2 / (p_1-p_2)^2$.
+$p_1=0.06, p_2=0.063$. $\bar{p}=0.0615$.
+Num $\approx (1.96 \sqrt{0.1156} + 0.84 \sqrt{0.0564+0.0592})^2 = (1.96 \times 0.34 + 0.84 \times 0.34)^2 = (0.666 + 0.285)^2 = 0.95^2 = 0.90$.
+Denom = $0.003^2 = 0.000009$.
+$n \approx 100,000$ per arm.
+The actual n is ~71,500.
+71,500 < 100,000.
+The study is UNDERPOWERED to detect the 5% target lift. The sample size is insufficient.
+Arithmetic check: $71,500$ vs required $\approx 100,000$.
+Yes, the arm is too small.
+
+ERRORS: POWER
+DECISION: HOLD

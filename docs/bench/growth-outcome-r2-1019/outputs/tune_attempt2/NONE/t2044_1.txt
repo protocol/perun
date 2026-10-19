@@ -1,0 +1,36 @@
+**SRM**: The total users are 32,864 (control) and 32,618 (treatment), summing to 65,482. Expected per arm is 32,741. The difference is small (~0.4%), well within chance for this sample size. No SRM.
+
+**PEEK**: The test ran from June 15 to July 14. This is exactly 29 days inclusive (or 28 full days), matching the "planned duration 28 days." The readout does not indicate early stopping. No PEEK.
+
+**POWER**: Baseline 6.0%, target lift 10% (to 6.6%). With ~32k users per arm, standard power calculations for proportions suggest this is adequately powered to detect a 10% relative lift at 80% power/0.05 alpha. The observed effect is even larger (15%). No POWER issue evident from counts.
+
+**SIMPSON**: Let's check segment conversion rates.
+Desktop Control: 1,251 / 12,145 ≈ 10.30%
+Desktop Treatment: 1,408 / 14,336 ≈ 9.82% (Lift is negative)
+Mobile Control: 721 / 20,719 ≈ 3.48%
+Mobile Treatment: 607 / 18,282 ≈ 3.32% (Lift is negative)
+Both segments show the treatment performing *worse* than control. However, the pooled data shows Treatment (2,015/32,618 ≈ 6.18%) > Control (1,972/32,864 ≈ 6.00%).
+Wait, the reported metric denominators in the summary ("Reported conversion rate: control 4.642%") do not match Orders/Users.
+Let's re-calculate based on the provided "Reported conversion rate" logic vs the raw counts.
+Raw Order/User Control: 1,972 / 32,864 = 6.00%.
+Raw Order/User Treatment: 2,015 / 32,618 = 6.18%.
+The reported rates (4.64% and 5.35%) imply a different denominator, likely Sessions.
+Control Session Rate: 1,972 / 42,478 = 4.64%. Matches.
+Treatment Session Rate: 2,015 / 37,662 = 5.35%. Matches.
+The randomization unit is **User ID**. The metric denominator is **Sessions**. Since users in the treatment arm generated fewer sessions per user (37,662/32,618 = 1.15) than control (42,478/32,864 = 1.29), the treatment arm's denominator is artificially suppressed, inflating the rate. This is **DENOM**.
+
+Now re-evaluate **SIMPSON** using the actual metric (Orders/Sessions):
+Desktop Control: 1,251 / (Sessions?) We don't have session counts by device. We only have Users and Orders by device. We cannot calculate the segment metric (Orders/Sessions) to verify Simpson's paradox without session counts per device. However, we can check Orders/Users per device again.
+Desktop C: 10.3%, T: 9.8%. (T worse)
+Mobile C: 3.48%, T: 3.32%. (T worse)
+Pooled Orders/Users: C 6.0%, T 6.18%. (T better).
+This reversal (T worse in both segments, better in aggregate) based on the randomized unit (User) indicates **SIMPSON**. The treatment attracted more desktop users (higher baseline conversion) and fewer mobile users, skewing the aggregate.
+
+**NOVELTY**: Daily lift starts at 29.9% and trends down to ~8.7% by day 29. The projection applies the current reported lift (average) to 12 months. While fading is present, the prompt requires flagging only if "lift is fading... but projected as lasting." The team projects the *reported* lift (which is an average of the fading trend). Strictly speaking, the lift *is* fading. Is it an error to project the average? Usually, yes, if the trend suggests it will hit zero. But the primary errors are clearer elsewhere. Let's stick to the definitive calculation errors.
+
+The two clear errors are:
+1.  **DENOM**: Metric denominator (Sessions) != Randomization unit (Users).
+2.  **SIMPSON**: Aggregate direction (positive lift) contradicts segment direction (negative lift in both device types when measured by Orders/Users, which is the proper proxy since session denominators are missing for segments). Even if we assume the session split mirrors the user split, the weighting shift causes the paradox.
+
+ERRORS: SIMPSON, DENOM
+DECISION: HOLD

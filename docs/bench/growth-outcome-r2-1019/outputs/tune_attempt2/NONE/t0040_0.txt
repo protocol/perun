@@ -1,0 +1,26 @@
+**SRM Check**: The planned split is 50/50. Total users = 77,145 + 74,787 = 151,932. Expected per arm = 75,966.
+Control deviation: (77,145 - 75,966) / 75,966 ≈ 1.55%.
+Treatment deviation: (74,787 - 75,966) / 75,966 ≈ -1.55%.
+With ~152k users, a 1.5% deviation is statistically significant (standard error ≈ 0.4%), indicating the assignment or logging is broken. **Flag SRM.**
+
+**DENOM Check**: Randomization was by user ID. The reported metric is "order conversion rate."
+Control rate calculation: 3,086 orders / 77,145 users = 4.00%.
+Reported control rate: 2.83%.
+If we use sessions as the denominator: 3,086 / 109,063 ≈ 2.83%.
+The team calculated conversion per session, not per user. Since users were randomized, analyzing by session violates the unit of randomization (sessions are not independent; one user has multiple sessions). **Flag DENOM.**
+
+**NOVELTY Check**: The daily lift starts at 77.0% and trends downward to 1.9% and 5.1% in the final days. The readout reports a cumulative 29.2% lift and projects this over twelve months. Ignoring the clear decay trend to project a stable long-term lift is a novelty error. **Flag NOVELTY.**
+
+**PEEK Check**: The test ran from Jan 19 to Feb 17. This is 30 days inclusive, or 29 days of data as listed. The planned duration was 28 days. The test ran slightly longer than planned, not shorter. No evidence of early stopping based on the dates provided.
+
+**POWER Check**: With ~75k users per arm and a 4% baseline, the sample size is sufficient to detect a 10% lift. The issue is not power, but validity.
+
+**SIMPSON Check**:
+Desktop Control Rate: 2,101/34,823 ≈ 6.03%. Treatment: 2,132/33,759 ≈ 6.31%. (Lift positive)
+Mobile Control Rate: 985/42,322 ≈ 2.33%. Treatment: 1,000/41,028 ≈ 2.44%. (Lift positive)
+Both segments show a positive lift; the direction is not reversed. No Simpson's paradox.
+
+The analysis contains fatal flaws: the unit of analysis mismatches the randomization unit, the sample ratio is skewed, and the projection ignores decay.
+
+ERRORS: SRM, DENOM, NOVELTY
+DECISION: HOLD

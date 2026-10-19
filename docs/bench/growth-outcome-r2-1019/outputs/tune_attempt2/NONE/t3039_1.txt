@@ -1,0 +1,27 @@
+**SRM Check**: Total users = 27,840 + 28,692 = 56,532. Expected per arm = 28,266.
+Observed split: Control 49.25%, Treatment 50.75%.
+Difference = 426 users. Standard Error for proportion $\approx \sqrt{0.5 \times 0.5 / 56532} \approx 0.0021$.
+Z-score $\approx 0.015 / 0.0021 \approx 7.1$. This is far beyond chance (p < 0.001). The allocation is not 50/50. **SRM flagged.**
+
+**PEEK Check**: Planned duration 21 days. Readout date Feb 19, Start Jan 27.
+Jan 27 to Feb 19 is exactly 24 days inclusive, or 23 full intervals. The data shows 23 days of lifts. The test ran longer than the planned 21 days, not shorter. No evidence of early stopping inflating false positives based on the text provided. **PEEK not flagged.**
+
+**POWER Check**: Baseline 4%, target lift 10% (to 4.4%).
+Approximate sample size needed per arm for 80% power, alpha 0.05:
+$n \approx \frac{16 \times p(1-p)}{(p_{target} - p_{base})^2} = \frac{16 \times 0.04 \times 0.96}{(0.004)^2} = \frac{0.6144}{0.000016} \approx 38,400$.
+Actual sample sizes are ~28k. The study is underpowered to detect the target 10% lift. However, the reported result is non-significant (p=0.64) and the observed lift (1.9%) is far below the target (10%). While underpowered for the *target*, the error code definition specifies "too small to detect the target lift...". Technically true, but usually POWER flags lead to "inconclusive" rather than false positive errors. However, strictly following the definition: the arm size (~28k) is less than required (~38k). **POWER flagged.**
+
+**SIMPSON Check**:
+Desktop Control Rate: $777/11474 \approx 6.77\%$. Treatment: $858/13083 \approx 6.56\%$. (Treatment < Control)
+Mobile Control Rate: $337/16366 \approx 2.06\%$. Treatment: $312/15609 \approx 2.00\%$. (Treatment < Control)
+Pooled Result: Treatment (4.078%) > Control (4.001%).
+The direction reverses: Treatment loses in both segments but wins in aggregate. This is Simpson's Paradox, likely driven by the SRM shifting more high-converting desktop users to the treatment arm. **SIMPSON flagged.**
+
+**DENOM Check**: Metric is order conversion rate. Randomization is by user id.
+Reported rates: Control $1114/27840 \approx 4.001\%$. Treatment $1170/28692 \approx 4.078\%$.
+The denominator used matches the randomized unit (users). **DENOM not flagged.**
+
+**NOVELTY Check**: Daily lift ranges from 1.5% to 2.2% with no clear fading trend over the 23 days. The projection assumes persistence, but the data does not show fading. **NOVELTY not flagged.**
+
+ERRORS: SRM, POWER, SIMPSON
+DECISION: HOLD

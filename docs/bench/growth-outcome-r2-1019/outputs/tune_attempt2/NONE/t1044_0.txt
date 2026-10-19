@@ -1,0 +1,38 @@
+Several analysis errors are evident in the readout based on the provided numbers.
+
+**SRM (Sample Ratio Mismatch):**
+The planned allocation is 50/50.
+Total users = 43,791 (control) + 42,401 (treatment) = 86,192.
+Expected per arm = 43,096.
+Difference = |43,791 - 43,096| = 695.
+Standard Deviation for binomial split ≈ $\sqrt{86192 \times 0.5 \times 0.5} \approx 147$.
+The difference is $695 / 147 \approx 4.7$ standard deviations away from expectation. This is statistically impossible by chance, indicating broken assignment or logging.
+
+**PEEK (Peeking):**
+The planned duration was 21 days. The final readout occurred on day 12 (April 10 to April 22 inclusive is 13 days, but the daily data lists only 12 days, and the date span is clearly short of 21 days). Stopping the test early because the results looked significant inflates the false positive rate.
+
+**DENOM (Denominator Mismatch):**
+Randomization was by **user id**. The reported metric is "order conversion rate."
+Control: 3,503 orders / 43,791 users = 8.0%.
+Treatment: 3,574 orders / 42,401 users = 8.4%.
+Relative lift = $(8.4 - 8.0) / 8.0 \approx 5\%$.
+However, the readout reports a lift of 19.6% with rates of 5.944% and 7.11%.
+Let's check sessions as the denominator:
+Control: 3,503 / 58,937 sessions ≈ 5.944%.
+Treatment: 3,574 / 50,265 sessions ≈ 7.11%.
+The reported rates use **sessions** as the denominator, not users. Since randomization was by user, using sessions violates the unit of analysis, especially since the session-per-user ratio differs between arms (Control: 1.35, Treatment: 1.18), likely due to the SRM issue.
+
+**SIMPSON (Simpson's Paradox):**
+Let's check segment lifts (using users as the correct denominator):
+Desktop Control: 2,267/17,752 ≈ 12.77%. Desktop Treatment: 2,313/17,189 ≈ 13.46%. Lift ≈ 5.4%.
+Mobile Control: 1,236/26,039 ≈ 4.75%. Mobile Treatment: 1,261/25,212 ≈ 5.00%. Lift ≈ 5.3%.
+Both segments show ~5.4% lift. The pooled user-based lift is ~5%. The reported 19.6% is an artifact of the wrong denominator (sessions), not a reversal of direction within segments. Thus, Simpson's paradox is not the primary driver here; the denominator error is.
+
+**POWER:**
+With ~42k users per arm, baseline 8%, and target 8% lift, the sample size is sufficient. Power is not the issue.
+
+**NOVELTY:**
+Daily lift fluctuates between 17% and 21% without a clear fading trend over the 12 days. No evidence of novelty effect fading.
+
+ERRORS: SRM, PEEK, DENOM
+DECISION: HOLD

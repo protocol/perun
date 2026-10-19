@@ -1,0 +1,20 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 45,473 (control) + 45,173 (treatment) = 90,646. The expected split is 45,323 per arm. The difference is 150 users. A chi-squared check: $(150^2 / 45323) \times 2 \approx 0.99$. With 1 degree of freedom, this p-value is well above 0.05, so the split is statistically consistent with 50/50. No SRM.
+
+Next, I check the denominator. Users were randomized by user ID, but the reported metric is "order conversion rate." The readout lists users and orders but does not explicitly define the denominator (orders per user vs. orders per session). However, looking at the math: Control orders/users = $2,729 / 45,473 \approx 6.00\%$. Treatment orders/users = $2,764 / 45,173 \approx 6.12\%$. This yields a lift of ~2%, not the reported 12.6%.
+Let's try sessions as the denominator. Control: $2,729 / 63,451 \approx 4.301\%$. Treatment: $2,764 / 57,090 \approx 4.841\%$. These match the reported percentages exactly. Since the unit of randomization was **user**, but the metric denominator is **session**, this is a DENOM error. Sessions are not independent; one user generates multiple sessions, violating the statistical assumptions of the test unless corrected for clustering.
+
+Now, check Simpson's Paradox.
+Desktop Control Rate: $1,925 / 18,630 \approx 10.33\%$.
+Desktop Treatment Rate: $2,045 / 20,403 \approx 10.02\%$. (Treatment is worse).
+Mobile Control Rate: $804 / 26,843 \approx 3.00\%$.
+Mobile Treatment Rate: $719 / 24,770 \approx 2.90\%$. (Treatment is worse).
+In both segments, the treatment performs worse than control. Yet, the pooled result shows treatment as significantly better (4.84% vs 4.30%). This reversal is a classic Simpson's Paradox, likely driven by the treatment group having a much higher proportion of high-converting desktop users (20,403 vs 18,630) despite equal user assignment, suggesting unequal session generation or logging issues correlating with device. This flags SIMPSON.
+
+Regarding PEEK: The test ran from Jan 16 to Jan 30, which is exactly 14 days, matching the planned duration. No evidence of early stopping.
+Regarding POWER: The sample size is large (~90k users), far exceeding requirements for an 8% lift on a 6% baseline.
+Regarding NOVELTY: The daily lift fluctuates (15.3% down to 10.9% and back up to 13.7%) but shows no clear fading trend; it remains high throughout.
+
+The critical errors are using sessions instead of users for the metric (DENOM) and the aggregate result reversing the segment-level trends (SIMPSON).
+
+ERRORS: DENOM, SIMPSON
+DECISION: HOLD

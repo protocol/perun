@@ -1,0 +1,33 @@
+**SRM Check**: The total users are 74,702 (control) and 74,500 (treatment). Total N = 149,202. Expected per arm = 74,601.
+Difference = 101 users.
+Standard Error for proportion $p=0.5$ is $\sqrt{0.5 \times 0.5 / 149202} \approx 0.00129$.
+Expected count SE = $149202 \times 0.00129 \approx 192$.
+The difference (101) is less than 2 standard errors ($101 < 384$). This is within chance variation. No SRM.
+
+**PEEK Check**: Planned duration was 28 days. The readout date is 2026-01-17, and data covers day 1 to day 12.
+$17 - 5 + 1 = 13$ days elapsed, but data only shows 12 days. The test was stopped/read at ~12 days instead of the planned 28.
+Stopping early based on interim results inflates false positive rates. The p-value (0.0527) is borderline; early stopping makes this unreliable. This is a PEEK error.
+
+**POWER Check**: Target lift 8%, baseline 6%. The observed lift is 4%. While the test might be underpowered to detect 4%, the design was calculated for 8%. The sample size (~74k/arm) is generally sufficient for an 8% lift on a 6% baseline with 80% power. The issue here isn't that the arm is too small for the *design* parameters, but that the effect wasn't found. However, since the result is not significant (p > 0.05), claiming a rollout based on this is risky, but strictly speaking, the "underpowered" error usually refers to designing a test that couldn't detect the *target* effect. Let's re-evaluate: Is 74k enough for 8% lift?
+Baseline 0.06, Target 0.0648.
+Using standard approximation, required N per arm $\approx 16 \times p(1-p) / (p_1-p_0)^2$.
+$\Delta = 0.0048$. $p \approx 0.06$.
+$N \approx 16 \times 0.06 \times 0.94 / (0.0048)^2 \approx 0.9 / 0.000023 \approx 39,000$.
+The actual N (74k) exceeds the required N (39k). The test was adequately powered for the target. No POWER error.
+
+**SIMPSON Check**:
+Desktop Control Rate: $3145/33211 \approx 9.47\%$. Treatment: $3262/33121 \approx 9.85\%$. Lift positive.
+Mobile Control Rate: $1338/41491 \approx 3.22\%$. Treatment: $1388/41379 \approx 3.35\%$. Lift positive.
+Both segments show positive lift. The aggregate shows positive lift. No reversal. No SIMPSON error.
+
+**DENOM Check**: Randomized by user id. Metric is order conversion rate.
+Denominator used in readout: Users (74,702 and 74,500).
+Orders / Users = Conversion per user. This matches the randomization unit. No DENOM error.
+
+**NOVELTY Check**: Daily lift: 3.7, 3.1, 4.3, 4.3, 4.1, 4.2, 4.1, 4.4, 4.2, 3.3, 4.9, 3.3.
+The values fluctuate but do not show a clear fading trend (e.g., high start, low end). Day 1 is 3.7, Day 12 is 3.3. No obvious novelty decay pattern visible in these 12 days. No NOVELTY error.
+
+**Conclusion**: The primary error is PEEK. The test was read/stopped at day 12 instead of the planned 28 days. Additionally, the p-value is 0.0527, which is not statistically significant at the 0.05 level, yet the recommendation is to roll out. Stopping early when results are borderline is a classic peeking violation.
+
+ERRORS: PEEK
+DECISION: HOLD

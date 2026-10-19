@@ -1,0 +1,32 @@
+**SRM**: The difference in users is $|21,739 - 21,675| = 64$. The denominator is $\sqrt{21,739 + 21,675} = \sqrt{43,414} \approx 208.36$. The ratio is $64 / 208.36 \approx 0.31$. Since $0.31 < 3.5$, there is no sample ratio mismatch.
+
+**POWER**: Baseline $p_1 = 0.05$. Target $p_2 = 0.05 \times 1.10 = 0.055$.
+Variance term: $0.05(0.95) + 0.055(0.945) = 0.0475 + 0.051975 = 0.099475$.
+Difference squared: $(0.055 - 0.05)^2 = 0.000025$.
+Required $n$ per arm: $7.85 \times (0.099475 / 0.000025) = 7.85 \times 3979 = 31,235$.
+The smaller arm (control) has 21,675 users. The threshold is $0.9 \times 31,235 = 28,111.5$.
+Since $21,675 < 28,111.5$, the study is underpowered. **Flag POWER**.
+
+**PEEK**: Start date 2026-09-23 to end date 2026-10-15 is 22 days inclusive (or 22 days elapsed if counting start to end). Even conservatively counting full days between, it is roughly 22 days. Planned duration is 21 days.
+$0.8 \times 21 = 16.8$. Since $22 > 16.8$, the test ran long enough. No early stopping.
+
+**DENOM**: Control conversion reported as 4.997%.
+Orders/Users: $1,083 / 21,675 \approx 0.049965$ (4.997%).
+Orders/Sessions: $1,083 / 28,687 \approx 0.0377$ (3.77%).
+The reported rate matches Orders/Users. The denominator is correct.
+
+**SIMPSON**:
+Pooled lift: Treatment ($1,109/21,739 \approx 5.10\%$) > Control ($1,083/21,675 \approx 5.00\%$). Lift is positive.
+Desktop lift: Treatment ($883/11,637 \approx 7.59\%$) > Control ($828/10,599 \approx 7.81\%$). Wait, $883/11637 = 0.0758$, $828/10599 = 0.0781$. Treatment < Control. Negative lift.
+Mobile lift: Treatment ($226/10,102 \approx 2.24\%$) vs Control ($255/11,076 \approx 2.30\%$). Treatment < Control. Negative lift.
+Since the pooled lift is positive but both segments show negative lift, Simpson's paradox is present. **Flag SIMPSON**.
+
+**NOVELTY**:
+First 3 days: 2.5, 1.8, 2.1. Mean = $6.4 / 3 \approx 2.13$. Half mean = $1.07$.
+Last 3 days: 2.2, 1.6 (Day 22), and 2.1 (Day 21)? The list has 22 values. Last three are 1.8, 2.1, 2.2? No, indices 20, 21, 22 correspond to values 1.8, 2.1, 1.6?
+List: ..., 1.8 (day 19), 2.1 (day 20), 2.2 (day 21), 1.6 (day 22).
+Last three: 2.1, 2.2, 1.6. Sum = 5.9. Mean = $1.97$.
+Is $1.97 < 1.07$? No. The lift is not fading below half the initial average.
+
+ERRORS: POWER, SIMPSON
+DECISION: HOLD

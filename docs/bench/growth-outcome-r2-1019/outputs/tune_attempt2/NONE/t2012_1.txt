@@ -1,0 +1,64 @@
+**SRM Check**: Total users = 75,189 (Control) + 75,451 (Treatment) = 150,640. Expected per arm = 75,320.
+Difference = |75,189 - 75,320| = 131.
+Standard Deviation ≈ $\sqrt{150640 \times 0.5 \times 0.5} \approx 194$.
+The difference (131) is less than 2 standard deviations (~388). The split is consistent with 50/50 randomization. No SRM.
+
+**PEEK Check**: Start date 2026-05-10, readout 2026-06-09. Duration = 30 days. Planned duration = 28 days.
+The test ran for 30 days, exceeding the planned 28 days. There is no evidence of early stopping. No PEEK.
+
+**POWER Check**: The test achieved a p-value of 0.0061 (significant) and detected a 7.1% lift close to the 8% target. Since the result is statistically significant, the sample size was sufficient to detect the effect. No POWER issue.
+
+**SIMPSON Check**:
+Control Rate Desktop: $2,199 / 33,440 \approx 6.58\%$
+Treatment Rate Desktop: $2,362 / 33,556 \approx 7.04\%$ (Lift positive)
+Control Rate Mobile: $808 / 41,749 \approx 1.94\%$
+Treatment Rate Mobile: $868 / 41,895 \approx 2.07\%$ (Lift positive)
+Both segments show a positive lift, matching the pooled result. No SIMPSON.
+
+**DENOM Check**: Randomization unit is "user id". The metric is "order conversion rate".
+Calculated rates: Control $3,007 / 75,189 \approx 4.00\%$. Treatment $3,230 / 75,451 \approx 4.28\%$.
+These match the reported rates exactly. The denominator used is users, which matches the randomization unit. No DENOM.
+
+**NOVELTY Check**: The daily lift fluctuates (5.0% to 9.2%) but shows no clear monotonic decay trend indicative of a novelty effect fading to zero. The final days (7.3%, 5.3%) are within the range of earlier days. While the team projects this lift for 12 months, the data itself does not definitively prove the lift is *currently* fading due to novelty; it appears relatively stable around a mean. Without a clear downward trajectory over time in the provided numbers, we cannot flag this purely on the stats provided.
+
+However, re-evaluating the **PEEK** criteria strictly: The prompt says "stopped or called before its planned duration". The test ran *longer* (30 vs 28 days). This is not peeking.
+
+Re-evaluating **NOVELTY**: The prompt defines NOVELTY as "lift is fading over the test but is projected as lasting." Looking at the sequence: 8.1, ..., 5.3. The last value (5.3) is the lowest in the set. The second to last (7.3) is average. Is there a fade? A linear regression on the 30 points would likely show a slight negative slope, but is it definitive?
+Let's look closer at the definition. If the lift isn't clearly fading, we don't flag it. The variance is high.
+Wait, let's re-read the **DENOM** check. "Order conversion rate" usually means Orders / Sessions or Orders / Users?
+If it were Orders/Sessions:
+Control: $3007/102825 = 2.92\%$.
+Treatment: $3230/108689 = 2.97\%$.
+The reported numbers are ~4.0%.
+$3007/75189 = 3.999\%$.
+So the denominator IS users. Randomization was by user. This is correct.
+
+Let's re-examine **SRM** with a stricter chi-square.
+$\chi^2 = (131)^2 / 75320 + (-131)^2 / 75320 = 34322 / 75320 \approx 0.45$.
+Critical value for p=0.05 is 3.84. 0.45 < 3.84. Not significant.
+
+Is there any other error?
+The test ran 30 days, planned 28.
+The lift is 7.1%, target 8%.
+P-value 0.0061.
+Everything seems consistent except perhaps the interpretation of stability for NOVELTY. But without a clear trend, flagging it is speculative.
+Wait, look at the daily lift again.
+Day 1: 8.1. Day 30: 5.3.
+Day 9: 5.0. Day 28: 6.2.
+It bounces. It doesn't clearly fade.
+
+Actually, look at **PEEK** again. "Stopped ... before planned duration". It went over. So not PEEK.
+What about **POWER**? "Smaller arm too small". Arms are equal.
+What about **DENOM**? "Denominator not unit randomized". Denom = Users. Unit = Users. Correct.
+
+Is it possible the answer is NONE?
+Let's double check the **SIMPSON** math.
+Desktop Lift: $(2362/33556) / (2199/33440) - 1 = 7.039/6.576 - 1 = 7.04\%$.
+Mobile Lift: $(868/41895) / (808/41749) - 1 = 2.072/1.935 - 1 = 7.08\%$.
+Pooled Lift: $4.281/3.999 - 1 = 7.05\%$.
+No paradox.
+
+Conclusion: The numbers provided do not demonstrate any of the listed errors definitively. The test ran slightly longer than planned (good for power), the split is valid, the metric denominator matches the randomization unit, and segment results align with the aggregate. The daily fluctuation does not constitute clear evidence of a fading novelty effect based solely on these numbers.
+
+ERRORS: NONE
+DECISION: SHIP

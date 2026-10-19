@@ -1,0 +1,39 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 34,853 (control) + 34,893 (treatment) = 69,746. The expected split is 50%, so 34,873 per arm. The observed difference is |34,893 - 34,873| = 20 users. For a sample size of ~70k, the standard deviation for a 50/50 split is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx \sqrt{17436} \approx 132$. A deviation of 20 is well within 1 standard deviation (far below the typical 3-4 sigma threshold for SRM flags). No SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The reported rates are calculated as Orders / Users?
+Control: 1,743 / 34,853 ≈ 0.05001 (5.001%).
+Treatment: 1,841 / 34,893 ≈ 0.05276 (5.276%).
+The calculation uses Users as the denominator, which matches the randomization unit. No DENOM error.
+
+Next, Simpson's Paradox (SIMPSON). I calculate the lift within segments.
+Desktop Control Rate: 1,206 / 14,278 ≈ 8.45%.
+Desktop Treatment Rate: 1,274 / 14,294 ≈ 8.91%. (Lift is positive).
+Mobile Control Rate: 537 / 20,575 ≈ 2.61%.
+Mobile Treatment Rate: 567 / 20,599 ≈ 2.75%. (Lift is positive).
+Since both segments show a positive lift and the aggregate shows a positive lift, there is no reversal. No SIMPSON error.
+
+Next, Power (POWER). The design targets a 10% relative lift. The observed lift is 5.5%. While the test failed to reach significance (p=0.0999), the question is whether the arm size was too small to detect the *target* lift. With ~35k users per arm and a 5% baseline, the standard error for the difference in proportions is roughly $\sqrt{\frac{0.05(0.95)}{35000} + \frac{0.05(0.95)}{35000}} \approx 0.00165$. The target absolute lift is 0.5% (0.005). The z-score for the target lift would be $0.005 / 0.00165 \approx 3.0$, which easily exceeds the threshold for 80% power (approx 2.8 for alpha 0.05 two-sided). The study was powered correctly for the target; it simply didn't achieve the target effect size. No POWER error in design.
+
+Next, Novelty (NOVELTY). The daily lift data ranges from 4.6% to 6.4% over 29 days. There is no clear fading trend (e.g., starting high and dropping to near zero). The lift remains stable around 5-6%. No NOVELTY error.
+
+Finally, Peeking (PEEK). The planned duration was 28 days. The readout date is 2026-10-21, and the start date was 2026-09-22.
+September has 30 days. From Sep 22 to Sep 30 is 9 days (inclusive of start? Usually duration counts full days). Let's count days: Sep 22 to Oct 21 is exactly 30 days (Sep 22-30 = 9 days, Oct 1-21 = 21 days; 9+21=30). Wait, Sep 22 to Oct 22 is 30 days. Sep 22 to Oct 21 is 29 days.
+The planned duration was 28 days. The test ran for 29 days (data includes "day 1 to day 29"). Running 1 day longer than planned to complete the cycle or due to timezone processing is generally not considered "peeking" (stopping early for significance). Peeking implies stopping *before* the planned duration because results looked good. Here, they ran *longer* than planned, and the result (p=0.0999) was not significant anyway. They did not stop early to claim a win. No PEEK error.
+
+Since no specific analysis errors from the list are demonstrated by the numbers, and the result is not statistically significant (p > 0.05), the recommendation to "roll out" is statistically unsound based on the lack of significance, but the prompt asks to flag categories *only if the numbers show that specific error*. None of the specific defined errors (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY) are present. However, the decision to ship a non-significant result is a general statistical error, not one of the coded categories provided. But wait, if I find no errors, do I ship? The prompt says "DECISION: HOLD if at least one flagged error... otherwise SHIP". Since I found no flagged errors from the specific list, the strict logic dictates "SHIP", even though the p-value suggests caution. However, re-reading the "PEEK" definition: "stopped or called before its planned duration". They ran 29 days vs 28 planned. That is not before.
+
+Wait, is there a hidden error?
+Target lift 10%. Observed 5.5%. P-value 0.0999.
+The team recommends rolling out despite p=0.0999. This is a "false positive" risk, but is it one of the codes?
+Perhaps POWER? "The smaller arm is too small to detect the target lift". We calculated it *was* large enough to detect 10%. It just didn't happen.
+Perhaps the error is that they are projecting a non-significant result? That isn't a code.
+
+Let's re-evaluate "PEEK". Did they check results daily and stop when it looked good? The lift was stable. They ran 29 days. Planned 28. This is not peeking.
+
+Let's re-evaluate "POWER". "Underpowered". If the variance was higher than expected, maybe? But based on the numbers, N=35k is sufficient for 10% lift detection at 5% baseline.
+
+Is it possible the user considers the recommendation itself an error derived from the numbers? The prompt asks to "Flag a category only if the numbers show that error."
+If no category applies, the answer is NONE.
+
+ERRORS: NONE
+DECISION: SHIP

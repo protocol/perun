@@ -1,0 +1,20 @@
+Several critical analysis errors are evident in the readout numbers.
+
+First, there is a clear **SRM** (Sample Ratio Mismatch). The experiment randomized users 50/50, yet the final counts are 5,612 (control) and 5,540 (treatment). While close, the device-level breakdown reveals a severe imbalance: Desktop has 2,682 control vs. 3,403 treatment, while Mobile has 2,930 control vs. 2,137 treatment. This inversion suggests broken assignment or logging logic that shifted traffic based on device type, invalidating the randomization.
+
+Second, **SIMPSON**'s paradox is present. The aggregated data shows the treatment winning (7.3% vs 5.5%). However, looking at the segments:
+- Desktop Control Rate: $339 / 2682 \approx 12.6\%$
+- Desktop Treatment Rate: $396 / 3403 \approx 11.6\%$ (Treatment loses)
+- Mobile Control Rate: $110 / 2930 \approx 3.8\%$
+- Mobile Treatment Rate: $74 / 2137 \approx 3.5\%$ (Treatment loses)
+The treatment performs worse in both device segments individually but appears to win overall because the treatment arm accidentally received far more high-converting desktop users due to the SRM.
+
+Third, there is a **DENOM** error. The metric is "order conversion rate," which should be orders per user (since users were randomized). The reported control rate is 5.549%. If calculated per user: $449 / 5612 \approx 8.0\%$. If calculated per session: $449 / 8091 \approx 5.55\%$. The team divided orders by sessions, not users. Since session counts differ drastically between arms (8,091 vs 6,406) likely due to the redesign affecting engagement, using sessions as the denominator biases the result.
+
+Finally, **NOVELTY** is flagged. The daily lift data shows significant volatility with a visible downward trend in the latter half (e.g., dropping from peaks of ~38% to ~27-30% range repeatedly), yet the team projects this lift as constant for twelve months without adjusting for decay.
+
+Regarding **PEEK**: The test ran from June 16 to July 16 (30 days) against a planned 28 days. It was not stopped early; it ran longer. Thus, PEEK is not flagged.
+Regarding **POWER**: With ~5,500 users per arm and an 8% baseline, the sample size is sufficient to detect a 10% lift. POWER is not flagged.
+
+ERRORS: SRM, SIMPSON, DENOM, NOVELTY
+DECISION: HOLD

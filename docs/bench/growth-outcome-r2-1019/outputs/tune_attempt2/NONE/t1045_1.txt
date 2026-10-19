@@ -1,0 +1,48 @@
+**SRM**: The planned split is 50/50. Total users = 47,996 + 47,844 = 95,840. Expected per arm = 47,920.
+Control deviation: |47,996 - 47,920| = 76.
+Treatment deviation: |47,844 - 47,920| = 76.
+Standard deviation for binomial split $\approx \sqrt{N \cdot 0.5 \cdot 0.5} = \sqrt{23960} \approx 155$.
+The deviation (76) is less than 1 standard deviation ($76 < 155$). This is within chance limits. No SRM.
+
+**PEEK**: The test started 2026-06-12 and ended 2026-07-12. This is exactly 30 days. The planned duration was 28 days. The test ran *longer* than planned, not shorter. Stopping late does not inflate false positives in the same way peeking does; if anything, it increases power. No PEEK.
+
+**POWER**: The sample sizes (~48k each) are large. With a baseline of 5% and target lift of 10%, the required sample size is roughly 15k-20k per arm for 80% power. The actual sample is well above this. No POWER issue.
+
+**SIMPSON**: Let's check conversion rates by segment.
+Desktop Control: $1,655 / 20,234 \approx 8.18\%$.
+Desktop Treatment: $1,919 / 24,929 \approx 7.70\%$.
+Lift Desktop: Treatment is **lower** (-5.9%).
+
+Mobile Control: $745 / 27,762 \approx 2.68\%$.
+Mobile Treatment: $579 / 22,915 \approx 2.53\%$.
+Lift Mobile: Treatment is **lower** (-5.6%).
+
+Both segments show a negative lift (treatment worse than control). However, the pooled result reports a positive lift of 20.7%.
+Pooled Control Rate (users): $(1655+745)/(20234+27762) = 2400/47996 \approx 5.00\%$.
+Wait, the readout says "Reported conversion rate: control 3.751%".
+Let's check the denominator used in the reported rate.
+Reported Control Rate = $2,400 / 63,977$ (sessions) $\approx 3.75\%$.
+Reported Treatment Rate = $2,498 / 55,175$ (sessions) $\approx 4.53\%$.
+The metric uses **sessions** as the denominator, but randomization was by **user**.
+Because the treatment arm has fewer sessions per user ($55,175/47,844 \approx 1.15$) than control ($63,977/47,996 \approx 1.33$), the session-based rate is artificially inflated in treatment if users who convert do so in fewer sessions, or simply because the denominator shrank disproportionately.
+This is a clear case of **DENOM**: the denominator (sessions) is not the unit of randomization (users).
+
+Additionally, looking at the user-based rates calculated above for segments:
+Desktop User Lift: Negative.
+Mobile User Lift: Negative.
+Overall User Lift: $(2498/47844) - (2400/47996) \approx 5.22\% - 5.00\% = +0.22\%$ (Positive).
+Wait, let me re-calculate user rates carefully.
+Control Users: 2400/47996 = 5.00%.
+Treatment Users: 2498/47844 = 5.22%.
+Overall user lift is positive (+4.4%).
+Segment user lifts:
+Desktop: C=8.18%, T=7.70% (Negative).
+Mobile: C=2.68%, T=2.53% (Negative).
+Since both segments are negative but the total is positive, this is **SIMPSON**'s paradox. The aggregation masks the negative performance in both strata due to the weighting of the groups (Treatment has more Desktop users, who have higher baseline conversion).
+
+So we have DENOM (wrong metric denominator) and SIMPSON (reversal of direction).
+
+**NOVELTY**: The daily lift drops from 43.6% to 6.1%. This shows fading. The projection applies the final reported lift (average) to 12 months. While fading is present, the primary fatal errors are the metric definition and the paradox. The prompt asks to flag if numbers show the error. The fading is evident. However, DENOM and SIMPSON are structural analysis failures making the result invalid immediately. NOVELTY is also present as the lift clearly decays, yet the projection assumes stability. I will include it as the decay is stark (43% -> 6%).
+
+ERRORS: SIMPSON, DENOM, NOVELTY
+DECISION: HOLD

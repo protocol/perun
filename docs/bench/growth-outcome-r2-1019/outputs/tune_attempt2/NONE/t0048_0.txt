@@ -1,0 +1,30 @@
+Several critical errors are evident in the readout based on the provided numbers.
+
+First, there is a clear **SRM** (Sample Ratio Mismatch). The experiment randomized users 50/50. The total user count is 11,152 (5,612 + 5,540). The expected count per arm is 5,576. The treatment arm has 5,540 users, a difference of only 36 users. A chi-squared check: $(36^2 / 5576) + (36^2 / 5576) \approx 0.46$. With 1 degree of freedom, the critical value for $p < 0.05$ is 3.84. Since $0.46 < 3.84$, the split is statistically consistent with 50/50. Wait, let me re-evaluate the session counts versus user counts. The prompt says randomized by *user id*. The user counts (5,612 vs 5,540) are balanced. However, look at the **DENOM** error. The metric is "order conversion rate." The randomization unit is *user*, but the reported rates imply a session-level or aggregated calculation that doesn't match the user count denominator.
+Control: 449 orders / 5,612 users = 8.00%.
+Treatment: 470 orders / 5,540 users = 8.48%.
+The readout reports control 5.549% and treatment 7.337%.
+Let's check sessions as the denominator:
+Control: 449 / 8,091 = 5.549%.
+Treatment: 470 / 6,406 = 7.337%.
+The reported metric divides orders by *sessions*, but randomization was by *user*. Since sessions are not independent (one user generates multiple sessions), using sessions as the denominator violates the independence assumption of the test. This is a **DENOM** error.
+
+Next, check **SIMPSON**'s paradox.
+Desktop Conversion (Orders/Users):
+Control: 339/2682 = 12.64%
+Treatment: 396/3403 = 11.64%
+(Lift is negative: -8%)
+Mobile Conversion (Orders/Users):
+Control: 110/2930 = 3.75%
+Treatment: 74/2137 = 3.46%
+(Lift is negative: -7.7%)
+Both segments show a negative lift for the treatment. However, the overall user-based lift calculated earlier (8.48% vs 8.00%) was positive. Even if we look at the reported session-based rates, the aggregation hides that the treatment performs worse in both desktop and mobile when calculated correctly per user. The pooled result (positive lift) reverses the direction seen in the segments (negative lift). This is **SIMPSON**.
+
+Regarding **PEEK**: The test ran from June 16 to July 16 (30 days), exceeding the planned 28 days. There is no evidence of early stopping; if anything, they ran longer. No PEEK error.
+Regarding **NOVELTY**: The daily lift fluctuates (26.5% to 38.2%) but shows no clear fading trend over the 30 days. The projection assumes permanence, but the data doesn't show fading yet. No NOVELTY error evident from the numbers alone.
+Regarding **POWER**: The sample size (~5.5k per arm) with an 8% baseline is sufficient to detect a 10% lift. The issue is the validity of the lift, not the ability to detect it.
+
+The primary fatal flaws are using the wrong denominator (sessions instead of users) and the resulting Simpson's paradox where the aggregate lies about the segment performance.
+
+ERRORS: DENOM, SIMPSON
+DECISION: HOLD

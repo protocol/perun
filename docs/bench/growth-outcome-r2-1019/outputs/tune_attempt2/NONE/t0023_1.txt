@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 160,002 (control) + 160,276 (treatment) = 320,278. The expected split is 50%, so 160,139 per arm. The difference is only 137 users, which is well within random chance for this sample size. No SRM.
+
+Next, I check the Denominator (DENOM). The metric is "order conversion rate." The readout reports: Control 4,800 orders / 160,002 users = 2.999%. However, the reported rate is 2.304%. If we divide orders by sessions (4,800 / 208,355), we get ~2.304%. For treatment: 5,040 / 167,610 = ~3.007%. The calculation uses sessions as the denominator, but users were randomized by user ID. Since a user can have multiple sessions, the denominator does not match the randomization unit. This is a DENOM error.
+
+Now, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device using users as the denominator (matching randomization):
+Desktop Control: 3,585 / 73,339 ≈ 4.89%
+Desktop Treatment: 3,764 / 73,464 ≈ 5.12% (Lift ~4.7%)
+Mobile Control: 1,215 / 86,663 ≈ 1.40%
+Mobile Treatment: 1,276 / 86,812 ≈ 1.47% (Lift ~5.0%)
+Both segments show a ~5% lift. The aggregated reported lift (based on sessions) was 30.5%. While the magnitude differs wildly due to the denominator error, the direction of the effect (positive) is consistent across segments and the aggregate. The paradox typically refers to a reversal of direction (e.g., positive overall but negative in segments). Here, the discrepancy is driven by the session/user ratio difference between arms (Control: 1.30 sessions/user; Treatment: 1.05 sessions/user), confirming the DENOM issue rather than a classic Simpson's reversal of sign.
+
+Regarding Power (POWER): The target was an 8% lift on a 3% baseline. The observed effect is massive (~30% or ~5% depending on metric). With ~160k users per arm, the test is not underpowered to detect this result.
+
+Regarding Peek (PEEK) and Novelty (NOVELTY): The test ran for the planned 21 days (June 30 to July 21). The daily lift fluctuates (24% to 38%) but does not show a clear fading trend to zero; it remains high throughout. There is no evidence of early stopping or fading novelty in the provided numbers.
+
+The primary fatal flaw is using sessions instead of users as the denominator, which invalidates the p-value and lift calculation because the treatment arm appears to have induced fewer sessions per user, artificially inflating the session-based conversion rate.
+
+ERRORS: DENOM
+DECISION: HOLD

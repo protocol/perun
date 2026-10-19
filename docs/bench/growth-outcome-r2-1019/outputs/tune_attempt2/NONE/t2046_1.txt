@@ -1,0 +1,17 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 48,639 (control) + 49,929 (treatment) = 98,568. The expected split is 49,284 per arm. The treatment arm has 645 more users than expected. The standard error for the difference is $\sqrt{N \cdot 0.5 \cdot 0.5} \approx 157$. The deviation is $645 / 157 \approx 4.1$ standard deviations. This is far beyond the threshold for chance (typically 2 SDs), indicating broken randomization or logging. **SRM is flagged.**
+
+Next, I check for Peeking (PEEK). The test started June 25 and ended July 4. This is 10 days inclusive (25, 26, 27, 28, 29, 30, 1, 2, 3, 4). The planned duration was 14 days. Stopping at day 10 instead of day 14 constitutes early stopping without correction, inflating false positive risk. **PEEK is flagged.**
+
+I check Power (POWER). The smaller arm (control) has 48,639 users. With a 4% baseline and 10% target lift, the required sample size per arm for 80% power at 0.05 alpha is roughly $16 \cdot p(1-p) / (0.1p)^2 \approx 16 \cdot 0.04 \cdot 0.96 / 0.000016 \approx 38,400$. The actual sample (48k) exceeds the requirement. POWER is not flagged.
+
+I check Simpson's Paradox (SIMPSON).
+Desktop CVR: Control $1435/23993 \approx 6.0\%$, Treatment $1578/24629 \approx 6.4\%$. Lift is positive.
+Mobile CVR: Control $511/24646 \approx 2.1\%$, Treatment $562/25300 \approx 2.2\%$. Lift is positive.
+Since both segments show a positive lift, the aggregate positive lift is consistent. SIMPSON is not flagged.
+
+I check Denominator (DENOM). Users were randomized by user ID. The metric is order conversion rate (orders/users). The denominator matches the randomization unit. DENOM is not flagged.
+
+I check Novelty (NOVELTY). The daily lift drops from 15.3% to 1.5% over 9 days, showing a clear fade. However, the team projects the *current reported* average lift (7.1%) for twelve months, ignoring the fading trend. This assumes the initial high lift or the current average persists despite the downward trajectory. **NOVELTY is flagged.**
+
+ERRORS: SRM, PEEK, NOVELTY
+DECISION: HOLD

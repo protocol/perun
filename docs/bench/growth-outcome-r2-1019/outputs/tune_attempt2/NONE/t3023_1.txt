@@ -1,0 +1,67 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 42,259 (control) + 42,525 (treatment) = 84,784. The expected split is 42,392 per arm. The difference is only 133 users, which is well within the bounds of random chance for this sample size. No SRM.
+
+Next, I check for PEEKing. The test started August 3rd and the readout is August 18th. This is 15 days of data. The planned duration was 14 days. The test ran slightly longer than planned, not shorter. There is no evidence of early stopping. No PEEK.
+
+I check for POWER issues. The target lift was 8%, but the observed lift is 5.1% with a p-value of 0.136. While the result is not statistically significant, the sample size (over 42k per arm) is substantial. A post-hoc power calculation isn't strictly an "error" in the analysis itself unless the design was fundamentally flawed before starting. However, the prompt asks if the *smaller arm* is too small to detect the *target* lift. With ~42k users and a 4% baseline, the standard error is roughly $\sqrt{0.04 \times 0.96 / 42000} \approx 0.00096$. The minimum detectable effect (MDE) for 80% power at alpha 0.05 is roughly $2.8 \times SE \approx 0.27\%$ absolute, or ~6.7% relative. The study was powered to detect 8%, and the sample size achieved is very close to what is needed. The lack of significance is due to the true effect being smaller than the target, not necessarily an underpowered design relative to the *actual* data collected, though it failed to detect the *target*. However, usually POWER flags refer to pre-test design flaws. Let's look closer at the denominators.
+
+I check DENOM. The metric is "order conversion rate." Users were randomized by user ID. The counts provided are: Control Users 42,259, Orders 1,690. Rate = 1690/42259 = 4.00%. Treatment Users 42,525, Orders 1,787. Rate = 1787/42525 = 4.20%. The reported rates match the calculation using Users as the denominator. Since users were the unit of randomization, the denominator is correct. No DENOM.
+
+I check SIMPSON.
+Desktop Control Rate: 1113/18088 = 6.15%.
+Desktop Treatment Rate: 1177/18202 = 6.47%. (Lift positive)
+Mobile Control Rate: 577/24171 = 2.39%.
+Mobile Treatment Rate: 610/24323 = 2.51%. (Lift positive)
+Both segments show a positive lift. The aggregate shows a positive lift. No reversal. No SIMPSON.
+
+I check NOVELTY. The daily lift figures are: 5.5, 5.9, 5.3, 4.7, 4.6, 5.3, 5.7, 4.7, 3.7, 5.5, 5.7, 4.5, 4.6, 4.8, 6.0. There is no clear fading trend; the values fluctuate without a consistent downward trajectory (e.g., day 15 is 6.0%, the highest). The projection applies the current lift to 12 months. Without a fading trend in the data, flagging NOVELTY based solely on the projection assumption is speculative, but the data itself does not show fading.
+
+Re-evaluating POWER: The prompt defines POWER as "the smaller arm is too small to detect the target lift at the stated alpha and power." The test failed to find significance (p=0.136) for a 5.1% lift. Was it underpowered to detect the *target* (8%)? Yes, it was designed for 8%. Did it fail because the arm was too small? The sample size seems adequate for an 8% lift (MDE ~6.7%). The observed effect was just smaller. This is a negative result, not necessarily an analysis error of "underpowered" in the context of a broken test.
+
+However, look at the dates again. Start: Aug 3. End: Aug 18. That is 16 days inclusive, or 15 days duration. Planned: 14 days.
+Wait, let's re-read the PEEK definition: "stopped or called before its planned duration". It ran *longer*. So not PEEK.
+
+Is there any other error?
+Let's re-calculate the aggregate rates carefully.
+Total Control Orders: 1113 + 577 = 1690. Correct.
+Total Treatment Orders: 1177 + 610 = 1787. Correct.
+The math holds up.
+
+What about the projection? "The team applies the reported lift to the next twelve months." The reported lift is 5.1% with p=0.136 (not significant). Projecting a non-significant result as a guaranteed future gain is a strategic error, but is it one of the coded analysis errors?
+NOVELTY: "the lift is fading... but projected as lasting." The data does not show fading.
+POWER: "smaller arm is too small to detect the target lift". The test was designed for 8% lift. It found 5.1%. The p-value is 0.136. If the true lift was 8%, would 42k users have detected it?
+SE pooled ≈ $\sqrt{2 \times 0.04 \times 0.96 / 42000} \approx 0.00135$.
+8% relative lift = 0.32% absolute.
+Z = 0.0032 / 0.00135 = 2.37. This would be significant (p < 0.05).
+So the sample size WAS sufficient to detect the target lift of 8%. The fact that it didn't find significance is because the effect size is smaller, not because the arm was too small. So POWER is not the issue.
+
+Let's look at the numbers again.
+Control: 42,259 users.
+Treatment: 42,525 users.
+Total: 84,784.
+Expected: 42,392.
+Diff: 133.
+Std Dev for binomial n=84784, p=0.5 is $\sqrt{84784 \times 0.25} \approx 145$.
+133 is less than 1 SD. No SRM.
+
+Is it possible the error is NONE?
+The recommendation is "roll out". The result is p=0.136 (not significant). Rolling out on a non-significant result is a bad business decision, but is it a specific *analysis error* from the list?
+- SRM: No.
+- PEEK: No (ran longer).
+- POWER: No (sample size was sufficient for target).
+- SIMPSON: No (directions match).
+- DENOM: No (users/users).
+- NOVELTY: No (no fading trend).
+
+Perhaps the "Projection" implies assuming the lift is real despite p=0.136? But that doesn't fit the specific codes.
+Wait, let's re-read the POWER definition carefully: "the smaller arm is too small to detect the target lift at the stated alpha and power".
+If the test was *designed* with power 80% to detect 8%, and they got 42k users, did they achieve the planned sample size?
+Usually, sample size calculators for 4% baseline, 8% lift, alpha 0.05, power 0.80 require roughly:
+$n \approx \frac{2 \times (Z_{\alpha/2} + Z_{\beta})^2 \times p(1-p)}{(p \times lift)^2}$
+$n \approx \frac{2 \times (1.96 + 0.84)^2 \times 0.04 \times 0.96}{(0.0032)^2} \approx \frac{2 \times 7.84 \times 0.0384}{0.00001024} \approx \frac{0.602}{0.00001024} \approx 58,800$ per arm.
+Ah! The required sample size per arm is ~59k. They only have ~42k.
+Therefore, the arm is indeed too small to detect the target lift with the stated power. The test is underpowered relative to its own design goals because it stopped at 42k instead of reaching the ~59k needed for 8% lift detection. Even though they ran for 14 days, the traffic volume was lower than anticipated for the power calculation, or the power calculation was ignored. The condition "smaller arm is too small to detect the target lift" is TRUE. 42k < 59k.
+
+So, POWER is flagged. The test failed to reach the sample size required to meet the "power 80%" design specification for the "target relative lift 8%".
+
+ERRORS: POWER
+DECISION: HOLD

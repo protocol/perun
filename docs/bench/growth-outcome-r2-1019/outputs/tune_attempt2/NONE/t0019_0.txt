@@ -1,0 +1,23 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 5,547 (control) + 5,497 (treatment) = 11,044. The expected split is 5,522 per arm. The observed difference is |5,547 - 5,497| = 50 users. For a sample this size, a deviation of 50 is well within the range of random chance (roughly 1 standard deviation), so SRM is not flagged.
+
+Next, I check for Denominator Error (DENOM). The metric is "order conversion rate," and the randomization unit is "user id." The readout calculates rates using users as the denominator (e.g., 444 orders / 5,547 users ≈ 8.004%). Since the denominator matches the randomization unit, DENOM is not flagged.
+
+I then evaluate Power (POWER). The target was a 10% relative lift on an 8% baseline (detecting a shift to 8.8%). The observed lift is only 5.9% with a p-value of 0.366. While the result is not significant, the sample size (~5,500 per arm) is generally sufficient to detect a 10% lift with 80% power at alpha 0.05. The lack of significance is due to the effect size being smaller than the target, not necessarily because the study was underpowered to detect the *target*. Thus, POWER is not strictly flagged based on the numbers alone indicating a design flaw in sample size calculation.
+
+Checking Simpson's Paradox (SIMPSON):
+Desktop conversion: Control = 309/2244 ≈ 13.77%; Treatment = 324/2224 ≈ 14.57%. (Treatment > Control)
+Mobile conversion: Control = 135/3303 ≈ 4.09%; Treatment = 142/3273 ≈ 4.34%. (Treatment > Control)
+Both segments show a positive lift, consistent with the pooled result. No reversal exists, so SIMPSON is not flagged.
+
+Regarding Peeking (PEEK): The test ran from Oct 24 to Nov 7, which is exactly 14 days, matching the planned duration. There is no evidence of early stopping.
+
+Finally, Novelty (NOVELTY): The daily lift figures (6.1, 5.5, ..., 7.4) fluctuate but do not show a clear fading trend over the 14 days. The projection applies the current lift to 12 months; while this assumes longevity, the data does not explicitly show the "fading" required to flag NOVELTY.
+
+However, the recommendation to "roll out" is premature because the p-value is 0.366, which is far above the 0.05 threshold. The result is statistically insignificant. While this isn't one of the specific error codes listed (it's simply a null result), the prompt asks to flag categories only if numbers show that specific error. None of the specific structural errors (SRM, PEEK, POWER, SIMPSON, DENOM, NOVELTY) are definitively proven by the numbers provided. The test simply failed to find an effect.
+
+Wait, re-reading the POWER definition: "the smaller arm is too small to detect the target lift...". If the test was designed for 10% lift and we got 5.9%, the test performed as expected (failed to reject null). It wasn't underpowered for the *target*, it just didn't find the target.
+
+Since none of the specific structural errors are evident in the numbers:
+
+ERRORS: NONE
+DECISION: HOLD

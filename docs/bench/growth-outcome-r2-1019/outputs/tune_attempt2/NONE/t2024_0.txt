@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 23,562 (control) + 23,388 (treatment) = 46,950. The expected split is 23,475 per arm. The treatment arm has 87 fewer users than expected. A quick chi-square approximation: $(87^2 / 23475) \times 2 \approx 0.65$. With a critical value of 3.84 for $p=0.05$, this deviation is well within chance. No SRM.
+
+Next, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device segment:
+Desktop Control: $1,235 / 8,322 \approx 14.84\%$.
+Desktop Treatment: $1,369 / 9,652 \approx 14.18\%$.
+Here, Control > Treatment (negative lift).
+
+Mobile Control: $650 / 15,240 \approx 4.27\%$.
+Mobile Treatment: $559 / 13,736 \approx 4.07\%$.
+Here, Control > Treatment (negative lift).
+
+In both segments, the treatment performs worse than the control. However, the reported aggregate rates are Control 8.0% and Treatment 8.244%, showing a positive lift. Since the direction of the effect reverses when pooling the data (negative in segments, positive in aggregate), this is a clear case of Simpson's Paradox. This usually happens when the treatment arm accidentally receives more traffic from the higher-converting segment (Desktop: 9,652 vs 8,322), skewing the overall average.
+
+I check Power (POWER). The target was a 10% lift. The observed lift is roughly 3%. The test ran for the planned 14 days (March 26 to April 9). While the result is not significant ($p=0.33$), the sample sizes (~23k per arm) are generally sufficient to detect a 10% lift on an 8% baseline. The failure to find significance is likely because the true effect is small or negative, not necessarily because the test was underpowered by design. The readout does not indicate early stopping (PEEK), as the dates match the plan. The daily lift is stable (fluctuating between 2.5% and 3.6%), showing no clear fading trend (NOVELTY). The denominator (users) matches the randomization unit (DENOM is safe).
+
+The critical error is SIMPSON. The aggregate positive lift is an artifact of imbalanced segment distribution, not a real improvement. Rolling this out based on the pooled number would be a mistake, as the treatment actually underperforms in both device categories.
+
+ERRORS: SIMPSON
+DECISION: HOLD

@@ -1,0 +1,21 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 74,697 (control) + 75,087 (treatment) = 149,784. The expected split is 50%, so 74,892 per arm. The treatment deviation is 75,087 - 74,892 = +195. The standard error for the difference is roughly $\sqrt{N \times 0.5 \times 0.5} \approx \sqrt{37,446} \approx 193.5$. The z-score is $195 / 193.5 \approx 1.01$. This is well within normal chance variation (typically < 1.96 for 95% confidence), so SRM is not flagged.
+
+Next, I check for PEEKing. The planned duration was 21 days, but the readout date is July 16, and the start was July 7. This is only 9 days of data. The test was stopped early, before the planned duration, which inflates the false positive rate. The p-value of 0.002 looks significant, but because the test was peeked at and stopped early without correction, this result is unreliable. This is a clear PEEK error.
+
+I check POWER. The sample sizes (~75k per arm) are large. With a baseline of 4% and target lift of 10% (to 4.4%), a quick approximation suggests ~60k-70k users per arm are needed for 80% power at alpha 0.05. Since we have ~75k, the test is adequately powered. No POWER error.
+
+I check SIMPSON's paradox.
+Desktop Control Rate: $2,277 / 35,689 \approx 6.38\%$.
+Desktop Treatment Rate: $2,471 / 35,875 \approx 6.89\%$. (Lift positive)
+Mobile Control Rate: $711 / 39,008 \approx 1.82\%$.
+Mobile Treatment Rate: $772 / 39,212 \approx 1.97\%$. (Lift positive)
+Both segments show a positive lift, consistent with the pooled result. No SIMPSON error.
+
+I check DENOM. The metric is order conversion rate. The randomization unit is user id. The counts provided for the metric calculation (orders) are aggregated by users in the arms. While sessions are listed, the conversion rate is typically orders/users or orders/sessions. If the metric is orders/users, the denominator matches the randomization unit. If it is orders/sessions, the denominator (sessions) is not the randomization unit (users). However, standard industry practice often accepts session-based denominators for user-randomized tests if the session count per user is balanced. Here, control sessions/user = $108,747/74,697 \approx 1.456$. Treatment sessions/user = $106,046/75,087 \approx 1.412$. There is a slight imbalance, but "DENOM" usually refers to a fundamental mismatch like analyzing pageviews when users were randomized. Given the explicit user counts and order counts, calculating a user-level conversion rate is possible and likely intended. Without explicit statement that the *reported* 4.0% used sessions as the denominator, I cannot definitively flag this based solely on the numbers provided, whereas the PEEK error is explicit in the dates.
+
+I check NOVELTY. The daily lift values are: 5.7, 8.8, 10.1, 7.6, 7.5, 8.1, 9.0, 7.3, 8.0. There is no clear fading trend; the lift fluctuates but remains stable around 7-9% after the first few days. The projection assumes lasting lift, but the data does not show fading. No NOVELTY error.
+
+The primary error is PEEK due to stopping at day 9 instead of the planned 21 days.
+
+ERRORS: PEEK
+DECISION: HOLD

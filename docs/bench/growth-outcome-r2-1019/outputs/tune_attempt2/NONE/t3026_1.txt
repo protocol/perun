@@ -1,0 +1,24 @@
+First, I check for Sample Ratio Mismatch (SRM). The total user count is 139,509 (control) + 139,293 (treatment) = 278,802. The expected split is 50%, so 139,401 per arm. The treatment deviation is $|139,293 - 139,401| = 108$. The standard deviation for a binomial distribution here is $\sqrt{278802 \times 0.5 \times 0.5} \approx 264$. The deviation is less than 1 standard deviation ($108 < 264$), so the split is consistent with random chance. No SRM.
+
+Next, I check the Denominator (DENOM). The metric is "order conversion rate." The readout reports rates derived from users (e.g., $6,976 / 139,509 \approx 5.0\%$? Wait, let's re-calculate).
+Control reported rate: $6,976 \text{ orders} / 139,509 \text{ users} = 0.0499$ (approx 5.0%).
+Treatment reported rate: $7,333 \text{ orders} / 139,293 \text{ users} = 0.0526$ (approx 5.3%).
+However, the readout states: "Reported conversion rate: control 3.444%, treatment 3.794%."
+Let's check the session denominator:
+Control: $6,976 / 202,544 = 0.03444$ (3.444%).
+Treatment: $7,333 / 193,266 = 0.03794$ (3.794%).
+The reported percentages match the calculation using **sessions** as the denominator. However, the randomization unit was **user id**. Using sessions as the denominator violates the independence assumption because multiple sessions from one user are correlated. This is a DENOM error.
+
+Next, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device using users as the denominator (since that is the randomized unit):
+Desktop Control: $4,432 / 56,065 = 7.90\%$.
+Desktop Treatment: $4,659 / 55,978 = 8.32\%$. (Lift positive)
+Mobile Control: $2,544 / 83,444 = 3.05\%$.
+Mobile Treatment: $2,674 / 83,315 = 3.21\%$. (Lift positive)
+Since the lift is positive in both segments and positive in the aggregate (when calculated correctly by user), there is no reversal. No SIMPSON.
+
+Next, I check PEEK and POWER. The test ran from Sept 10 to Oct 10 (30 days), exceeding the planned 28 days. Thus, it was not stopped early. No PEEK. Regarding POWER, the sample size (~139k per arm) is massive compared to the baseline (5%) and target lift (5%). With these counts, the test is highly powered. No POWER issue.
+
+Finally, NOVELTY. The daily lift data shows a clear downward trend: starting at 18.2% and ending around 6.2%, with significant drops in the second half (e.g., day 28 is 3.0%). The team projects the current reported average lift (which includes the high early days) for the next twelve months. Ignoring the fading effect and projecting a transient novelty spike as a permanent lift constitutes a NOVELTY error.
+
+ERRORS: DENOM, NOVELTY
+DECISION: HOLD

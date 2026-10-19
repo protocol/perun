@@ -1,0 +1,20 @@
+Several critical analysis errors are evident in the readout based on the provided numbers.
+
+First, there is a clear **SRM** (Sample Ratio Mismatch) issue when looking at device segments. While the total user split is roughly 50/50 (232,556 vs 233,244), the device allocation is severely skewed.
+Desktop: Control 105,103 vs Treatment 131,315.
+Mobile: Control 127,453 vs Treatment 101,929.
+The treatment arm has significantly more desktop users and significantly fewer mobile users than the control arm. Since users were randomized by user ID, this distribution suggests broken assignment or logging logic correlated with device type.
+
+Second, **SIMPSON**'s paradox is present. The aggregate report claims a massive 21.3% lift (2.791% vs 3.386%). However, calculating the conversion rates per device reveals the opposite trend:
+Desktop Control: $6,517 / 105,103 \approx 6.20\%$
+Desktop Treatment: $7,663 / 131,315 \approx 5.84\%$ (Lift is negative)
+Mobile Control: $2,785 / 127,453 \approx 2.19\%$
+Mobile Treatment: $2,096 / 101,929 \approx 2.06\%$ (Lift is negative)
+Both segments show a decrease in conversion, yet the pooled data shows a large increase. This reversal occurs because the treatment arm has a higher proportion of high-converting desktop users due to the SRM, artificially inflating the overall average.
+
+Third, **PEEK** is indicated. The test planned for 28 days but the final readout occurred on day 15 (Aug 13 to Aug 28). Stopping early based on observed significance (p=0.0) without correction inflates the false positive rate.
+
+Finally, **DENOM** is an issue. The metric is "order conversion rate," typically defined as Orders/Users or Orders/Sessions. The randomization unit is User ID. If the metric calculation inadvertently used sessions as the denominator while users were randomized, or if the session counts vary wildly between arms (Control: 333k sessions, Treatment: 288k sessions) indicating data quality issues, the denominator does not align cleanly with the randomized unit's behavior. Specifically, the session-per-user ratio differs: Control $\approx 1.43$, Treatment $\approx 1.23$. This discrepancy supports the SRM/logging breakage, making the denominator unreliable.
+
+ERRORS: SRM, PEEK, SIMPSON, DENOM
+DECISION: HOLD

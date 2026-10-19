@@ -1,0 +1,30 @@
+**SRM Check**: Total users = 35,473 + 36,445 = 71,918. Expected per arm = 35,959.
+Difference = |35,473 - 35,959| = 486.
+Standard Error (SE) for 50/50 split ≈ $\sqrt{N \times 0.5 \times 0.5} = \sqrt{17,979.5} \approx 134$.
+Z-score = $486 / 134 \approx 3.6$. A Z-score > 1.96 indicates a significant mismatch. The split is not 50/50 by chance; assignment or logging is broken. **SRM flagged.**
+
+**PEEK Check**: Planned duration was 14 days. The readout date is Jan 18, start Jan 8. This is 10 days of data (inclusive). The test was stopped 4 days early. Stopping before the planned duration inflates false positives. **PEEK flagged.**
+
+**POWER Check**: The smaller arm (Control) has 35,473 users.
+Baseline rate = 5.0%, Target lift = 10% (absolute 0.5%).
+Using standard approximation for sample size per arm: $n \approx 16 \times p(1-p) / \delta^2$.
+$n \approx 16 \times 0.05 \times 0.95 / (0.005)^2 = 0.76 / 0.000025 = 30,400$.
+The actual sample (35,473) exceeds the required ~30,400. The test is adequately powered. **POWER not flagged.**
+
+**SIMPSON Check**:
+Desktop Control Rate: $1,214 / 14,313 \approx 8.48\%$. Treatment: $1,310 / 14,705 \approx 8.91\%$. (Lift positive)
+Mobile Control Rate: $559 / 21,160 \approx 2.64\%$. Treatment: $603 / 21,740 \approx 2.77\%$. (Lift positive)
+Both segments show positive lift, matching the pooled direction. No reversal. **SIMPSON not flagged.**
+
+**DENOM Check**: Randomization unit is User ID. Metric is Order Conversion Rate.
+Reported rates: Control $1,773 / 35,473 \approx 5.0\%$? Wait, the readout says 3.704%.
+Let's check the denominator used for the reported rate: $1,773 / 47,869$ (sessions) $\approx 3.70\%$.
+The calculation uses Sessions as the denominator, but users were randomized. If a user has multiple sessions, this violates the independence assumption of the randomization unit. **DENOM flagged.**
+
+**NOVELTY Check**: Daily lifts: 12.1, 14.6, 16.8, 13.7, 12.8, 17.7, 16.5, 15.4, 15.4, 15.9.
+The values fluctuate but do not show a consistent fading trend (e.g., high start, low end). The projection assumes lasting lift, but the data doesn't explicitly show fading yet. **NOVELTY not flagged.**
+
+Errors found: SRM, PEEK, DENOM. These invalidate the statistical validity of the result.
+
+ERRORS: SRM, PEEK, DENOM
+DECISION: HOLD

@@ -1,0 +1,23 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 44,526 (control) + 44,238 (treatment) = 88,764. The expected split is 44,382 per arm. The difference is only 144 users, which is well within the bounds of random chance for this sample size. No SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." The readout reports: Control 3,562 orders / 44,526 users = 7.99%. However, the reported rate is 6.186%. If we divide orders by sessions (3,562 / 57,579), we get exactly 6.186%. The same applies to treatment: 3,701 / 47,914 = 7.724%. Since users were randomized by user ID, but the metric divides by sessions, the denominator does not match the randomization unit. This is a DENOM error.
+
+Now, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device using users as the denominator:
+Desktop Control: 2,303 / 18,416 ≈ 12.51%
+Desktop Treatment: 2,760 / 23,484 ≈ 11.75%
+(Lift is negative: Treatment is worse).
+
+Mobile Control: 1,259 / 26,110 ≈ 4.82%
+Mobile Treatment: 941 / 20,754 ≈ 4.53%
+(Lift is negative: Treatment is worse).
+
+In both segments, the treatment performs worse than the control. Yet, the pooled reported result claims a massive positive lift (24.9%). The aggregate result reverses the direction of the segments. This is a clear case of SIMPSON.
+
+Regarding Power (POWER): The target was an 8% lift on an 8% baseline. The actual observed effect (if calculated correctly by user) is negative. While the test might be underpowered to detect small effects if the variance is high due to the session/user mismatch, the primary failures are the denominator mismatch and the paradoxical aggregation.
+
+Regarding Peek (PEEK): The test ran from April 28 to May 6. This is 8 days (inclusive counting: 28, 29, 30, 1, 2, 3, 4, 5, 6? Or just 8 days of data shown). The plan was 14 days. Stopping at day 8 suggests early stopping, but without knowing the specific sequential testing protocol, it's less definitive than the math errors above. However, the daily lift is stable, not fading (ruling out NOVELTY based on the provided trend).
+
+The critical errors preventing decision are the wrong denominator and the reversed logic in aggregation.
+
+ERRORS: DENOM, SIMPSON
+DECISION: HOLD

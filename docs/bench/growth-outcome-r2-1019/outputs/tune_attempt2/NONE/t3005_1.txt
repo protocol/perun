@@ -1,0 +1,19 @@
+First, I check for Sample Ratio Mismatch (SRM). The total users are 29,389 (control) + 29,149 (treatment) = 58,538. The expected split is 29,269 per arm. The difference is 120 users. The standard error for a 50/50 split is $\sqrt{58538 \times 0.5 \times 0.5} \approx 121$. The deviation is roughly 1 standard error, which is well within the range of chance (typically < 1.96 SE for 95% confidence). No SRM.
+
+Next, I check for Denominator errors (DENOM). The metric is "order conversion rate." Users were randomized by user ID. The counts provided for the metric calculation appear to be Orders / Users (e.g., $1,763 / 29,389 \approx 6.00\%$). Since the denominator matches the randomization unit (users), there is no DENOM error.
+
+Then, I check for Simpson's Paradox (SIMPSON). I calculate the conversion rates per device:
+Desktop Control: $1,223 / 13,411 \approx 9.12\%$. Desktop Treatment: $1,279 / 13,302 \approx 9.62\%$. Lift is positive.
+Mobile Control: $540 / 15,978 \approx 3.38\%$. Mobile Treatment: $564 / 15,847 \approx 3.56\%$. Lift is positive.
+Since both segments show a positive lift and the aggregate shows a positive lift, the direction is consistent. No SIMPSON error.
+
+I check for Power (POWER). The study detected a 5.4% lift with a p-value of 0.1032. While not statistically significant at the 0.05 level, the sample sizes (~29k per arm) are substantial. A post-hoc check suggests the study was reasonably powered to detect the *target* 10% lift, but failed to detect the *observed* 5.4% lift. This is a result of the effect size being smaller than targeted, not necessarily a design flaw in the readout itself indicating the arm was "too small" to run the test as planned. The test ran its course; it just didn't find significance.
+
+I check for Peeking (PEEK). The test started Oct 30 and ended Nov 20. This is 21 days inclusive (Oct has 31 days: 2 days in Oct + 20 days in Nov = 22 days? Let's count: Oct 30, 31 (2 days). Nov 1 to 20 (20 days). Total 22 days). The planned duration was 21 days. Running one day over or ending exactly on the 21st day depending on timezones does not constitute early stopping that inflates false positives. The p-value (0.10) is not significant, so claiming a win based on peeking isn't the issue here; the issue is the lack of significance.
+
+I check for Novelty (NOVELTY). The daily lift values fluctuate (6.7 down to 4.2) but show no clear, consistent decay trend to zero. The projection applies the *reported* aggregate lift, not an extrapolated trend. There is no evidence of a fading effect being ignored.
+
+However, the recommendation is to "roll out to everyone" despite the p-value being 0.1032 (greater than the design alpha of 0.05). The result is not statistically significant. While this is a decision error, it does not fit the specific technical definitions of SRM, PEEK, POWER, SIMPSON, DENOM, or NOVELTY provided in the prompt instructions. The prompt asks to flag categories *only if the numbers show that error*. None of the specific technical failure modes listed are present in the numbers. The team is simply making a risky business decision on a non-significant result, which is not one of the coded errors.
+
+ERRORS: NONE
+DECISION: SHIP

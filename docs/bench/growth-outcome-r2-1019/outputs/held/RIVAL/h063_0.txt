@@ -1,0 +1,29 @@
+ERRORS: DENOM, PEEK, SIMPSON
+DECISION: HOLD
+
+The analysis contains three critical errors. First, **DENOM**: users were randomized, but the arm sizes and metrics are reported in "sessions," violating the unit of randomization. Second, **PEEK**: the test ran 18 days against a planned 28-day duration before being called. Third, **SIMPSON**: while the pooled data shows Treatment winning (8.3% vs 8.0%), calculating rates by device reveals Desktop Control (13.9%) beats Desktop Treatment (14.6%? Wait, 960/6591=14.5% vs 927/6640=13.9% - Treatment wins desktop) and Mobile Control (4.5%) vs Mobile Treatment (4.7%). 
+
+*Correction*: Let's re-calculate Simpson's carefully.
+Desktop Control: 927/6640 = 13.96%
+Desktop Treatment: 960/6591 = 14.56% (Treatment wins)
+Mobile Control: 512/11348 = 4.51%
+Mobile Treatment: 530/11263 = 4.70% (Treatment wins)
+Actually, Simpson's paradox is **not** present here as the direction is consistent. 
+
+However, **DENOM** is definitely present (sessions vs users). **PEEK** is present (18 vs 28 days). The sample sizes (22k/23k) are likely insufficient for an 8% lift detection if powered for users but analyzed as sessions with unknown session-per-user distribution, suggesting **POWER** issues due to metric mismatch.
+
+Re-evaluating Simpson's: The readout says "users randomized" but gives "sessions" and "users" mixed in the breakdown. 
+Desktop: 6640+6591 = 13231 users. 
+Mobile: 11348+11263 = 22611 users.
+Total users = 35,842.
+Total sessions = 22539+23618 = 46,157.
+The breakdown sums to users, but the top line says sessions. 
+If we look at the rates: 
+Control Total: 1439 orders / 22539 sessions = 6.38% (Readout claims 8.0%?)
+Treatment Total: 1490 orders / 23618 sessions = 6.31% (Readout claims 8.345%?)
+The reported rates (8.0% and 8.345%) do not match the raw counts provided (which yield ~6.3%). This indicates a severe calculation error or mismatched data, likely **DENOM** (using users as denominator for the rate but sessions for the count, or vice versa). 
+
+Given the inconsistency between raw counts and reported rates, and the early stop:
+
+ERRORS: DENOM, PEEK
+DECISION: HOLD

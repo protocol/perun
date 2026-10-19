@@ -1,0 +1,44 @@
+**SRM**: The difference in users is $|20,981 - 20,887| = 94$. The denominator is $\sqrt{20,981 + 20,887} = \sqrt{41,868} \approx 204.6$. The ratio is $94 / 204.6 \approx 0.46$. Since $0.46 < 3.5$, there is no sample ratio mismatch.
+
+**POWER**: The baseline rate $p_1 = 0.08$. The target lift is 10%, so $p_2 = 0.08 \times 1.10 = 0.088$.
+The required sample size per arm is:
+$n = 7.85 \times \frac{0.08(0.92) + 0.088(0.912)}{(0.088 - 0.08)^2}$
+$n = 7.85 \times \frac{0.0736 + 0.080256}{0.000064} = 7.85 \times \frac{0.153856}{0.000064} \approx 18,879$.
+The threshold for being underpowered is $0.9 \times 18,879 \approx 16,991$.
+The smaller arm (control) has 20,887 users. Since $20,887 > 16,991$, the test is sufficiently powered.
+
+**PEEK**: The experiment ran from Feb 22 to Mar 24.
+Feb 22 to Feb 28 (2026 is not a leap year) = 7 days (22, 23, 24, 25, 26, 27, 28).
+Mar 1 to Mar 24 = 24 days.
+Total days run = $7 + 24 = 31$ days? Wait, let's count inclusive or duration.
+Start: Feb 22. End: Mar 24.
+Days in Feb remaining: $28 - 22 = 6$ (if starting end of day) or just count dates.
+Let's count dates inclusive: Feb 22, 23, 24, 25, 26, 27, 28 (7 days).
+Mar 1 through 24 (24 days). Total = 31 days.
+Planned duration = 28 days.
+Threshold = $0.8 \times 28 = 22.4$ days.
+Since $31 > 22.4$, the test did not stop early. (Even if calculated as 30 days based on the data list, it is still above 22.4).
+
+**DENOM**: The reported control rate is $5.92\%$.
+Orders / Users = $1,671 / 20,887 \approx 0.0800$ ($8.00\%$).
+Orders / Sessions = $1,671 / 28,226 \approx 0.0592$ ($5.92\%$).
+The reported rate matches Orders/Sessions. Since users were the randomized unit, the denominator is wrong. **Flag DENOM**.
+
+**SIMPSON**:
+Pooled Lift: Treatment rate ($1,806/20,981 \approx 8.61\%$) > Control rate ($8.00\%$). Lift is positive.
+Desktop Lift:
+Control: $1,003 / 7,771 \approx 12.91\%$.
+Treatment: $1,084 / 7,806 \approx 13.89\%$.
+Lift is positive ($13.89 > 12.91$).
+Since the lift is positive in the desktop segment, it is not negative in *every* segment. **No Simpson's paradox**.
+
+**NOVELTY**:
+First three daily lifts: 17.7, 14.8, 12.0. Mean = $(17.7+14.8+12.0)/3 = 44.5/3 \approx 14.83\%$.
+Half of first mean = $7.415\%$.
+Last three daily lifts (days 28, 29, 30): 16.3, 14.4, 14.6. Mean = $(16.3+14.4+14.6)/3 = 45.3/3 = 15.1\%$.
+Is $15.1 < 7.415$? No. The lift is not fading below the threshold. **No Novelty effect**.
+
+Only DENOM is flagged. Using sessions instead of users for the metric when randomization is by user invalidates the statistical inference (p-values and confidence intervals) because the independence assumption is violated (sessions from the same user are correlated). This must be fixed before making a decision.
+
+ERRORS: DENOM
+DECISION: HOLD
