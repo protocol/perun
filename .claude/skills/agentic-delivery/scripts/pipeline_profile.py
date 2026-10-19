@@ -21,7 +21,8 @@ COMMANDS
            time, reruns and flakes, duplicated suites (in seconds), cache hit rate. Ranked bottleneck table.
   fixes    Price the fix catalogue from a profile; each saving is computed from measured numbers. Duplicate
            removal always ranks first when it saves anything.
-  compare  BEFORE.json AFTER.json: measured delta and a KEEP / REVERT / UNVERIFIED verdict for one change.
+  compare  BEFORE.json AFTER.json: measured delta and a KEEP / REVERT / UNVERIFIED verdict for one change;
+           KEEP also needs lead time and merge rate not to regress (`--stage-only` skips that).
 
 DATA SOURCES (stdlib only)
 --------------------------
@@ -857,9 +858,12 @@ def lead_metrics(bundle):
         if greens:
             waits.append(span(max(greens, key=lambda r: ts(r["updated_at"]) or 0)["updated_at"], p["merged_at"]))
         upd.append(sum(span(r["created_at"], r["updated_at"]) or 0.0 for r in rs if _UPDATE_MSG.match(r.get("msg") or "")))
+    merged = [ts(p["merged_at"]) for p in pulls if p.get("merged_at") and ts(p["merged_at"]) is not None]
+    days = {int(t // 86400) for t in merged}  # UTC days; merge rate = merged PRs / calendar days from first to last merge
+    per_day = len(merged) / (max(days) - min(days) + 1) if len(merged) >= 2 else None
     return {"prs": len(cycles), "cycles_median": med(cycles), "first_push_to_merge_s": med(firsts),
             "last_push_to_merge_s": med(lasts), "post_green_wait_s": med(waits),
-            "update_branch_ci_s_per_pr": mean(upd)}
+            "update_branch_ci_s_per_pr": mean(upd), "merged_per_day": per_day}
 
 
 def cache_metrics(root, logs=None):
@@ -1251,14 +1255,25 @@ def price_fixes(P, entries, shards=4, runner_ratio=2.0):
     return out
 
 
-def compare_profiles(before, after, metric, min_gain=MIN_GAIN, min_n=3):
-    """KEEP only if the target metric dropped by more than min_gain (and the noise floor) and both profiles have
-    at least min_n measured runs behind it; REVERT if it did not drop; UNVERIFIED if it cannot be read."""
+GUARD_LEAD, GUARD_RATE = "lead.first_push_to_merge_s", "lead.merged_per_day"  # compare outcome guardrails
+
+
+def get_path(P, path):
+    """Dotted-path lookup in a profile dict; None when any step is missing."""
+    cur = P
+    for part in path.split("."):
+        cur = cur.get(part) if isinstance(cur, dict) else None
+    return cur
+
+
+def compare_profiles(before, after, metric, min_gain=MIN_GAIN, min_n=3, stage_only=False):
+    """KEEP only if the target metric dropped by more than min_gain (and the noise floor), both profiles have
+    at least min_n measured runs behind it, AND the delivery outcome did not regress: lead.first_push_to_merge_s
+    must not rise and lead.merged_per_day must not fall by more than min_gain. A stage that got faster while
+    delivery got slower is REVERT; outcome data missing on either side is UNVERIFIED unless stage_only (then KEEP,
+    labelled stage-only). REVERT if the target did not drop; UNVERIFIED if it cannot be read."""
     def get(P):
-        cur = P
-        for part in metric.split("."):
-            cur = cur.get(part) if isinstance(cur, dict) else None
-        return cur
+        return get_path(P, metric)
     def runs(P):  # samples behind the metric: measured CI runs, or recorded hook timings for a local stage
         if metric.startswith(("ci.", "lead.", "flake.")):
             return (P.get("ci") or {}).get("measured_runs") or 0
@@ -1290,6 +1305,19 @@ def compare_profiles(before, after, metric, min_gain=MIN_GAIN, min_n=3):
     gain = (b - a) / b if b else 0.0
     ok = delta < 0 and gain > min_gain and (b - a) > NOISE_FLOOR_S
     n = " [n=%d]" % min(ns) if ns else ""
+    if ok and stage_only:
+        n += " [stage-only: delivery outcome not checked]"
+    elif ok:
+        for g, up_is_bad, f in ((GUARD_LEAD, True, fmt), (GUARD_RATE, False, lambda v: "%.2f/day" % v)):
+            gb, ga = get_path(before, g), get_path(after, g)
+            if not isinstance(gb, (int, float)) or not isinstance(ga, (int, float)):
+                return {"verdict": "UNVERIFIED", "metric": metric, "before": b, "after": a,
+                        "reason": "outcome not measured: %s missing in %s (use --stage-only to accept a stage-only KEEP)" % (
+                            g, "both" if gb is None and ga is None else "before" if gb is None else "after")}
+            worse = (ga - gb) if up_is_bad else (gb - ga)
+            if worse > 0 and worse > min_gain * gb:
+                return {"verdict": "REVERT", "metric": metric, "before": b, "after": a, "delta_s": delta, "gain": gain,
+                        "reason": "stage improved but delivery outcome regressed: %s %s->%s" % (g, f(gb), f(ga))}
     return {"verdict": "KEEP" if ok else "REVERT", "metric": metric, "before": b, "after": a, "delta_s": delta,
             "gain": gain, "reason": "dropped %.1f%% (%s -> %s)%s" % (100 * gain, fmt(b), fmt(a), n) if ok else
             "did not drop by more than %.0f%% and %s%s" % (100 * min_gain, fmt(NOISE_FLOOR_S), n)}
@@ -1542,7 +1570,7 @@ def cmd_fixes(args):
 
 def cmd_compare(args):
     r = compare_profiles(_load_profile(args.before), _load_profile(args.after), args.metric, args.min_gain,
-                         args.min_samples)
+                         args.min_samples, args.stage_only)
     print("%s  %s" % (r["verdict"], r["reason"]))
     return {"KEEP": 0, "REVERT": 1}.get(r["verdict"], 2)
 
@@ -1564,7 +1592,15 @@ def selftest():
     P = build_profile(".", b, {"rows": [], "stage_s": {}}, smap, None, {"steps": [], "hit_rate": None, "note": ""}, None)
     assert price_fixes(P, [])[0]["per_pr_s"] in (0.0, None)
     assert compare_profiles({"ci": {"measured_runs": 5, "exec_s": {"median": 100.0}}},
-                            {"ci": {"measured_runs": 5, "exec_s": {"median": 60.0}}}, "ci.exec_s.median")["verdict"] == "KEEP"
+                            {"ci": {"measured_runs": 5, "exec_s": {"median": 60.0}}}, "ci.exec_s.median",
+                            stage_only=True)["verdict"] == "KEEP"
+    ld = lambda f, r: {"ci": {"measured_runs": 5, "exec_s": {"median": 100.0 if f == 1000 else 60.0}},
+                       "lead": {"first_push_to_merge_s": f, "merged_per_day": r}}
+    assert compare_profiles(ld(1000, 5), ld(1500, 5), "ci.exec_s.median")["verdict"] == "REVERT"  # proxy better, outcome worse
+    assert compare_profiles(ld(1000, 5), ld(1100, 5), "ci.exec_s.median")["verdict"] == "REVERT"
+    assert compare_profiles(ld(1000, 5), ld(500, 5), "ci.exec_s.median")["verdict"] == "KEEP"
+    assert compare_profiles(ld(1000, 5), ld(500, 4), "ci.exec_s.median")["verdict"] == "REVERT"  # merge rate fell
+    assert compare_profiles(ld(1000, 5), {"ci": ld(500, 5)["ci"]}, "ci.exec_s.median")["verdict"] == "UNVERIFIED"
     assert compare_profiles({"ci": {"measured_runs": 5, "exec_s": {"median": 100.0}}},
                             {"ci": {"measured_runs": 5, "exec_s": {"median": 99.0}}}, "ci.exec_s.median")["verdict"] == "REVERT"
     print("pipeline_profile selftest: ok")
@@ -1630,7 +1666,9 @@ def main(argv=None):
     p = sub.add_parser("compare", help="BEFORE.json AFTER.json -> KEEP / REVERT / UNVERIFIED")
     p.add_argument("before")
     p.add_argument("after")
-    p.add_argument("--metric", default="ci.exec_s.median", help="dotted path in the profile (default ci.exec_s.median)")
+    p.add_argument("--metric", default=GUARD_LEAD, help="dotted path in the profile (default %s)" % GUARD_LEAD)
+    p.add_argument("--stage-only", action="store_true",
+                   help="KEEP on the stage metric alone, labelled stage-only; skips the delivery-outcome guardrails")
     p.add_argument("--min-gain", type=float, default=MIN_GAIN)
     p.add_argument("--min-samples", type=int, default=3, help="runs or timings needed on each side (default 3)")
     p.set_defaults(fn=cmd_compare)

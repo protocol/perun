@@ -100,7 +100,7 @@ pipeline_profile.py profile --data after-bundle.json --out after.json
 pipeline_profile.py compare before.json after.json --metric ci.exec_s.median
 ```
 
-Exit 0 is KEEP, 1 is REVERT, 2 is UNVERIFIED. KEEP needs the metric to fall by more than 5% and more than 1 second, with at least 3 measured runs behind each side. A local timing and a CI timing are different surfaces: name which one each number is, and never report a local speed-up as a CI one. A change whose time did not drop is reverted and the next row is taken.
+Exit 0 is KEEP, 1 is REVERT, 2 is UNVERIFIED. KEEP needs the metric to fall by more than 5% and more than 1 second, with at least 3 measured runs behind each side. A local timing and a CI timing are different surfaces: name which one each number is, and never report a local speed-up as a CI one. A change whose time did not drop is reverted and the next row is taken. The default metric is `lead.first_push_to_merge_s`, and any KEEP also needs delivery not to regress: `lead.first_push_to_merge_s` must not rise and `lead.merged_per_day` must not fall by more than 5%, otherwise REVERT ("stage improved but delivery outcome regressed"); outcome data missing on either side is UNVERIFIED unless `--stage-only` accepts a KEEP labelled stage-only.
 
 ## Worked example: this repository's own pipeline (2026-10-16)
 

@@ -465,7 +465,8 @@ class Fixes(unittest.TestCase):
 
 class Compare(unittest.TestCase):
     def prof(self, v, n=5):
-        return {"ci": {"measured_runs": n, "exec_s": {"median": v}}, "stages_s": {"push": v}}
+        return {"ci": {"measured_runs": n, "exec_s": {"median": v}}, "stages_s": {"push": v},
+                "lead": {"first_push_to_merge_s": 600.0, "merged_per_day": 4.0}}
 
     def test_keep_only_when_the_time_drops(self):
         m = "ci.exec_s.median"
@@ -488,17 +489,17 @@ class Compare(unittest.TestCase):
             rows = [{"stage": "ci", "name": "heavy", "key": None, "n": n, "wall_median_s": v, "cpu_median_s": v}]
             return {"local": {"rows": rows, "stage_s": {}, "by_name": {"heavy": v}}}
         m = "local.by_name.heavy"
-        self.assertEqual(pp.compare_profiles(prof(600.0, 3), prof(200.0, 3), m)["verdict"], "KEEP")
+        self.assertEqual(pp.compare_profiles(prof(600.0, 3), prof(200.0, 3), m, stage_only=True)["verdict"], "KEEP")
         self.assertEqual(pp.compare_profiles(prof(600.0, 1), prof(200.0, 3), m)["verdict"], "UNVERIFIED")
         self.assertEqual(pp.compare_profiles(prof(600.0, 3), prof(590.0, 3), m)["verdict"], "REVERT")
         self.assertEqual(pp.compare_profiles(prof(600.0, 3), prof(200.0, 3), "local.by_name.other")["verdict"], "UNVERIFIED")
-        self.assertEqual(pp.compare_profiles(prof(600.0, 1), prof(200.0, 1), m, min_n=1)["verdict"], "KEEP")
+        self.assertEqual(pp.compare_profiles(prof(600.0, 1), prof(200.0, 1), m, min_n=1, stage_only=True)["verdict"], "KEEP")
 
     def test_a_local_hook_metric_needs_repeated_timings(self):
         def hook(v, n):
             return {"stages_s": {"push": v}, "local": {"rows": [{"stage": "push", "name": "hook:pre-push", "n": n}]}}
         self.assertEqual(pp.compare_profiles(hook(30.0, 1), hook(10.0, 5), "stages_s.push")["verdict"], "UNVERIFIED")
-        self.assertEqual(pp.compare_profiles(hook(30.0, 5), hook(10.0, 5), "stages_s.push")["verdict"], "KEEP")
+        self.assertEqual(pp.compare_profiles(hook(30.0, 5), hook(10.0, 5), "stages_s.push", stage_only=True)["verdict"], "KEEP")
         self.assertEqual(pp.compare_profiles(hook(30.0, 5), {"stages_s": {"push": 10.0}}, "stages_s.push")["verdict"], "UNVERIFIED")
 
     def test_cli_exit_codes(self):
@@ -508,7 +509,7 @@ class Compare(unittest.TestCase):
 
             def rc(x, y):
                 return subprocess.run([sys.executable, TOOL, "compare", os.path.join(d, x + ".json"),
-                                       os.path.join(d, y + ".json")], capture_output=True, text=True).returncode
+                                       os.path.join(d, y + ".json"), "--metric", "ci.exec_s.median"], capture_output=True, text=True).returncode
             self.assertEqual((rc("b", "a"), rc("b", "c"), rc("b", "missing")), (0, 1, 2))
 
 

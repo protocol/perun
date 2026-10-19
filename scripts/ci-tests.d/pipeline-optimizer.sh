@@ -3,3 +3,4 @@ python3 .claude/skills/agentic-delivery/scripts/pipeline_profile.py --selftest
 python3 scripts/test_pipeline_profile.py
 python3 scripts/test_pipeline_profile_failclosed.py
 bash scripts/test-selftest-stamps.sh
+python3 scripts/test_pipeline_profile_outcome_guardrail.py
