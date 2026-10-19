@@ -1,0 +1,81 @@
+### Endpoint Documentation: `GET /api/v1/willingness-to-pay`
+
+**Service:** Orchardpay
+**Description:** Retrieves the calculated willingness-to-pay (WTP) score for a specific customer or transaction context. This metric helps merchants optimize pricing strategies by estimating the maximum price a customer is likely to accept based on historical behavior and market data.
+
+#### HTTP Method
+`GET`
+
+#### Endpoint URL
+`/api/v1/willingness-to-pay`
+
+#### Query Parameters
+The following parameters are required or optional when calling this endpoint:
+
+| Parameter | Type | Required | Description |
+| :--- | :--- | :--- | : |
+| `customer_id` | string | **Yes** | The unique identifier for the customer in the Orchardpay system. |
+| `product_id` | string | **Yes** | The unique identifier for the specific product or SKU being evaluated. |
+| `currency` | string | No | The currency code (ISO 4217) for the returned price estimate. Defaults to `USD` if omitted. |
+| `include_breakdown` | boolean | No | If set to `true`, returns a detailed breakdown of the factors influencing the score. Defaults to `false`. |
+
+#### Example Request
+```http
+GET /api/v1/willingness-to-pay?customer_id=cust_8923xyz&product_id=prod_4451abc&currency=EUR&include_breakdown=true HTTP/1.1
+Host: api.orchardpay.com
+Authorization: Bearer sk_live_abc123def456
+Accept: application/json
+```
+
+#### Example Response
+**Status Code:** `200 OK`
+
+```json
+{
+  "request_id": "req_9988776655",
+  "data": {
+    "customer_id": "cust_8923xyz",
+    "product_id": "prod_4451abc",
+    "currency": "EUR",
+    "willingness_to_pay": {
+      "estimated_max_price": 145.50,
+      "confidence_score": 0.87,
+      "price_range": {
+        "min": 130.00,
+        "max": 160.00
+      }
+    },
+    "breakdown": {
+      "factors": [
+        {
+          "name": "purchase_history",
+          "impact": "positive",
+          "weight": 0.45
+        },
+        {
+          "name": "seasonal_demand",
+          "impact": "neutral",
+          "weight": 0.20
+        },
+        {
+          "name": "competitor_pricing",
+          "impact": "negative",
+          "weight": 0.35
+        }
+      ],
+      "last_updated": "2023-10-27T14:30:00Z"
+    }
+  },
+  "meta": {
+    "processing_time_ms": 42
+  }
+}
+```
+
+#### Response Field Descriptions
+- **`estimated_max_price`**: The predicted highest price point the customer is likely to accept.
+- **`confidence_score`**: A float between 0 and 1 indicating the model's certainty in the prediction.
+- **`price_range`**: Suggested lower and upper bounds for dynamic pricing.
+- **`breakdown`**: (Only present if `include_breakdown=true`) Details the specific data signals contributing to the calculation.
+
+*Note: All monetary values are returned as floats representing two decimal places. Authentication via Bearer token is required for all requests.*

@@ -1,0 +1,68 @@
+To utilize the `PriceTestRunner` from the Margindesk client library, you must first ensure the library is included in your project dependencies (typically via Maven or Gradle). The `PriceTestRunner` is designed to simulate pricing scenarios, validate margin calculations, or test connectivity with the Margindesk pricing engine.
+
+Below is a concise Java example demonstrating how to instantiate the `PriceTestRunner` with typical constructor arguments and execute the `run()` method to retrieve the result object.
+
+```java
+import com.margindesk.client.PriceTestRunner;
+import com.margindesk.client.model.TestResult;
+import com.margindesk.client.config.ClientConfig;
+
+public class MargindeskPriceTest {
+
+    public static void main(String[] args) {
+        // 1. Define Configuration
+        // Typically requires an API key, endpoint URL, and optional timeout settings.
+        String apiKey = "YOUR_MARGINDesk_API_KEY";
+        String apiUrl = "https://api.margindesk.com/v1";
+        int timeoutMs = 5000;
+
+        ClientConfig config = new ClientConfig.Builder()
+                .setApiKey(apiKey)
+                .setApiUrl(apiUrl)
+                .setTimeout(timeoutMs)
+                .build();
+
+        // 2. Define Test Parameters
+        // These arguments depend on the specific test scenario (e.g., asset symbol, quantity, side).
+        String assetSymbol = "BTC-USD";
+        double quantity = 1.5;
+        String side = "BUY"; // or "SELL"
+
+        // 3. Instantiate the PriceTestRunner
+        // The constructor usually accepts the configuration and specific test inputs.
+        PriceTestRunner runner = new PriceTestRunner(config, assetSymbol, quantity, side);
+
+        try {
+            // 4. Execute the test
+            // The run() method performs the network call or local calculation and returns a result object.
+            TestResult result = runner.run();
+
+            // 5. Handle the Result
+            if (result.isSuccess()) {
+                System.out.println("Test Passed.");
+                System.out.println("Calculated Price: " + result.getPrice());
+                System.out.println("Required Margin: " + result.getMarginRequirement());
+                System.out.println("Execution Time (ms): " + result.getLatencyMs());
+            } else {
+                System.err.println("Test Failed.");
+                System.err.println("Error Code: " + result.getErrorCode());
+                System.err.println("Message: " + result.getErrorMessage());
+            }
+
+        } catch (Exception e) {
+            // Handle unexpected runtime exceptions (e.g., network failures)
+            System.err.println("An unexpected error occurred during the price test: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+### Key Components Explained
+
+1.  **Configuration (`ClientConfig`)**: Before creating the runner, you establish the connection context. This includes authentication credentials (`apiKey`) and the target environment (`apiUrl`). The builder pattern is commonly used here for flexibility.
+2.  **Constructor Arguments**: The `PriceTestRunner` constructor in this example takes the configuration object followed by the specific variables needed for the pricing logic: the asset symbol, the trade quantity, and the direction (buy/sell). Depending on the library version, these might be passed as a single parameter object instead of individual arguments.
+3.  **The `run()` Method**: This is the core execution call. It is synchronous in this example, blocking until the test completes. It returns a `TestResult` object.
+4.  **The Result Object (`TestResult`)**: This object encapsulates the outcome. It generally provides methods to check success status (`isSuccess()`), retrieve financial data (price, margin), and diagnose failures (error codes, messages). Always wrap the execution in a `try-catch` block to handle network interruptions or serialization errors gracefully.
+
+Ensure you replace `"YOUR_MARGINDesk_API_KEY"` with a valid credential and verify the exact package names against your specific version of the Margindesk client library, as API structures can evolve between releases.

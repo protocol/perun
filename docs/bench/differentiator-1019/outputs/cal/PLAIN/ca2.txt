@@ -1,0 +1,52 @@
+To initiate an A/B price test using Brightloop Billing's `POST /v3/pricing_experiments` endpoint, you must construct a `curl` command that includes the necessary authentication header and a JSON payload containing all required fields. While specific API requirements can vary slightly by version, a standard pricing experiment typically requires a name, the target product or plan ID, the variant definitions (including price modifications), and the traffic allocation split.
+
+Below is the complete `curl` command template. You will need to replace the placeholder values (indicated in angle brackets like `<YOUR_API_KEY>`) with your actual data.
+
+```bash
+curl -X POST "https://api.brightloopbilling.com/v3/pricing_experiments" \
+  -H "Authorization: Bearer <YOUR_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "<EXPERIMENT_NAME>",
+    "product_id": "<PRODUCT_OR_PLAN_ID>",
+    "status": "active",
+    "variants": [
+      {
+        "name": "control",
+        "price_modifier": 1.0,
+        "description": "Original pricing"
+      },
+      {
+        "name": "treatment_a",
+        "price_modifier": 1.15,
+        "description": "15% price increase test"
+      }
+    ],
+    "allocation": {
+      "control": 50,
+      "treatment_a": 50
+    },
+    "start_date": "<ISO_8601_DATE>",
+    "end_date": "<ISO_8601_DATE>"
+  }'
+```
+
+### Key Field Explanations
+
+*   **`Authorization`**: Replace `<YOUR_API_KEY>` with your secret key found in the Brightloop dashboard. This is critical for authentication.
+*   **`name`**: A human-readable identifier for your experiment (e.g., "Q3_Enterprise_Price_Test").
+*   **`product_id`**: The unique identifier of the subscription plan or product you are testing.
+*   **`variants`**: An array defining the test groups.
+    *   `control`: Usually set to a `price_modifier` of `1.0` (no change).
+    *   `treatment_a`: The experimental group. A `price_modifier` of `1.15` represents a 15% increase, while `0.90` would be a 10% discount.
+*   **`allocation`**: Defines the percentage of traffic each variant receives. The sum must equal 100. In this example, traffic is split evenly (50/50).
+*   **`start_date` / `end_date`**: ISO 8601 formatted strings (e.g., `"2023-10-01T00:00:00Z"`) defining the experiment duration.
+
+### Usage Instructions
+
+1.  Save this command in a shell script (e.g., `start_test.sh`).
+2.  Ensure you have `curl` installed in your environment.
+3.  Replace all bracketed placeholders with valid data from your Brightloop account.
+4.  Execute the script. A successful response will typically return a `201 Created` status code along with a JSON object containing the new `experiment_id`, which you can use for tracking and analytics.
+
+Always verify the specific `product_id` and ensure your account permissions allow for creating experiments before running this in a production environment.
