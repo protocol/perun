@@ -43,6 +43,9 @@ SUBCOMMANDS
               names the culprit — the member whose inclusion breaks the gate.
               Members outside a prefix are held out for that prefix's entire
               verification run, never re-admitted mid-search (#1119).
+          A member parked on a conflict earlier in a run that then names a
+          culprit is un-parked (UNTRY) and rebuilt in at once: it may only have
+          clashed with the culprit; a real conflict re-parks it.
           A parked member stays excluded from every later plan/verify until its
           head changes. The surviving union is rebuilt immediately. When a
           union is green the base SHA and member heads are recorded in --state.
@@ -645,18 +648,29 @@ class Train:
                 lo = mid
         return members[hi - 1], f"breaks gate after {names(members[:hi - 1]) or 'base'}"
 
+    def untry(self, member, culprit):
+        """Un-park `member`: it was parked on a conflict, but a culprit that conflicted with it is now named and parked."""
+        self.state["parked"].pop(str(member["number"]), None)
+        self.save()
+        self.say(f"UNTRY #{member['number']} (conflict parked while culprit {culprit} was still in the union)")
+
     def verify(self):
-        """The `verify` subcommand: find the largest green union, parking culprits; record it."""
+        """The `verify` subcommand: find the largest green union, parking culprits; record it.
+
+        A member parked on a conflict in a union that then fails the gate may only have clashed with the culprit:
+        once the culprit is named it is un-parked and rebuilt in at once (a real conflict re-parks it).
+        """
         members = self.eligible()
         self.base_sha, members = self.fetch(members)
         members = self.screen(members)  # a recorded, unlanded keystone parks its copies (#1142)
-        parked_any = False
+        parked_any, held = False, []
         while members:
             try:
                 why = self.fails(members, f"union {names(members)}")
             except Conflict as c:
                 self.park(c.member, "conflict " + ",".join(clean(f, 60) for f in c.files[:5]))
                 members, parked_any = [m for m in members if m is not c.member], True
+                held.append(c.member)
                 continue  # #1134: rebuild at once, never a sleep per conflict
             if not why:
                 self.state.update(base=self.a.base, base_sha=self.base_sha, members=members)
@@ -664,9 +678,13 @@ class Train:
                 self.say(f"GREEN base={self.base_sha[:7]} members={names(members)}")
                 return OK
             guilty = self.attribute(members) if why.startswith("cap") else []
-            for m, reason in guilty or [self.bisect(members)]:
+            culprits = guilty or [self.bisect(members)]
+            for m, reason in culprits:
                 self.park(m, reason)
                 members, parked_any = [x for x in members if x is not m], True
+            for h in held:
+                self.untry(h, names([m for m, _ in culprits]))
+            members, held = sorted(members + held, key=lambda x: x["number"]), []
         self.state.update(base=self.a.base, base_sha=self.base_sha, members=[])
         self.save()
         self.say("RED no green union: every member parked" if parked_any else "NOOP no eligible members")
@@ -1414,6 +1432,7 @@ class FakeForge:
         self.bad = set()  # a union containing any of these fails verify
         self.flaky_left = 0  # the next N verify runs fail, then pass
         self.conflicts = set()  # these conflict when merged after any other member
+        self.clash = {}  # n -> members it conflicts with when merged after one of them
         self.delta, self.marked = {}, set()
         self.view_override, self.merge_fail, self.intruder = {}, set(), False
         self.trees, self.calls, self.sleeps, self.gates = {}, [], [], []
@@ -1491,7 +1510,7 @@ class FakeForge:
             return 0, "", ""
         if a[:2] == ["git", "merge"] and cwd:
             n = next((k for k, p in self.prs.items() if p["head"] == a[-1]), None) or int(a[-1][1:])
-            if n in self.conflicts and self.trees[cwd]["merged"]:
+            if (n in self.conflicts and self.trees[cwd]["merged"]) or self.clash.get(n, set()) & set(self.trees[cwd]["merged"]):
                 self.trees[cwd]["conflict"] = True
                 return 1, "", "CONFLICT"
             self.trees[cwd]["merged"].append(n)
@@ -1611,6 +1630,15 @@ def _selftest() -> int:
         ok = (rc == OK and all(f"PARK #{n} conflict src/shared.py" in out for n in (2, 3, 4))
               and "GREEN base=B0 members=#1" in out and f.sleeps == [] and f.gates == [(1,)])
         return ok, (out, f.sleeps, f.gates)
+
+    def conflict_with_culprit_is_untried_after_bisect():
+        f = FakeForge(4)
+        f.bad, f.clash = {2}, {3: {2}}
+        rc, out = go(f, "verify", "--verify-cmd", "t", state=fresh("u.json"))
+        ok1 = (rc == OK and "PARK #3 conflict src/shared.py" in out and "PARK #2 breaks gate after #1" in out
+               and "UNTRY #3" in out and "GREEN base=B0 members=#1,#3,#4" in out)
+        rc2, out2 = go(f, "verify", "--verify-cmd", "t", state="u.json")
+        return ok1 and "SKIP #2 parked" in out2 and "SKIP #3" not in out2, (out, out2)
 
     def flaky_passes_on_retry_with_bounded_backoff():
         f = FakeForge(2)
@@ -2410,6 +2438,7 @@ def _selftest() -> int:
         ("plan-filters-latest-check-per-name-and-K", plan_filters),
         ("culprit-among-four-isolated-and-stays-parked", culprit_among_four_is_isolated_and_stays_parked),
         ("conflicts-all-parked-in-one-cycle-no-sleep", conflicts_all_parked_in_one_cycle_without_sleeping),
+        ("conflict-with-culprit-untried-after-bisect", conflict_with_culprit_is_untried_after_bisect),
         ("flaky-passes-on-retry-bounded-backoff", flaky_passes_on_retry_with_bounded_backoff),
         ("deterministic-failure-parks-member", deterministic_failure_parks_member),
         ("all-members-bad-is-red", all_members_bad_is_red),

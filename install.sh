@@ -567,8 +567,6 @@ HOUSE
     [[ -f "${OPLAYER_LOCAL}" ]] || { echo '{}' > "${OPLAYER_LOCAL}"; OPLAYER_LOCAL_NEW=1; }
     OPLAYER_PRE="$(mktemp "${TMPDIR:-/tmp}/perun.XXXXXX")"; cp "${OPLAYER_LOCAL}" "${OPLAYER_PRE}"
     # Append template hook entries not already present; existing env/model win.
-    # Placeholder matchers (contain "<") never fire: skip them, tell the operator.
-    echo "warning: skipped template hook entries with a placeholder matcher (e.g. <your-read-only-review-type>); add a SubagentStop entry with your real review agent type by hand" >&2
     # dm: recursive merge, existing (right) values win, arrays unioned (existing order first).
     # autoCompactWindow 200000: only when no user/project/local settings file sets it (local would shadow a user's value) and policy auto_compact is not off.
     OPLAYER_AC=200000
@@ -592,7 +590,7 @@ HOUSE
       (.hooks[]?[]?.hooks[]? | select((.command? | type) == "string") | .command) |= up
       | reduce ($t.hooks | keys[]) as $e (.;
           (.hooks[$e] // []) as $a
-          | .hooks[$e] = $a + ($t.hooks[$e] | map(select(((.matcher // "") | contains("<") | not) and (. as $x | $a | index([$x]) | not)))))
+          | .hooks[$e] = $a + ($t.hooks[$e] | map(select(. as $x | $a | index([$x]) | not))))
       | .env = ($t.env + (.env // {}))
       | (if $t.sandbox then .sandbox = dm($t.sandbox; .sandbox // {}) else . end)
       | (if $t.permissions then .permissions = dm($t.permissions; .permissions // {}) else . end)

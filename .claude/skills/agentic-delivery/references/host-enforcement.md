@@ -133,8 +133,8 @@ script header.
 **A harness with no report file** (a review lane's findings ARE its chat
 answer) still needs a cap, never an exemption (exempt = uncapped). Matching
 hooks run in parallel and any block wins, so give that type its own entry
-(`matcher` = the type, env `HANDBACK_MAX_LINES=25 HANDBACK_MAX_CHARS=2000`,
-as in the template), list it in
+(`matcher` = the type, env `HANDBACK_MAX_LINES=25 HANDBACK_MAX_CHARS=2000`;
+add by hand), list it in
 `LANE_RULES_SKIP_TYPES`, and scope the default entry's `matcher` to leave it
 out: a matcher with other characters is a JavaScript regex, e.g.
 `^(?!security-reviewer$).*`.

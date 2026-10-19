@@ -8,16 +8,10 @@ W="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-ur.XXXXXX")"; trap 'rm -rf "$W"' EXIT
 fail=0
 ok() { if [ "$1" -eq 0 ]; then echo "PASS  $2"; else echo "FAIL  $2"; fail=1; fi; }
 
-# 1) install.sh drops placeholder-matcher entries; selfcheck flags a placeholder matcher.
-if command -v jq >/dev/null 2>&1; then
-  mkdir -p "$W/t/.claude"; echo '{}' >"$W/t/.claude/settings.local.json"
-  err="$(bash "$ROOT/install.sh" --with-delivery --apply-operating-layer "$W/t" 2>&1 >/dev/null)"
-  [ "$(jq '[.hooks.SubagentStop[] | select((.matcher // "") | contains("<"))] | length' "$W/t/.claude/settings.local.json")" = 0 ] \
-    && grep -q "placeholder matcher" <<<"$err"; ok $? "apply-operating-layer: placeholder matcher skipped with warning"
-fi
+# 1) a fresh install wires the SubagentStop cap with no placeholder entry and no placeholder warning (scripts/test-fresh-install-subagentstop.sh).
 cp "$ROOT/.claude/skills/agentic-delivery/templates/operating-layer.settings.json" "$W/raw.json"
-python3 "$SC/operating_selfcheck.py" --settings "$W/raw.json" 2>&1 | grep -i "handback-cap-two-tier" | grep -q MISSING
-ok $? "operating_selfcheck: placeholder matcher is not configured"
+python3 "$SC/operating_selfcheck.py" --settings "$W/raw.json" 2>&1 | grep -i "handback-cap-two-tier" | grep -q PRESENT
+ok $? "operating_selfcheck: the template's handback cap is PRESENT"
 
 # 2) reap_own: age() of a PID that already exited must be empty, not abort under set -e.
 sleep 0.3 & gone=$!; wait "$gone" 2>/dev/null
