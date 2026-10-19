@@ -28,8 +28,9 @@ F=.claude/skills/deep-code-review
 
 run; ok $rc "clean range passes"
 
-# raise the first skill row one byte past max(its row, its file's size): the ratchet's old value is that max, and a
-# lane that grew the file without committing the row (derived rows are not committed) leaves the row below the size
+# LANDED tree (VERSION moved vs base): the committed row is ratcheted as-is. Raise the first skill row one byte past
+# max(its row, its file's size): the ratchet's old value is that max.
+echo 9.9.9 >"$R/$F/VERSION"
 python3 - "$R" <<'PY'
 import os, sys
 r = sys.argv[1]; p = os.path.join(r, "scripts/size-budgets.tsv"); out = []; done = False
@@ -41,6 +42,21 @@ for ln in open(p).read().split("\n"):
 open(p, "w").write("\n".join(out))
 PY
 red size-ratchet 'size-ratchet'
+# UNLANDED tree: CI runs regen-unlanded.sh before the ratchet, so a lane that only GREW a skill file (row never
+# committed) is a raise CI refuses. The hook must refuse it too, quote the marker, and leave the user tree alone.
+ref="$(cd "$R" && ls $F/references/*.md | head -1)"
+head -c 300 /dev/zero | tr '\0' 'x' >>"$R/$ref"; echo >>"$R/$ref"
+g add -A; g commit -q -m "plant unlanded growth" -m "No-Mechanism-Reason: planted test growth"; run
+{ [ "$rc" -ne 0 ] && grep -q 'FAIL -- size-ratchet' "$WORK/log" && grep -q 'RATCHET FAIL' "$WORK/log"; }; ok $? "unlanded growth refused (size-ratchet after regen, as CI does)"
+mk="$(sed -n 's/.*RATCHET FAIL: \([^ ]*\) raised \([0-9]*\)->\([0-9]*\) bytes.*/size-budget-raise: \1 \2→\3/p' "$WORK/log" | head -1)"
+[ -z "$(g status --porcelain)" ]; ok $? "user tree untouched by the regen"
+[ -z "$(g worktree list | sed 1d)" ]; ok $? "throwaway worktree removed"
+g commit -q --amend -m "plant unlanded growth" -m "$mk because the planted growth is deliberate" -m "No-Mechanism-Reason: planted test growth"; run
+{ [ "$rc" -eq 0 ] && [ -n "$mk" ]; }; ok $? "unlanded growth with its marker line passes"
+g reset -q --hard "$B"
+# bench-check: CI runs bench_check.py --changed over new docs/bench dirs; a new bench with no ledger is refused here too
+mkdir -p "$R/docs/bench/zz-plant"; echo '[{"id": "a", "prompt": "planted"}]' >"$R/docs/bench/zz-plant/scenarios.json"
+red bench-check 'bench_check --changed'
 awk -F'\t' 'BEGIN{OFS=FS} $1=="phase-floor-light"{$2=1} {print}' "$R/scripts/mustload-budgets.tsv" >"$WORK/t" && cp "$WORK/t" "$R/scripts/mustload-budgets.tsv"
 red mustload 'mustload'
 python3 - "$R/$F/evals/evals.json" <<'PY'
