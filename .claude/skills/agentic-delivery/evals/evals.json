@@ -2943,6 +2943,17 @@
         "Says the remote is queried at most once per 15 minutes and the cached verdict is replayed between",
         "Says it fails open and has only off and warn modes (policy landing_watchdog, landing_stall_min, env PERUN_LANDING_WATCHDOG)"
       ]
+    },
+    {
+      "id": "background-work-guard-handback",
+      "prompt": "A lane started a long test run in the background from its worktree and handed back before it finished; the orchestrator then merged on a result that never completed. Which existing hook should catch this, what does it check, and how is it configured?",
+      "expected_output": "The SubagentStop hook handback_cap.py, extended rather than a new hook (it already blocks a handback while a git push from the worktree is live). When the lane's cwd is inside a linked worktree and a test or build runner (pytest, jest, make, npm test, cargo test and similar) has its cwd inside it, it names the pid and command: in warn mode (the default) as a systemMessage to the owner, in block mode with exit 2 so the lane waits, released after the same 30-minute bound as the push check. Policy key background_guard (off|warn|block) or env PERUN_BACKGROUND_GUARD. It scans with lane_liveness.cwd_pids plus one ps, excludes the hook's own pid, ancestors and descendants, ignores dev servers and a shared checkout, and fails open with COULD_NOT_CHECK when ps or lsof cannot answer.",
+      "expectations": [
+        "Names handback_cap.py (SubagentStop) as the place to extend, not a second hook, because it already holds the live-push check",
+        "Says it finds processes whose cwd is inside the lane's linked worktree and that name a test or build runner, and reports the pid and command",
+        "Says warn is the default and block exits 2 with a bounded release, configured by policy background_guard or env PERUN_BACKGROUND_GUARD",
+        "Says it excludes the hook's own process tree and fails open (COULD_NOT_CHECK) rather than wedging a handback"
+      ]
     }
   ]
 }
