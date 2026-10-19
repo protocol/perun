@@ -94,7 +94,7 @@ class Compare(unittest.TestCase):
     def test_known_stage_metrics_count_their_samples(self):
         b = {"ci": {"measured_runs": 5}, "stages_s": {"ci_exec": 100.0}}
         a = {"ci": {"measured_runs": 5}, "stages_s": {"ci_exec": 50.0}}
-        self.assertEqual(pp.compare_profiles(b, a, "stages_s.ci_exec")["verdict"], "KEEP")
+        self.assertEqual(pp.compare_profiles(b, a, "stages_s.ci_exec", stage_only=True)["verdict"], "KEEP")
         a["ci"]["measured_runs"] = 1
         self.assertEqual(pp.compare_profiles(b, a, "stages_s.ci_exec")["verdict"], "UNVERIFIED")
 

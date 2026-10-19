@@ -87,8 +87,10 @@ The raw API bundle is not committed (it holds commit messages and branch names);
 
 ```
 python3 .claude/skills/agentic-delivery/scripts/pipeline_profile.py profile --repo protocol/perun --workflow ci.yml --runs 30 --data after-bundle.json --out after.json
-python3 .claude/skills/agentic-delivery/scripts/pipeline_profile.py compare docs/bench/pipeline-1016/before-profile.json after.json --metric ci.exec_s.median
+python3 .claude/skills/agentic-delivery/scripts/pipeline_profile.py compare docs/bench/pipeline-1016/before-profile.json after.json --metric ci.exec_s.median --stage-only
 ```
+
+`--stage-only` is needed because `before-profile.json` predates the delivery-outcome fields (`lead.merged_per_day`); without it the compare is UNVERIFIED ("outcome not measured"). The KEEP it gives is labelled stage-only: it says nothing about push-to-merge lead time.
 
 Exit 0 is KEEP, 1 is REVERT, 2 is UNVERIFIED (too few samples).
 

@@ -627,6 +627,7 @@ gate "$GATES" size-ratchet --base "origin/main" --config "$ROOT/scripts/size-bud
 if [ "$GATE_RC" -eq 0 ]; then
   record 0 "size-ratchet: the real repo config drops no row for a file that still exists vs origin/main"
 else
+  sed 's/^/  /' "$WORK/last.log" >&2
   record 1 "size-ratchet: the real repo config drops no row for a file that still exists vs origin/main"
 fi
 
