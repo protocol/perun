@@ -70,6 +70,8 @@ cwd inside that worktree, `warn` sends the owner a `systemMessage` naming the pi
 same text on stderr (released after PUSH_MAX_S, like a live push). Dev servers are not matched. The scan reuses
 lane_liveness.cwd_pids (lsof, else /proc) plus one `ps`, excludes this hook's own pid, ancestors and descendants, and
 fails open: a blind scan prints COULD_NOT_CHECK and never blocks. A non-worktree cwd (a shared checkout) is not scanned.
+When the scan finds nothing but the handback text itself says the lane is "waiting on" its background tests (WAIT_RE),
+a `systemMessage` flags it in every mode but `off`; never a block (the text is a claim, not evidence).
 
 LANE AUDIT (default on). Whenever the stop is allowed (also for exempt types,
 flagged `exempt`), one JSON line per lane is appended to a local ledger so
@@ -254,6 +256,38 @@ def _ps_table(text):
     rows = (ln.split(None, 2) for ln in text.splitlines())
     return {int(a): (int(b), c) for a, b, c in (r for r in rows if len(r) == 3) if a.isdigit() and b.isdigit()}
 
+# The lane's own words: it hands back "waiting on" its background tests. Advisory only (see check()).
+_WAIT_KW = (r"(?:background|bg|tests?|test\s+(?:suite|run)|suites?|builds?|pytest|playwright|e2e|gates?|pre-push|ci|checks?"
+            r"|lint|workflows?|actions|jobs?|runs?)")
+WAIT_RE = re.compile(
+    r"\b(?:waiting|awaiting)\s+(?:on\s+|for\s+)?(?:[\w-]+\s+){0,3}?" + _WAIT_KW + r"\b"
+    r"|\b(?:background|bg)\s+(?:\w+\s+){0,2}?(?:is\s+|are\s+)?(?:still\s+)?running"
+    r"|\b" + _WAIT_KW + r"\s+(?:[\w-]+\s+){0,2}?(?:is\s+|are\s+)?still\s+(?:running|going)"
+    r"|running\s+in\s+(?:the\s+)?background", re.IGNORECASE)
+# Words in the claim's own clause that cancel it: a negation, a wait on a person rather than on background work, or
+# CI on main rather than the lane's own. A past tense cancels only "running in the background", and only in the
+# three words before it ("that was running in the background"), so "I ran the suite and I am waiting on CI" counts.
+_NOT_A_CLAIM = re.compile(r"\b(?:not|no|never|longer|nothing|none|nobody|owner|parent|human|user|approv\w*|decision|review\w*"
+                          r"|main|pre-existing)\b|n't\b", re.IGNORECASE)
+_PAST = re.compile(r"\b(?:was|were|had|ran|finished|killed|stopped)\b", re.IGNORECASE)
+_CLAUSE_END = re.compile(r"[.;:,!?()\u2013\u2014]|\s-\s|\b(?:after|and|then|but)\b")
+
+
+def _waiting_claim(msg):
+    """True when a counted line of `msg` (fences and '! ' lines excluded, as for the cap) claims the lane is waiting
+    on background work. A match whose own clause (the text back to the previous punctuation, and the next five words
+    after it) carries a negation ("not waiting on tests", "wait for CI not needed") or names a person ("waiting on
+    owner to run tests") does not count. A heuristic: it misses wordings it has no keyword for, which is why it only
+    advises."""
+    for ln in _counted(msg):
+        for m in WAIT_RE.finditer(ln):
+            head = _CLAUSE_END.split(ln[:m.start()])[-1]
+            tail = " ".join(_CLAUSE_END.split(ln[m.end():])[0].split()[:5])
+            past = m.group(0).lower().startswith("running") and _PAST.search(" ".join(head.split()[-3:]))
+            if not (_NOT_A_CLAIM.search(head + " " + m.group(0) + " " + tail) or past):
+                return True
+    return False
+
 
 def _bg_found(table, pids, me):
     """[(pid, command)] of test/build processes among `pids`. `table` maps pid -> (ppid, command). Never counts `me`,
@@ -351,6 +385,8 @@ def check(data):
         if mode == "warn":
             print(json.dumps({"systemMessage": f"background_guard: this lane handed back with a test/build still running from its worktree: {what}."}))
     msg = data.get("last_assistant_message") or ""
+    if not bg and mode != "off" and _waiting_claim(msg):  # scan saw nothing (or was blind) but the lane says it is waiting
+        print(json.dumps({"systemMessage": "background_guard: this lane's handback says it is waiting on background work; it must wait in its own turn (lane_guard.py wait) and hand back the result."}))
     chars, lines, too_long = _shape(msg)  # fields-only and the 400/8 target never block: audit() logs them
     no_status = _require_status() and not STATUS_RE.search(msg)
     if not (too_long or no_status):
