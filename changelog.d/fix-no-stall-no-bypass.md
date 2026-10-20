@@ -1,0 +1,3 @@
+### Fixed
+- Pre-push gate: when the host sandbox denies `git worktree add` for the throwaway checkout, `pre-push-verify.sh` now falls back to a shared clone in `TMPDIR` and still runs the gate. Before, a host restriction turned into "the gate cannot run", and that pressure ends in `--no-verify`. If both the worktree and the clone fail, the push is still refused with the cause named. Tests: `scripts/test-prepush-ci-parity.sh`.
+- Landing banners (`train_land.sh`, `land_train.sh`): a classifier deny on a merge now parks only that merge for the owner. Every other lane, review and build keeps going, so a single denied action no longer reads as "stop the run". Tests: `scripts/test-peer-pains-4.sh`.

@@ -380,7 +380,16 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       fg_tmp="$(mktemp -d "${TMPDIR:-/tmp}/dcr-prepush.XXXXXX")"
       trap fg_cleanup EXIT
       trap 'fg_cleanup; exit 130' INT TERM
-      if git worktree add -q --detach "${fg_tmp}/t" "${local_sha}" >/dev/null 2>&1; then
+      # A sandbox that denies writes under .git/worktrees still allows a shared clone in TMPDIR: fall back to it,
+      # so a host restriction never turns into "the gate cannot run" (the pressure that ends in --no-verify).
+      if git worktree add -q --detach "${fg_tmp}/t" "${local_sha}" >/dev/null 2>&1 \
+        || { printf 'pre-push-verify: note -- git worktree add denied; using a shared clone instead.\n' >&2
+             # Own git env (an inherited GIT_DIR would point checkout at the host); copy the host's remote-tracking
+             # refs so origin/<default> in the clone is the host's, as in a worktree, not the host's local branch.
+             (unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+              git clone -q --shared --no-checkout "${PWD}" "${fg_tmp}/t" \
+                && git -C "${fg_tmp}/t" fetch -q "${PWD}" '+refs/remotes/*:refs/remotes/*' \
+                && git -C "${fg_tmp}/t" checkout -q --detach "${local_sha}") >/dev/null 2>&1; }; then
         fg_tree="${fg_tmp}/t"
         fg "regen-unlanded.sh (CI runs it before the ratchet)" "run 'bash scripts/regen-unlanded.sh ${fg_base}' on a clean checkout and fix what it prints" \
           in_tree bash scripts/regen-unlanded.sh "${fg_base}"

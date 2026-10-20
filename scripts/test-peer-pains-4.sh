@@ -70,8 +70,8 @@ err=$(require_clean_tree "$R" 2>&1); rc=$?
 git -C "$R" checkout -q -- f
 echo c >"$R/f"
 out=$(cd "$R" && GH=true UNION_DIRS="$R" VERIFY_CMD=true bash "$SC/train_land.sh" t 1 2 2>&1); rc=$?
-[ "$rc" -eq 2 ] && grep -q "uncommitted changes" <<<"$out" && grep -q "park for the owner" <<<"$out"; ok $? "train_land: banner then refuses dirty tree (exit 2)"
-out=$(UNION_DIRS="$R" bash "$SC/land_train.sh" a b 2>&1); grep -q "park for the owner; do not retry or route around" <<<"$out"; ok $? "land_train: owner-gated banner"
+[ "$rc" -eq 2 ] && grep -q "uncommitted changes" <<<"$out" && grep -q "park THAT merge for the owner" <<<"$out"; ok $? "train_land: banner then refuses dirty tree (exit 2)"
+out=$(UNION_DIRS="$R" bash "$SC/land_train.sh" a b 2>&1); grep -q "park THAT merge for the owner (do not retry or route around it) and keep every other lane" <<<"$out"; ok $? "land_train: owner-gated banner"
 git -C "$R" checkout -q -- f
 
 # merge checkpoint
