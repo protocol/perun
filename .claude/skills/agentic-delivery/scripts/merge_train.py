@@ -60,6 +60,14 @@ SUBCOMMANDS
           base mid-train (HALT). A member that fails deterministically is parked
           with its reason and the rest HALT, because the remaining combination
           was never verified.
+  partial-kill (#1778) A PR whose precheck ended COULD_NOT_CHECK on some checks carries a PARTIAL-PASS receipt
+          written by `partial_pass.py write` (dir --partial-dir / $PARTIAL_DIR / .perun/partial), valid for its
+          exact head, naming EXACTLY the unchecked checks and a kill criterion. plan/verify judge every check
+          except those named; the ELIGIBLE line shows `PARTIAL-PASS unchecked=...`. At most ONE such PR rides a
+          train: a second is SKIPped with "second PARTIAL-PASS (one per train; #N holds the slot)". `merge
+          --apply` records the landed one in --state. `partial-kill`, run once post-merge CI has run on the
+          merge commit, reverts it (--apply opens the revert PR, exit 1) when any unchecked check failed, keeps
+          it when all passed, prints PENDING otherwise. A partial pass is never counted as a pass.
   keystone  The owner's pre-ratified red-base exception for ONE fix PR (issue
           #1142; deep-code-review `merge-operations.md` *Red base*). Needs
           --only globs naming the files the fix may touch; every glob must
@@ -170,7 +178,7 @@ runs PR code on this machine, which is why fork PRs are skipped by default.
 OUTPUT AND EXIT CODES
 ---------------------
 One line per action (ELIGIBLE, SKIP, PLAN, FAIL, FLAKY, PARK, GREEN, RED,
-KEYSTONE, WOULD-MERGE, MERGED, WOULD-UPDATE, UPDATED, UPDATE-FAILED, DUP-FIX,
+KEYSTONE, WOULD-MERGE, MERGED, KILL, WOULD-REVERT, REVERT, KEPT, PENDING, WOULD-UPDATE, UPDATED, UPDATE-FAILED, DUP-FIX,
 SIMILAR-FIX, WARN, NOOP, HALT, ERROR, DROP-FAILED). Untrusted text (check
 names, file names, forge errors) is stripped of control characters and
 truncated.
@@ -191,6 +199,7 @@ USAGE
                         [--count-cmd CMD --cap N --marker-key size-budget-raise]
                         [--retries 2] [--backoff 30] [--gate-backoff 5] [--timeout 3600]
   merge_train.py merge  --base main [--apply --grant REF]
+  merge_train.py partial-kill --base main [--apply]
   merge_train.py keystone --base main --pr N --verify-cmd CMD --only GLOB
                         [--only GLOB ...] [--owner-email E ...] [--require-signed] [--apply]
                         [--use-update-branch]
@@ -220,6 +229,7 @@ from datetime import date, datetime, timedelta, timezone
 
 sys.dont_write_bytecode = True  # never litter __pycache__ into a checksummed skill tree
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import partial_pass as pp  # noqa: E402  (PARTIAL-PASS receipts, #1778)
 import gh_rest  # noqa: E402  (curl fallback for gh api under the macOS-sandbox TLS failure)
 import board_common as bc  # noqa: E402  (validate_repo, run_checks)
 import focus_gate as fg  # noqa: E402  (resolve_owners, _owner_problem: the standing-grant owner check)
@@ -490,19 +500,24 @@ class Train:
         heads = {str(p["number"]): p["headRefOid"] for p in prs}
         parked = {n: p for n, p in self.state.get("parked", {}).items() if heads.get(n) == p["head"]}
         self.state["parked"] = parked  # a new head is new information: it un-parks
-        members = []
+        members, slot = [], None  # slot: the one PARTIAL-PASS member this train may carry (#1778)
         for pr in sorted(prs, key=lambda p: p["number"]):
-            why = self._ineligible(pr, parked)
+            rcpt = pp.load(pr["number"], pr["headRefOid"], self.a.partial_dir)
+            why = self._ineligible(pr, parked, rcpt["unchecked"] if rcpt else ())
+            if not why and rcpt and slot:
+                why = f"second PARTIAL-PASS (one per train; #{slot} holds the slot)"
             if why:
                 self.say(f"SKIP #{pr['number']} {why}")
             else:
-                members.append({"number": pr["number"], "head": pr["headRefOid"]})
-                self.say(f"ELIGIBLE #{pr['number']} {pr['headRefOid'][:7]}")
+                members.append({"number": pr["number"], "head": pr["headRefOid"], **({"partial": rcpt["unchecked"]} if rcpt else {})})
+                slot = slot or (pr["number"] if rcpt else None)
+                self.say(f"ELIGIBLE #{pr['number']} {pr['headRefOid'][:7]}"
+                         + (f" PARTIAL-PASS unchecked={clean(','.join(rcpt['unchecked']), 120)}" if rcpt else ""))
         self.say(f"PLAN base={self.a.base} members={names(members) or 'none'}")
         return members
 
-    def _ineligible(self, pr, parked):
-        """'' when `pr` may join the train, else the reason it is skipped."""
+    def _ineligible(self, pr, parked, waive=()):
+        """'' when `pr` may join the train, else the reason it is skipped. `waive`: checks a PARTIAL-PASS receipt left unchecked."""
         if pr.get("isDraft"):
             return "draft"
         if pr.get("isCrossRepository") and not self.a.allow_forks:
@@ -511,13 +526,24 @@ class Train:
             return f"parked ({parked[str(pr['number'])]['reason']})"
         if pr.get("mergeable") != "MERGEABLE":
             return f"mergeable={clean(pr.get('mergeable'))}"
-        passed, bad = self._checks(pr["headRefOid"])
+        passed, bad = self._checks(pr["headRefOid"], waive)
         if bad:
             return f"check {bad}"
         return f"checks {passed}<{self.a.min_checks}" if passed < self.a.min_checks else ""
 
-    def _checks(self, sha):
-        """(latest-per-name success count, first non-green 'name=state' or '')."""
+    def _checks(self, sha, waive=()):
+        """(latest-per-name success count, first non-green 'name=state' or ''). Names in `waive` are not judged."""
+        latest = self._latest(sha)
+        passed = 0
+        for name in sorted(set(latest) - set(waive)):
+            r = latest[name]
+            if r.get("status") != "completed" or r.get("conclusion") not in GREEN_CONCLUSIONS:
+                return passed, clean(f"{name}={r.get('conclusion') or r.get('status')}")
+            passed += r.get("conclusion") == "success"
+        return passed, ""
+
+    def _latest(self, sha):
+        """{check name: its latest run} for `sha`; ForgeError when the list is truncated."""
         repo = self.a.repo or "{owner}/{repo}"
         _, out, _ = self.run(["gh", "api", f"repos/{repo}/commits/{sha}/check-runs?per_page=100"])
         data = json.loads(out)
@@ -529,13 +555,7 @@ class Train:
             key = (r.get("started_at") or "", r.get("id") or 0)
             if r["name"] not in latest or key > latest[r["name"]][0]:
                 latest[r["name"]] = (key, r)
-        passed = 0
-        for name in sorted(latest):
-            r = latest[name][1]
-            if r.get("status") != "completed" or r.get("conclusion") not in GREEN_CONCLUSIONS:
-                return passed, clean(f"{name}={r.get('conclusion') or r.get('status')}")
-            passed += r.get("conclusion") == "success"
-        return passed, ""
+        return {n: v[1] for n, v in latest.items()}
 
     # ---- verify ---------------------------------------------------------
     @contextmanager
@@ -793,10 +813,45 @@ class Train:
                 raise Halt(f"base moved by another writer while merging #{m['number']} ({new[:7]} is not "
                            f"{prev[:7]}+#{m['number']}); {names(members[i + 1:]) or 'no members'} left unmerged")
             self.state.update(base_sha=new, members=members[i + 1:])
+            if m.get("partial"):  # kill criterion (#1778): `partial-kill` reads this record
+                self.state["partial"] = {"number": m["number"], "merge_sha": new, "unchecked": m["partial"]}
             self.save()
-            self.say(f"MERGED #{m['number']} {m['head'][:7]} -> {self.a.base}@{new[:7]} grant={clean(self.a.grant)}")
+            self.say(f"MERGED #{m['number']} {m['head'][:7]} -> {self.a.base}@{new[:7]} grant={clean(self.a.grant)}"
+                     + (f" PARTIAL-PASS unchecked={clean(','.join(m['partial']), 120)} kill={pp.KILL}" if m.get("partial") else ""))
             prev = new
         return OK
+
+    def partial_kill(self):
+        """The `partial-kill` subcommand: once a merged PARTIAL-PASS PR's unchecked checks have run on its merge commit,
+        revert it if any failed (RED, GraphQL revertPullRequest opens the revert PR), keep it if all passed, else PENDING.
+        Dry-run by default; --apply opens the revert PR. Clears the record once decided."""
+        rec = self.state.get("partial")
+        if not rec:
+            self.say("NOOP no merged PARTIAL-PASS PR recorded")
+            return OK
+        n, latest = rec["number"], self._latest(rec["merge_sha"])
+        runs = [latest.get(u) for u in rec["unchecked"]]
+        bad = [f"{u}={r.get('conclusion') or r.get('status')}" for u, r in zip(rec["unchecked"], runs)
+               if r and r.get("status") == "completed" and r.get("conclusion") not in GREEN_CONCLUSIONS]
+        if not bad:
+            done = all(r and r.get("status") == "completed" for r in runs)
+            if done:
+                self.state.pop("partial")
+                self.save()
+            self.say(f"{'KEPT' if done else 'PENDING'} #{n} unchecked checks {'passed' if done else 'not all finished'} "
+                     f"on {rec['merge_sha'][:7]}")
+            return OK
+        self.say(f"KILL #{n} unchecked check failed after merge: {clean(', '.join(bad), 160)}")
+        if not self.a.apply:
+            self.say(f"WOULD-REVERT #{n}; --apply opens the revert PR")
+            return RED
+        _, node, _ = self.run(["gh", "pr", "view", str(n), *self.repo_flag, "--json", "id", "--jq", ".id"])
+        _, url, _ = self.run(["gh", "api", "graphql", "-f", "id=" + node.strip(), "-f", "query=mutation($id:ID!){revertPullRequest("
+                              "input:{pullRequestId:$id}){revertPullRequest{url}}}", "--jq", ".data.revertPullRequest.revertPullRequest.url"])
+        self.state.pop("partial")
+        self.save()
+        self.say(f"REVERT #{n} revert PR opened {clean(url.strip())}")
+        return RED
 
     # ---- keystone -------------------------------------------------------
     def patch_ids(self, head):
@@ -1320,6 +1375,7 @@ def build_parser():
     common.add_argument("--backoff", type=float, default=30.0, help="first retry delay in seconds (doubles, max 300)")
     common.add_argument("--gate-backoff", type=float, default=5.0,
                         help="first delay before re-running a failing --verify-cmd (doubles, max 300)")
+    common.add_argument("--partial-dir", default=None, help="PARTIAL-PASS receipts dir (default $PARTIAL_DIR or .perun/partial)")
     p = argparse.ArgumentParser(description="Verify several green PRs as one union, then land them back-to-back.")
     p.add_argument("--selftest", action="store_true", help="run offline self-tests against a fake forge")
     sub = p.add_subparsers(dest="cmd")
@@ -1333,6 +1389,7 @@ def build_parser():
     m = sub.add_parser("merge", parents=[common])
     m.add_argument("--apply", action="store_true", help="actually merge (default is a dry run)")
     m.add_argument("--grant", default="", help="the owner's decision or recorded standing grant authorising this merge")
+    sub.add_parser("partial-kill", parents=[common]).add_argument("--apply", action="store_true", help="open the revert PR (default is a dry run)")
     k = sub.add_parser("keystone", parents=[common])
     k.add_argument("--pr", type=int, required=True, help="the keystone PR that fixes the red base")
     k.add_argument("--verify-cmd", required=True, help="the failing gate, run on the base alone and on base + PR")
@@ -1390,7 +1447,7 @@ def run(argv, runner=default_runner, out=sys.stdout, sleep=time.sleep) -> int:
     train = None
     try:
         train = Train(a, runner, out, sleep)
-        return getattr(train, a.cmd)()
+        return getattr(train, a.cmd.replace("-", "_"))()
     except Halt as exc:
         print(f"HALT {exc}", file=out)
         return HALT
