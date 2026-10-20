@@ -26,6 +26,8 @@ DOCS = {
     5: {"state": "open", "body": "Fix `src/gone.py`, `gone_fn()`, `real_fn()` and `src/a.py`."},
     6: {"state": "closed", "body": "old"},
     7: {"state": "open", "body": "See `a.py`, `src/a.py.` and `real_fn()`."},
+    9: {"state": "open", "body": "Uses `real_fn(x)`, `src/a.py` and `Makefile`; docs-only `doc_only_fn`."},
+    10: {"state": "closed", "body": "Fix `src/gone.py` and `gone_fn()`."},
 }
 
 
@@ -44,7 +46,10 @@ class PremiseCheck(unittest.TestCase):
         (Path(r) / "src").mkdir()
         (Path(r) / "docs").mkdir()
         (Path(r) / "src/a.py").write_text("def real_fn(x):\n    pass\n")
-        (Path(r) / "docs/x.md").write_text("x\n")
+        (Path(r) / "docs/x.md").write_text("x\ndoc_only_fn\n")
+        (Path(r) / "changelog.d").mkdir()
+        (Path(r) / "changelog.d/f.txt").write_text("frag_only_fn\n")
+        (Path(r) / "Makefile").write_text("all:\n")
         for cmd in (["init", "-q"], ["add", "."], ["-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-qm", "i"]):
             subprocess.run(["git", "-C", r, *cmd], check=True, capture_output=True)
         self.old = pc.sc._gh
@@ -72,6 +77,34 @@ class PremiseCheck(unittest.TestCase):
 
     def test_bare_name_trailing_punctuation_and_call_suffix(self):
         self.assertEqual(self.line(7), ("#7 ISSUE OPEN", False))
+
+    def test_cited_shapes(self):
+        body = "`src/b.tsx` `cmd/main.go` `lib/x.rs` `notes.txt` `Makefile` `pkg/Makefile` `fn(x,y)` `PremiseCheck` `MAX_RETRY` `HEAD` `--flag` `v1.2` `and/or` `e.g.`"
+        self.assertEqual(
+            pc.cited(body),
+            (["src/b.tsx", "cmd/main.go", "lib/x.rs", "notes.txt", "Makefile", "pkg/Makefile"], ["fn(x,y)", "PremiseCheck", "MAX_RETRY"]),
+        )
+
+    def test_symbols_in_docs_and_changelog_do_not_count(self):
+        self.assertEqual(self.line(9), ("#9 ISSUE OPEN; absent at HEAD: doc_only_fn", True))
+        DOCS[11] = {"state": "open", "body": "`frag_only_fn()` `real_fn(x)`"}
+        self.addCleanup(DOCS.pop, 11)
+        self.assertEqual(self.line(11), ("#11 ISSUE OPEN; absent at HEAD: frag_only_fn()", True))
+
+    def test_run_from_subdir_with_dot_root(self):
+        cwd = os.getcwd()
+        self.addCleanup(os.chdir, cwd)
+        os.chdir(Path(self.root) / "docs")  # --full-tree and :(top) must make this equal a run from the root
+        self.assertEqual(pc.line("o/r", 4, ".", 5), ("#4 ISSUE OPEN", False))
+        self.assertEqual(pc.line("o/r", 5, ".", 5), ("#5 ISSUE OPEN; absent at HEAD: src/gone.py, gone_fn()", True))
+
+    def test_closed_issue_with_cites_skips_head_check(self):
+        def boom(*a):
+            raise AssertionError("HEAD check ran for a closed issue")
+
+        self.addCleanup(setattr, pc, "absent", pc.absent)
+        pc.absent = boom
+        self.assertEqual(self.line(10), ("#10 ISSUE CLOSED", True))
 
     def test_other_repo_skips_head_check(self):
         self.assertEqual(pc.line("o/r", 5, None, 5), ("#5 ISSUE OPEN", False))

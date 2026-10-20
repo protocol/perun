@@ -6,8 +6,8 @@
 WHY: a handed list is a snapshot that ages (multi-session-coordination.md, "A peer-handed work-partition").
 For each number, one `gh api repos/<slug>/issues/N` read (it serves PRs and issues) prints one line:
   `#N PR MERGED|CLOSED|OPEN` or `#N ISSUE OPEN|CLOSED`; an open issue also gets `absent at HEAD: ...` listing the
-  backticked file paths and `name()` / snake_case symbols its body cites that this checkout's HEAD does not
-  contain (a path missing from the tree, a symbol `git grep -F` does not find). Absent means "premise may have
+  backticked file paths and `name()` / snake_case / CamelCase / UPPER_CONST symbols its body cites that this checkout's HEAD does not
+  contain (a path missing from the tree, a symbol `git grep -F` does not find outside *.md and changelog.d). Absent means "premise may have
   drifted, re-read the issue", not "wrong": a file the issue asks you to create is listed too.
 Exit 0 when every number is an OPEN PR or an OPEN issue with nothing absent; 1 when any number is MERGED, CLOSED,
 absent-flagged or unreadable (`#N UNREADABLE`); 3 on bad arguments. Side effects: none (reads only); needs `gh`
@@ -25,8 +25,14 @@ import gh_rest  # noqa: E402  (origin slug)
 import surface_check as sc  # noqa: E402  (gh runner with the curl fallback)
 
 TICK = re.compile(r"`([^`\s]+)`")
-PATH = re.compile(r"^[\w.-]+(/[\w.-]+)*(/|\.(py|sh|md|json|tsv|ya?ml|js|ts|toml))$")
-SYM = re.compile(r"^(\w+\(\)|[a-z]+(_[a-z0-9]+)+)$")  # `fn()` or snake_case; plain words and flags are skipped
+EXT = r"(py|sh|md|json|tsv|ya?ml|js|jsx|ts|tsx|go|rs|txt|toml|cfg|ini|html|css|sql)"
+NOEXT = r"(Makefile|Dockerfile|LICENSE|Procfile|Gemfile|Justfile)"
+# dir/, dir/any.ext, bare name.known-ext, [dir/]ExtensionlessName
+PATH = re.compile(rf"^([\w.-]+/)*({NOEXT}|[\w-]+\.{EXT})$|^[\w.-]+(/[\w.-]+)*/$|^([\w.-]+/)+[\w-]+\.\w+$")
+# `fn()` / `fn(x)`, snake_case, CamelCase, UPPER_CONST; plain words, flags and bare UPPER words (HEAD, JSON) are skipped
+SYM = re.compile(r"^(\w+\([^)]*\)|[a-z]+(_[a-z0-9]+)+|[A-Z][a-z0-9]+([A-Z][a-z0-9]*)+|[A-Z][A-Z0-9]*(_[A-Z0-9]+)+)$")
+# symbol search skips docs and changelog fragments, which mention names that code no longer has
+GREP = [":(top)", ":(top,exclude,glob)**/*.md", ":(top,exclude)changelog.d"]
 
 
 def cited(body):
@@ -42,7 +48,7 @@ def absent(root, body):
     tree = subprocess.run(["git", "-C", root, "ls-tree", "-r", "--full-tree", "--name-only", "HEAD"], capture_output=True, text=True).stdout.splitlines()
     miss = [p for p in paths if not any(f == p or f.startswith(p.rstrip("/") + "/") or f.endswith("/" + p) for f in tree)]
     for s in syms:
-        if subprocess.run(["git", "-C", root, "grep", "-qF", s.removesuffix("()"), "HEAD", "--", ":/"], capture_output=True).returncode != 0:
+        if subprocess.run(["git", "-C", root, "grep", "-qF", s.split("(")[0], "HEAD", "--", *GREP], capture_output=True).returncode != 0:
             miss.append(s)
     return miss
 

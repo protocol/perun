@@ -37,10 +37,10 @@ chat may be terse.
 | Isolate a lane's worktree | `references/worktree-isolation.md` |
 | Slow pipeline (hooks, CI, merge wait) | `references/pipeline-optimizer.md`; `scripts/pipeline_profile.py map` first; claims: `scripts/outcome_claim_guard.py` |
 | Verify or relay a lane's result | `references/verification-handback.md` |
-| Long session, compaction, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate and before handback |
+| Long session, compaction, new session, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate and before handback |
 | New machine or new fleet | `references/operating-discipline.md` first: always-on layer entry point, `install.sh --with-operating-layer` snippet, `scripts/operating_selfcheck.py` |
 | PR state | `scripts/pr_state.py <n>`: head, checks, review, behind, train; exit 0 green, 1 red, 2 pending |
-| Hand a PR or issue to a lane | `scripts/premise_check.py <n>...`: flags merged/closed PRs and cited paths or symbols absent at HEAD; exit 1 flagged |
+| Hand a PR or issue to a lane | `scripts/premise_check.py <n>...`: flags merged/closed PRs and cites absent at HEAD; exit 1 flagged |
 | Commit a changelog fragment | `.githooks/pre-commit` runs `scripts/ci-gates.sh fragments`: marker and heading rules |
 
 ---
