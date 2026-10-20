@@ -78,6 +78,26 @@ class Rollup(unittest.TestCase):
         self.assertEqual(r["lanes"], 1)
         self.assertTrue(r["line"].endswith("; 1 lane transcript(s) unreadable"))
 
+    def test_non_utf8_session_and_lane_do_not_crash(self):
+        (self.d / "bad.jsonl").write_bytes(b"\xff\xfe\x00bad\n")
+        write(self.d / "a2.jsonl", [turn("claude-sonnet-5", inp=1)])
+        (self.d / "a2" / "subagents").mkdir(parents=True)
+        (self.d / "a2" / "subagents" / "l.jsonl").write_bytes(b"\xff\xfe\n")
+        r = tr.build_rollup(str(self.d), None)
+        # bad main + the session owning the bad lane are both reported; the readable sessions still price
+        self.assertEqual(r["unreadable_sessions"], 2)
+        self.assertEqual(r["total_usd"], 29.0)
+        self.assertIn("; 2 session(s) unreadable", r["line"])
+
+    def test_all_unparsable_session_is_unreadable_not_zero(self):
+        d = self.d / "only"
+        d.mkdir()
+        (d / "junk.jsonl").write_text("not json\n{broken\n")
+        r = tr.build_rollup(str(d), None)
+        self.assertEqual(r["unreadable_sessions"], 1)
+        self.assertTrue(r["line"].endswith("; 1 session(s) unreadable"))
+        self.assertEqual(tr.build_rollup(str(self.d), tr.parse_timestamp("2030-01-01T00:00:00Z"))["unreadable_sessions"], 0)
+
     def test_cli(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):

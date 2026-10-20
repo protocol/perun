@@ -1057,13 +1057,18 @@ def build_rollup(directory: str, since, rates=DEFAULT_RATES) -> dict:
     Sessions with no turns in the window are dropped. The dollar figures price the merged per-model
     totals once (a model with no rate stays UNPRICED, never estimated); `line` is the status-update summary.
     """
-    rows, mains, subs, unreadable = [], [], [], 0
+    rows, mains, subs, unreadable, bad_sessions = [], [], [], 0, 0
     for name in sorted(os.listdir(directory)):
         if not name.endswith(".jsonl"):
             continue
-        r = build_report(os.path.join(directory, name), since, 0, rates)
+        try:
+            r = build_report(os.path.join(directory, name), since, 0, rates)
+        except (OSError, UnicodeError, ValueError):  # a non-UTF-8 or unreadable file must not hide the rest
+            bad_sessions += 1
+            continue
         unreadable += len(r["unusable_subagents"])
         if not r["main_turns"] and not r["subagents_count"]:
+            bad_sessions += r["main_span"] is None  # no timestamped turn at all (not just windowed out): unparsable
             continue
         mains.append(r["main_by_model"])
         subs.append(r["subagents_by_model"])
@@ -1080,10 +1085,12 @@ def build_rollup(directory: str, since, rates=DEFAULT_RATES) -> dict:
             f"(main {_usd(main_usd or (None if main_miss else 0.0), main_miss)}, "
             f"lanes {_usd(sub_usd or (None if sub_miss else 0.0), sub_miss)})"
             + (f" since {since.isoformat()}" if since else "") + f"; default rates as of {RATES_DATE}"
-            + (f"; {unreadable} lane transcript(s) unreadable" if unreadable else ""))
+            + (f"; {unreadable} lane transcript(s) unreadable" if unreadable else "")
+            + (f"; {bad_sessions} session(s) unreadable" if bad_sessions else ""))
     rows.sort(key=lambda r: r["raw_tokens"], reverse=True)
     return {"dir": directory, "sessions": rows, "lanes": lanes, "main_usd": main_usd, "lanes_usd": sub_usd,
-            "total_usd": total, "unpriced_models": miss, "unreadable_lanes": unreadable, "line": line}
+            "total_usd": total, "unpriced_models": miss, "unreadable_lanes": unreadable,
+            "unreadable_sessions": bad_sessions, "line": line}
 
 
 def render_rollup(roll: dict, top: int) -> str:
