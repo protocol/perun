@@ -230,7 +230,7 @@ Critical if world-reachable; S1 PII / attributed private work; S2 internal
 catalogs / unpublished strategy (anonymous full dump = **Critical**, no "it's
 only docs" discount); S3 intentionally public, named stating artifact
 required. Latent findings keep intrinsic severity; they block *enabling*, not
-unrelated merge. Fail-open vs fail-closed is a severity axis — depth:
+unrelated merge. Fail-open vs fail-closed and a breached repo-stated hard rule (floor) are severity axes — depth:
 `report-format.md`. `unverified` / `PLAUSIBLE` report at
 provisional severity but block only once confirmed.
 
