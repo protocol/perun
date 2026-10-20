@@ -957,7 +957,8 @@ def _r_tier(f):
 
 
 def _r_main_tier(f):
-    if f["isset"]("model", "ANTHROPIC_MODEL"):
+    # Decided from the main's measured per-model usage, not from the model setting (it may name the top tier itself).
+    if f["share"] <= ORCHESTRATION_FLAG_THRESHOLD:
         return None
     top = model_stats([t for t in f["turns"] if any(k in (t.get("model") or "") for k in TOP_TIER)])[2]
     usd, miss = _stake(top, f["rates"])
@@ -965,8 +966,8 @@ def _r_main_tier(f):
     # Unpriced top-tier or total spend: no share can be computed, stay silent (never guess).
     if usd is None or miss or not total or usd < ADV["main_top_usd"] or usd / total < ADV["main_top_share"]:
         return None
-    return (f"main-session turns on a top tier carry {usd / total:.0%} of the priced spend of this session's main turns",
-            (usd, miss))
+    return (f"main-session turns on a top tier carry {usd / total:.0%} of the priced spend of this session's main turns; "
+            f"orchestration share {f['share']:.0%}", (usd, miss))
 
 
 def _r_short_lanes(f):
@@ -1021,7 +1022,7 @@ def advise(report: dict, since, rates, project: str = ".") -> dict:
     cfg, env, mcp, bad = load_settings(project)
     f = {"turns": turns, "rates": rates, "cfg": cfg, "env": env, "mcp": mcp, "bad": bad,
          "ctx": [t["input_tokens"] + t["cache_write_5m"] + t["cache_write_1h"] + t["cache_read"] for t in turns],
-         "lanes": report["all_subagents"], "used": _mcp_servers_used(report["session"]),
+         "share": report["orchestration_share"], "lanes": report["all_subagents"], "used": _mcp_servers_used(report["session"]),
          "isset": lambda *names: bool(bad) or any(n in cfg or n in env for n in names)}
     fired = []
     for i, (rid, check, rec, doc) in enumerate(ADVICE_RULES):

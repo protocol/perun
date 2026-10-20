@@ -192,14 +192,20 @@ class Advise(unittest.TestCase):
         self.lane(1, [line(i, model=OPUS, ctx=2_000_000, out=2000) for i in range(30)])
         self.assertNotIn("main-tier", self.ids([line(i, model=SONNET) for i in range(3)]))
 
-    def test_main_tier_silent_when_unpriced_or_model_set(self):
+    def test_main_tier_silent_when_unpriced(self):
         self.assertNotIn("main-tier", self.ids([line(i, model="acme-opus-1", ctx=2_000_000, out=2000) for i in range(30)]))
-        self.settings({"model": "sonnet"})
-        self.assertNotIn("main-tier", self.ids([line(i, model=OPUS, ctx=2_000_000, out=2000) for i in range(30)]))
 
-    def test_main_tier_silent_when_model_env_set(self):
-        with mock.patch.dict(os.environ, {"ANTHROPIC_MODEL": "sonnet"}):
-            self.assertNotIn("main-tier", self.ids([line(i, model=OPUS, ctx=2_000_000, out=2000) for i in range(30)]))
+    def test_main_tier_fires_even_when_model_setting_names_the_top_tier(self):
+        # Regression: a set `model`/ANTHROPIC_MODEL (here the top tier itself) used to silence the rule.
+        rows = [line(i, model="claude-opus-5-5", ctx=20_000_000, out=2000) for i in range(30)]
+        self.settings({"model": "claude-opus-5-5"})
+        self.assertIn("main-tier", self.ids(rows))
+        with mock.patch.dict(os.environ, {"ANTHROPIC_MODEL": "claude-opus-5-5"}):
+            self.assertIn("main-tier", self.ids(rows))
+
+    def test_main_tier_silent_when_orchestration_share_is_low(self):
+        self.lane(1, [line(i, model=SONNET, ctx=200_000_000, out=2000) for i in range(30)])
+        self.assertNotIn("main-tier", self.ids([line(i, model=OPUS, ctx=2_000_000, out=2000) for i in range(30)]))
 
     def test_short_lanes(self):
         for n in range(5):
