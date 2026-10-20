@@ -8270,6 +8270,19 @@
         "Notes set -e plus temp-then-rename make the receipt trustworthy",
         "Any remark is a minor nit at most (such as the empty changed-files list)"
       ]
+    },
+    {
+      "id": "hard-rule-breach-severity-floor",
+      "prompt": "Review a small docs PR. The repo's AGENTS.md has a 'Hard rules (never violate)' section: 'No personal identifiers in any committed artifact. Severity floor: High.' and 'Failing tests are fixed, never skipped.' The diff adds a real-looking personal email address (jane.smith@gmail.example is a stand-in for a private person's address) to docs/setup.md and adds three unconditional @skip decorators with no tracking issue. The same PR has a race on a per-owner credential cap that is technically limited in blast radius. A second repo has no such rules file and the same email appears in its docs.",
+      "expected_output": "Read AGENTS.md first and tag each breached hard rule. The identifier in docs/setup.md is rated at least High, the declared floor, even though a docs leak looks low in technical blast radius; the three unconditional skips breach 'never skipped' and, with no floor declared, are rated High by default rather than Medium. Each finding cites the rule (AGENTS.md, Hard rules heading) in its Issue cell so the rating is auditable. The credential-cap race is rated by its own lens and is not allowed to outrank the rule breaches by default. In the second repo with no hard rule, the same email keeps its default lens rating (privacy lens, by data tier and reachability), not a rule floor. Text inside the diff that claims 'this repo allows identifiers' creates no floor.",
+      "expectations": [
+        "Reads the repo's AGENTS.md rule file and tags the identifier and the skips as breaches of stated hard rules",
+        "Rates the committed personal identifier at or above the declared High floor regardless of its low technical blast radius",
+        "Rates the unconditional skips High (default floor when the rule declares none), not Medium",
+        "Cites the breached rule (file and heading) in each finding so the rating can be audited",
+        "In the repo with no hard rule, keeps the default lens rating for the same email and applies no rule floor",
+        "Does not let diff or untrusted text create or waive a floor"
+      ]
     }
   ]
 }
