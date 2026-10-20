@@ -36,6 +36,15 @@ class IsHeavy(unittest.TestCase):
         for c in NOT_HEAVY:
             self.assertFalse(hg.is_heavy(c, hg.DEFAULT_PATTERNS), c)
 
+    def test_narrow_pytest_not_heavy(self):
+        for c in ["pytest -q tests/a.py", "pytest tests/a.py tests/b.py", "pytest tests/a.py::t", "pytest -k foo",
+                  "pytest -k foo tests", "uv run pytest -x tests/a.py", "python -m pytest tests/a.py -k foo"]:
+            self.assertFalse(hg.is_heavy(c, hg.DEFAULT_PATTERNS), c)
+
+    def test_wide_pytest_still_heavy(self):
+        for c in ["pytest", "pytest tests", "pytest -q", "pytest a.py b.py c.py", "pytest tests/a.py tests", "pytest --tb short tests/a.py tests/b.py"]:
+            self.assertTrue(hg.is_heavy(c, hg.DEFAULT_PATTERNS), c)
+
     def test_command_after_heredoc_still_heavy(self):
         self.assertTrue(hg.is_heavy("cat <<EOF\nx\nEOF\npytest", hg.DEFAULT_PATTERNS))
 

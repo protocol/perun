@@ -54,6 +54,7 @@ def tokens(command: str):
         lines.append(line)
     lex = shlex.shlex("\n".join(lines), posix=True, punctuation_chars=PUNCT)
     lex.whitespace = " \t\r"
+    lex.wordchars += ":"  # node ids (file.py::test) stay one token
     return list(lex)
 
 
@@ -91,10 +92,22 @@ def strip_wrappers(toks):
     return toks
 
 
+def narrow_pytest(toks) -> bool:
+    """True for a pytest run scoped small: a `-k` filter, or 1-2 positional args that are each a test file (`*.py`) or a node id (`::`).
+    Bare `pytest`, directories, and 3+ files stay heavy. An option that takes a separate value (`--tb short`) adds a positional, so it fails safe (heavy)."""
+    if not toks or toks[0] != "pytest":
+        return False
+    args = toks[1:]
+    if any(a == "-k" or a.startswith("-k") and not a.startswith("--") for a in args):
+        return True
+    pos = [a for a in args if not a.startswith("-")]
+    return 1 <= len(pos) <= 2 and all(a.endswith(".py") or "::" in a for a in pos)
+
+
 def is_heavy(command: str, patterns) -> bool:
     """True when a shell segment of `command` begins, after runner wrappers, with a heavy pattern.
     Quote- and heredoc-aware: `git commit -m "fix; pytest"` is not heavy; `cd x && uv run pytest` is.
-    Light invocations (--version, --help, --collect-only, `playwright install`) are never heavy.
+    Light invocations (--version, --help, --collect-only, `playwright install`, a pytest scoped by -k or to at most 2 test files) are never heavy.
     A command that does not parse (unclosed quote) is NOT heavy: the gate fails open."""
     try:
         segs = segments(command or "")
@@ -103,6 +116,8 @@ def is_heavy(command: str, patterns) -> bool:
     for toks in segs:
         toks = strip_wrappers(toks)
         if not toks or LIGHT_FLAGS & set(toks) or (toks[0] == "playwright" and (toks[1:2] or [""])[0].startswith("install")):
+            continue
+        if narrow_pytest(toks):
             continue
         seg = " ".join(toks)
         if any(re.match(p, seg) for p in patterns):
@@ -195,7 +210,7 @@ def main() -> int:
             _bypass(cmd, str(data.get("cwd") or ""), deny=True)
         ram_s = f"{ram:.0f}% free" if ram is not None else "unknown"
         msg = (f"machine busy (load {load1:.1f}/{cores} cores, RAM {ram_s}; {reason}): "
-               "wait and retry, or run a narrower test (one file or -k filter)")
+               "wait and retry, or run a narrower test (pytest with -k, or at most 2 test files, is not held)")
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                                  "permissionDecision": "deny",
                                                  "permissionDecisionReason": msg}}))
