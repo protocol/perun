@@ -1,0 +1,2 @@
+### Fixed
+- `agentic-delivery/scripts/heavy_gate.py` (#1829): a pytest run scoped to one or two explicit test files (optionally with `-k`) is no longer held by the gate. The hold message advises exactly that narrower run, but `is_heavy()` matched every pytest call, so the advised escape was held too. A full-suite run, a directory, `-k` alone, or any pytest option outside a short allowlist (such as `--ignore` or `--cache-dir`) are still held.

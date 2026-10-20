@@ -40,10 +40,41 @@ DEFAULT_PATTERNS = (
 PUNCT = ";()<>|&\n"
 WRAP = re.compile(r"(\w+=\S*|env|time|nice|command|exec|sudo|npx|uv run|poetry run|pipx run|pnpm exec|python[\d.]* -m)$")
 LIGHT_FLAGS = {"--version", "--help", "-h", "--collect-only", "--co"}
+TEST_FILE = re.compile(r"[A-Za-z0-9_./-]+\.py(::[A-Za-z0-9_.\[\]-]+)*")
+SHORT_FLAGS = re.compile(r"-[qvxsl]+")
+PYTEST_VALUE_OPTS = {"-k", "-m", "-W", "-r", "-p", "-n", "-o", "-c", "--cov", "--cov-report", "--log-file", "--tb", "--maxfail",
+                     "--durations", "--rootdir", "--basetemp", "--junitxml"}
+PYTEST_FLAGS = {"--lf", "--ff", "--nf", "--sw", "--no-header", "--showlocals", "--strict-markers", "--failed-first",
+                "--last-failed", "--verbose", "--quiet", "--exitfirst"}
 
 
-def tokens(command: str):
-    """Shell tokens, punctuation (`;`, `|`, `>`, `&&`, newline) as tokens of their own. Quotes and heredoc bodies never split; raises ValueError on a parse error."""
+def scoped_pytest(args) -> bool:
+    """True when pytest `args` name one or two test files/nodeids and nothing else positional.
+    Fail-closed: only options in PYTEST_FLAGS / SHORT_FLAGS (no value) or PYTEST_VALUE_OPTS (next arg skipped; `--opt=val`
+    and the attached short form `-kfoo` match by name) are understood; any other option (`--ignore`, `--cache-dir`, ...)
+    makes the run heavy. Every positional must fully match TEST_FILE (plain path chars ending `.py`, optional `::nodeid`),
+    so a glob, brace list, `$var`, or directory is heavy. Expects tokens from segments(cmd, ":[]") so a colon or bracket
+    stays inside its word and whitespace is never lost."""
+    pos, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a.startswith("-"):
+            if a.split("=")[0] in PYTEST_VALUE_OPTS:
+                skip = "=" not in a
+            elif a[:2] not in PYTEST_VALUE_OPTS or a.startswith("--"):  # else attached short value: -kfoo, -n4, -rA
+                if a not in PYTEST_FLAGS and not SHORT_FLAGS.fullmatch(a):
+                    return False
+        elif TEST_FILE.fullmatch(a):
+            pos.append(a)
+        else:
+            return False
+    return 1 <= len(pos) <= 2
+
+
+def tokens(command: str, extra: str = ""):
+    """Shell tokens, punctuation (`;`, `|`, `>`, `&&`, newline) as tokens of their own. Quotes and heredoc bodies never split; raises ValueError on a parse error.
+    `extra` chars are added to the word characters, so they stay inside a word instead of splitting it."""
     lines, delim = [], None
     for line in command.split("\n"):
         if delim is not None:
@@ -54,14 +85,15 @@ def tokens(command: str):
         lines.append(line)
     lex = shlex.shlex("\n".join(lines), posix=True, punctuation_chars=PUNCT)
     lex.whitespace = " \t\r"
+    lex.wordchars += extra
     return list(lex)
 
 
-def segments(command: str):
+def segments(command: str, extra: str = ""):
     """Token lists, one per shell segment (split at punctuation); raises ValueError on a parse error.
     A quoted empty argument (`sed -i '' ...`) is an argument, not a separator: `set('') <= set(PUNCT)` is true, hence the `tok and`."""
     seg, out = [], []
-    for tok in tokens(command):
+    for tok in tokens(command, extra):
         if tok and set(tok) <= set(PUNCT):
             out.append(seg)
             seg = []
@@ -95,9 +127,11 @@ def is_heavy(command: str, patterns) -> bool:
     """True when a shell segment of `command` begins, after runner wrappers, with a heavy pattern.
     Quote- and heredoc-aware: `git commit -m "fix; pytest"` is not heavy; `cd x && uv run pytest` is.
     Light invocations (--version, --help, --collect-only, `playwright install`) are never heavy.
+    A pytest run scoped to one or two explicit test files (`a.py`, `a.py::test`), with any -k, is light
+    (the hold message advises it); no file, a directory, or a third file stays heavy (see scoped_pytest).
     A command that does not parse (unclosed quote) is NOT heavy: the gate fails open."""
     try:
-        segs = segments(command or "")
+        segs = segments(command or "", ":[]")
     except ValueError:
         return False
     for toks in segs:
@@ -106,6 +140,8 @@ def is_heavy(command: str, patterns) -> bool:
             continue
         seg = " ".join(toks)
         if any(re.match(p, seg) for p in patterns):
+            if toks[0] == "pytest" and scoped_pytest(toks[1:]):
+                continue
             return True
     return False
 

@@ -39,6 +39,22 @@ class IsHeavy(unittest.TestCase):
     def test_command_after_heredoc_still_heavy(self):
         self.assertTrue(hg.is_heavy("cat <<EOF\nx\nEOF\npytest", hg.DEFAULT_PATTERNS))
 
+    def test_scoped_pytest_is_light(self):
+        """The hold message advises a narrower run, so 1-2 files must pass while the full suite stays held (#1829)."""
+        for c in ("pytest -q tests/test_one.py", "python3 -m pytest a.py b.py::t", "uv run pytest -q a.py -k name",
+                  "pytest -k x.py a.py", "pytest -W ignore a.py", "pytest --cov pkg a.py", "pytest -r fE a.py",
+                  "pytest --tb=short -x a.py", "pytest -o x=y a.py", "pytest --junitxml=out.xml a.py",
+                  "pytest --cov-report term a.py", "pytest -kfoo a.py", "pytest a.py::t[1]","pytest -p no:cacheprovider a.py",
+                  "pytest -W ignore::Warning a.py", "pytest -k a:b a.py","pytest a.py::Cls::test_x"):
+            self.assertFalse(hg.is_heavy(c, hg.DEFAULT_PATTERNS), c)
+        for c in ("pytest -q", "pytest a.py b.py c.py", "pytest tests/", "pytest --ignore=a.py --ignore=b.py",
+                  "pytest tests/ a.py", "pytest -k name", "pytest --ignore a.py --ignore b.py", "pytest --ignore x.py a.py",
+                  "pytest --log-file out.py", "pytest -W x.py", "pytest --cache-dir out.py", "pytest --bogus a.py",
+                  "pytest tests/*.py", "pytest *.py", "pytest tests/test_{a..z}.py", "pytest a.py:: tests/", "pytest a.py $X",
+                  "pytest a.py `ls`", "pytest a.py::", "pytest -k x:: tests/ a.py",
+                  "pytest a.py -k a: tests", "pytest a.py -p no: tests", "pytest a.py:: tests"):
+            self.assertTrue(hg.is_heavy(c, hg.DEFAULT_PATTERNS), c)
+
     def test_custom_pattern(self):
         self.assertTrue(hg.is_heavy("make check", [r"make check\b"]))
 
