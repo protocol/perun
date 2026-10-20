@@ -2954,6 +2954,18 @@
         "Says warn is the default and block exits 2 with a bounded release, configured by policy background_guard or env PERUN_BACKGROUND_GUARD",
         "Says it excludes the hook's own process tree and fails open (COULD_NOT_CHECK) rather than wedging a handback"
       ]
+    },
+    {
+      "id": "teardown-and-cleanup-handback",
+      "prompt": "A lane is about to hand back after starting a dev server and a poll loop from its worktree, and a test runner exported a mode switch that leaked into the tests it ran. What does the Teardown and cleanup rule set require before hand-back, and which existing check backs each rule?",
+      "expected_output": "operating-discipline.md item 11: stop your own PIDs, then run ROOT=<worktree> scripts/reap_own.sh --report, which lists listeners and orphans (reparented to pid 1) whose cwd or command line is under the worktree; orphans=0 is the pass and the hand-back quotes the line (lane-preamble Lane teardown). Scripts that start a server, browser or loop need an EXIT trap and a deadline on every loop (scripts/teardown_lint.py). Runner switches are dropped by prefix by scrub_env.sh when a caller sets SCRUB_PREFIXES, but nothing sets it yet, so that rule is a lane rule for now. Delivered worktrees are removed and dirty ones archived by clean_finished.sh; train-before-lane heavy slots come from heavy_gate.py's exclusive lease; one heavy job per worktree and per-run log paths are lane rules, not enforced by code. Claims use an atomic mkdir (_lock.sh lock_take). Test: scripts/test-teardown.sh.",
+      "expectations": [
+        "Says to stop its own PIDs first, then run reap_own.sh --report with ROOT set to the worktree and quote the orphans line in the hand-back",
+        "Says orphans=0 is the pass and that orphans reparented to pid 1 whose cwd or command line is under the worktree are counted, not only listeners",
+        "Names teardown_lint.py for the EXIT-trap and loop-deadline rule on scripts that start servers, browsers or loops",
+        "Names SCRUB_PREFIXES in scrub_env.sh for dropping runner mode switches before each test, and says nothing sets it yet so it is a lane rule until a caller does",
+        "Does not claim the per-worktree one-heavy-job limit is enforced by code; it calls it a lane rule"
+      ]
     }
   ]
 }

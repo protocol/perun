@@ -1,0 +1,5 @@
+### Added
+- agentic-delivery: new "Teardown and cleanup" rule set (`operating-discipline.md` item 11, linked from the lane preamble's hand-back teardown line). Rules (a) and (b) have code checks: `reap_own.sh --report` with `ROOT=<worktree>` now also lists orphaned processes (ppid 1; a Linux subreaper hides them) whose cwd or command line is under the worktree, and prints `COULD_NOT_CHECK` when an orphan's cwd cannot be read; new `teardown_lint.py` flags shell scripts that start background work without an `EXIT` trap or have an endless loop with no counter or deadline test. Rule (f) has the `scrub_env.sh` `SCRUB_PREFIXES` mechanism, but no caller sets it yet. Rules (c) per-worktree heavy-job limit and (d) per-run log paths are lane rules with no check; (e) reuses `clean_finished.sh`. Test: `scripts/test-teardown.sh` (run in CI).
+
+size-budget-raise: .claude/skills/agentic-delivery/references/operating-discipline.md 9281→10577 item 11 pointers for the Teardown and cleanup rule set
+size-budget-raise: .claude/skills/INDEX.md 11425→11540 teardown_lint.py listed in the generated script index

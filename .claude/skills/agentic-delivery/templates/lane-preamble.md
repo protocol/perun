@@ -47,7 +47,7 @@ default for this lane, not a suggestion.
 
 ## Stop conditions
 - Tool-call budget: at most `<tool-call cap>` tool calls (150 is a starting value; tune it from `python3 .claude/skills/agentic-ceo/scripts/token_report.py --budget`). At the cap, commit work in progress and hand back `status=UNVERIFIED blockers=budget result=<what remains>` instead of continuing.
-- Lane teardown, before handback: `ROOT=<your worktree tree> bash .claude/skills/agentic-delivery/scripts/clean_finished.sh`, then `ROOT=<your worktree> bash .claude/skills/agentic-delivery/scripts/reap_own.sh --report` must print `orphans=0` (no listener left under the worktree). Rules: `merge-operations.md`.
+- Lane teardown, before handback: `ROOT=<your worktree tree> bash .claude/skills/agentic-delivery/scripts/clean_finished.sh`, then `ROOT=<your worktree> bash .claude/skills/agentic-delivery/scripts/reap_own.sh --report` must print `orphans=0` (no listener or orphaned process left under the worktree), and the handback quotes that line; stop your own PIDs first (`operating-discipline.md` item 11). Rules: `merge-operations.md`.
 - Before handback: write the changelog fragment and get `git diff --check` clean. Before any shell or layout migration, inventory the old capabilities (search, favorites, collapse) so none is silently dropped.
 - After handback this lane may no longer receive messages: a review fix or conflict on its PR gets a fresh lane per PR, not a nudge to this one.
 - Blocked: record the block and the next item; don't retry the same fix a third time.
