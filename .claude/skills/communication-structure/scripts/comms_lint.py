@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""comms_lint.py --kind K [--file F] [--source S] [--json] | --list — score a human-facing draft against its artifact template.
+"""comms_lint.py --kind K [--file F] [--source S] [--json] | --list — score a draft against its template.
 
 Kinds, word/line budgets and the optional checks per kind come from the table in references/artifact-templates.md
 (the one source of truth; `--list` prints it). Always checked: lead (line 1 is the answer: <=60 words, first

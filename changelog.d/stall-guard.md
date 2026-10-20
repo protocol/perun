@@ -1,0 +1,2 @@
+### Added
+- `agentic-delivery/scripts/stall_guard.py`: Stop hook, wired in the operating-layer template and checked by `perun_doctor.py`. When a turn ends on "stopped / holding / waiting on you" and launched no Agent and no background tool, it blocks once with a nudge to launch the next lane, review or build, or to name the one owner-only blocker. The next stop passes (`stop_hook_active`); `PERUN_STALL_GUARD=off` disables it; any parse error fails open.
