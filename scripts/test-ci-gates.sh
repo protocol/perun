@@ -4201,10 +4201,10 @@ else
 fi
 
 # finding_ground_check.py + merge_findings.py: grounding and merge gates behave (plain-assert suite).
-if python3 "$ROOT/scripts/test_finding_gates.py" >/dev/null; then
+if python3 "$ROOT/scripts/test_finding_gates.py" >"$WORK/finding-gates.log" 2>&1; then
   record 0 "finding gates: ground check + merge/dedupe/cap tests pass"
 else
-  record 1 "finding gates: ground check + merge/dedupe/cap tests pass"
+  record 1 "finding gates: ground check + merge/dedupe/cap tests pass"; tail -5 "$WORK/finding-gates.log"
 fi
 
 # /perun-run command: exists, has frontmatter, names the drain test it depends on.
