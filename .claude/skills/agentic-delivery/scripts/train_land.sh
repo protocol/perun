@@ -62,9 +62,12 @@ LT=${LOCK_TIMEOUT_MIN:-30} lw=${LEASE_WAIT_SECS:-$((${LOCK_TIMEOUT_MIN:-30} * 60
 lock_take "$LOCK" 0 "$LT" || exit 1
 # Exclusive machine-wide heavy lease while the gate runs: heavy_gate.py denies other heavy commands ("gate running: wait").
 # Held by another gate: wait for it (up to LEASE_WAIT_SECS), then DEFER with nothing built.
+qn=${PERUN_QUEUE_NOTE_SECS:-120}; [[ $qn =~ ^[0-9]+$ ]] && [ "$qn" -gt 0 ] || qn=120  # queue-line gap in seconds; a bad value falls back to 120
+q0=$SECONDS ql=$SECONDS
 while :; do
   xrc=0; python3 "$HERE/perun_policy.py" heavy-exclusive >/dev/null 2>&1 || xrc=$?
   [ "$xrc" -eq 1 ] && [ "$lw" -gt 0 ] || break
+  [ $((SECONDS - ql)) -lt "$qn" ] || { ql=$SECONDS; echo "queued $((SECONDS - q0))s: another gate holds the exclusive heavy lease; ${lw}s of wait left (LEASE_WAIT_SECS)" >&2; }
   lw=$((lw - 1)); sleep 1
 done
 [ "$xrc" -ne 1 ] || { echo "DEFER: another gate holds the exclusive heavy lease; nothing built, retry later" >&2; lock_drop "$LOCK"; exit 4; }

@@ -6,7 +6,8 @@
 #   record it removes only what it created (its own pid file) and returns 1.
 #   lock_drop <dir>  releases it (only when this shell holds it).
 lock_take() {
-  local d=$1 wait=${2:-0} tmo=${3:-30} p ts told=
+  local d=$1 wait=${2:-0} tmo=${3:-30} p ts told= qn=${PERUN_QUEUE_NOTE_SECS:-120}
+  [[ $qn =~ ^[0-9]+$ ]] && [ "$qn" -gt 0 ] || qn=120  # a bad PERUN_QUEUE_NOTE_SECS falls back to 120
   while :; do
     if mkdir "$d" 2>/dev/null; then
       { echo $$ >"$d/pid" && date +%s >"$d/ts"; } 2>/dev/null && return 0
@@ -23,7 +24,8 @@ lock_take() {
     if [[ $p =~ ^[0-9]+$ ]]; then kill -0 "$p" 2>/dev/null || st=dead; else st=unknown; fi
     [[ $ts =~ ^[0-9]+$ ]] && age=", age $(($(date +%s) - ts))s"
     [ "$wait" -gt 0 ] || { echo "lock held by pid ${p:-?} ($st$age) ($d)" >&2; return 1; }
-    [ -n "$told" ] || { echo "waiting on lock held by pid ${p:-?} ($st$age) ($d)" >&2; told=1; }
+    # first line at once, then one every PERUN_QUEUE_NOTE_SECS (default 120): a long wait is never silent
+    [ -n "$told" ] && [ $((SECONDS - told)) -lt "$qn" ] || { echo "waiting on lock held by pid ${p:-?} ($st$age) ($d)" >&2; told=$SECONDS; }
     wait=$((wait - 1)); sleep 1
   done
 }
