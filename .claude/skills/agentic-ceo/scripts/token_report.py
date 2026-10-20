@@ -107,6 +107,13 @@ NESTED SPEND: `usage.iterations[]` entries whose type is not `message` (e.g.
 `advisor_message`, billed on their own model and absent from the top-level
 usage) are booked as extra turns on that model, in main and lanes alike.
 
+PROJECT ROLLUP (--rollup DIR)
+-----------------------------
+`--rollup <transcript dir>` (a `~/.claude/projects/<project>` dir) prices every `<session>.jsonl` in it
+and prints one status-update line (`spend: $X across N sessions, M lanes (main $A, lanes $B)`) plus the
+costliest sessions (`--top`, `--since`, `--json`). Merged per-model totals are priced once; a model without
+a rate is named UNPRICED, an all-unpriced project reads UNPRICED, never $0. Reads many large files: slow.
+
 ORCHESTRATION SHARE
 --------------------
 `main_raw_tokens / (main_raw_tokens + subagents_raw_tokens)`, where
@@ -308,10 +315,12 @@ def _flat(usage: dict) -> dict:
     }
 
 
-def extract_turns(entries: list) -> list:
+def extract_turns(entries: list, seen: set | None = None) -> list:
     """Dedupe multi-block turns (same requestId, keep max apiBlockIndex), sorted by timestamp.
 
-    A line with no usable requestId is its own singleton turn (degrade path).
+    A line with no usable requestId is its own singleton turn (degrade path). With `seen` (a set shared
+    across files), a requestId already in it marks that turn and its nested turns `dup`, and new ids are
+    added: a resumed session copies earlier turns into its new transcript, so a rollup must count each once.
     """
     grouped: dict = {}
     singleton_key = 0
@@ -344,8 +353,11 @@ def extract_turns(entries: list) -> list:
     turns = []
     for k in order:
         g = grouped[k]
-        turns.append(g)
-        turns += [{"timestamp": g["timestamp"], "model": i.get("model"), "iter": True, **_flat(i)}
+        dup = seen is not None and k[0] == "req" and k[1] in seen
+        if seen is not None and k[0] == "req":
+            seen.add(k[1])
+        turns.append({**g, "dup": True} if dup else g)
+        turns += [{"timestamp": g["timestamp"], "model": i.get("model"), "iter": True, **_flat(i), **({"dup": True} if dup else {})}
                   for i in g["_iters"]]
     turns.sort(key=lambda t: (t["timestamp"] is None, t["timestamp"] or datetime.min.replace(tzinfo=timezone.utc)))
     for t in turns:
@@ -584,10 +596,10 @@ def build_subagent_report(jsonl_path: str, since) -> dict:
     }
 
 
-def build_report(session_path: str, since, top: int = 5, rates=None) -> dict:
+def build_report(session_path: str, since, top: int = 5, rates=None, seen: set | None = None) -> dict:
     main_entries = list(read_jsonl(session_path))
-    all_main = extract_turns(main_entries)
-    main_turns = filter_since(all_main, since)
+    all_main = extract_turns(main_entries, seen)
+    main_turns = filter_since([t for t in all_main if not t.get("dup")], since)
     stamps = [t["timestamp"] for t in all_main if t["timestamp"]]
     main_totals = sum_turns(main_turns)
 
@@ -1056,6 +1068,61 @@ def render_advice(a: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _priced(by_model: dict, rates):
+    """`price`, but an empty map (no spend to price) is None, not $0, so it never reads as priced."""
+    return price(by_model, rates) if by_model else (None, [])
+
+
+def build_rollup(directory: str, since, rates=DEFAULT_RATES) -> dict:
+    """Per-project spend across every `<session>.jsonl` directly in `directory` (main + lanes).
+
+    A requestId seen in an earlier file (a resumed session's copied turns) counts once. Sessions with no
+    turns in the window are dropped. The dollar figures price the merged per-model
+    totals once (a model with no rate stays UNPRICED, never estimated); `line` is the status-update summary.
+    """
+    rows, mains, subs, unreadable, bad_sessions, seen = [], [], [], 0, 0, set()
+    for name in sorted(os.listdir(directory)):
+        if not name.endswith(".jsonl"):
+            continue
+        try:
+            r = build_report(os.path.join(directory, name), since, 0, rates, seen)
+        except (OSError, UnicodeError, ValueError):  # a non-UTF-8 or unreadable file must not hide the rest
+            bad_sessions += 1
+            continue
+        unreadable += len(r["unusable_subagents"])
+        bad_sessions += r["main_span"] is None  # no timestamped main turn at all (not just windowed out): unparsable
+        if not r["main_turns"] and not r["subagents_count"]:
+            continue
+        mains.append(r["main_by_model"])
+        subs.append(r["subagents_by_model"])
+        usd, miss = _priced(merge_by_model([r["main_by_model"], r["subagents_by_model"]]), rates)
+        rows.append({"session": name[:-len(".jsonl")], "lanes": r["subagents_count"], "usd": usd,
+                     "unpriced_models": miss,
+                     "raw_tokens": r["main"]["raw_tokens"] + r["subagents_totals"]["raw_tokens"]})
+    main_usd, main_miss = _priced(merge_by_model(mains), rates)
+    sub_usd, sub_miss = _priced(merge_by_model(subs), rates)
+    total = 0.0 if not rows else None if main_usd is None and sub_usd is None else round((main_usd or 0) + (sub_usd or 0), 4)
+    miss = sorted(set(main_miss + sub_miss))
+    lanes = sum(r["lanes"] for r in rows)
+    line = (f"spend: {_usd(total, miss)} across {len(rows)} sessions, {lanes} lanes "
+            f"(main {_usd(main_usd or (None if main_miss else 0.0), main_miss)}, "
+            f"lanes {_usd(sub_usd or (None if sub_miss else 0.0), sub_miss)})"
+            + (f" since {since.isoformat()}" if since else "") + f"; default rates as of {RATES_DATE}"
+            + (f"; {unreadable} lane transcript(s) unreadable" if unreadable else "")
+            + (f"; {bad_sessions} session(s) unreadable" if bad_sessions else ""))
+    rows.sort(key=lambda r: r["raw_tokens"], reverse=True)
+    return {"dir": directory, "sessions": rows, "lanes": lanes, "main_usd": main_usd, "lanes_usd": sub_usd,
+            "total_usd": total, "unpriced_models": miss, "unreadable_lanes": unreadable,
+            "unreadable_sessions": bad_sessions, "line": line}
+
+
+def render_rollup(roll: dict, top: int) -> str:
+    out = [roll["line"]]
+    for r in (roll["sessions"][:top] if top > 0 else roll["sessions"]):
+        out.append(f"  {r['session'][:8]} {_usd(r['usd'], r['unpriced_models'])} lanes={r['lanes']} raw={r['raw_tokens']}")
+    return "\n".join(out)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     p.add_argument("--session", help="path to <session>.jsonl")
@@ -1068,6 +1135,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--advise", action="store_true", help="add usage-optimization advice (rule table in the ADVISE section)")
     p.add_argument("--project", default=".", metavar="DIR",
                    help="project whose .claude settings and .mcp.json --advise reads (default .)")
+    p.add_argument("--rollup", metavar="DIR",
+                   help="project rollup: price every <session>.jsonl in DIR (a ~/.claude/projects/<project> dir) "
+                        "and print one summary line plus the costliest sessions (--top, --since, --json apply)")
     p.add_argument("--selftest", action="store_true")
     return p
 
@@ -1076,6 +1146,20 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     if args.selftest:
         return _selftest()
+
+    if args.rollup:
+        if not os.path.isdir(args.rollup):
+            print(f"token_report.py: --rollup directory not found: {args.rollup}", file=sys.stderr)
+            return ERROR
+        since = parse_timestamp(args.since, local=True) if args.since else None
+        if args.since and since is None:
+            print(f"token_report.py: could not parse --since value: {args.since}", file=sys.stderr)
+            return ERROR
+        roll = build_rollup(args.rollup, since)
+        if args.json and args.top > 0:
+            roll["sessions"] = roll["sessions"][:args.top]
+        print(json.dumps(roll, indent=2, sort_keys=True) if args.json else render_rollup(roll, args.top))
+        return OK
 
     if not args.session:
         print("token_report.py: --session <path> is required", file=sys.stderr)
