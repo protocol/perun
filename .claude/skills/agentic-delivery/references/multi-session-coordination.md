@@ -49,6 +49,9 @@ replace hand-reading and hand-posting a board issue:
   dispatch step, one call: probe, and only on GO, post the CLAIM through
   `board_post.py` — an open PR and a local worktree check both miss another
   machine's unpushed claim, which this closes.
+- `scripts/premise_check.py N...` — run before handing PRs or issues to a lane or
+  peer (and on receipt): one line per number, PR `MERGED|CLOSED|OPEN`, issue state
+  plus the cited files/symbols `absent at HEAD`; exit 1 when any is done or drifted.
 
 A coordination lesson closes only when a script or gate enforcing it lands
 with an eval exercising it; prose alone leaves it open.
@@ -673,7 +676,9 @@ a dispatch order, it re-does delivered work (#960).
   each against `<governing-ref>`, several may already be done" — the same re-check-at-send
   and idempotent-framing discipline the correction section above applies to a correction,
   applied to a work list so it degrades gracefully instead of reading as false the moment
-  an item is already delivered.
+  an item is already delivered. `scripts/premise_check.py <numbers>` runs the
+  PR/issue half of that check mechanically (merged/closed, cited paths and symbols
+  missing at HEAD) on both the sending and the receiving side.
 
 Distinct from the **domain-partition** rule (#834 above): that *prevents* claim **races** by
 handing each peer a disjoint live slice — the item is at risk of being double-**claimed**

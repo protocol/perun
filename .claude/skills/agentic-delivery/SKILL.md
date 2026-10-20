@@ -37,10 +37,11 @@ chat may be terse.
 | Isolate a lane's worktree | `references/worktree-isolation.md` |
 | Slow pipeline (hooks, CI, merge wait) | `references/pipeline-optimizer.md`; `scripts/pipeline_profile.py map` first; claims: `scripts/outcome_claim_guard.py` |
 | Verify or relay a lane's result | `references/verification-handback.md` |
-| Long session, compaction, new session, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate, before a context-heavy step, before handback |
+| Long session, compaction, new session, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate and before handback |
 | New machine or new fleet | `references/operating-discipline.md` first: always-on layer entry point, `install.sh --with-operating-layer` snippet, `scripts/operating_selfcheck.py` |
-| Use when you need a PR's state | `scripts/pr_state.py <n>`: head, checks, review, behind, train; exit 0 green, 1 red, 2 pending |
-| Use when committing a changelog fragment | `.githooks/pre-commit` runs `scripts/ci-gates.sh fragments`: marker and heading rules |
+| PR state | `scripts/pr_state.py <n>`: head, checks, review, behind, train; exit 0 green, 1 red, 2 pending |
+| Hand PRs/issues to a lane | `scripts/premise_check.py <n>...`: merged/closed PRs, cites absent at HEAD; exit 1 |
+| Commit a changelog fragment | `.githooks/pre-commit` runs `scripts/ci-gates.sh fragments`: marker and heading rules |
 
 ---
 
@@ -93,8 +94,8 @@ exactly four things: a lane blocking a gate, a lane returning a receipt (the
 output contract, at an exact SHA), a lane exceeding its stated time/cost budget,
 or a preflight collision (*Worktrees and occupancy*, below). Between those
 events the Conductor reads status only — not a lane's raw tool-call transcript —
-and does not do the lane's work itself, the same way a subagent returns a
-distilled summary while its own context stays isolated from its parent's
+and does not do the lane's work itself, as a subagent returns a
+summary while its own context stays isolated from its parent's
 (Anthropic, context engineering for AI agents).
 
 **Size the fan-out to the decomposition, not to available concurrency** —
@@ -135,7 +136,7 @@ making it non-blocking is (`pipeline-optimizer.md`).
 |---|---|---|---|
 | G0 Intake | Owner goal | Brief | Goals, non-goals, constraints, and **appetite** (a stated time-box, not an estimate — Shape Up); `idea-critic` on any agent-originated approach before the owner sees it |
 | G1 Spec | Brief | Testable spec | Acceptance criteria; names `deep-code-review` scope and pinned base SHA |
-| G2 Plan | Spec | Acyclic work graph | Role triggers, one writer per worktree; **every lane with a paid model call names a per-lane token/dollar budget before G4 starts — no budget set is blocked, not unlimited** (a cap that defaults to off is not a cap); in a multi-repo plan, classify each item provider vs consumer before cutting lanes (`references/roles.md` *No scope creep*) |
+| G2 Plan | Spec | Acyclic work graph | Role triggers, one writer per worktree; **every lane with a paid model call names a per-lane token/dollar budget before G4 starts — no budget set is blocked, not unlimited**; in a multi-repo plan, classify each item provider vs consumer before cutting lanes (`references/roles.md` *No scope creep*) |
 | G3 Design | Graph | ADRs / contracts | Interfaces, NFR budgets, data/security decisions explicit. Shape: `references/template-adr.md` |
 | G4 Implement | Work packets | Patch/commit per lane | Tests before or with the change; packet names review skill + immutable base SHA |
 | G5 Verify | Exact revision | Test receipts | **Local stack up** then build, lint, type, unit, and applicable integration/E2E **green at that SHA**; a gate that never started the app is `UNVERIFIED`. **UI change (domain P):** headed-browser evidence on the exact route after the action. Unit tests alone are not a UI gate; UI DONE needs `journey: <page> <steps> PASS` (`verification-handback.md`) |
