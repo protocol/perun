@@ -1,0 +1,2 @@
+### Fixed
+- `handback_cap.py` push and background-work detection: a live `git push`, test or build now blocks a lane's stop only when its cwd or `-C` dir is in the same git worktree as the stopping lane (nearest `.git` ancestor, shared helper `lane_liveness.same_tree`), not anywhere beneath the hook's cwd. A lane in a worktree nested under the main checkout no longer stalls every other lane's handback; a submodule inside a checkout still counts as that checkout. Covered by the `handback_cap.py` self-test and `scripts/test_nested_worktree_liveness.py`.

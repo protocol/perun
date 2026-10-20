@@ -170,7 +170,7 @@ def _cwd_pids_via_lsof(root: str):
                 pid = None
                 continue
             seen.add(pid)
-        elif tag == "n" and pid is not None and _inside(value, root):
+        elif tag == "n" and pid is not None and same_tree(value, root):
             pids.add(pid)
     if os.getpid() not in seen:
         return None, "lsof ran but did not see this script's own process"
@@ -194,7 +194,7 @@ def _cwd_pids_via_proc(root: str):
             continue
         if int(name) == os.getpid():
             saw_self = True
-        if _inside(cwd, root):
+        if same_tree(cwd, root):
             pids.add(int(name))
     if not saw_self:
         return None, "/proc listed but this script's own cwd was unreadable"
@@ -208,6 +208,35 @@ def _inside(candidate: str, root: str) -> bool:
     except OSError:
         return False
     return c == r or c.startswith(r + os.sep)
+
+
+def _top(p: str):
+    """Nearest ancestor of `p` with a `.git` (dir or worktree file), or None. A submodule's `.git` file
+    (gitdir under `/modules/`) belongs to its parent checkout, so the walk continues past it."""
+    p = os.path.realpath(p)
+    while True:
+        g = os.path.join(p, ".git")
+        if os.path.isdir(g):
+            return p
+        if os.path.isfile(g):
+            try:
+                gd = open(g).read()
+            except OSError:
+                gd = ""
+            if "/modules/" not in gd or "/worktrees/" in gd:
+                return p
+        if p == os.path.dirname(p):
+            return None
+        p = os.path.dirname(p)
+
+
+def same_tree(candidate: str, root: str) -> bool:
+    """`candidate` is inside `root` and in the same git worktree, so a lane worktree nested under the main
+    checkout does not count as the main checkout's. Outside any git tree: plain containment."""
+    if not _inside(candidate, root):
+        return False
+    top = _top(root)
+    return top is None or _top(candidate) == top
 
 
 def cwd_pids(root: str):

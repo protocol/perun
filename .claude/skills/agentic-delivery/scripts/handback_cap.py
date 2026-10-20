@@ -195,17 +195,14 @@ PUSH_RE = re.compile(r"""\bgit\b((?:\s+-C\s+(?:"([^"]*)"|'([^']*)'|(\S+))|\s+-c\
 PUSH_MAX_S = int(os.environ.get("HANDBACK_PUSH_MAX_S", "1800"))  # keep blocking while the push is live, at most this long
 
 
-def _inside(p, root):
-    p = os.path.realpath(p)
-    return p == root or p.startswith(root.rstrip("/") + "/")
-
-
 def _push_running(cwd):
-    """True/False: is a `git push` (also `git -C <dir> push`) live with its cwd or -C dir inside `cwd`?
+    """True/False: is a `git push` (also `git -C <dir> push`) live with its cwd or -C dir in the same git worktree as `cwd`?
     None = could not check (no cwd, ps/lsof denied or failed): the hook stays advisory and fails open, but says so."""
     if not cwd or not os.path.isdir(cwd):
         return None
     try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from lane_liveness import same_tree as _same_tree
         r = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, timeout=10)
         if r.returncode != 0 or not r.stdout.strip():
             return None
@@ -216,12 +213,12 @@ def _push_running(cwd):
             if not m or not pid.isdigit() or int(pid) == os.getpid():
                 continue
             cdir = m.group(2) or m.group(3) or m.group(4)
-            if cdir and _inside(cdir, root):
+            if cdir and _same_tree(cdir, root):
                 return True
             out = subprocess.run(["lsof", "-a", "-d", "cwd", "-p", pid, "-Fn"], capture_output=True, text=True, timeout=10)
             if out.returncode > 1:
                 return None
-            if any(n.startswith("n") and _inside(n[1:], root) for n in out.stdout.splitlines()):
+            if any(n.startswith("n") and _same_tree(n[1:], root) for n in out.stdout.splitlines()):
                 return True
         return False
     except (OSError, subprocess.SubprocessError):
@@ -618,6 +615,30 @@ def _selftest():
     subprocess.run = _deny
     try:
         case("ps-denied-is-unknown-not-false", _push_running(tmp), None)
+    finally:
+        subprocess.run = real_run
+    mdir = os.path.join(tmp, "main")  # a lane worktree nested under the main checkout must not look like main's push
+    wt = os.path.join(mdir, "wt-x")
+    os.makedirs(os.path.join(mdir, "sub"))
+    os.makedirs(os.path.join(mdir, ".git"))
+    os.makedirs(wt)
+    open(os.path.join(wt, ".git"), "w").close()
+    def _ps_with(cmd):
+        def run(argv, **k):
+            return subprocess.CompletedProcess(argv, 0, f"123 {cmd}\n" if argv[0] == "ps" else "", "")
+        return run
+    subprocess.run = _ps_with(f"git -C {wt} push origin x")
+    try:
+        case("nested-worktree-push-not-main-push", _push_running(mdir), False)
+        case("nested-worktree-push-is-own-push", _push_running(wt), True)
+        subprocess.run = _ps_with(f"git -C {mdir}/sub push origin x")
+        case("subdir-push-is-own-push", _push_running(mdir), True)
+        sm = os.path.join(mdir, "vendor", "sm")  # submodule: its .git file points into .../modules/, same tree as main
+        os.makedirs(sm)
+        with open(os.path.join(sm, ".git"), "w") as f:
+            f.write("gitdir: ../../.git/modules/sm\n")
+        subprocess.run = _ps_with(f"git -C {sm} push origin x")
+        case("submodule-push-is-own-push", _push_running(mdir), True)
     finally:
         subprocess.run = real_run
     def cd(c):
