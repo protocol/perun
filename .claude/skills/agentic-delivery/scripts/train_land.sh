@@ -39,7 +39,7 @@ BASE_BRANCH=${BASE_BRANCH:-main} REMOTE=${REMOTE:-origin} LOG=${LOG_DIR:-.}/trai
 HERE=$(cd "$(dirname "$0")" && pwd) GH=${GH:-$(dirname "$0")/gh_rest.py}
 . "$HERE/_clean_union.sh"
 . "$HERE/_dirty_guard.sh"
-echo "train_land: this lands to $BASE_BRANCH: if the host classifier denies the merge, stop and park for the owner; do not retry or route around." >&2
+echo "train_land: this lands to $BASE_BRANCH: if the host classifier denies the merge, park THAT merge for the owner (do not retry or route around it) and keep every other lane, review and build going." >&2
 # Flake ledger (FLAKE_LEDGER_DIR, flake_ledger.py): refuse a dir the code under test can write (under this worktree or git toplevel), read the quarantine
 # list ONCE NOW (before VERIFY_CMD/BROWSER_CMD/RERUN_CMD run PR code) into an unexported shell variable (never a file), and keep the path out of the
 # environment of everything but train_flake.sh, which gets the list on stdin. Same-uid code can still read the path by other means: see flake_ledger.py (KNOWN CEILING).

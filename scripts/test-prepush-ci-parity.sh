@@ -74,15 +74,17 @@ echo "# drift" >>"$R/.claude/skills/agentic-delivery/scripts/wired_check.py"
 red sha256 'SHA256SUMS stale'
 awk 'NR==5{print "## [Unreleased]\n"} {print}' "$R/CHANGELOG.md" >"$WORK/t" && cp "$WORK/t" "$R/CHANGELOG.md"
 red changelog 'CHANGELOG version heading'
-# throwaway cleanup: a git shim fails `worktree add` (SHIM=fail) or lets it finish then TERMs the hook (SHIM=kill).
+# throwaway cleanup: a git shim fails `worktree add` (SHIM=fail; the shared-clone fallback must carry the gate), fails it and
+# `clone` (SHIM=failall), or lets it finish then TERMs the hook (SHIM=kill).
 # TMPDIR is private so any leftover mktemp dir shows up; the worktree list must be back to the host alone.
 mkdir -p "$WORK/shim" "$WORK/tmp"; export REAL_GIT; REAL_GIT="$(command -v git)"
 cat >"$WORK/shim/git" <<'SH'
 #!/usr/bin/env bash
 if [ "$1 $2" = "worktree add" ]; then
-  [ "${SHIM:-}" = fail ] && exit 1
+  case "${SHIM:-}" in fail|failall) exit 1 ;; esac
   if [ "${SHIM:-}" = kill ]; then "$REAL_GIT" "$@"; kill -TERM "$PPID"; exit 0; fi
 fi
+[ "$1" = clone ] && [ "${SHIM:-}" = failall ] && exit 1
 exec "$REAL_GIT" "$@"
 SH
 chmod +x "$WORK/shim/git"
@@ -93,8 +95,11 @@ shim_run() { # shim_run <mode>: hook over a planted commit with the git shim on 
   rc=$?; g reset -q --hard "$B"
 }
 shim_run fail
-{ [ "$rc" -ne 0 ] && grep -q 'cannot create a throwaway checkout' "$WORK/log"; }; ok $? "worktree-add failure refused with named cause"
-[ -z "$(ls -A "$WORK/tmp")" ]; ok $? "worktree-add failure leaves no mktemp dir"
+{ [ "$rc" -eq 0 ] && grep -q 'using a shared clone' "$WORK/log" && ! grep -q 'cannot create a throwaway checkout' "$WORK/log"; }; ok $? "worktree-add denied (sandbox): shared-clone fallback runs the gate"
+[ -z "$(ls -A "$WORK/tmp")" ]; ok $? "fallback clone leaves no mktemp dir"
+shim_run failall
+{ [ "$rc" -ne 0 ] && grep -q 'cannot create a throwaway checkout' "$WORK/log"; }; ok $? "worktree-add and clone both fail: refused with named cause"
+[ -z "$(ls -A "$WORK/tmp")" ]; ok $? "throwaway failure leaves no mktemp dir"
 shim_run kill
 [ "$rc" -ne 0 ]; ok $? "TERM mid-run aborts the hook"
 { [ -z "$(ls -A "$WORK/tmp")" ] && [ -z "$(g worktree list | sed 1d)" ]; }; ok $? "TERM mid-run leaves no throwaway worktree or mktemp dir"
