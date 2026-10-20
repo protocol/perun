@@ -8201,6 +8201,62 @@
         "Flags bash install scripts with no .gitattributes eol rule as a Windows line-ending risk",
         "Rates a broken declared-supported environment High and proposes widening the CI matrix or narrowing the declaration"
       ]
+    },
+    {
+      "id": "gate-integrity-narrow-run-writes-wide-cache-key",
+      "prompt": "Review this CI step. The team says the full suite is always green on main.\n\n```bash\nKEY=\"suite-$(sha256sum package-lock.json | cut -c1-12)\"\nif [ -f \".cache/$KEY.ok\" ]; then echo 'tests: cached pass'; exit 0; fi\nif [ \"$GITHUB_EVENT_NAME\" = pull_request ]; then\n  FILES=$(git diff --name-only origin/main...HEAD | grep '\\.test\\.js$')\n  npx jest $FILES\nelse\n  npx jest\nfi\ntouch \".cache/$KEY.ok\"\n```",
+      "expected_output": "The cache key names only the lockfile, but the run behind it has two scopes: a pull_request run executes only changed test files, a push run executes everything. Both write the same .cache/$KEY.ok, so a narrow PR pass is read later as a full-suite pass for the same lockfile, including by the main-branch run, which exits 'cached pass' without running a test. Gate scope, cache key and receipt must name the same scope; a narrower run must never write under the wider key. Fix: put the scope in the key (suite-full vs suite-changed-<file hash>), or only let the full run write the marker. There is no set -e, so the marker is also touched after a failing jest, and an empty FILES on a PR with no test changes runs the whole suite or none depending on the runner; check both. Cross-reference release-engineering.md, Gate tooling and hooks.",
+      "expectations": [
+        "Identifies that the PR (changed-files) run and the full run share one cache key and one .ok marker",
+        "States the consequence: a narrow pass is later accepted as a full-suite pass, so main skips the tests",
+        "Proposes scope in the key or restricting the write to the full run",
+        "Does not accept 'full suite is always green on main' without checking what the cache hit actually ran",
+        "Credit: also notes the key tracks only the lockfile, not the source, so a hit can be stale after a code change"
+      ]
+    },
+    {
+      "id": "gate-integrity-cache-populate-no-status-not-atomic",
+      "prompt": "A build script (no set -e, no pipefail) warms a shared artifact cache. Review it.\n\n```bash\nOUT=\"$CACHE/$HASH.gz\"\nif [ ! -e \"$OUT\" ]; then\n  build_artifacts --target \"$TARGET\" | gzip > \"$OUT\"\nfi\nexport ARTIFACT=\"$OUT\"\n```",
+      "expected_output": "The cache entry is created in place from a pipeline whose exit status is that of gzip only: if build_artifacts fails or is killed, gzip still writes a (truncated or empty) archive and the script proceeds (without pipefail the failure is invisible). The next run sees the file exists and treats it as a hit, so the partial artifact is served until someone clears it. Two concurrent runs also race on the same path. Fix: set -o pipefail, write to a temp file in the same directory, check status, then mv (atomic rename) into place; validate on read or use a checksum. Populate/copy steps must check producer status and write atomically.",
+      "expectations": [
+        "Flags that the pipeline hides the build failure (status of the last command only / no pipefail)",
+        "Flags that a partial or empty archive is left in the final path and later treated as a hit",
+        "Recommends temp file in the same directory then atomic rename after a status check",
+        "Does not frame this as style or performance"
+      ]
+    },
+    {
+      "id": "gate-integrity-scanner-path-gap",
+      "prompt": "Our license scanner is green. Is every shipped file covered?\n\n```python\nimport os, re\nSKIP = {'node_modules', '.git', 'dist', 'vendor', 'scripts'}\nPAT = re.compile(r'SPDX-License-Identifier:')\nbad = []\nfor root, dirs, files in os.walk('.'):\n    dirs[:] = [d for d in dirs if d not in SKIP]\n    for f in files:\n        if f.endswith(('.py', '.js')) and not PAT.search(open(os.path.join(root, f)).read(300)):\n            bad.append(os.path.join(root, f))\nprint('license scan:', 'FAIL' if bad else 'ok')\nraise SystemExit(1 if bad else 0)\n```\n\nThe release tarball is built from src/, scripts/ and vendor/.",
+      "expected_output": "Green covers only what the walk lists. The scanner claims the shipped tree but skips scripts/ and vendor/, both of which the tarball includes, so those files are never checked: a path gap is a finding even though every scanned file passes. It also only checks .py and .js (a .ts, .sh or .mjs file is invisible) and reads only 300 characters. Diff the scanner's file list against the tarball manifest; fix by driving the scan from the release manifest (or removing the excludes that overlap shipped paths) and fail if a shipped file is unlisted. Do not report 'license scan ok' as clearance for the release.",
+      "expectations": [
+        "Notes that scripts/ and vendor/ are skipped yet shipped, so green does not cover them",
+        "Treats the uncovered path as a finding rather than reporting every scanned file as passing",
+        "Suggests comparing the scanner's file list to the release manifest",
+        "May also note the extension filter and 300-character window but leads with the path gap"
+      ]
+    },
+    {
+      "id": "gate-integrity-trust-decision-fails-open",
+      "prompt": "Review this deploy-time check.\n\n```python\nimport json\n\ndef signer_allowed(signer: str) -> bool:\n    try:\n        allow = json.load(open('/etc/deploy/allowed_signers.json'))\n    except Exception:\n        return True  # don't block deploys on a config hiccup\n    return signer in allow\n\ndef main(manifest):\n    if os.environ.get('SKIP_SIG'):\n        return deploy(manifest)\n    if signer_allowed(manifest['signer']):\n        deploy(manifest)\n```",
+      "expected_output": "Two trust decisions fail open. (1) signer_allowed returns True when the allowlist is missing, unreadable or malformed, so anyone who can break or remove the file (or a deploy host with a bad mount) can deploy unsigned manifests; it must deny and raise. (2) SKIP_SIG silently bypasses the whole check with no log line and no record of what was skipped; an opt-out must be an explicit, named flag that logs the skip (who, what, when). Also the bare except hides the cause. Severity is high: this is the signature gate for production. Fix: fail closed on any load or parse error and require an explicit logged override.",
+      "expectations": [
+        "Flags the except-return-True path as fail-open on a missing or malformed allowlist",
+        "Flags the silent SKIP_SIG bypass: opt-out must be explicit and logged",
+        "Recommends deny-by-default with the error surfaced",
+        "Rates it as a trust-boundary defect, not a nit"
+      ]
+    },
+    {
+      "id": "gate-integrity-clean-distractor-scoped-key-atomic-write",
+      "prompt": "Review this CI test step.\n\n```bash\nset -euo pipefail\nSCOPE=\"${TEST_SCOPE:?TEST_SCOPE must be full or changed}\"\nKEY=\"suite-$SCOPE-$(git rev-parse 'HEAD^{tree}')\"\nif [ \"$SCOPE\" = full ] && [ -f \".cache/$KEY.ok\" ]; then echo 'tests: cached full pass'; exit 0; fi\nif [ \"$SCOPE\" = full ]; then npx jest; else npx jest $(git diff --name-only origin/main...HEAD | grep '\\.test\\.js$'); fi\nif [ \"$SCOPE\" = full ]; then\n  TMP=$(mktemp .cache/.XXXXXX)\n  echo \"$KEY $(git rev-parse HEAD)\" > \"$TMP\"\n  mv \"$TMP\" \".cache/$KEY.ok\"\nfi\n```",
+      "expected_output": "No gate-integrity defect. The scope is required (unset fails), the key carries both the scope and the source tree hash (a new commit misses the cache), only the full run reads or writes the marker, set -e/pipefail stops the marker write if jest fails, and the receipt is written to a temp file then renamed. Report this as clean; at most a nit (the empty changed-files case on a PR with no test changes). Inventing a cache-key, atomicity or fail-open finding here is the failing case.",
+      "expectations": [
+        "Does not invent a cache-key, atomicity or fail-open defect",
+        "Notes the scope is in the key and only the full run writes the marker",
+        "Notes set -e plus temp-then-rename make the receipt trustworthy",
+        "Any remark is a minor nit at most (such as the empty changed-files list)"
+      ]
     }
   ]
 }

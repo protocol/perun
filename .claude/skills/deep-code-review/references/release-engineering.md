@@ -376,6 +376,19 @@ problem, not contention.
 - **One acceptance rule for cache and consumer.** The code that decides a cache entry is a hit and the code that
   consumes it must share one predicate (key, version, freshness, validity); two copies drift until the cache serves
   what the consumer would reject.
+- **Gate integrity: a pass covers the scope it claims.** Four checks, each a case of "a pass is evidence only where
+  the gate could see the artifact" (`SKILL.md` principle 2; planted-defect probe in `method.md`):
+  1. *Scope = key = receipt = update path.* The scope a gate ran (full vs changed files, which suites, which
+     platforms), the cache key it reads and writes, and the receipt it emits must name the same scope. A narrower run
+     never writes a result under a wider key, or a later full-scope run reads the narrow pass as its own.
+  2. *Populate and copy steps check status and write atomically.* A step that fills a cache, artifact or receipt
+     checks the producer's exit status before storing, and writes to a temp path then renames; a crash or failed
+     producer otherwise leaves a partial entry that the next run accepts as a hit.
+  3. *A scanner lists the tree it claims.* Diff the scanner's actual file list against the tree it says it covers; a
+     path gap (an exclude glob, a hidden directory, an untracked or generated path, a depth limit) is a finding even
+     when every listed file passes.
+  4. *Opt-outs are explicit, named and logged.* Beyond "Gates fail closed" above: skipping a check takes a named flag
+     or config entry that prints what it skipped, never a silent default.
 - **Select affected tests by the import graph, fail closed.** Choosing tests from changed paths by name or directory
   misses indirect dependents; walk the import graph, and when the graph cannot be built or a changed file is
   unmapped, run the full suite instead of none.

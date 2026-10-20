@@ -1,0 +1,3 @@
+### Added
+- deep-code-review: gate-integrity lens in `references/release-engineering.md` (Gate tooling and hooks). A gate pass must cover the scope it claims: gate scope, cache key, receipt and update path name the same scope; populate and copy steps check status and write atomically; a scanner lists the tree it claims; trust decisions fail closed and opt-outs are explicit, named and logged. Five fixture evals in `evals/evals.json` (four defect cases plus one clean distractor).
+size-budget-raise: .claude/skills/deep-code-review/references/release-engineering.md 30350→31668 one bullet with four gate-integrity checks, no existing text restated
