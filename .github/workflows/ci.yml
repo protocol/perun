@@ -40,6 +40,18 @@ jobs:
         if: github.event_name == 'pull_request'
         run: bash scripts/regen-unlanded.sh origin/main
 
+      # A slow per-PR test registers as scripts/ci-tests.d/<slug>.bg.sh: it starts here, runs alongside the gate
+      # steps below, and the "Per-PR tests" step waits for it and fails on its exit code (a hang is killed after 15 minutes), so it adds no serial time.
+      - name: Start background per-PR tests (scripts/ci-tests.d/*.bg.sh)
+        run: |
+          mkdir -p "$RUNNER_TEMP/bg"
+          for t in scripts/ci-tests.d/*.bg.sh; do
+            [ -e "$t" ] || continue
+            f="$RUNNER_TEMP/bg/$(basename "$t")"
+            : >"$f.log"
+            nohup bash -c 'timeout 900 bash -e "$1" >"$2.log" 2>&1; echo $? >"$2.rc.tmp"; mv "$2.rc.tmp" "$2.rc"' _ "$t" "$f" >/dev/null 2>&1 &
+          done
+
       # Prove the gate helper against its own fixtures (routing/version/privacy
       # + the real install path) before trusting it on this repo.
       - name: Gate helper self-tests
@@ -358,6 +370,18 @@ jobs:
         run: |
           set -euo pipefail
           for t in scripts/ci-tests.d/*.sh; do
+            case "$t" in *.bg.sh) continue ;; esac
             echo "== $t"
             bash -e "$t"
+          done
+          for t in scripts/ci-tests.d/*.bg.sh; do
+            [ -e "$t" ] || continue
+            f="$RUNNER_TEMP/bg/$(basename "$t")"
+            echo "== $t (started in the background)"
+            [ -f "$f.log" ] || { echo "FAIL: $t was never started"; exit 1; }
+            end=$((SECONDS + ${BG_WAIT_S:-960}))
+            while [ ! -f "$f.rc" ] && [ "$SECONDS" -lt "$end" ]; do sleep 1; done
+            cat "$f.log"
+            [ -f "$f.rc" ] || { echo "FAIL: $t did not finish in time"; exit 1; }
+            [ "$(cat "$f.rc")" = 0 ]
           done

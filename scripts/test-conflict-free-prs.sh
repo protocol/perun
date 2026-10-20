@@ -81,6 +81,24 @@ sed -i.bak 's|^\( *\)for d in \.claude/skills/\*/; do|\1# for d in .claude/skill
 o=$(cd "$R" && bash scripts/ci-gates.sh enumeration . 2>&1); grep -q 'has no ci.yml routing line' <<<"$o"; ok $? "enumeration: a commented routing loop does not route skills"
 g checkout -q -f -- .github/workflows/ci.yml; rm -f "$R/.github/workflows/ci.yml.bak"
 grep -qF 'bash -e "$t"' "$ROOT/.github/workflows/ci.yml"; ok $? "ci-tests.d files run under bash -e (an early failure is not masked)"
+# Background per-PR tests: run ci.yml's own start + wait step bodies over a fake ci-tests.d, so a dead line can't pass.
+BG="$(mktemp -d "${TMPDIR:-/tmp}/dcr-bg.XXXXXX")"; mkdir -p "$BG/scripts/ci-tests.d"; echo 'echo fast' >"$BG/scripts/ci-tests.d/a.sh"
+python3 -c '
+import sys
+s = open(sys.argv[1]).read()
+def body(name):
+    j = s.index("run: |", s.index("- name: " + name)) + 6; out = []
+    for ln in s[j:].split("\n")[1:]:
+        if ln.strip() and not ln.startswith(" " * 10): break
+        out.append(ln[10:])
+    return "\n".join(out)
+print(body("Start background per-PR tests") + "\n(\n" + body("Per-PR tests (scripts/ci-tests.d)") + "\n)")
+' "$ROOT/.github/workflows/ci.yml" >"$BG/steps.sh"
+mkdir -p "$BG/bin"; command -v timeout >/dev/null || printf '#!/bin/sh\nshift; exec "$@"\n' >"$BG/bin/timeout"; chmod +x "$BG/bin/"* 2>/dev/null  # macOS has no coreutils timeout
+bgrun() { echo "$1" >"$BG/scripts/ci-tests.d/z.bg.sh"; rt="$(mktemp -d "$BG/rt.XXXXXX")"; (cd "$BG" && PATH="$BG/bin:$PATH" RUNNER_TEMP="$rt" BG_WAIT_S="${2:-30}" bash "$BG/steps.sh") >"$BG/log" 2>&1; }
+bgrun 'echo bg-ran'; { [ $? -eq 0 ] && grep -q bg-ran "$BG/log" && grep -q fast "$BG/log"; }; ok $? "a *.bg.sh test runs from the background slot, its log printed, serial tests still run"
+bgrun 'echo bg-failed; exit 3'; { [ $? -ne 0 ] && grep -q bg-failed "$BG/log"; }; ok $? "a failing *.bg.sh test fails the Per-PR step with its log"
+bgrun 'sleep 6' 1; { [ $? -ne 0 ] && grep -q 'did not finish in time' "$BG/log"; }; ok $? "a *.bg.sh test past the wait deadline fails the step instead of hanging"
 grep -qF 'regen-unlanded.sh --check "${fg_base}"' "$ROOT/.claude/skills/deep-code-review/templates/pre-push-verify.sh"; ok $? "pre-push hook decides landed-vs-unlanded against the merge-base"
 
 echo "Tests: $pass/$((pass + fail))"
