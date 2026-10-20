@@ -44,7 +44,7 @@ python3 .claude/skills/agentic-delivery/scripts/pipeline_profile.py map --declar
 
 It reads the commit and push hooks (`core.hooksPath`, `.githooks`, `.husky`, `.git/hooks`; a thin hook is its implementation), the workflows (`pull_request` and `push` are ci, `merge_group` is train, a tag-only push is a release and is skipped), and fenced commands under a "pre-commit" or "before you open a PR" heading in `CONTRIBUTING.md`, `README.md`, `AGENTS.md` and `CLAUDE.md` (precheck). A suite key is `script [subcommand|--selftest]` or `runner [subcommand]`, so one check run with different arguments still collides. Output: the table, every duplicate, and the gate to keep (the latest server-enforced stage; hooks and prechecks are bypassable). `--declare STAGE=CMD`, or `.perun/pipeline.json` (`{"stages": {"train": ["cmd"]}}`), adds a stage no file shows, such as a merge-train verify command.
 
-A `gate_map` script is planned in the hook-cache lane and is not shipped in this release. When it exists in `scripts/`, run it first and treat any disagreement with `map` as a bug in one of them. Until then `map` is the map.
+`deep-code-review`'s `gate_map.py` is a narrower map (hooks, prechecks, train env; no workflows) that tags each suite `cached` or not. Use it for cache coverage; `map` is the map.
 
 ## Step 2: measure
 
