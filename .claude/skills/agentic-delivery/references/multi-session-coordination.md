@@ -52,6 +52,9 @@ replace hand-reading and hand-posting a board issue:
 - `scripts/premise_check.py N...` — run before handing PRs or issues to a lane or
   peer (and on receipt): one line per number, PR `MERGED|CLOSED|OPEN`, issue state
   plus the cited files/symbols `absent at HEAD`; exit 1 when any is done or drifted.
+- `scripts/job_lease.py run -- CMD` — start every long job (ship, QA, merge train) under the repo's
+  lease, owner and agents alike: a second one queues (a `queued Ns` line every 2 min) instead of colliding,
+  and `PERUN_RUN_SUFFIX` / `job_lease.py suffix` makes per-run names (databases, ports) unique.
 
 A coordination lesson closes only when a script or gate enforcing it lands
 with an eval exercising it; prose alone leaves it open.

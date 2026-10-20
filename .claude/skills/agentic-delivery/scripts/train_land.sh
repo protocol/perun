@@ -65,6 +65,7 @@ lock_take "$LOCK" 0 "$LT" || exit 1
 while :; do
   xrc=0; python3 "$HERE/perun_policy.py" heavy-exclusive >/dev/null 2>&1 || xrc=$?
   [ "$xrc" -eq 1 ] && [ "$lw" -gt 0 ] || break
+  lq=$((${lq:-0} + 1)); [ $((lq % ${PERUN_QUEUE_NOTE_SECS:-120})) -ne 0 ] || echo "queued ${lq}s: another gate holds the exclusive heavy lease; ${lw}s of wait left (LEASE_WAIT_SECS)" >&2
   lw=$((lw - 1)); sleep 1
 done
 [ "$xrc" -ne 1 ] || { echo "DEFER: another gate holds the exclusive heavy lease; nothing built, retry later" >&2; lock_drop "$LOCK"; exit 4; }

@@ -23,7 +23,8 @@ lock_take() {
     if [[ $p =~ ^[0-9]+$ ]]; then kill -0 "$p" 2>/dev/null || st=dead; else st=unknown; fi
     [[ $ts =~ ^[0-9]+$ ]] && age=", age $(($(date +%s) - ts))s"
     [ "$wait" -gt 0 ] || { echo "lock held by pid ${p:-?} ($st$age) ($d)" >&2; return 1; }
-    [ -n "$told" ] || { echo "waiting on lock held by pid ${p:-?} ($st$age) ($d)" >&2; told=1; }
+    # first line at once, then one every PERUN_QUEUE_NOTE_SECS (default 120): a long wait is never silent
+    [ -n "$told" ] && [ $((SECONDS - told)) -lt "${PERUN_QUEUE_NOTE_SECS:-120}" ] || { echo "waiting on lock held by pid ${p:-?} ($st$age) ($d)" >&2; told=$SECONDS; }
     wait=$((wait - 1)); sleep 1
   done
 }

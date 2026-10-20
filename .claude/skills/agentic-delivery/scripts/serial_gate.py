@@ -210,6 +210,10 @@ _POLL_CAP = 1.0
 _POLL_BACKOFF = 1.6
 _ADOPT_READ_TRIES = 20  # x 0.1s: time for a just-started holder to write its record
 _LOCK_FREED = -1  # internal: the record never verified, but the lock is free again; retry the start once
+try:  # a waiter prints a queue line this often (seconds); PERUN_QUEUE_NOTE_SECS overrides it
+    QUEUE_NOTE_SECS = float(os.environ.get("PERUN_QUEUE_NOTE_SECS", "120"))
+except ValueError:
+    QUEUE_NOTE_SECS = 120.0
 _RETRY_BACKOFF_CAP = 30.0  # ceiling on --retry's per-attempt backoff (#1127: bounded, never unbounded)
 
 
@@ -407,6 +411,20 @@ def _lock_file_path(lock_dir: str) -> str:
     return os.path.join(lock_dir, "lock")
 
 
+def _queue_note(label: str, start: float, last: float, fd: int | None = None) -> float:
+    """Print one stderr line ("queued Ns on <label>; holder <owner record>") when QUEUE_NOTE_SECS passed since `last`;
+    return the new `last`. A waiter on a long job is never silent. The holder text is the lock file's informational record."""
+    now = time.monotonic()
+    if now - last < QUEUE_NOTE_SECS:
+        return last
+    try:
+        holder = os.pread(fd, 300, 0).decode(errors="replace") if fd is not None else ""
+    except OSError:
+        holder = ""
+    print(f"serial_gate: queued {int(now - start)}s on {label}; holder {holder or 'unknown'}", file=sys.stderr, flush=True)
+    return now
+
+
 def _slot_lock_path(lock_dir: str, index: int, slots: int) -> str:
     """Lock-file path for one semaphore slot. `slots<=1` is exactly
     `_lock_file_path` (the single `lock` file) — no behavior or filename
@@ -435,7 +453,8 @@ def acquire_slot(lock_dir: str, slots: int, timeout: float) -> tuple[int, int]:
     assert fcntl is not None, "acquire_slot requires fcntl (POSIX only)"
     os.makedirs(lock_dir, exist_ok=True)
     slots = max(1, slots)
-    deadline = time.monotonic() + timeout
+    start = last = time.monotonic()
+    deadline = start + timeout
     delay = _POLL_START
     while True:
         for index in range(slots):
@@ -451,6 +470,7 @@ def acquire_slot(lock_dir: str, slots: int, timeout: float) -> tuple[int, int]:
                 raise
         if time.monotonic() >= deadline:
             raise LockTimeout(f"timed out after {timeout}s waiting for a free slot (0..{slots - 1}): {lock_dir}")
+        last = _queue_note(lock_dir, start, last)
         time.sleep(min(delay, _POLL_CAP) + random.uniform(0, delay * 0.1))
         delay = min(delay * _POLL_BACKOFF, _POLL_CAP)
 
@@ -494,7 +514,8 @@ def acquire_lock(lock_dir: str, timeout: float) -> int:
     assert fcntl is not None, "acquire_lock requires fcntl (POSIX only)"
     os.makedirs(lock_dir, exist_ok=True)
     fd = os.open(_lock_file_path(lock_dir), os.O_RDWR | os.O_CREAT, 0o644)
-    deadline = time.monotonic() + timeout
+    start = last = time.monotonic()
+    deadline = start + timeout
     delay = _POLL_START
     while True:
         try:
@@ -509,6 +530,7 @@ def acquire_lock(lock_dir: str, timeout: float) -> int:
         if time.monotonic() >= deadline:
             os.close(fd)
             raise LockTimeout(f"timed out after {timeout}s waiting for lock: {lock_dir}")
+        last = _queue_note(lock_dir, start, last, fd)
 
         time.sleep(min(delay, _POLL_CAP) + random.uniform(0, delay * 0.1))
         delay = min(delay * _POLL_BACKOFF, _POLL_CAP)
