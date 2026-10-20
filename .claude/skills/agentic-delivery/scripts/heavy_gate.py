@@ -38,7 +38,20 @@ DEFAULT_PATTERNS = (
     r"(npx )?next build\b", r"(npm|pnpm|yarn|bun) run build\b", r"(npx )?tsc -b\b",
 )
 PUNCT = ";()<>|&\n"
-WRAP = re.compile(r"(\w+=\S*|env|time|nice|command|exec|sudo|npx|uv run|poetry run|pipx run|pnpm exec|python[\d.]* -m)$")
+WRAP = re.compile(r"(\w+=\S*|command|npx|uv run|poetry run|pipx run|pnpm exec|python[\d.]* -m)$")
+WRAP_VALUE_OPTS = {"-p", "--package", "--with", "--python", "--from"}  # `uv run --with x`, `npx -p pkg`
+# Wrappers whose listed options take a separate value (`nice -n 5`); timeout also takes a DURATION positional.
+# ponytail: a known-launcher list, so an unlisted one (watch, parallel, `{ ...; }`) still passes light; the gate is
+# a host-load hold, not a security boundary.
+VALUE_WRAP = {"env": {"-u", "--unset", "-C", "--chdir"}, "nice": {"-n", "--adjustment"}, "nohup": set(), "setsid": set(),
+              "caffeinate": set(), "arch": set(), "time": {"-f", "-o", "--format", "--output"}, "exec": {"-a"},
+              "sudo": {"-u", "-g", "-h", "-p", "-C", "-D", "-R", "-T", "--user", "--group"}, "doas": {"-u", "-C"},
+              "ionice": {"-c", "-n", "-p"}, "taskpolicy": {"-c", "-t", "-l", "-p"},
+              "timeout": {"-s", "--signal", "-k", "--kill-after"}, "stdbuf": {"-i", "-o", "-e", "--input", "--output", "--error"},
+              "xargs": {"-n", "-I", "-P", "-L", "-d", "-E", "-s", "-a", "--max-args", "--replace", "--max-procs",
+                        "--max-lines", "--delimiter", "--eof", "--max-chars", "--arg-file"}}
+SHELLS = {"bash", "sh", "zsh", "dash", "ksh", "fish"}
+SHELL_VALUE_OPTS = {"-o", "-O", "+o", "+O", "--rcfile", "--init-file"}
 LIGHT_FLAGS = {"--version", "--help", "-h", "--collect-only", "--co"}
 TEST_FILE = re.compile(r"[A-Za-z0-9_./-]+\.py(::[A-Za-z0-9_.\[\]-]+)*")
 SHORT_FLAGS = re.compile(r"-[qvxsl]+")
@@ -109,9 +122,19 @@ def heavy_patterns():
 
 
 def strip_wrappers(toks):
-    """Drop leading runner wrappers (env/VAR=x/time/sudo, npx, uv|poetry|pipx run, pnpm exec, python -m) and their flags."""
+    """Drop leading runner wrappers (env/VAR=x/time/sudo, npx, uv|poetry|pipx run, pnpm exec, python -m, nice, nohup,
+    timeout DURATION, stdbuf, xargs) and their flags; a VALUE_WRAP option's separate value is dropped with it."""
     while toks:
+        toks = [os.path.basename(toks[0]) or toks[0]] + toks[1:]  # /usr/bin/env, /usr/bin/python3 -m
         two = " ".join(toks[:2])
+        if toks[0] in VALUE_WRAP:
+            opts, toks = VALUE_WRAP[toks[0]], toks[1:]
+            while toks and toks[0].startswith("-") and toks[0] != "-":
+                toks = toks[2:] if toks[0] in opts else toks[1:]
+            if two.startswith("timeout"):
+                toks = toks[1:]  # DURATION
+            toks = toks[1:] if toks[:1] == ["--"] else toks
+            continue
         if WRAP.match(two) and len(toks) > 1:
             toks = toks[2:]
         elif WRAP.match(toks[0]):
@@ -119,7 +142,7 @@ def strip_wrappers(toks):
         else:
             break
         while toks and toks[0].startswith("-"):
-            toks = toks[1:]
+            toks = toks[2:] if toks[0] in WRAP_VALUE_OPTS else toks[1:]
     return toks
 
 
@@ -129,13 +152,27 @@ def is_heavy(command: str, patterns) -> bool:
     Light invocations (--version, --help, --collect-only, `playwright install`) are never heavy.
     A pytest run scoped to one or two explicit test files (`a.py`, `a.py::test`), with any -k, is light
     (the hold message advises it); no file, a directory, or a third file stays heavy (see scoped_pytest).
-    A command that does not parse (unclosed quote) is NOT heavy: the gate fails open."""
+    `bash|sh -c 'STRING'` (any option cluster holding `c`, e.g. `-lc`) is checked as STRING.
+    A command that does not parse (unclosed quote) is NOT heavy: the gate fails open; a `-c` STRING that does not
+    parse is heavy (fails closed), since a heavy run is the likely reason to wrap it."""
+    return _heavy(command, patterns, False)
+
+
+def _heavy(command, patterns, on_parse_error):
     try:
-        segs = segments(command or "", ":[]")
+        segs = segments(command or "", ":[]{}+%")  # `{}`, `+x`, `%e` stay one word: `xargs -I{} pytest {}`
     except ValueError:
-        return False
+        return on_parse_error
     for toks in segs:
         toks = strip_wrappers(toks)
+        if toks and os.path.basename(toks[0]) in SHELLS:
+            i = 1
+            while i < len(toks) and toks[i][:1] in "-+":
+                i += 2 if toks[i] in SHELL_VALUE_OPTS else 1
+            if i < len(toks) and any("c" in t for t in toks[1:i] if t[:1] == "-" and not t.startswith("--")):
+                if _heavy(toks[i], patterns, True):
+                    return True
+                continue
         if not toks or LIGHT_FLAGS & set(toks) or (toks[0] == "playwright" and (toks[1:2] or [""])[0].startswith("install")):
             continue
         seg = " ".join(toks)
