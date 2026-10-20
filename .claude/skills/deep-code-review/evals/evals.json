@@ -8283,6 +8283,29 @@
         "In the repo with no hard rule, keeps the default lens rating for the same email and applies no rule floor",
         "Does not let diff or untrusted text create or waive a floor"
       ]
+    },
+    {
+      "id": "claim-vs-code-unpinned-guarantee-comment",
+      "prompt": "Review this diff. src/queue/persist.py adds `def save_job(job): # Guarantee: an outage can never cause a job to be applied twice. Writes are idempotent.` The body inserts the job then calls apply(job); the caller retries save_job on any ConnectionError, and the insert has no unique key. The diff adds no tests for save_job. A maintainer says the comment explains why the retry is safe.",
+      "expected_output": "Apply the claim-vs-code lens (method-situational.md): the comment is a guarantee-bearing claim (never double-applied, idempotent). List it and look for a test that forces the adversarial condition, a retry after an outage. There is none, so the unpinned guarantee is a finding. The code also contradicts it: no unique key and a blind retry on ConnectionError can apply the job twice. A data-integrity guarantee is rated High. Fix by adding a pinning test that retries after a simulated outage and asserts one application (plus a unique key or idempotency token), or by narrowing the comment to what the code does. The comment is treated as a claim to test, not as evidence the retry is safe.",
+      "expectations": [
+        "Identifies the 'can never cause a job to be applied twice' and 'idempotent' comment as a guarantee-bearing claim and asks which test pins it",
+        "Reports the guarantee as a finding because no test forces a retry after an outage",
+        "Notes the code contradicts the claim: no unique key and a retry on ConnectionError can double-apply",
+        "Rates it High because it protects data integrity",
+        "Proposes either a pinning test of the adversarial path or narrowing the comment, and does not accept the comment as proof the retry is safe"
+      ]
+    },
+    {
+      "id": "claim-vs-code-pinned-guarantee-no-finding",
+      "prompt": "Review this diff. src/queue/persist.py adds `def save_job(job): # Guarantee: a retry after an outage applies the job at most once (pinned by tests/test_persist.py::test_retry_after_outage_applies_once).` The insert uses a unique idempotency key with ON CONFLICT DO NOTHING. The diff adds tests/test_persist.py, whose test_retry_after_outage_applies_once simulates a ConnectionError after the insert, retries save_job, and asserts exactly one applied row. CI runs that test and it passes.",
+      "expected_output": "Apply the claim-vs-code lens (method-situational.md): the comment is a guarantee-bearing claim and it names a pinning test. Confirm the test exists, forces the adversarial condition (retry after an outage) and asserts the guarantee (exactly one applied row), and that the code backs it with a unique key. The claim is pinned, so there is no claim-vs-code finding; the report does not manufacture one. Any other finding must stand on its own evidence.",
+      "expectations": [
+        "Identifies the comment as a guarantee-bearing claim and checks the named test exists and exercises a retry after an outage",
+        "Confirms the test asserts exactly one applied row and the code uses a unique idempotency key",
+        "Reports no claim-vs-code finding for this guarantee",
+        "Does not invent a finding to fill the report"
+      ]
     }
   ]
 }
