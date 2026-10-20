@@ -39,8 +39,9 @@ chat may be terse.
 | Verify or relay a lane's result | `references/verification-handback.md` |
 | Long session, compaction, new session, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate, before a context-heavy step, before handback |
 | New machine or new fleet | `references/operating-discipline.md` first: always-on layer entry point, `install.sh --with-operating-layer` snippet, `scripts/operating_selfcheck.py` |
-| Use when you need a PR's state | `scripts/pr_state.py <n>`: head, checks, review, behind, train; exit 0 green, 1 red, 2 pending |
-| Use when committing a changelog fragment | `.githooks/pre-commit` runs `scripts/ci-gates.sh fragments`: marker and heading rules |
+| PR state | `scripts/pr_state.py <n>`: head, checks, review, behind, train; exit 0 green, 1 red, 2 pending |
+| Hand off PRs/issues | `scripts/premise_check.py <n>...`: merged/closed PRs, cites absent at HEAD; exit 1 |
+| Commit a changelog fragment | `.githooks/pre-commit` runs `scripts/ci-gates.sh fragments`: marker and heading rules |
 
 ---
 
@@ -93,8 +94,8 @@ exactly four things: a lane blocking a gate, a lane returning a receipt (the
 output contract, at an exact SHA), a lane exceeding its stated time/cost budget,
 or a preflight collision (*Worktrees and occupancy*, below). Between those
 events the Conductor reads status only — not a lane's raw tool-call transcript —
-and does not do the lane's work itself, the same way a subagent returns a
-distilled summary while its own context stays isolated from its parent's
+and does not do the lane's work itself, as a subagent returns a
+summary, its context isolated from its parent's
 (Anthropic, context engineering for AI agents).
 
 **Size the fan-out to the decomposition, not to available concurrency** —
@@ -143,7 +144,7 @@ making it non-blocking is (`pipeline-optimizer.md`).
 | G7 Integrate | Accepted lanes | Integration receipt + `deep-code-review DIFF` | One integration owner; rerun affected gates on the exact final SHA |
 | G8 Release | Exact integrated SHA | Release manifest | Rollback proven; **owner approves** outward/production action |
 | G9 Production verify | Deployed SHA | Verification receipt + `postdeploy-logs:` | Served behaviour and SLOs; rollback on breach |
-| G10 Learn | Receipts | Retrospective | Escaped gap → regression test in this repo. Reusable lessons are generalized, third-party identifiers stripped, before leaving the project (`contribution` overlay proposes them upstream). Mandatory-trigger criteria, blameless shape, action-item-closure gate: `references/retrospective.md` + `references/template-postmortem.md` |
+| G10 Learn | Receipts | Retrospective | Escaped gap → regression test in this repo. Reusable lessons are generalized, third-party identifiers stripped, before leaving the project (`contribution` overlay proposes them upstream). Triggers, blameless shape, action-item closure: `references/retrospective.md` + `references/template-postmortem.md` |
 
 **Missing evidence is `UNVERIFIED`, never pass. Missing price is `UNPRICED`,
 never zero. Missing spend cap is `BLOCKED`, never unlimited** — `UNPRICED` is a
@@ -278,7 +279,7 @@ decide-from-probe rules: `references/fanout-host-sizing.md` **Environment probe
 procedure** (read it before sizing any fan-out); CI-offload:
 `references/merge-queue-worktrees.md`.
 
-- **Act-on predicate:** spawn another heavy lane only while free RAM >15% AND swap is not climbing; CPU idle is secondary, `load1` never decides — commands and why: `references/fanout-host-sizing.md` **Gate on free RAM and the swap trend**. Mechanized: `scripts/host_probe.py --lane-type {cpu,io,light} [--canary CMD --baseline-file F]` prints `SPAWN`/`HOLD <reason>`/`COULD_NOT_CHECK <what>`.
+- **Act-on predicate:** spawn another heavy lane only while free RAM >15% AND swap is not climbing; CPU idle is secondary, `load1` never decides — why: `references/fanout-host-sizing.md` **Gate on free RAM and the swap trend**. Mechanized: `scripts/host_probe.py --lane-type {cpu,io,light} [--canary CMD --baseline-file F]` prints `SPAWN`/`HOLD <reason>`/`COULD_NOT_CHECK <what>`.
 - **Auto-wired by `--apply-operating-layer`:** `scripts/heavy_gate.py` (PreToolUse Bash) denies tests/builds while `host_probe` HOLDs or heavy leases are full; fails open. `scripts/session_brief.py` (SessionStart): ≤3 report-only lines.
 
 ## Local environment (own it)
@@ -313,7 +314,7 @@ merge triggers deploy or publish is a deploy (an auto-deploying `main`) — neve
 covered. Force-push, history rewrite, deploy/prod, secrets/IAM, spend, external
 sends, and destructive data stay gated always. The un-gated half of an unattended run is
 `references/unattended-operating-mode.md` **The Human-gate boundary**. A gated
-item is parked with its next step while the loop continues; it is not a stop. A gate usually covers one step, so slice the work around it rather than parking the whole item: pre-fill the decision so the human acts once, build behind a switch, write and dry-run the script, dispatch what is un-gated, and ask only about the human step itself.
+item is parked with its next step while the loop continues; it is not a stop. A gate usually covers one step, so slice the work around it, not park the whole item: pre-fill the decision so the human acts once, build behind a switch, write and dry-run the script, dispatch what is un-gated, and ask only about the human step itself.
 
 Shape every ask as one issue, two approaches:
 
