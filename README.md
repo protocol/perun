@@ -236,6 +236,8 @@ code-review skill inside it is still called `deep-code-review`, after what it do
 Perun is instructions, not a service: your code goes only where your agent
 already sends it. Switch on your agent's sandbox and keep human review
 ([host safety](docs/host-safety.md), [`SECURITY.md`](SECURITY.md)).
+Before you trust a skill you did not write, run
+`python3 perun/scripts/audit_skills.py path/to/skills` (exit 2 = findings; `--help` lists what it checks and its limits).
 
 ## Learn more
 
