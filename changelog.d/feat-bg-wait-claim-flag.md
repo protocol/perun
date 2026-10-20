@@ -1,0 +1,2 @@
+### Added
+- Operating layer: `handback_cap.py` now also flags a handback whose own text says the lane is "waiting on" its background tests or builds, even when the process scan finds nothing or cannot run. It sends the owner a `systemMessage` in `warn` and `block` modes (silent in `off`); it never blocks, since the text is a claim and not evidence. Test: `scripts/test_bg_wait_claim.py` (run in CI).
