@@ -8201,6 +8201,19 @@
         "Flags bash install scripts with no .gitattributes eol rule as a Windows line-ending risk",
         "Rates a broken declared-supported environment High and proposes widening the CI matrix or narrowing the declaration"
       ]
+    },
+    {
+      "id": "concurrency-race-and-release-required-check",
+      "prompt": "Review this TypeScript diff to a job service.\n```ts\nexport async function createOrder(userId: string, item: Item) {\n  const n = await db.count('orders', { userId });\n  if (n < 5) await db.insert('orders', { userId, ...item });\n}\n\nexport async function registerEmail(email: string) {\n  // emails.email has a UNIQUE index\n  await db.query('insert into emails(email) values ($1) on conflict (email) do nothing', [email]);\n}\n\nexport async function runExclusive(key: string, work: () => Promise<void>) {\n  const lock = await acquireLock(key);\n  try { work(); } finally { await releaseLock(lock); }\n}\n\nexport async function withAdvisoryLock(id: number, fn: () => Promise<void>) {\n  const client = await pool.connect();\n  await client.query('select pg_advisory_lock($1)', [id]);\n  try { await fn(); } finally {\n    try { await client.query('select pg_advisory_unlock($1)', [id]); } catch {}\n    client.release();\n  }\n}\n```",
+      "expected_output": "Apply the required race and release check from concurrency-shared-state.md to every read-then-write and acquire, and report each site. (1) The count-then-insert is a read-then-write window with no lock, compare-and-set, unique constraint or transaction, so two concurrent calls both pass the cap and exceed 5 (and a double submit creates two records): a finding; fix with a constraint or a locked transaction. (2) work() is not awaited, so the finally releases the lock while the guarded work is still running: a finding; await the work (return await) before release. (3) The swallowed unlock error followed by client.release() returns a pooled connection that still holds the session lock to the pool, leaking the lock to the next borrower: a finding; destroy the connection (release with an error) when unlock fails. registerEmail is atomic via the unique constraint and ON CONFLICT, so it is recorded as answered with no finding. Each site's answer appears in the report.",
+      "expectations": [
+        "Flags the count-then-insert as a read-then-write window with no lock, compare-and-set, unique constraint or transaction as the source of atomicity, so concurrent calls exceed the cap or create duplicate records",
+        "Flags the finally in runExclusive that releases the lock while the un-awaited async work() is still running, and says to await the work before release",
+        "Flags the swallowed unlock error on the pooled session-scoped advisory lock because client.release() returns a connection that may still hold the lock",
+        "Says to destroy the connection (not return it to the pool) when the unlock fails",
+        "Does not report registerEmail as a race, because the unique index plus ON CONFLICT makes the insert atomic",
+        "Records an answer for each read-then-write and each acquire site, including registerEmail as atomic via its unique constraint with no finding"
+      ]
     }
   ]
 }

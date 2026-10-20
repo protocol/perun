@@ -23,6 +23,16 @@ special case.
 
 ---
 
+## Required: race and release check
+
+When domain G applies, answer these for **every** read-then-write and **every** acquire, and record each answer (or "n/a, no such site") in the report body (a finding or "atomic via constraint"). An unanswered site is a gap, not a pass.
+
+1. **Read-then-write window.** Where does atomicity come from: a lock, a compare-and-set, a unique constraint, or a transaction? A check-then-insert, a cap checked against a snapshot, or a double submit, with none of the four, is a finding.
+2. **Release on the error path.** For each acquire (lock, claim, slot, connection, lease), what releases it when the guarded work throws, and is that release awaited *after* the work finishes? A `finally` running before the guarded work finishes (a missing `await`/`return await`, or a detached task) releases a lock while the guarded work still runs: a finding. A claim left pending after a throw is a finding.
+3. **Session-scoped lock on a pooled connection** (advisory lock, `GET_LOCK`). If the unlock fails, is the connection destroyed rather than returned? A swallowed unlock error that returns the connection to the pool leaks a held lock to the next borrower: a finding.
+
+---
+
 ## In-process races
 
 - Shared mutable globals / module-level caches mutated from request handlers or

@@ -15,6 +15,7 @@ Read this when domain G (Concurrency & shared state) is applicable in Phase 2 �
   (framework `@Injectable`/`@Component`, a module global) holding per-request/run
   data leaks across calls **even with perfect synchronization** — match each
   stateful field's lifetime to its data's; thread a per-run value.
+- **Race and release check (required)**: answer the three questions in `references/concurrency-shared-state.md` § Required: race and release check for every read-then-write and acquire.
 - 🚩 shared mutable globals, a singleton field whose lifetime outlives its data,
   missing `await`, non-atomic read-modify-write, lock
   held across I/O, two workers writing the same file, **tests or jobs that write
