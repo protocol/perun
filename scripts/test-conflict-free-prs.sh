@@ -81,6 +81,7 @@ sed -i.bak 's|^\( *\)for d in \.claude/skills/\*/; do|\1# for d in .claude/skill
 o=$(cd "$R" && bash scripts/ci-gates.sh enumeration . 2>&1); grep -q 'has no ci.yml routing line' <<<"$o"; ok $? "enumeration: a commented routing loop does not route skills"
 g checkout -q -f -- .github/workflows/ci.yml; rm -f "$R/.github/workflows/ci.yml.bak"
 grep -qF 'bash -e "$t"' "$ROOT/.github/workflows/ci.yml"; ok $? "ci-tests.d files run under bash -e (an early failure is not masked)"
+grep -qF '*.bg.sh) continue' "$ROOT/.github/workflows/ci.yml" && grep -qF '[ "$(cat "$f.rc")" = 0 ]' "$ROOT/.github/workflows/ci.yml"; ok $? "a *.bg.sh test runs in the background and its exit code still fails the Per-PR step"
 grep -qF 'regen-unlanded.sh --check "${fg_base}"' "$ROOT/.claude/skills/deep-code-review/templates/pre-push-verify.sh"; ok $? "pre-push hook decides landed-vs-unlanded against the merge-base"
 
 echo "Tests: $pass/$((pass + fail))"
