@@ -55,6 +55,17 @@ class IsHeavy(unittest.TestCase):
                   "pytest a.py -k a: tests", "pytest a.py -p no: tests", "pytest a.py:: tests"):
             self.assertTrue(hg.is_heavy(c, hg.DEFAULT_PATTERNS), c)
 
+    def test_wrapped_runs_are_unwrapped(self):
+        """timeout/nohup/env/nice/time/stdbuf/xargs and `sh -c 'STRING'` must not hide a heavy run (#1840)."""
+        for c in ("timeout 600 pytest", "timeout -s KILL 5m npm test", "nohup npm test &", "env -u FOO pytest",
+                  "env X=1 pytest", "nice -n 5 pytest", "nice pytest", "time go test ./...", "stdbuf -oL pytest",
+                  "xargs pytest", "find . -name '*.py' | xargs -n 1 pytest", 'bash -c "pytest"', "sh -c 'cd x && npm test'",
+                  'bash -lc "cargo test"', '/bin/bash -c "go test ./..."', "bash -c 'echo \"x'"):
+            self.assertTrue(hg.is_heavy(c, hg.DEFAULT_PATTERNS), c)
+        for c in ("timeout 5 ls", "nohup ./server &", "nice -n 5 make", "xargs rm", 'bash -c "echo hi"', "bash script.sh",
+                  "timeout 5 pytest a.py", 'bash -c "pytest a.py"', 'git commit -m "bash -c pytest"', "echo timeout 5 pytest"):
+            self.assertFalse(hg.is_heavy(c, hg.DEFAULT_PATTERNS), c)
+
     def test_custom_pattern(self):
         self.assertTrue(hg.is_heavy("make check", [r"make check\b"]))
 

@@ -38,7 +38,13 @@ DEFAULT_PATTERNS = (
     r"(npx )?next build\b", r"(npm|pnpm|yarn|bun) run build\b", r"(npx )?tsc -b\b",
 )
 PUNCT = ";()<>|&\n"
-WRAP = re.compile(r"(\w+=\S*|env|time|nice|command|exec|sudo|npx|uv run|poetry run|pipx run|pnpm exec|python[\d.]* -m)$")
+WRAP = re.compile(r"(\w+=\S*|time|command|exec|sudo|npx|uv run|poetry run|pipx run|pnpm exec|python[\d.]* -m)$")
+# Wrappers whose listed options take a separate value (`nice -n 5`); timeout also takes a DURATION positional.
+VALUE_WRAP = {"env": {"-u", "--unset", "-C", "--chdir"}, "nice": {"-n", "--adjustment"}, "nohup": set(),
+              "timeout": {"-s", "--signal", "-k", "--kill-after"}, "stdbuf": {"-i", "-o", "-e", "--input", "--output", "--error"},
+              "xargs": {"-n", "-I", "-P", "-L", "-d", "-E", "-s", "-a", "--max-args", "--replace", "--max-procs",
+                        "--max-lines", "--delimiter", "--eof", "--max-chars", "--arg-file"}}
+SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 LIGHT_FLAGS = {"--version", "--help", "-h", "--collect-only", "--co"}
 TEST_FILE = re.compile(r"[A-Za-z0-9_./-]+\.py(::[A-Za-z0-9_.\[\]-]+)*")
 SHORT_FLAGS = re.compile(r"-[qvxsl]+")
@@ -109,9 +115,17 @@ def heavy_patterns():
 
 
 def strip_wrappers(toks):
-    """Drop leading runner wrappers (env/VAR=x/time/sudo, npx, uv|poetry|pipx run, pnpm exec, python -m) and their flags."""
+    """Drop leading runner wrappers (env/VAR=x/time/sudo, npx, uv|poetry|pipx run, pnpm exec, python -m, nice, nohup,
+    timeout DURATION, stdbuf, xargs) and their flags; a VALUE_WRAP option's separate value is dropped with it."""
     while toks:
         two = " ".join(toks[:2])
+        if toks[0] in VALUE_WRAP:
+            opts, toks = VALUE_WRAP[toks[0]], toks[1:]
+            while toks and toks[0].startswith("-") and toks[0] != "-":
+                toks = toks[2:] if toks[0] in opts else toks[1:]
+            if two.startswith("timeout"):
+                toks = toks[1:]  # DURATION
+            continue
         if WRAP.match(two) and len(toks) > 1:
             toks = toks[2:]
         elif WRAP.match(toks[0]):
@@ -129,13 +143,27 @@ def is_heavy(command: str, patterns) -> bool:
     Light invocations (--version, --help, --collect-only, `playwright install`) are never heavy.
     A pytest run scoped to one or two explicit test files (`a.py`, `a.py::test`), with any -k, is light
     (the hold message advises it); no file, a directory, or a third file stays heavy (see scoped_pytest).
-    A command that does not parse (unclosed quote) is NOT heavy: the gate fails open."""
+    `bash|sh -c 'STRING'` (any option cluster holding `c`, e.g. `-lc`) is checked as STRING.
+    A command that does not parse (unclosed quote) is NOT heavy: the gate fails open; a `-c` STRING that does not
+    parse is heavy (fails closed), since a heavy run is the likely reason to wrap it."""
+    return _heavy(command, patterns, False)
+
+
+def _heavy(command, patterns, on_parse_error):
     try:
         segs = segments(command or "", ":[]")
     except ValueError:
-        return False
+        return on_parse_error
     for toks in segs:
         toks = strip_wrappers(toks)
+        if toks and os.path.basename(toks[0]) in SHELLS:
+            i = 1
+            while i < len(toks) and toks[i].startswith("-"):
+                i += 1
+            if i < len(toks) and any("c" in t for t in toks[1:i] if not t.startswith("--")):
+                if _heavy(toks[i], patterns, True):
+                    return True
+                continue
         if not toks or LIGHT_FLAGS & set(toks) or (toks[0] == "playwright" and (toks[1:2] or [""])[0].startswith("install")):
             continue
         seg = " ".join(toks)

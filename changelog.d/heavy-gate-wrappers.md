@@ -1,0 +1,2 @@
+### Fixed
+- `heavy_gate.py` unwraps `timeout [opts] DURATION`, `nohup`, `env [-u NAME]`, `nice [-n N]`, `stdbuf`, `xargs [opts]` and `bash|sh|zsh -c 'STRING'` (any option cluster holding `c`, such as `-lc`) before the heavy check, so `timeout 600 pytest`, `nohup npm test &`, `xargs pytest` and `bash -c "pytest"` are held like a bare run. A `-c` string that does not parse is heavy (fails closed). `ceo_altitude_guard.py` shares the same unwrapping.
