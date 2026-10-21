@@ -84,6 +84,14 @@ and flags `HANDOFF` when the last-third average (the average when < 3 turns)
 exceeds 400000: write a handoff note and start a fresh session. JSON key:
 `main_context`.
 
+5-HOUR WINDOWS (burn rate)
+--------------------------
+`burn_blocks` groups main + lane turns into 5-hour UTC windows (the model ccusage "blocks" and Claude-Code-Usage-Monitor sessions use; the
+account's real quota window may open elsewhere, so this is a pace signal). Per window: weighted tokens, burn per minute, lane share, most
+lanes open at once, the top spender. For the costliest window it names the driver: main thread over the auto-compact window -> /compact or
+/clear + handoff; and only when that window is at least 2x the median of the others: one lane >= 40% -> split or trim it; no
+spender >= 40% with 3+ lanes open at once -> fewer lanes per wave. JSON key: `burn_blocks`.
+
 PRICING (--rates TSV)
 ---------------------
 Without `--rates`, the built-in `DEFAULT_RATES` table (official pricing page,
@@ -216,11 +224,12 @@ import json
 import math
 import os
 import re
+import statistics
 import subprocess
 import sys
 import tempfile
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 OK = 0
 BREACH = 1
@@ -619,6 +628,7 @@ def build_subagent_report(jsonl_path: str, since, seen: set | None = None) -> di
         "consult_by_model": model_stats([t for t in turns if t.get("iter")])[2],
         "tool_results": tool_results(entries, turns, totals["input_equivalent"], since),
         "in_flight": not called and last_stop != "end_turn",
+        "_turns": turns,  # build_report pops it for burn_blocks; never in the report
         **totals,
     }
 
@@ -629,6 +639,10 @@ MAIN_TIER_LEVER_SHARE = 0.40
 AUTO_COMPACT_WINDOW = 200_000  # the autoCompactWindow install.sh writes
 COMPACT_RESTART_TOKENS = 30_000  # ASSUMPTION: context right after a compaction (fixed prefix + summary); a real summary varies
 TOOL_RESULT_MIN_CHARS, CHARS_PER_TOKEN = 10_000, 4  # CHARS_PER_TOKEN is a rough ASSUMPTION, which is why the carry is an estimate
+BURN_DRIVER_SHARE = 0.40  # a block gets advice only when one spender carries at least this share of it
+BURN_SPIKE_X = 2.0  # lane advice needs the peak window at least this multiple of the median of the others
+BURN_FANOUT_LANES = 3  # starting value: lanes open at once before a diffuse lane-driven window is called a fan-out
+BLOCK_S = 5 * 3600  # the 5-hour usage window ccusage "blocks" and Claude-Code-Usage-Monitor sessions model, started at the first turn's hour
 TAIL_LEVER_SHARE = 0.10  # lever fires when the beyond-cap tail is at least this share of lane input-eq
 
 
@@ -784,6 +798,64 @@ def compact_saving(turns: list, main_ie: float, window: int = AUTO_COMPACT_WINDO
     return out
 
 
+def burn_blocks(main_turns: list, lanes: list) -> dict:
+    """Spend per 5-hour window (UTC, opened at the first turn's hour) with burn rate and the window's top spender. Counts only; no text read.
+
+    `lanes` is [(label, turns)]. Each block has `weighted` (input-eq + output, the tool's one measure), `burn_per_min` (weighted over the
+    first-to-last turn span, floored at 1 minute), `lane_share`, `peak_lanes` (most lane spans open at once), `main_ctx_avg` and `driver`
+    (main, or the costliest lane's label, with its share of the block). `peak` is the costliest block; `spike_x` is its weighted over the
+    median of the others (None with fewer than 2 others). The window is MODELLED on the public tools: the account's real quota window may
+    open elsewhere, so a block is a pace signal, not a limit. `advice` is set only for the peak block, from measured fields: main-driven with
+    average context over AUTO_COMPACT_WINDOW -> /compact or /clear + handoff; and, only when `spike_x` is at least BURN_SPIKE_X: one lane at
+    BURN_DRIVER_SHARE or more -> split or trim it; no spender at BURN_DRIVER_SHARE with BURN_FANOUT_LANES+ lanes open at once ->
+    dispatch fewer lanes per wave. `peak_lanes` counts lanes by their first-to-last turn inside the block only (idle lanes and lanes
+    from other windows do not count).
+    """
+    live = lambda ts: [t for t in ts if t["timestamp"] and t.get("model") != "<synthetic>"]  # noqa: E731
+    groups = [("main", live(main_turns))] + [(lb, live(ts)) for lb, ts in lanes]
+    marks = sorted(((t["timestamp"].astimezone(timezone.utc), k, t) for k, (_, ts) in enumerate(groups) for t in ts), key=lambda m: m[:2])
+    blocks: list = []
+    for ts, k, t in marks:
+        if not blocks or ts >= blocks[-1]["end"]:
+            start = ts.replace(minute=0, second=0, microsecond=0)
+            blocks.append({"start": start, "end": start + timedelta(seconds=BLOCK_S), "first": ts, "last": ts, "by": {}})
+        blocks[-1]["last"] = ts
+        blocks[-1]["by"].setdefault(k, []).append(t)
+    out = []
+    for b in blocks:
+        w = {k: weighted_tokens(sum_turns(ts)) for k, ts in b["by"].items()}
+        total = sum(w.values())
+        top = max(w, key=w.get)
+        ctx = [t["input_tokens"] + t["cache_write_5m"] + t["cache_write_1h"] + t["cache_read"] for t in b["by"].get(0, []) if not t.get("iter")]
+        mins = max((b["last"] - b["first"]).total_seconds() / 60, 1.0)
+        spans = [(ts[0]["timestamp"], ts[-1]["timestamp"]) for k, ts in b["by"].items() if k]  # each lane clipped to this block's own turns
+        out.append({"start": b["start"].isoformat(), "active_min": round(mins, 1), "weighted": round(total, 2),
+                    "burn_per_min": round(total / mins, 2), "lane_share": round(1 - w.get(0, 0) / total, 4) if total else 0.0,
+                    # ponytail: O(lanes^2) overlap count, fine for hundreds of lanes
+                    "peak_lanes": max((sum(lo <= p <= hi for lo, hi in spans) for p, _ in spans), default=0),
+                    "main_ctx_avg": round(sum(ctx) / len(ctx)) if ctx else 0,
+                    "driver": {"who": groups[top][0], "lane": top != 0, "share": round(w[top] / total, 4) if total else 0.0}})
+    res = {"window_s": BLOCK_S, "blocks": out, "peak": None, "spike_x": None, "advice": None}
+    if out:
+        pk = res["peak"] = max(out, key=lambda b: b["weighted"])
+        rest = sorted(b["weighted"] for b in out if b is not pk)
+        if len(rest) >= 2 and statistics.median(rest) > 0:
+            res["spike_x"] = round(pk["weighted"] / statistics.median(rest), 2)
+        d, spike = pk["driver"], (res["spike_x"] or 0) >= BURN_SPIKE_X  # lane advice needs a real spike: a calm single-lane window names nothing
+        if d["share"] < BURN_DRIVER_SHARE:
+            if spike and pk["peak_lanes"] >= BURN_FANOUT_LANES:  # no single spender (so lanes carry over 60%): the fan-out itself is the driver
+                res["advice"] = (f"peak block {pk['start']}: {pk['lane_share'] * 100:.0f}% of it came from lanes, up to {pk['peak_lanes']} open at once "
+                                 f"(burn {pk['burn_per_min']} weighted/min, largest spender only {d['share'] * 100:.0f}%): dispatch fewer lanes per wave "
+                                 "and check your quota before the next wave")
+        elif not d["lane"] and pk["main_ctx_avg"] > AUTO_COMPACT_WINDOW:
+            res["advice"] = (f"peak block {pk['start']}: main thread drove {d['share'] * 100:.0f}% at {pk['burn_per_min']} weighted/min with average context "
+                             f"{pk['main_ctx_avg']} (over the {AUTO_COMPACT_WINDOW} window): run /compact at a task boundary, or /clear and resume from a handoff note")
+        elif d["lane"] and spike:
+            res["advice"] = (f"peak block {pk['start']}: lane '{d['who']}' alone drove {d['share'] * 100:.0f}% ({pk['peak_lanes']} lanes open at once, "
+                             f"{pk['lane_share'] * 100:.0f}% of the block from lanes): split or trim that lane before the next dispatch")
+    return res
+
+
 def tier_split(main_by_model: dict, sub_by_model: dict, rates) -> dict:
     """Input-equivalent share by model for main and lanes, plus main's share of all input-eq (a measured split, not a price).
 
@@ -913,6 +985,7 @@ def build_report(session_path: str, since, top: int = 5, rates=None, cap: int = 
         "tier_split": tier_split(main_by_model, sub_by_model, rates),
         "idle_rewrites": idle_rewrites(main_turns, main_totals["input_equivalent"]),
         "auto_compact": compact_saving(main_turns, main_totals["input_equivalent"]),
+        "burn_blocks": burn_blocks(main_turns, [(s["label"], s.pop("_turns")) for s in subagents]),
         "tool_results": {**all_tr, "main": mt, "lanes": lanes_tr, "share_of_session_ie": pct_ie(all_tr["carry_ie_upper"]),
                          "bash_share_of_session_ie": pct_ie(all_tr["by_tool"]["bash"]["carry_ie_upper"])},
         "lane_tail": lane_tail(subagents, cap, shipped_lane_cap()),
@@ -1218,6 +1291,14 @@ def render_text(report: dict) -> str:
                      f"total {_usd(c['total'], c['unpriced_models'])}"
                      + (f" (priced with default rates as of {RATES_DATE})" if report["rates"] != "--rates file" else ""))
     lines += _gap_tier_lines(report)
+    bb = report.get("burn_blocks") or {"blocks": []}
+    if bb["blocks"]:
+        pk = bb["peak"]
+        lines.append(f"5h windows (modelled like ccusage blocks, UTC-hour start; a pace signal, not your quota): {len(bb['blocks'])}; peak {pk['start']} "
+                     f"{pk['weighted']} weighted at {pk['burn_per_min']}/min, {pk['lane_share'] * 100:.0f}% lanes, up to {pk['peak_lanes']} lanes open"
+                     + (f"; {bb['spike_x']}x the median of the other windows" if bb["spike_x"] else ""))
+        if bb["advice"]:
+            lines.append(f"Lever: {bb['advice']}")
     x = report["main_context"]
     if report["main_turns"]:
         trend = f" first-third={x['first_third']} last-third={x['last_third']}" if x["first_third"] is not None else ""
