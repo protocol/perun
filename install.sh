@@ -106,7 +106,7 @@ on re-install). Overlay skills are opt-in.
   --with-operating-layer
                        Write .claude/settings.operating-layer.json.new: the
                        heavy_gate.py PreToolUse and session_brief.py SessionStart hooks, the
-                       ceo_altitude_guard.py hook (counts always, warns/blocks only once policy role is set), the
+                       ceo_altitude_guard.py hook (an applied install writes policy role=ceo, warn, unless the policy has a role or PERUN_ROLE is set; role=off silences it, ceo-strict blocks), the
                        outcome_claim_guard.py Stop + UserPromptSubmit + PreToolUse hook (unmeasured "fixed/faster" claims; policy outcome_guard), the
                        stall_guard.py Stop hook (one nudge when a turn ends "stopped / waiting on you" with no lane launched; PERUN_STALL_GUARD=off), the
                        landing_watchdog.py UserPromptSubmit + PreToolUse(Agent|Task) hook (nothing merged for an hour while green PRs wait; policy landing_watchdog), the
@@ -910,6 +910,12 @@ if [[ -n "${POLICY}" ]]; then
   for kv in "${_kv[@]}"; do
     PERUN_POLICY="${PERUN_POLICY_FILE}" python3 "${POLICY_PY}" set "${kv%%=*}" "${kv#*=}" >/dev/null || exit 2
   done
+fi
+# Operating layer arms the CEO-altitude guard (warn) unless the policy already has a role or PERUN_ROLE is set.
+if [[ "${WITH_OPERATING_LAYER}" -eq 1 && "${APPLY_OPLAYER}" -eq 1 && -z "${PERUN_ROLE:-}" ]] \
+   && ! jq -e 'has("role")' "${PERUN_POLICY_FILE}" >/dev/null 2>&1; then
+  PERUN_POLICY="${PERUN_POLICY_FILE}" python3 "${POLICY_PY}" set role ceo >/dev/null || exit 2
+  echo "CEO-altitude guard now warns (role=ceo); opt out: perun_policy set role off"
 fi
 if [[ -f "${PERUN_POLICY_FILE}" ]]; then POLICY_LINE="$(PERUN_POLICY="${PERUN_POLICY_FILE}" python3 "${POLICY_PY}" show)" || exit 2
 else POLICY_LINE="defaults (no .perun/policy.json)"; fi

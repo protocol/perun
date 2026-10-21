@@ -190,7 +190,8 @@ class InstallWiringTests(unittest.TestCase):
         self.assertIn("runs release code from the Perun remote in the background", p.stdout)
         self.assertIn("--no-auto-update", p.stdout)
         self.assertIn('"auto_update": "off"', p.stdout)
-        self.assertFalse((repo / ".perun/policy.json").exists())
+        pol = repo / ".perun/policy.json"  # the default install only arms the CEO guard (role); auto_update stays unset
+        self.assertNotIn("auto_update", json.loads(pol.read_text()) if pol.exists() else {})
 
     def test_no_auto_update_turns_policy_off_and_keeps_other_keys(self):
         repo = Path(tempfile.mkdtemp())

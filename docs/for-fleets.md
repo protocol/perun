@@ -115,7 +115,7 @@ Every resource is spent efficiently unless you name a front to push. One file,
   maximum pace spend rises only where it buys speed or quality, and the waste filter still applies
   ([`lane-preamble.md`](../.claude/skills/agentic-delivery/templates/lane-preamble.md), **Drive to the goal**).
 - `share_learnings` (`auto|ask|off`, default `ask`) governs `share_learning.py`; `auto` also runs it at the end of `/perun-run`, after its privacy gate.
-- `role` (`off|ceo|ceo-strict`, default `off`) is not a resource: it arms `ceo_altitude_guard.py` for the main session. Set it with `perun_policy.py set role ceo` or `--policy role=ceo`; env `PERUN_ROLE` overrides it per process (`PERUN_ROLE=off` for a top-level lane or peer session, which has no `agent_id` to tell it from a main session).
+- `role` (`off|ceo|ceo-strict`, default `off`; an applied operating-layer install writes `ceo` unless a role or `PERUN_ROLE` is already set) is not a resource: it arms `ceo_altitude_guard.py` for the main session. Set it with `perun_policy.py set role ceo` or `--policy role=ceo`; env `PERUN_ROLE` overrides it per process (`PERUN_ROLE=off` for a top-level lane or peer session, which has no `agent_id` to tell it from a main session).
 - Agents read the policy (`python3 scripts/perun_policy.py get <dim>`) before choosing
   parallelism, CI, or model. A malformed file fails closed.
 

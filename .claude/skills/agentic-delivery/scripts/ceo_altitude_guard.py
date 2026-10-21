@@ -13,7 +13,8 @@ call looks like a lane's and the guard goes silent. It can never block a lane. A
 itself a lane (a `claude -p` worker, a peer session) also has no `agent_id`: start it with PERUN_ROLE=off.
 
 ARMED BY: role `ceo` (warn) or `ceo-strict` (block): env PERUN_ROLE, else policy key `role` (`perun_policy.py set role
-ceo`); default `off`; an unreadable policy reads as `off` (fail open). Counting does not depend on the role, so
+ceo`); the policy default is `off`, but install.sh with the operating layer applied writes `role: ceo` unless the policy
+already has a role or PERUN_ROLE is set; an unreadable policy reads as `off` (fail open). Counting does not depend on the role, so
 `operating_selfcheck.py` can show drift before and after arming.
 
 WHAT IT FLAGS (main session, per turn = per `prompt_id`): the 2nd direct edit of a source file (EDIT_FREE) and the 4th
