@@ -2,8 +2,8 @@
 name: idea-critic
 description: >-
   Use BEFORE asking the owner anything or presenting a new plan, architecture,
-  process, agent, skill or unsolicited "we should". Skeptic, better-way, kill-
-  criteria hats return HOLD, REVISE or PASS_TO_USER. Owner-request cannot
+  process, agent, skill or unsolicited "we should". Skeptic, better-way,
+  kill-criteria hats return HOLD, REVISE or PASS_TO_USER. Owner-request cannot
   HOLD. Not code review. Opt-in: --with-critic or --full.
 license: MIT
 metadata:

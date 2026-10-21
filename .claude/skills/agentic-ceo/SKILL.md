@@ -2,9 +2,9 @@
 name: agentic-ceo
 description: >-
   Use at the START of any multi-step or multi-skill session, and whenever
-  choosing a skill. Conductor: routes stage + area to the skill - idea-critic
-  before any plan or owner ask, communication-structure before any human-
-  facing message, agentic-delivery to build, deep-code-review to review.
+  choosing a skill. Conductor: idea-critic before any plan or owner ask,
+  communication-structure before any human-facing message, agentic-delivery
+  to build, deep-code-review to review.
 license: MIT
 metadata:
   author: deep-code-review contributors

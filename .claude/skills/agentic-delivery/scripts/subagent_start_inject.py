@@ -76,7 +76,7 @@ SKILL_ROUTE = ("Skill route: idea-critic before any owner ask or new plan; "
 HOST_RULES = ("Host rules: never `sleep N` to wait; background the command and act on its completion notification, "
               "or Monitor with an until-loop.\n"
               "In an isolated worktree run plain separate git commands from the worktree root; "
-              "no `cd X &&` chains or loops around git (the host refuses them as too complex to verify).\n"
+              "no `cd X &&` chains or loops around git (the host refuses them).\n"
               "Find any Perun skill or tool: read .claude/skills/INDEX.md first.")
 # Zero-chat lane rules, injected for every type except those in CHAT_TYPES. The size and shape named here are the target
 # handback_cap.py logs against (its default TARGET_CHARS 400); scripts/test_zero_chat_lanes.py pins both and CHAT_TYPES.
