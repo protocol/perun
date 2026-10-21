@@ -1,5 +1,5 @@
 ---
-description: Start an owner-authorised autonomous run that works the task ledger queue item by item until it is drained
+description: Start an owner-authorised autonomous run that works the task ledger queue until drained
 argument-hint: <goal>
 disable-model-invocation: true
 ---
