@@ -28,8 +28,7 @@ which never opens it.
 
 ## How to use this file
 
-**Agent-agnostic.** Claude Code, Cursor, Codex, Copilot, Gemini, Aider,
-Windsurf, OpenCode, Hermes, Kiro, or any model that can read files. Discover
+**Agent-agnostic.** Any coding agent or model that can read files. Discover
 from `.agents/skills/`, `.cursor/skills/`, `.claude/skills/`, `.codex/skills/`,
 plus extra roots `install.sh` can write, or from the project's `AGENTS.md`
 stamp. Invoke `/deep-code-review <scope>` or ask for a deep code review with
@@ -252,19 +251,17 @@ first-response block; it shapes the going-forward roadmap (`report-format.md`).
 | `mature` | Stable / maintenance | net-new scope; focus shifts to stability, tech-debt, supply chain |
 
 **Guardrails — a stage is a lens, never an excuse:**
-1. **Declared or evidenced, never guessed.** Stage is owner-stated, or the review
-   **names the signals** it read (tests/CI present, deploy config, users/traffic,
+1. **Declared or evidenced, never guessed.** Owner-stated, or the review
+   **names the signals** it read (tests/CI, deploy config, users/traffic,
    version ≥ 1.0, changelog depth) and marks it `UNVERIFIED` when it cannot.
-   **Unstated → default to the stricter (later-stage) reading.** A review that
-   assumed `prototype` and waved a Critical is a worse failure than one that
-   over-asked for CI on a spike.
+   **Unstated → the stricter (later-stage) reading**: assuming `prototype` and
+   waving a Critical is worse than over-asking for CI on a spike.
 2. **Security, secret-exposure, and data-loss/integrity findings never relax** (nor safety) — a
    `prototype` with an exposed credential is still Critical. These have no "relax"
    entry at any stage; that is why the third column omits them on purpose.
-3. **Stage moves urgency, not intrinsic severity.** Every finding keeps its true
-   severity — reuse the latent-findings rule (intrinsic severity stays; stage
-   changes only what *blocks now*). The going-forward roadmap sequences findings
-   by stage-urgency; it does not downgrade them.
+3. **Stage moves urgency, not intrinsic severity** (the latent-findings rule:
+   stage changes only what *blocks now*). The roadmap sequences findings by
+   stage-urgency; it never downgrades them.
 
 **Stage-evolution lenses (when to add, not how to secure).** Roadmap "how should
 this evolve for its stage": **read** `infra-evolution-by-stage.md` and
@@ -280,9 +277,9 @@ machine-readable findings file a program consumes (or a `PRIOR`
 re-verification) follows `machine-report.md`. Gate and dedupe rows with `scripts/merge_findings.py`. Worked
 fictional example: `references/example-review-report.md`.
 
-Default: chat BLUF ≤30 lines + full table **out-of-tree**. Never paste the
+Default per Phase 5: chat BLUF + full table **out-of-tree**; never paste the
 machine table as the first chat bubble. In-repo `code-review/` only on
-confirmation and an idle checkout. On a public remote, committed
+confirmation and an idle checkout; on a public remote, committed
 reports are ID + severity + area only.
 
 ---
@@ -292,10 +289,8 @@ reports are ID + severity + area only.
 Two checklists; they fail independently.
 
 **(a) Review method complete**
-- First-response block printed (`SCOPE`, `START_SHA`, `TREE_STATE`,
-  `VERIFY_SURFACE` on a web / port / restyle / parity task, `HISTORY_DEPTH`,
-  `REVERTS_CHECKED`, `BANNED_REMEDIES`, `ARCHETYPE`, `STAGE`,
-  `COVERAGE_LEDGER`); citations re-verified at that ref with a verbatim
+- First-response block printed in full (`VERIFY_SURFACE` on a web / port /
+  restyle / parity task); citations re-verified at that ref with a verbatim
   snippet.
 - On a FULL review, `STAGE` is stated (or `UNVERIFIED`, defaulting stricter) and a
   stage-calibrated going-forward roadmap is produced (`report-format.md`); stage
@@ -335,12 +330,10 @@ Two checklists; they fail independently.
 Restate in the project's canonical AI-facing file (prefer `AGENTS.md`; peers
 are thin pointers).
 
-- **No fabrication, anywhere.** Omit or flag rather than guess.
-- **Nothing private/internal/confidential/identifying about a third party** in
-  committable artifacts. A project's **own intended-public first-party
-  identity is exempt** where it already publishes it. Fan-out masks the same
-  classes before the lead sees them (`parallel-audit.md`). Scan
-  reports `file:line` and **never echoes the match**.
+- **No fabrication, anywhere** (principle 3) and **no third-party identifying
+  data** in committable artifacts (principle 11; own intended-public identity
+  exempt). Fan-out masks the same classes (`parallel-audit.md`). Scans report
+  `file:line` and **never echo the match**.
 - **Secrets via env/secret manager only.**
 - **Confirm** before destructive, irreversible, billable, or shared-state
   actions. A tentative or question-phrased message ("I think you could merge
