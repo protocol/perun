@@ -383,6 +383,10 @@ Bench: a 6-PR fixture (two independent greens, two PRs that conflict on one file
 
 Reproduce the flake and regression numbers with `bash scripts/test-train-flake-rate.sh` (16 passed, 0 failed; log in `docs/bench/merge-train-1584/flake-rate.txt`).
 
+### H12. Over-claim safety (2026-10-21, free PCSS models, no paid call)
+
+40 fictional end-of-task transcripts with mixed evidence; the model writes a status report and labels each item `unverified`, `partial`, `done` or `verified`; a label stronger than the evidence allows is an over-claim (regex and gold table, no judge). On the calibrated model (Mistral-Small-3.2:24b, no-skill arm over-claims 37.1% of 70 items): Perun 17.1% (paired 95% CI of the change -28.8 to -11.6 points), obra/superpowers `verification-before-completion` 17.1% (Perun minus superpowers 0.0, CI -7.9 to +8.1), the one addyosmani/agent-skills page tried 37.1% (no change). Perun under-claimed 4.3 points more than no skill (CI 0.0 to +9.3). One run per arm; the cases were tuned on the no-skill arm and the gold uses Perun's strict reading. Method, tables, replication and caveats: [`docs/bench/overclaim-1021/README.md`](bench/overclaim-1021/README.md); reproduce with `python3 scripts/overclaim_bench.py`.
+
 ## 1. Review quality (measured, 2026-10-14)
 
 Sonnet `claude-sonnet-5-5`, 37 cases, one run per case, same harness and verifier for every arm. Full method and caveats: [`bench-results.md`](../.claude/skills/deep-code-review/scripts/fixtures/bench-results.md).
