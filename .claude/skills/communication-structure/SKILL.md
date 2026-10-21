@@ -4,7 +4,7 @@ description: >-
   Use BEFORE sending any human-facing message (PR body, issue/PR comment,
   status update, reply) or producing a report, plan, doc, summary or table.
   Forces BLUF, one ask, core value only, zero AI-slop before you draft. Skip
-  for chat with the user, which keeps its house voice.
+  for chat with the user.
 license: MIT
 metadata:
   author: deep-code-review contributors

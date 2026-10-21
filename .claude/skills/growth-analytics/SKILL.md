@@ -3,8 +3,8 @@ name: growth-analytics
 description: >-
   Use when deciding what to measure once building or shipping: North Star
   metric, AARRR funnel (retention first), event taxonomy, A/B reads. Works on
-  the user's own analytics; never fabricates benchmarks. Not product-
-  discovery. Opt-in overlay: --with-growth.
+  the user's own analytics; never fabricates benchmarks. Not
+  product-discovery. Opt-in overlay: --with-growth.
 license: MIT
 metadata:
   author: deep-code-review contributors
