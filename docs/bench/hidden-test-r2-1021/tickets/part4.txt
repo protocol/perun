@@ -1,0 +1,595 @@
+### deep_merge
+--- ticket
+After `merged = deep_merge(defaults, user)` our `defaults` dict has the user's values in it. The shared defaults are being modified.
+--- src
+def deep_merge(base, override):
+    """Return a new dict with the keys of both. When both values for a key are dicts they are merged recursively; otherwise the override value wins (even None). Neither input is modified, and the result shares no mutable dict or list with either input."""
+    result = base
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(result.get(k), dict):
+            result[k] = deep_merge(result[k], v)
+        else:
+            result[k] = v
+    return result
+--- fix
+import copy
+
+
+def deep_merge(base, override):
+    """Return a new dict with the keys of both. When both values for a key are dicts they are merged recursively; otherwise the override value wins (even None). Neither input is modified, and the result shares no mutable dict or list with either input."""
+    result = copy.deepcopy(base)
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(result.get(k), dict):
+            result[k] = deep_merge(result[k], v)
+        else:
+            result[k] = copy.deepcopy(v)
+    return result
+--- test
+import copy
+
+from mod import deep_merge
+
+
+def test_merge_semantics():
+    base = {"a": 1, "n": {"x": 1, "y": 2}, "l": [1]}
+    over = {"b": 2, "n": {"y": 3, "z": 4}, "l": [9]}
+    assert deep_merge(base, over) == {"a": 1, "b": 2, "n": {"x": 1, "y": 3, "z": 4}, "l": [9]}
+
+
+def test_override_wins_even_none_and_type_change():
+    assert deep_merge({"a": {"x": 1}}, {"a": None}) == {"a": None}
+    assert deep_merge({"a": 1}, {"a": {"x": 1}}) == {"a": {"x": 1}}
+    assert deep_merge({"a": {"x": 1}}, {"a": 5}) == {"a": 5}
+
+
+def test_inputs_untouched():
+    base = {"n": {"x": 1}}
+    over = {"n": {"y": 2}}
+    b0, o0 = copy.deepcopy(base), copy.deepcopy(over)
+    deep_merge(base, over)
+    assert (base, over) == (b0, o0)
+
+
+def test_no_shared_mutables():
+    base = {"n": {"x": [1]}}
+    over = {"m": {"k": [2]}, "q": [3]}
+    r = deep_merge(base, over)
+    r["n"]["x"].append(99)
+    r["m"]["k"].append(99)
+    r["q"].append(99)
+    assert base == {"n": {"x": [1]}}
+    assert over == {"m": {"k": [2]}, "q": [3]}
+
+### percentile
+--- ticket
+`percentile([15, 20, 35, 40, 50], 100)` raises IndexError and `percentile(..., 40)` returns 35, not 20. Please use the nearest-rank method correctly.
+--- src
+def percentile(xs, p):
+    """Nearest-rank percentile: the smallest value in xs such that at least p percent of the values are <= it (rank = ceil(p/100 * n), 1-based; p=0 returns the minimum). xs is unsorted and is not modified. Raises ValueError for empty xs or p outside [0, 100]."""
+    s = sorted(xs)
+    return s[int(len(s) * p / 100)]
+--- fix
+import math
+
+
+def percentile(xs, p):
+    """Nearest-rank percentile: the smallest value in xs such that at least p percent of the values are <= it (rank = ceil(p/100 * n), 1-based; p=0 returns the minimum). xs is unsorted and is not modified. Raises ValueError for empty xs or p outside [0, 100]."""
+    if not xs or not 0 <= p <= 100:
+        raise ValueError((len(xs), p))
+    s = sorted(xs)
+    rank = max(1, math.ceil(len(s) * p / 100))
+    return s[rank - 1]
+--- test
+import pytest
+from mod import percentile
+
+DATA = [50, 15, 40, 35, 20]
+
+
+@pytest.mark.parametrize("p,v", [(0, 15), (5, 15), (20, 15), (30, 20), (40, 20), (50, 35), (75, 40), (100, 50)])
+def test_nearest_rank(p, v):
+    assert percentile(DATA, p) == v
+
+
+def test_ten_values():
+    xs = list(range(1, 11))
+    assert percentile(xs, 90) == 9
+    assert percentile(xs, 10) == 1
+    assert percentile(xs, 95) == 10
+
+
+def test_input_not_modified():
+    xs = [3, 1, 2]
+    percentile(xs, 50)
+    assert xs == [3, 1, 2]
+
+
+@pytest.mark.parametrize("xs,p", [([], 50), ([1], 101), ([1], -1)])
+def test_invalid(xs, p):
+    with pytest.raises(ValueError):
+        percentile(xs, p)
+
+### ticket_fee
+--- ticket
+A 12-year-old is charged the youth fee instead of the child fee. While you are there: `fee_for_age(-5)` returns 0 and `fee_for_age("9")` crashes with a TypeError instead of a ValueError.
+--- src
+def fee_for_age(age):
+    """Ticket fee in cents: ages 0-2 free (0); 3-12 child (500); 13-17 youth (800); 18-64 adult (1200); 65 and over senior (700). age must be an int and >= 0 (bool is not accepted), else ValueError."""
+    if age < 3:
+        return 0
+    if age < 12:
+        return 500
+    if age <= 17:
+        return 800
+    if age < 65:
+        return 1200
+    return 700
+--- fix
+def fee_for_age(age):
+    """Ticket fee in cents: ages 0-2 free (0); 3-12 child (500); 13-17 youth (800); 18-64 adult (1200); 65 and over senior (700). age must be an int and >= 0 (bool is not accepted), else ValueError."""
+    if not isinstance(age, int) or isinstance(age, bool) or age < 0:
+        raise ValueError(age)
+    if age < 3:
+        return 0
+    if age <= 12:
+        return 500
+    if age <= 17:
+        return 800
+    if age < 65:
+        return 1200
+    return 700
+--- test
+import pytest
+from mod import fee_for_age
+
+
+@pytest.mark.parametrize("age,fee", [(0, 0), (2, 0), (3, 500), (12, 500), (13, 800), (17, 800), (18, 1200), (64, 1200), (65, 700), (100, 700)])
+def test_fees(age, fee):
+    assert fee_for_age(age) == fee
+
+
+@pytest.mark.parametrize("bad", [-1, 5.5, "9", True, None])
+def test_invalid(bad):
+    with pytest.raises(ValueError):
+        fee_for_age(bad)
+
+### format_bytes
+--- ticket
+`format_bytes(1024)` gives `1024.0 B`; we want `1.0 KB`. Small sizes should print as whole bytes (`512 B`). Also `format_bytes(1048575)` prints `1024.0 KB`.
+--- src
+def format_bytes(n):
+    """Human-readable size with 1024 steps and one decimal: 0 -> '0 B', 1023 -> '1023 B', 1024 -> '1.0 KB', 1536 -> '1.5 KB', 1048576 -> '1.0 MB'. Units are B, KB, MB, GB, TB (larger values stay in TB). A value that would print as 1024.0 of a unit rolls over to 1.0 of the next ('1048575' -> '1.0 MB'). Plain bytes print without a decimal. Negative n raises ValueError."""
+    units = ["B", "KB", "MB", "GB", "TB"]
+    size = float(n)
+    i = 0
+    while size > 1024 and i < len(units) - 1:
+        size /= 1024
+        i += 1
+    return f"{size:.1f} {units[i]}"
+--- fix
+def format_bytes(n):
+    """Human-readable size with 1024 steps and one decimal: 0 -> '0 B', 1023 -> '1023 B', 1024 -> '1.0 KB', 1536 -> '1.5 KB', 1048576 -> '1.0 MB'. Units are B, KB, MB, GB, TB (larger values stay in TB). A value that would print as 1024.0 of a unit rolls over to 1.0 of the next ('1048575' -> '1.0 MB'). Plain bytes print without a decimal. Negative n raises ValueError."""
+    if n < 0:
+        raise ValueError(n)
+    if n < 1024:
+        return f"{n} B"
+    units = ["B", "KB", "MB", "GB", "TB"]
+    size, i = n / 1024, 1
+    while round(size, 1) >= 1024 and i < 4:
+        size /= 1024
+        i += 1
+    return f"{size:.1f} {units[i]}"
+--- test
+import pytest
+from mod import format_bytes
+
+
+@pytest.mark.parametrize("n,s", [
+    (0, "0 B"), (5, "5 B"), (512, "512 B"), (1023, "1023 B"), (1024, "1.0 KB"), (1536, "1.5 KB"),
+    (1048576, "1.0 MB"), (1048575, "1.0 MB"), (1024 ** 3, "1.0 GB"), (1024 ** 4, "1.0 TB"),
+    (1024 ** 5, "1024.0 TB"), (10 * 1024, "10.0 KB"),
+])
+def test_format(n, s):
+    assert format_bytes(n) == s
+
+
+def test_negative():
+    with pytest.raises(ValueError):
+        format_bytes(-1)
+
+### anagram_groups
+--- ticket
+`anagram_groups(["Listen", "Silent"])` finds nothing because of the capital letters, and a phrase like `"dirty room!"` never matches `"Dormitory"`.
+--- src
+def anagram_groups(words):
+    """Group words that are anagrams of each other. Comparison is case-insensitive and uses letters only (spaces, digits and punctuation are ignored); words with no letters are ignored. Identical strings count once. Return only groups with 2 or more distinct words: each group sorted alphabetically ignoring case (original spelling kept), the groups ordered by their first member (ignoring case)."""
+    groups = {}
+    for w in words:
+        groups.setdefault("".join(sorted(w)), []).append(w)
+    return [g for g in groups.values() if len(g) > 1]
+--- fix
+def anagram_groups(words):
+    """Group words that are anagrams of each other. Comparison is case-insensitive and uses letters only (spaces, digits and punctuation are ignored); words with no letters are ignored. Identical strings count once. Return only groups with 2 or more distinct words: each group sorted alphabetically ignoring case (original spelling kept), the groups ordered by their first member (ignoring case)."""
+    groups = {}
+    for w in dict.fromkeys(words):
+        key = "".join(sorted(c for c in w.lower() if c.isalpha()))
+        if key:
+            groups.setdefault(key, []).append(w)
+    out = [sorted(g, key=str.lower) for g in groups.values() if len(g) > 1]
+    return sorted(out, key=lambda g: g[0].lower())
+--- test
+from mod import anagram_groups
+
+
+def test_case_insensitive():
+    assert anagram_groups(["Listen", "silent", "enlist", "google", "Tinsel"]) == [["enlist", "Listen", "silent", "Tinsel"]]
+
+
+def test_phrases_and_punctuation():
+    assert anagram_groups(["Dormitory", "dirty room!"]) == [["dirty room!", "Dormitory"]]
+
+
+def test_duplicates_count_once():
+    assert anagram_groups(["a", "a"]) == []
+    assert anagram_groups(["dusty", "study", "study"]) == [["dusty", "study"]]
+    assert anagram_groups(["dusty", "study", "Study"]) == [["dusty", "study", "Study"]]
+
+
+def test_no_letters_ignored():
+    assert anagram_groups(["!!", "??", "12", "21"]) == []
+
+
+def test_group_order():
+    assert anagram_groups(["bat", "tab", "act", "cat", "dog"]) == [["act", "cat"], ["bat", "tab"]]
+    assert anagram_groups([]) == []
+
+### evaluate
+--- ticket
+`evaluate("10-4-3")` returns 9; it should be 3 (subtraction is left associative). Junk is also accepted: `evaluate("1 2")` returns 1 and `evaluate("(1+2")` does not complain.
+--- src
+import re
+
+
+def evaluate(expr):
+    """Evaluate an arithmetic expression with integers, + - * /, parentheses, unary minus and spaces. Standard precedence (* and / before + and -), all binary operators left associative. '/' is true division (a float). Malformed input (empty, unbalanced parentheses, dangling operator, two numbers in a row, any other character) raises ValueError. Division by zero raises ZeroDivisionError."""
+    tokens = re.findall(r"\d+|[-+*/()]", expr)
+    pos = 0
+
+    def peek():
+        return tokens[pos] if pos < len(tokens) else None
+
+    def eat():
+        nonlocal pos
+        pos += 1
+        return tokens[pos - 1]
+
+    def atom():
+        t = eat()
+        if t == "(":
+            v = add()
+            eat()
+            return v
+        if t == "-":
+            return -atom()
+        return int(t)
+
+    def mul():
+        v = atom()
+        while peek() in ("*", "/"):
+            op = eat()
+            v = v * atom() if op == "*" else v / atom()
+        return v
+
+    def add():
+        v = mul()
+        while peek() in ("+", "-"):
+            op = eat()
+            v = v + add() if op == "+" else v - add()
+        return v
+
+    return add()
+--- fix
+import re
+
+
+def evaluate(expr):
+    """Evaluate an arithmetic expression with integers, + - * /, parentheses, unary minus and spaces. Standard precedence (* and / before + and -), all binary operators left associative. '/' is true division (a float). Malformed input (empty, unbalanced parentheses, dangling operator, two numbers in a row, any other character) raises ValueError. Division by zero raises ZeroDivisionError."""
+    if not re.fullmatch(r"[\d+\-*/() ]*", expr):
+        raise ValueError(expr)
+    tokens = re.findall(r"\d+|[-+*/()]", expr)
+    pos = 0
+
+    def peek():
+        return tokens[pos] if pos < len(tokens) else None
+
+    def eat():
+        nonlocal pos
+        if pos >= len(tokens):
+            raise ValueError(expr)
+        pos += 1
+        return tokens[pos - 1]
+
+    def atom():
+        t = eat()
+        if t == "(":
+            v = add()
+            if eat() != ")":
+                raise ValueError(expr)
+            return v
+        if t == "-":
+            return -atom()
+        if not t.isdigit():
+            raise ValueError(expr)
+        return int(t)
+
+    def mul():
+        v = atom()
+        while peek() in ("*", "/"):
+            op = eat()
+            v = v * atom() if op == "*" else v / atom()
+        return v
+
+    def add():
+        v = mul()
+        while peek() in ("+", "-"):
+            op = eat()
+            v = v + mul() if op == "+" else v - mul()
+        return v
+
+    result = add()
+    if pos != len(tokens):
+        raise ValueError(expr)
+    return result
+--- test
+import pytest
+from mod import evaluate
+
+
+@pytest.mark.parametrize("e,v", [
+    ("2+3*4", 14), ("10-4-3", 3), ("(1+2)*3", 9), ("-(2+3)", -5), ("8/2/2", 2.0), ("2*-3", -6),
+    (" 7 ", 7), ("2--3", 5), ("100/8", 12.5), ("2*(3+(4-1))", 12), ("1-2-3-4", -8),
+])
+def test_values(e, v):
+    assert evaluate(e) == v
+
+
+@pytest.mark.parametrize("bad", ["", "   ", "1+", "(1+2", "1+2)", "2 $ 3", "1 2", "*3", "()", "1+*2", "2(3)"])
+def test_malformed(bad):
+    with pytest.raises(ValueError):
+        evaluate(bad)
+
+
+def test_zero_division():
+    with pytest.raises(ZeroDivisionError):
+        evaluate("1/0")
+
+### inventory
+--- ticket
+`reserve({"widget": 2, "gadget": 99})` raises because gadget is short, but the widget stock was already reduced. A failed reservation must leave stock untouched. Negative quantities also add stock.
+--- src
+class Inventory:
+    """Stock levels by SKU. reserve(order) takes a dict sku -> qty and is all-or-nothing: if any SKU is unknown, any qty is not a positive int, or any SKU lacks stock, raise ValueError and change nothing. On success stock is reduced. available(sku) returns the current stock (0 for unknown SKUs). The constructor copies the stock dict it is given."""
+
+    def __init__(self, stock):
+        self.stock = dict(stock)
+
+    def available(self, sku):
+        return self.stock.get(sku, 0)
+
+    def reserve(self, order):
+        for sku, qty in order.items():
+            if self.stock.get(sku, 0) < qty:
+                raise ValueError(sku)
+            self.stock[sku] -= qty
+--- fix
+class Inventory:
+    """Stock levels by SKU. reserve(order) takes a dict sku -> qty and is all-or-nothing: if any SKU is unknown, any qty is not a positive int, or any SKU lacks stock, raise ValueError and change nothing. On success stock is reduced. available(sku) returns the current stock (0 for unknown SKUs). The constructor copies the stock dict it is given."""
+
+    def __init__(self, stock):
+        self.stock = dict(stock)
+
+    def available(self, sku):
+        return self.stock.get(sku, 0)
+
+    def reserve(self, order):
+        for sku, qty in order.items():
+            if not isinstance(qty, int) or isinstance(qty, bool) or qty <= 0 or sku not in self.stock or self.stock[sku] < qty:
+                raise ValueError(sku)
+        for sku, qty in order.items():
+            self.stock[sku] -= qty
+--- test
+import pytest
+from mod import Inventory
+
+
+def test_success_reduces():
+    inv = Inventory({"widget": 5, "gadget": 3})
+    inv.reserve({"widget": 2, "gadget": 3})
+    assert (inv.available("widget"), inv.available("gadget")) == (3, 0)
+    inv.reserve({})
+    assert inv.available("widget") == 3
+
+
+def test_all_or_nothing():
+    inv = Inventory({"widget": 5, "gadget": 1})
+    with pytest.raises(ValueError):
+        inv.reserve({"widget": 2, "gadget": 99})
+    assert (inv.available("widget"), inv.available("gadget")) == (5, 1)
+    with pytest.raises(ValueError):
+        inv.reserve({"widget": 2, "nope": 1})
+    assert inv.available("widget") == 5
+
+
+@pytest.mark.parametrize("qty", [0, -3, 1.5])
+def test_bad_quantities(qty):
+    inv = Inventory({"widget": 5})
+    with pytest.raises(ValueError):
+        inv.reserve({"widget": qty})
+    assert inv.available("widget") == 5
+
+
+def test_constructor_copies_and_unknown():
+    stock = {"a": 1}
+    inv = Inventory(stock)
+    inv.reserve({"a": 1})
+    assert stock == {"a": 1}
+    assert inv.available("zzz") == 0
+
+### cache_key
+--- ticket
+`cache_key(a=1, b=2)` and `cache_key(b=2, a=1)` produce different keys, and `cache_key([1, 2])` collides with `cache_key((1, 2))`. We get cache misses and false hits.
+--- src
+import json
+
+
+def cache_key(*args, **kwargs):
+    """Stable string key for a call. Equal calls give equal keys: keyword order and nested dict key order do not matter. Values that differ in type give different keys: 1, 1.0 and True are all different, and a list differs from a tuple with the same items. Positional and keyword arguments are distinct (cache_key(1) != cache_key(x=1)). Allowed values: None, bool, int, float, str, and lists, tuples and dicts (with str keys) of those. Anything else, including dicts with non-str keys, raises TypeError."""
+    return json.dumps([args, kwargs])
+--- fix
+import json
+
+
+def _enc(v):
+    if v is None or isinstance(v, (bool, int, float, str)):
+        return [type(v).__name__, v]
+    if isinstance(v, (list, tuple)):
+        return [type(v).__name__, [_enc(x) for x in v]]
+    if isinstance(v, dict):
+        if not all(isinstance(k, str) for k in v):
+            raise TypeError("dict keys must be str")
+        return ["dict", sorted([k, _enc(x)] for k, x in v.items())]
+    raise TypeError(type(v).__name__)
+
+
+def cache_key(*args, **kwargs):
+    """Stable string key for a call. Equal calls give equal keys: keyword order and nested dict key order do not matter. Values that differ in type give different keys: 1, 1.0 and True are all different, and a list differs from a tuple with the same items. Positional and keyword arguments are distinct (cache_key(1) != cache_key(x=1)). Allowed values: None, bool, int, float, str, and lists, tuples and dicts (with str keys) of those. Anything else, including dicts with non-str keys, raises TypeError."""
+    return json.dumps([_enc(list(args)), _enc(kwargs)])
+--- test
+import pytest
+from mod import cache_key
+
+
+def test_order_independent():
+    assert cache_key(1, a=1, b=2) == cache_key(1, b=2, a=1)
+    assert cache_key({"x": 1, "y": {"p": 1, "q": 2}}) == cache_key({"y": {"q": 2, "p": 1}, "x": 1})
+
+
+def test_types_distinct():
+    keys = [cache_key(1), cache_key(1.0), cache_key(True), cache_key("1"), cache_key(None)]
+    assert len(set(keys)) == 5
+    assert cache_key([1, 2]) != cache_key((1, 2))
+    assert cache_key(1, 2) != cache_key((1, 2))
+
+
+def test_positional_vs_keyword():
+    assert cache_key(1) != cache_key(x=1)
+    assert cache_key(1) != cache_key(1, 1)
+
+
+def test_values_matter():
+    assert cache_key(a=[1, 2]) != cache_key(a=[2, 1])
+    assert cache_key({"a": 1}) != cache_key({"a": 2})
+    assert isinstance(cache_key(1), str)
+
+
+@pytest.mark.parametrize("bad", [object(), {1: "a"}, {"a": {2: 3}}, [1, {3, 4}], b"x"])
+def test_unsupported(bad):
+    with pytest.raises(TypeError):
+        cache_key(bad)
+
+### parse_int
+--- ticket
+`parse_int("1,23")` returns 123 and `parse_int("1_000")` returns 1000, but neither is a valid number in our forms. Also `parse_int(None)` crashes instead of returning the default.
+--- src
+def parse_int(text, default=None):
+    """Parse a human-entered integer. Accepts surrounding whitespace, an optional leading + or -, and ASCII digits, optionally with thousands commas in correct groups of three ('1,234', '-12,345,678'). Returns `default` for anything else: empty text, '1,23', '1,,234', ',5', '12.5', '1e3', '1_000', non-ASCII digits, a bare sign, or a non-string argument."""
+    try:
+        return int(text.replace(",", ""))
+    except ValueError:
+        return default
+--- fix
+import re
+
+_NUM = re.compile(r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)", re.ASCII)
+
+
+def parse_int(text, default=None):
+    """Parse a human-entered integer. Accepts surrounding whitespace, an optional leading + or -, and ASCII digits, optionally with thousands commas in correct groups of three ('1,234', '-12,345,678'). Returns `default` for anything else: empty text, '1,23', '1,,234', ',5', '12.5', '1e3', '1_000', non-ASCII digits, a bare sign, or a non-string argument."""
+    if not isinstance(text, str):
+        return default
+    t = text.strip()
+    if not _NUM.fullmatch(t):
+        return default
+    return int(t.replace(",", ""))
+--- test
+import pytest
+from mod import parse_int
+
+
+@pytest.mark.parametrize("s,n", [("42", 42), (" 42 ", 42), ("+7", 7), ("-5", -5), ("1,234", 1234), ("-12,345,678", -12345678), ("-0", 0), ("999", 999)])
+def test_valid(s, n):
+    assert parse_int(s) == n
+
+
+@pytest.mark.parametrize("s", ["", "  ", "1,23", "1,,234", ",5", "12.5", "1e3", "1_000", "٣", "-", "+", "1,2345", "1 000", "0x10", "1,234,5"])
+def test_invalid_gives_default(s):
+    assert parse_int(s) is None
+    assert parse_int(s, default=-1) == -1
+
+
+@pytest.mark.parametrize("v", [None, 5, 5.5, b"5"])
+def test_non_string(v):
+    assert parse_int(v, default="d") == "d"
+
+### date_range
+--- ticket
+`date_range("2024-02-27", "2024-03-01")` stops at Feb 29 and never returns March 1. The end date should be included.
+--- src
+from datetime import date, timedelta
+
+
+def date_range(start, end, step_days=1):
+    """List of ISO 'YYYY-MM-DD' strings from start to end, both inclusive, stepping step_days days (a positive int). start after end gives []. With a step, the end date is included only if the stepping lands exactly on it. Invalid ISO strings raise ValueError."""
+    s, e = date.fromisoformat(start), date.fromisoformat(end)
+    out = []
+    while s < e:
+        out.append(s.isoformat())
+        s += timedelta(days=step_days)
+    return out
+--- fix
+from datetime import date, timedelta
+
+
+def date_range(start, end, step_days=1):
+    """List of ISO 'YYYY-MM-DD' strings from start to end, both inclusive, stepping step_days days (a positive int). start after end gives []. With a step, the end date is included only if the stepping lands exactly on it. Invalid ISO strings raise ValueError."""
+    s, e = date.fromisoformat(start), date.fromisoformat(end)
+    out = []
+    while s <= e:
+        out.append(s.isoformat())
+        s += timedelta(days=step_days)
+    return out
+--- test
+import pytest
+from mod import date_range
+
+
+def test_inclusive_across_leap_day():
+    assert date_range("2024-02-27", "2024-03-01") == ["2024-02-27", "2024-02-28", "2024-02-29", "2024-03-01"]
+    assert date_range("2023-02-27", "2023-03-01") == ["2023-02-27", "2023-02-28", "2023-03-01"]
+
+
+def test_same_day_and_reversed():
+    assert date_range("2024-05-05", "2024-05-05") == ["2024-05-05"]
+    assert date_range("2024-05-06", "2024-05-05") == []
+
+
+def test_step():
+    assert date_range("2024-01-01", "2024-01-06", 2) == ["2024-01-01", "2024-01-03", "2024-01-05"]
+    assert date_range("2024-01-01", "2024-01-05", 2) == ["2024-01-01", "2024-01-03", "2024-01-05"]
+    assert date_range("2024-12-30", "2025-01-02") == ["2024-12-30", "2024-12-31", "2025-01-01", "2025-01-02"]
+
+
+@pytest.mark.parametrize("bad", ["2024-13-01", "nope", ""])
+def test_invalid(bad):
+    with pytest.raises(ValueError):
+        date_range(bad, "2024-01-01")

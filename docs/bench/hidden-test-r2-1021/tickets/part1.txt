@@ -1,0 +1,420 @@
+### chunk
+--- ticket
+`chunk([1, 2, 3, 4, 5], 2)` returns `[[1, 2], [3, 4]]`. The trailing `5` silently disappears. Expected `[[1, 2], [3, 4], [5]]`.
+--- src
+def chunk(items, n):
+    """Split items into consecutive lists of length n; the last may be shorter. n must be >= 1, else ValueError."""
+    return [items[i:i + n] for i in range(0, len(items) - n, n)]
+--- fix
+def chunk(items, n):
+    """Split items into consecutive lists of length n; the last may be shorter. n must be >= 1, else ValueError."""
+    if n < 1:
+        raise ValueError(n)
+    return [items[i:i + n] for i in range(0, len(items), n)]
+--- test
+import pytest
+from mod import chunk
+
+
+def test_basic():
+    assert chunk([1, 2, 3, 4], 2) == [[1, 2], [3, 4]]
+    assert chunk([1, 2, 3, 4, 5], 2) == [[1, 2], [3, 4], [5]]
+
+
+def test_edges():
+    assert chunk([], 3) == []
+    assert chunk([1], 5) == [[1]]
+    assert chunk([1, 2, 3], 3) == [[1, 2, 3]]
+
+
+@pytest.mark.parametrize("n", [0, -1])
+def test_bad_n(n):
+    with pytest.raises(ValueError):
+        chunk([1, 2], n)
+
+### moving_average
+--- ticket
+`moving_average([1, 2, 3, 4], 2)` gives `[1.5, 2.5]`; the last window `(3 + 4) / 2` is missing. Fix the function.
+--- src
+def moving_average(xs, k):
+    """Mean of each full window of k consecutive values (len(xs) - k + 1 results). Empty list if k > len(xs). k < 1 raises ValueError."""
+    out = []
+    for i in range(len(xs) - k):
+        out.append(sum(xs[i:i + k]) / k)
+    return out
+--- fix
+def moving_average(xs, k):
+    """Mean of each full window of k consecutive values (len(xs) - k + 1 results). Empty list if k > len(xs). k < 1 raises ValueError."""
+    if k < 1:
+        raise ValueError(k)
+    return [sum(xs[i:i + k]) / k for i in range(len(xs) - k + 1)]
+--- test
+import pytest
+from mod import moving_average
+
+
+def test_windows():
+    assert moving_average([1, 2, 3, 4], 2) == [1.5, 2.5, 3.5]
+    assert moving_average([1, 2], 2) == [1.5]
+    assert moving_average([5, 5, 5], 1) == [5, 5, 5]
+
+
+def test_short_input():
+    assert moving_average([1], 2) == []
+    assert moving_average([], 1) == []
+
+
+@pytest.mark.parametrize("k", [0, -2])
+def test_bad_k(k):
+    with pytest.raises(ValueError):
+        moving_average([1, 2, 3], k)
+
+### parse_duration
+--- ticket
+`parse_duration("1h30m")` returns 3600 instead of 5400. Compound durations only count the first unit.
+--- src
+import re
+
+_UNITS = {"h": 3600, "m": 60, "s": 1}
+
+
+def parse_duration(text):
+    """Parse strings like '1h30m', '45s', '2h' into whole seconds. Units may appear in any order and may repeat ('1m1m' is 120). Whitespace is ignored. Empty or malformed text (including trailing junk such as '5x' or '1h30') raises ValueError."""
+    m = re.match(r"(\d+)([hms])", text.replace(" ", ""))
+    if not m:
+        raise ValueError(text)
+    return int(m.group(1)) * _UNITS[m.group(2)]
+--- fix
+import re
+
+_UNITS = {"h": 3600, "m": 60, "s": 1}
+
+
+def parse_duration(text):
+    """Parse strings like '1h30m', '45s', '2h' into whole seconds. Units may appear in any order and may repeat ('1m1m' is 120). Whitespace is ignored. Empty or malformed text (including trailing junk such as '5x' or '1h30') raises ValueError."""
+    t = text.replace(" ", "")
+    if not re.fullmatch(r"(\d+[hms])+", t):
+        raise ValueError(text)
+    return sum(int(n) * _UNITS[u] for n, u in re.findall(r"(\d+)([hms])", t))
+--- test
+import pytest
+from mod import parse_duration
+
+
+def test_values():
+    assert parse_duration("1h30m") == 5400
+    assert parse_duration("45s") == 45
+    assert parse_duration("2h") == 7200
+    assert parse_duration("1h 30m 5s") == 5405
+    assert parse_duration("90m") == 5400
+    assert parse_duration("1m1m") == 120
+    assert parse_duration("5s1h") == 3605
+
+
+@pytest.mark.parametrize("bad", ["", "5x", "1h30", "h", "1h5x", "abc", "1h-5m"])
+def test_malformed(bad):
+    with pytest.raises(ValueError):
+        parse_duration(bad)
+
+### slugify
+--- ticket
+`slugify("Hello, World!")` returns `hello--world-`. We want clean slugs for URLs.
+--- src
+import re
+
+
+def slugify(title):
+    """Lowercase ASCII slug: each run of characters outside a-z and 0-9 becomes a single '-', with no leading or trailing '-'. Titles with no alphanumerics give ''."""
+    return re.sub(r"[^a-z0-9]", "-", title.lower())
+--- fix
+import re
+
+
+def slugify(title):
+    """Lowercase ASCII slug: each run of characters outside a-z and 0-9 becomes a single '-', with no leading or trailing '-'. Titles with no alphanumerics give ''."""
+    return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+--- test
+from mod import slugify
+
+
+def test_slugs():
+    assert slugify("Hello, World!") == "hello-world"
+    assert slugify("  a  b  ") == "a-b"
+    assert slugify("C++ & Rust") == "c-rust"
+    assert slugify("x") == "x"
+    assert slugify("Year 2024") == "year-2024"
+
+
+def test_empty_results():
+    assert slugify("---") == ""
+    assert slugify("") == ""
+    assert slugify("!!!") == ""
+
+
+def test_non_ascii_is_a_separator():
+    assert slugify("Ano ñ 2024") == "ano-2024"
+
+### merge_intervals
+--- ticket
+`merge_intervals([[1, 3], [3, 4]])` returns two intervals but they share the point 3 and should merge. Also unsorted input like `[[8, 10], [1, 3], [2, 6]]` comes back wrong.
+--- src
+def merge_intervals(intervals):
+    """Merge overlapping or touching [start, end] pairs (inclusive: [1, 3] and [3, 4] touch and merge, [1, 2] and [3, 4] do not). Input order is arbitrary and the input must not be modified. Returns a sorted list of [start, end] lists."""
+    out = []
+    for s, e in intervals:
+        if out and s < out[-1][1]:
+            out[-1][1] = max(out[-1][1], e)
+        else:
+            out.append([s, e])
+    return out
+--- fix
+def merge_intervals(intervals):
+    """Merge overlapping or touching [start, end] pairs (inclusive: [1, 3] and [3, 4] touch and merge, [1, 2] and [3, 4] do not). Input order is arbitrary and the input must not be modified. Returns a sorted list of [start, end] lists."""
+    out = []
+    for s, e in sorted(intervals):
+        if out and s <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], e)
+        else:
+            out.append([s, e])
+    return out
+--- test
+from mod import merge_intervals
+
+
+def test_overlap_and_order():
+    assert merge_intervals([[1, 3], [2, 6], [8, 10]]) == [[1, 6], [8, 10]]
+    assert merge_intervals([[8, 10], [1, 3], [2, 6]]) == [[1, 6], [8, 10]]
+
+
+def test_touching():
+    assert merge_intervals([[1, 3], [3, 4]]) == [[1, 4]]
+    assert merge_intervals([[1, 2], [3, 4]]) == [[1, 2], [3, 4]]
+
+
+def test_contained_and_empty():
+    assert merge_intervals([[1, 10], [2, 3]]) == [[1, 10]]
+    assert merge_intervals([]) == []
+
+
+def test_input_untouched_and_tuples():
+    data = [[5, 7], [1, 2]]
+    merge_intervals(data)
+    assert data == [[5, 7], [1, 2]]
+    assert merge_intervals([(5, 7), (6, 9)]) == [[5, 9]]
+
+### dedupe
+--- ticket
+`dedupe([[1], [2], [1]])` crashes with `TypeError: unhashable type: 'list'`. Lists and dicts should be accepted.
+--- src
+def dedupe(items, key=None):
+    """Remove duplicates keeping the first occurrence and the original order. With key, two items are duplicates when key(item) values are equal. Items (and key values) may be unhashable, such as lists or dicts; compare those by equality."""
+    seen = set()
+    out = []
+    for item in items:
+        k = key(item) if key else item
+        if k not in seen:
+            out.append(item)
+        seen.add(k)
+    return out
+--- fix
+def dedupe(items, key=None):
+    """Remove duplicates keeping the first occurrence and the original order. With key, two items are duplicates when key(item) values are equal. Items (and key values) may be unhashable, such as lists or dicts; compare those by equality."""
+    seen = []
+    out = []
+    for item in items:
+        k = key(item) if key else item
+        if k not in seen:
+            out.append(item)
+            seen.append(k)
+    return out
+--- test
+from mod import dedupe
+
+
+def test_hashable():
+    assert dedupe([3, 1, 3, 2, 1]) == [3, 1, 2]
+    assert dedupe([]) == []
+    assert dedupe([None, None]) == [None]
+
+
+def test_unhashable():
+    assert dedupe([[1], [2], [1]]) == [[1], [2]]
+    assert dedupe([{"a": 1}, {"a": 1}, {"a": 2}]) == [{"a": 1}, {"a": 2}]
+
+
+def test_key():
+    assert dedupe(["A", "b", "a", "B"], key=str.lower) == ["A", "b"]
+    assert dedupe([{"id": 1, "v": "x"}, {"id": 1, "v": "y"}, {"id": 2, "v": "z"}], key=lambda d: d["id"]) == [{"id": 1, "v": "x"}, {"id": 2, "v": "z"}]
+    assert dedupe(["ab", "ac", "bd"], key=lambda s: [s[0]]) == ["ab", "bd"]
+
+### add_tag
+--- ticket
+Calling `add_tag("a")` and then `add_tag("b")` returns `["a", "b"]` the second time. Tags leak between unrelated calls, and the list we pass in gets modified.
+--- src
+def add_tag(tag, tags=[]):
+    """Return a new list with tag added to tags. The tags argument is never modified and nothing is shared between calls. Tags are compared case-insensitively and stored lowercased (existing tags are lowercased in the result too). A tag already present is not added twice."""
+    tags.append(tag)
+    return tags
+--- fix
+def add_tag(tag, tags=None):
+    """Return a new list with tag added to tags. The tags argument is never modified and nothing is shared between calls. Tags are compared case-insensitively and stored lowercased (existing tags are lowercased in the result too). A tag already present is not added twice."""
+    base = [t.lower() for t in (tags or [])]
+    t = tag.lower()
+    return base if t in base else base + [t]
+--- test
+from mod import add_tag
+
+
+def test_no_leak_between_calls():
+    assert add_tag("A") == ["a"]
+    assert add_tag("B") == ["b"]
+
+
+def test_input_not_modified():
+    t = ["x"]
+    assert add_tag("y", t) == ["x", "y"]
+    assert t == ["x"]
+
+
+def test_case_and_dupes():
+    assert add_tag("X", ["x"]) == ["x"]
+    assert add_tag("Y", ["X"]) == ["x", "y"]
+    assert add_tag("z", []) == ["z"]
+
+
+def test_result_is_fresh():
+    t = ["x"]
+    assert add_tag("x", t) is not t
+
+### leap
+--- ticket
+`days_in_month(2000, 2)` returns 28. Year 2000 was a leap year. Also asking for month 13 should not quietly say 31.
+--- src
+def is_leap(year):
+    """Gregorian leap year: divisible by 4, except centuries, unless divisible by 400."""
+    return year % 4 == 0 and year % 100 != 0
+
+
+def days_in_month(year, month):
+    """Days in the month (1-12). Raises ValueError for a month outside 1-12."""
+    if month == 2:
+        return 29 if is_leap(year) else 28
+    return 30 if month in (4, 6, 9, 11) else 31
+--- fix
+def is_leap(year):
+    """Gregorian leap year: divisible by 4, except centuries, unless divisible by 400."""
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+
+
+def days_in_month(year, month):
+    """Days in the month (1-12). Raises ValueError for a month outside 1-12."""
+    if not 1 <= month <= 12:
+        raise ValueError(month)
+    if month == 2:
+        return 29 if is_leap(year) else 28
+    return 30 if month in (4, 6, 9, 11) else 31
+--- test
+import pytest
+from mod import days_in_month, is_leap
+
+
+@pytest.mark.parametrize("year,leap", [(2000, True), (1900, False), (2024, True), (2023, False), (2100, False), (2400, True)])
+def test_is_leap(year, leap):
+    assert is_leap(year) is leap
+
+
+def test_days():
+    assert days_in_month(2000, 2) == 29
+    assert days_in_month(1900, 2) == 28
+    assert days_in_month(2023, 4) == 30
+    assert days_in_month(2023, 12) == 31
+    assert days_in_month(2024, 1) == 31
+
+
+@pytest.mark.parametrize("m", [0, 13, -1])
+def test_bad_month(m):
+    with pytest.raises(ValueError):
+        days_in_month(2024, m)
+
+### median
+--- ticket
+`median([4, 1, 3, 2])` returns 3.5 instead of 2.5, and afterwards my list is sorted in place. Please fix both.
+--- src
+def median(xs):
+    """Median of a non-empty list of numbers (mean of the two middle values for even length). Does not modify xs. Raises ValueError on empty input."""
+    xs.sort()
+    mid = len(xs) // 2
+    if len(xs) % 2:
+        return xs[mid]
+    return (xs[mid] + xs[mid + 1]) / 2
+--- fix
+def median(xs):
+    """Median of a non-empty list of numbers (mean of the two middle values for even length). Does not modify xs. Raises ValueError on empty input."""
+    if not xs:
+        raise ValueError("empty")
+    s = sorted(xs)
+    mid = len(s) // 2
+    if len(s) % 2:
+        return s[mid]
+    return (s[mid - 1] + s[mid]) / 2
+--- test
+import pytest
+from mod import median
+
+
+def test_values():
+    assert median([3, 1, 2]) == 2
+    assert median([4, 1, 3, 2]) == 2.5
+    assert median([5]) == 5
+    assert median([1, 1, 2, 2]) == 1.5
+    assert median([-5, -1]) == -3
+
+
+def test_not_modified():
+    xs = [3, 1, 2]
+    median(xs)
+    assert xs == [3, 1, 2]
+
+
+def test_empty():
+    with pytest.raises(ValueError):
+        median([])
+
+### word_count
+--- ticket
+`word_count("The cat. the CAT!")` returns four separate keys. Counting should ignore case and punctuation.
+--- src
+def word_count(text):
+    """Return {word: count}. A word is a run of ASCII letters, digits and apostrophes; matching is case-insensitive and keys are lowercase. "Don't" is one word. Any other character separates words."""
+    counts = {}
+    for w in text.split(" "):
+        counts[w] = counts.get(w, 0) + 1
+    return counts
+--- fix
+import re
+
+
+def word_count(text):
+    """Return {word: count}. A word is a run of ASCII letters, digits and apostrophes; matching is case-insensitive and keys are lowercase. "Don't" is one word. Any other character separates words."""
+    counts = {}
+    for w in re.findall(r"[a-z0-9']+", text.lower()):
+        counts[w] = counts.get(w, 0) + 1
+    return counts
+--- test
+from mod import word_count
+
+
+def test_case_and_punctuation():
+    assert word_count("The cat. the CAT!") == {"the": 2, "cat": 2}
+
+
+def test_apostrophe_and_digits():
+    assert word_count("Don't stop") == {"don't": 1, "stop": 1}
+    assert word_count("R2D2, r2d2") == {"r2d2": 2}
+
+
+def test_whitespace_kinds_and_empty():
+    assert word_count("a\nb\tc a") == {"a": 2, "b": 1, "c": 1}
+    assert word_count("") == {}
+    assert word_count("  ...  ") == {}
+    assert word_count("well-known") == {"well": 1, "known": 1}
