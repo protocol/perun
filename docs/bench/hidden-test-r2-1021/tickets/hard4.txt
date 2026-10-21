@@ -1,0 +1,646 @@
+### h_csv_parse
+--- ticket
+parse_csv(text, delimiter=",") returns a list of rows, each a list of strings. A field may be wrapped in double quotes; inside quotes the delimiter and line breaks are literal and a doubled quote "" stands for one quote. Rows end at "\n" or "\r\n". A quote in the middle of an unquoted field is an ordinary character. A final line terminator does not create an extra row, and completely empty lines outside quotes are skipped, but a line holding only "" (a quoted empty field) is a row with one empty field. Whitespace is never stripped. An unterminated quote raises ValueError. Empty text gives [].
+Observed: commas inside quotes split the field, quoted line breaks split the row, "" stays doubled, and a trailing newline adds an empty row.
+--- src
+def parse_csv(text, delimiter=","):
+    return [line.split(delimiter) for line in text.split("\n")]
+--- fix
+def parse_csv(text, delimiter=","):
+    rows, row, field = [], [], ""
+    in_q = False
+    fstart = True
+    had = False
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if in_q:
+            if c == '"':
+                if text[i + 1:i + 2] == '"':
+                    field += '"'
+                    i += 1
+                else:
+                    in_q = False
+            else:
+                field += c
+        elif c == '"' and fstart:
+            in_q = True
+            fstart = False
+            had = True
+        elif c == delimiter:
+            row.append(field)
+            field = ""
+            fstart = True
+            had = True
+        elif c == "\n" or (c == "\r" and text[i + 1:i + 2] == "\n"):
+            if c == "\r":
+                i += 1
+            if had or field or row:
+                row.append(field)
+                rows.append(row)
+            row, field, fstart, had = [], "", True, False
+        else:
+            field += c
+            fstart = False
+            had = True
+        i += 1
+    if in_q:
+        raise ValueError("unterminated quote")
+    if had or field or row:
+        row.append(field)
+        rows.append(row)
+    return rows
+--- test
+import pytest
+from mod import parse_csv
+
+
+def test_plain_and_terminators():
+    assert parse_csv("a,b,c\n1,2,3\n") == [["a", "b", "c"], ["1", "2", "3"]]
+    assert parse_csv("a,b\r\n1,2\r\n") == [["a", "b"], ["1", "2"]]
+    assert parse_csv("a,b\n1,2") == [["a", "b"], ["1", "2"]]
+    assert parse_csv("") == []
+
+
+def test_quotes():
+    assert parse_csv('"a,b",c\n') == [["a,b", "c"]]
+    assert parse_csv('"he said ""hi""",x') == [['he said "hi"', "x"]]
+    assert parse_csv('"line1\nline2",z\nq,r') == [["line1\nline2", "z"], ["q", "r"]]
+    assert parse_csv('"a\r\nb",c') == [["a\r\nb", "c"]]
+    assert parse_csv('ab"c,d') == [['ab"c', "d"]]
+
+
+def test_empty_fields_and_lines():
+    assert parse_csv("a,,c\n,\n") == [["a", "", "c"], ["", ""]]
+    assert parse_csv("a\n\n\nb\n") == [["a"], ["b"]]
+    assert parse_csv('""\n') == [[""]]
+    assert parse_csv('a,""\n') == [["a", ""]]
+
+
+def test_whitespace_and_delimiter():
+    assert parse_csv(" a , b \n") == [[" a ", " b "]]
+    assert parse_csv("a;b,c\n", delimiter=";") == [["a", "b,c"]]
+    assert parse_csv('"x;y";z', delimiter=";") == [["x;y", "z"]]
+
+
+def test_unterminated():
+    with pytest.raises(ValueError):
+        parse_csv('a,"b\nc')
+
+
+### h_glob
+--- ticket
+glob_match(pattern, path) returns True when the whole path matches the pattern. "*" matches any run of characters except "/" (including none); "?" matches exactly one character except "/"; "**" matches any characters including "/", and "**/" matches zero or more whole directories, so "a/**/b" matches both "a/b" and "a/x/y/b". "[abc]" and "[a-c]" match one character from the set and "[!abc]" one character outside it; a class never matches "/". A backslash makes the next character literal. Everything else is literal and case-sensitive. A leading dot is not special.
+Observed: "*" matches across directories, "**" is not understood, and "a/**/b" does not match "a/b".
+--- src
+import fnmatch
+
+
+def glob_match(pattern, path):
+    return fnmatch.fnmatchcase(path, pattern)
+--- fix
+import re
+
+
+def glob_match(pattern, path):
+    i, n, out = 0, len(pattern), ""
+    while i < n:
+        c = pattern[i]
+        if c == "\\" and i + 1 < n:
+            out += re.escape(pattern[i + 1])
+            i += 2
+        elif c == "*":
+            if pattern[i:i + 3] == "**/":
+                out += "(?:.*/)?"
+                i += 3
+            elif pattern[i:i + 2] == "**":
+                out += ".*"
+                i += 2
+            else:
+                out += "[^/]*"
+                i += 1
+        elif c == "?":
+            out += "[^/]"
+            i += 1
+        elif c == "[":
+            j = i + 1
+            neg = pattern[j:j + 1] == "!"
+            if neg:
+                j += 1
+            close = pattern.find("]", j)
+            if close <= j:
+                out += re.escape(c)
+                i += 1
+            else:
+                body = pattern[j:close].replace("\\", "\\\\").replace("^", "\\^")
+                out += ("[^/" if neg else "(?!/)[") + body + "]"
+                i = close + 1
+        else:
+            out += re.escape(c)
+            i += 1
+    return re.fullmatch(out, path, re.S) is not None
+--- test
+from mod import glob_match
+
+
+def test_star_and_question():
+    assert glob_match("*.py", "a.py")
+    assert not glob_match("*.py", "src/a.py")
+    assert glob_match("src/*/x.py", "src/a/x.py")
+    assert not glob_match("src/*/x.py", "src/a/b/x.py")
+    assert not glob_match("src/*/x.py", "src/x.py")
+    assert glob_match("a?c", "abc")
+    assert not glob_match("a?c", "a/c")
+    assert glob_match("*", "")
+    assert glob_match("*", "file")
+    assert not glob_match("*", "a/b")
+
+
+def test_double_star():
+    assert glob_match("src/**/x.py", "src/x.py")
+    assert glob_match("src/**/x.py", "src/a/b/x.py")
+    assert not glob_match("src/**/x.py", "other/x.py")
+    assert glob_match("src/**", "src/a/b")
+    assert glob_match("**/test_*.py", "test_a.py")
+    assert glob_match("**/test_*.py", "x/y/test_a.py")
+    assert not glob_match("**/test_*.py", "x/atest_a.py")
+    assert not glob_match("**/test_*.py", "x/y/test_a.pyc")
+
+
+def test_classes():
+    assert glob_match("[a-c]x", "bx")
+    assert not glob_match("[a-c]x", "dx")
+    assert glob_match("[!a-c]x", "dx")
+    assert not glob_match("[!a-c]x", "bx")
+    assert not glob_match("[!a-c]x", "/x")
+    assert glob_match("f[oa]o", "fao")
+
+
+def test_literals():
+    assert glob_match("a\\*b", "a*b")
+    assert not glob_match("a\\*b", "axb")
+    assert not glob_match("a.b", "aXb")
+    assert not glob_match("Foo", "foo")
+    assert glob_match(".hidden/*", ".hidden/x")
+    assert glob_match("a+b(1)", "a+b(1)")
+    assert not glob_match("*.py", "a.py/")
+
+
+### h_set_path
+--- ticket
+set_path(obj, path, value) returns a new structure in which the location named by path holds value; obj itself and everything reachable from it must be left untouched (the result shares no mutable parts with obj). A path is dot-separated keys with optional list indexes, for example "a.b[2].c" or "items[0]". Missing dict keys are created, and a missing container is a dict when the next step is a key and a list when the next step is an index. An index equal to the list length appends, and a larger index pads the list with None up to that index. If an existing value has the wrong type for the next step (a key step on a list or scalar, an index step on a dict or scalar) raise TypeError. A path that is empty or malformed ("a..b", ".a", "a[-1]", "a[x]", "a[") raises ValueError. The first step must be a key and obj must be a dict.
+Observed: the caller's dict changes after the call, lists are not padded, and an index into a missing list crashes.
+--- src
+def set_path(obj, path, value):
+    node = obj
+    parts = path.replace("[", ".[").split(".")
+    for p in parts[:-1]:
+        if p.startswith("["):
+            node = node[int(p[1:-1])]
+        else:
+            node = node[p]
+    last = parts[-1]
+    if last.startswith("["):
+        node[int(last[1:-1])] = value
+    else:
+        node[last] = value
+    return obj
+--- fix
+import copy
+import re
+
+_PATH = re.compile(r"[^.\[\]]+(?:\.[^.\[\]]+|\[\d+\])*")
+_STEP = re.compile(r"\[(\d+)\]|([^.\[\]]+)")
+
+
+def set_path(obj, path, value):
+    if not _PATH.fullmatch(path):
+        raise ValueError(path)
+    steps = [int(i) if i else k for i, k in _STEP.findall(path)]
+    if not isinstance(obj, dict):
+        raise TypeError("obj must be a dict")
+    root = copy.deepcopy(obj)
+    node = root
+    for n, step in enumerate(steps):
+        last = n == len(steps) - 1
+        fill = None if last else ([] if isinstance(steps[n + 1], int) else {})
+        if isinstance(step, int):
+            if not isinstance(node, list):
+                raise TypeError("index step on non-list")
+            while len(node) <= step:
+                node.append(None)
+            if last:
+                node[step] = copy.deepcopy(value)
+            else:
+                if node[step] is None:
+                    node[step] = fill
+                node = node[step]
+        else:
+            if not isinstance(node, dict):
+                raise TypeError("key step on non-dict")
+            if last:
+                node[step] = copy.deepcopy(value)
+            else:
+                if step not in node or node[step] is None:
+                    node[step] = fill
+                node = node[step]
+    return root
+--- test
+import pytest
+from mod import set_path
+
+
+def test_create_paths():
+    assert set_path({}, "a.b", 1) == {"a": {"b": 1}}
+    assert set_path({}, "a[2].c", 1) == {"a": [None, None, {"c": 1}]}
+    assert set_path({}, "a[0][1]", 5) == {"a": [[None, 5]]}
+    assert set_path({"x": 1}, "y.z", 2) == {"x": 1, "y": {"z": 2}}
+
+
+def test_list_index_rules():
+    assert set_path({"a": [1, 2]}, "a[2]", 3) == {"a": [1, 2, 3]}
+    assert set_path({"a": [1, 2]}, "a[0]", 9) == {"a": [9, 2]}
+    assert set_path({"a": [1]}, "a[3]", 4) == {"a": [1, None, None, 4]}
+    assert set_path({"a": [{"k": 1}]}, "a[0].j", 2) == {"a": [{"k": 1, "j": 2}]}
+
+
+def test_no_mutation_or_sharing():
+    o = {"a": {"b": [1]}, "k": [1, 2]}
+    r = set_path(o, "a.b[0]", 9)
+    assert o == {"a": {"b": [1]}, "k": [1, 2]}
+    assert r == {"a": {"b": [9]}, "k": [1, 2]}
+    assert r["k"] is not o["k"]
+    v = [1]
+    r2 = set_path({}, "x", v)
+    v.append(2)
+    assert r2 == {"x": [1]}
+
+
+def test_type_errors():
+    with pytest.raises(TypeError):
+        set_path({"a": [1]}, "a.b", 1)
+    with pytest.raises(TypeError):
+        set_path({"a": {}}, "a[0]", 1)
+    with pytest.raises(TypeError):
+        set_path({"a": 5}, "a.b", 1)
+    with pytest.raises(TypeError):
+        set_path({"a": 5}, "a[0]", 1)
+
+
+def test_value_errors():
+    for bad in ["", "a..b", ".a", "a[-1]", "a[x]", "a[", "[0]"]:
+        with pytest.raises(ValueError):
+            set_path({}, bad, 1)
+
+
+### h_inventory
+--- ticket
+Inventory tracks lots per SKU. add(sku, qty, expires) adds a lot (qty must be positive, else ValueError); expires is an integer day number and the lot is usable through that day inclusive (usable while today <= expires). take(sku, qty, today) removes qty units from usable lots, earliest expiry first and, for equal expiry, the lot added first, and returns the pieces taken as a list of (expires, qty) tuples in that order. If usable stock is below qty nothing is removed and ValueError is raised; qty must be positive, else ValueError. Expired lots (today > expires) are never used and are dropped whenever take or stock looks at that SKU. stock(sku, today) returns the usable total; an unknown SKU has stock 0.
+Observed: the oldest-added lot is sold first instead of the earliest-expiring one, expired units are counted and sold, a failed take still removes part of the stock, and lots on their last day are refused.
+--- src
+class Inventory:
+    def __init__(self):
+        self.lots = {}
+
+    def add(self, sku, qty, expires):
+        self.lots.setdefault(sku, []).append([expires, qty])
+
+    def take(self, sku, qty, today):
+        taken = []
+        for lot in self.lots.get(sku, []):
+            if qty == 0:
+                break
+            n = min(qty, lot[1])
+            lot[1] -= n
+            qty -= n
+            taken.append((lot[0], n))
+        if qty:
+            raise ValueError("insufficient")
+        return taken
+
+    def stock(self, sku, today):
+        return sum(lot[1] for lot in self.lots.get(sku, []))
+--- fix
+class Inventory:
+    def __init__(self):
+        self.lots = {}
+
+    def add(self, sku, qty, expires):
+        if qty <= 0:
+            raise ValueError("qty")
+        self.lots.setdefault(sku, []).append([expires, qty])
+
+    def _usable(self, sku, today):
+        if sku not in self.lots:
+            return []
+        self.lots[sku] = [lot for lot in self.lots[sku] if lot[0] >= today and lot[1] > 0]
+        return sorted(self.lots[sku], key=lambda lot: lot[0])
+
+    def take(self, sku, qty, today):
+        if qty <= 0:
+            raise ValueError("qty")
+        lots = self._usable(sku, today)
+        if sum(lot[1] for lot in lots) < qty:
+            raise ValueError("insufficient")
+        taken = []
+        for lot in lots:
+            if qty == 0:
+                break
+            n = min(qty, lot[1])
+            lot[1] -= n
+            qty -= n
+            taken.append((lot[0], n))
+        self.lots[sku] = [lot for lot in self.lots[sku] if lot[1] > 0]
+        return taken
+
+    def stock(self, sku, today):
+        return sum(lot[1] for lot in self._usable(sku, today))
+--- test
+import pytest
+from mod import Inventory
+
+
+def test_earliest_expiry_first_ties_by_insertion():
+    inv = Inventory()
+    inv.add("a", 5, 10)
+    inv.add("a", 3, 5)
+    inv.add("a", 4, 5)
+    assert inv.stock("a", 1) == 12
+    assert inv.take("a", 4, 1) == [(5, 3), (5, 1)]
+    assert inv.stock("a", 1) == 8
+    assert inv.take("a", 6, 1) == [(5, 3), (10, 3)]
+    assert inv.stock("a", 1) == 2
+
+
+def test_expiry_inclusive_and_dropped():
+    inv = Inventory()
+    inv.add("b", 5, 3)
+    inv.add("b", 2, 9)
+    assert inv.stock("b", 3) == 7
+    assert inv.stock("b", 4) == 2
+    assert inv.stock("b", 3) == 2
+    with pytest.raises(ValueError):
+        inv.take("b", 3, 4)
+    assert inv.stock("b", 4) == 2
+    assert inv.take("b", 2, 9) == [(9, 2)]
+    assert inv.stock("b", 9) == 0
+
+
+def test_failed_take_is_atomic():
+    inv = Inventory()
+    inv.add("c", 2, 10)
+    inv.add("c", 2, 12)
+    with pytest.raises(ValueError):
+        inv.take("c", 5, 1)
+    assert inv.stock("c", 1) == 4
+    assert inv.take("c", 4, 1) == [(10, 2), (12, 2)]
+
+
+def test_expired_never_sold():
+    inv = Inventory()
+    inv.add("d", 10, 2)
+    inv.add("d", 1, 8)
+    assert inv.take("d", 1, 5) == [(8, 1)]
+    with pytest.raises(ValueError):
+        inv.take("d", 1, 5)
+
+
+def test_validation_and_unknown():
+    inv = Inventory()
+    assert inv.stock("zz", 0) == 0
+    with pytest.raises(ValueError):
+        inv.take("zz", 1, 0)
+    with pytest.raises(ValueError):
+        inv.add("e", 0, 5)
+    with pytest.raises(ValueError):
+        inv.add("e", -1, 5)
+    inv.add("e", 1, 5)
+    with pytest.raises(ValueError):
+        inv.take("e", 0, 1)
+
+
+### h_snake_case
+--- ticket
+to_snake(name) converts an identifier to snake_case. A word boundary falls before an uppercase letter that follows a lowercase letter or digit (fooBar gives foo_bar, version2Beta gives version2_beta), and inside an acronym before the last capital when a lowercase letter follows (HTTPServer gives http_server). Digits stay attached to the word before them (utf8Decode gives utf8_decode). Spaces, hyphens and underscores inside the name are separators, and any run of them becomes one underscore. Leading and trailing underscores are preserved exactly as written (__dunder__ stays __dunder__, _privateName gives _private_name). The result is lowercase. The empty string gives the empty string.
+Observed: HTTPServer becomes h_t_t_p_server, privateName loses its leading underscore, and double underscores in the middle survive.
+--- src
+import re
+
+
+def to_snake(name):
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+--- fix
+import re
+
+
+def to_snake(name):
+    lead, core, trail = re.match(r"^(_*)(.*?)(_*)$", name, re.S).groups()
+    core = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", core)
+    core = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", core)
+    core = re.sub(r"[\s_-]+", "_", core)
+    return lead + core.lower() + trail
+--- test
+from mod import to_snake
+
+
+def test_basic_boundaries():
+    assert to_snake("fooBar") == "foo_bar"
+    assert to_snake("FooBar") == "foo_bar"
+    assert to_snake("version2Beta") == "version2_beta"
+    assert to_snake("utf8Decode") == "utf8_decode"
+    assert to_snake("base64") == "base64"
+    assert to_snake("already_snake") == "already_snake"
+
+
+def test_acronyms():
+    assert to_snake("HTTPServerError") == "http_server_error"
+    assert to_snake("getHTTPResponse") == "get_http_response"
+    assert to_snake("userID") == "user_id"
+    assert to_snake("ID") == "id"
+    assert to_snake("XMLHttp2Request") == "xml_http2_request"
+
+
+def test_separators_collapse():
+    assert to_snake("Mixed__Case") == "mixed_case"
+    assert to_snake("a-b c") == "a_b_c"
+    assert to_snake("a - b") == "a_b"
+    assert to_snake("one___two") == "one_two"
+
+
+def test_edge_underscores_and_empty():
+    assert to_snake("__dunder__") == "__dunder__"
+    assert to_snake("_privateName") == "_private_name"
+    assert to_snake("trailingName_") == "trailing_name_"
+    assert to_snake("__initHTTPClient__") == "__init_http_client__"
+    assert to_snake("") == ""
+    assert to_snake("A") == "a"
+
+
+### h_stale_profile
+--- ticket
+After update_profile(uid, changes), get_profile(uid) sometimes still shows the old profile until the process restarts. Intended behavior: get_profile returns a dict copy of the stored profile, deep enough that callers may mutate it (including nested dicts) without affecting the store or any later read. update_profile merges changes into the stored profile (new keys added, existing keys replaced, nested dicts replaced as a whole) and later reads reflect it; the caller's changes dict may be modified afterwards without affecting the store. An unknown uid raises KeyError from both methods. Different uids never share state. A read goes to the database (counted in db_reads) only on the first get_profile after a change, never on repeats.
+--- src
+class ProfileService:
+    def __init__(self, db):
+        self.db = db
+        self.cache = {}
+        self.db_reads = 0
+
+    def _load(self, uid):
+        self.db_reads += 1
+        return dict(self.db[uid])
+
+    def get_profile(self, uid):
+        if uid not in self.cache:
+            self.cache[uid] = self._load(uid)
+        return self.cache[uid]
+
+    def update_profile(self, uid, changes):
+        profile = self._load(uid)
+        profile.update(changes)
+        self.db[uid] = profile
+        self.cache.pop(str(uid), None)
+--- fix
+import copy
+
+
+class ProfileService:
+    def __init__(self, db):
+        self.db = db
+        self.cache = {}
+        self.db_reads = 0
+
+    def _load(self, uid):
+        self.db_reads += 1
+        return copy.deepcopy(self.db[uid])
+
+    def get_profile(self, uid):
+        if uid not in self.cache:
+            self.cache[uid] = self._load(uid)
+        return copy.deepcopy(self.cache[uid])
+
+    def update_profile(self, uid, changes):
+        self.db[uid] = {**self.db[uid], **copy.deepcopy(changes)}
+        self.cache.pop(uid, None)
+--- test
+import pytest
+from mod import ProfileService
+
+
+def make():
+    return ProfileService({1: {"name": "Jane", "prefs": {"theme": "dark"}}, 2: {"name": "Sam", "prefs": {}}})
+
+
+def test_update_visible_after_cached_read():
+    s = make()
+    assert s.get_profile(1)["name"] == "Jane"
+    s.update_profile(1, {"name": "Janet", "age": 30})
+    assert s.get_profile(1) == {"name": "Janet", "prefs": {"theme": "dark"}, "age": 30}
+
+
+def test_nested_dicts_replaced_wholesale():
+    s = make()
+    s.get_profile(1)
+    s.update_profile(1, {"prefs": {"lang": "en"}})
+    assert s.get_profile(1)["prefs"] == {"lang": "en"}
+
+
+def test_returned_copy_is_independent():
+    s = make()
+    p = s.get_profile(1)
+    p["name"] = "Hacked"
+    p["prefs"]["theme"] = "neon"
+    assert s.get_profile(1) == {"name": "Jane", "prefs": {"theme": "dark"}}
+    assert s.db[1] == {"name": "Jane", "prefs": {"theme": "dark"}}
+
+
+def test_changes_dict_not_shared():
+    s = make()
+    ch = {"prefs": {"a": 1}}
+    s.update_profile(1, ch)
+    ch["prefs"]["a"] = 2
+    assert s.get_profile(1)["prefs"] == {"a": 1}
+
+
+def test_unknown_uid_and_isolation():
+    s = make()
+    with pytest.raises(KeyError):
+        s.get_profile(9)
+    with pytest.raises(KeyError):
+        s.update_profile(9, {"x": 1})
+    s.update_profile(2, {"name": "Sammy"})
+    assert s.get_profile(1)["name"] == "Jane"
+    assert s.get_profile(2)["name"] == "Sammy"
+
+
+def test_db_reads_only_after_change():
+    s = make()
+    s.get_profile(1)
+    s.get_profile(1)
+    base = s.db_reads
+    s.get_profile(1)
+    assert s.db_reads == base
+    s.update_profile(1, {"x": 1})
+    after_update = s.db_reads
+    s.get_profile(1)
+    s.get_profile(1)
+    assert s.db_reads == after_update + 1
+
+
+### h_backoff
+--- ticket
+backoff_schedule(base, factor, cap, attempts, budget=None) returns the list of delays before each retry. Delay number k (starting at 0) is min(cap, base * factor**k), and there are at most `attempts` delays (0 gives []). With a budget, the running total of delays may not exceed it: once adding the next delay would pass the budget, that delay is cut down to exactly what remains and nothing follows it; if nothing remains the list stops before it. The cap applies before the budget. ValueError for attempts < 0, base <= 0, factor < 1, cap < base, or a negative budget.
+Observed: the first delay is already multiplied by the factor, one attempt too few is returned, and a budget stops early instead of using the remainder.
+--- src
+def backoff_schedule(base, factor, cap, attempts, budget=None):
+    out, total = [], 0
+    for k in range(1, attempts):
+        d = base * factor ** k
+        if budget is not None and total + d > budget:
+            break
+        out.append(min(d, cap))
+        total += d
+    return out
+--- fix
+def backoff_schedule(base, factor, cap, attempts, budget=None):
+    if attempts < 0 or base <= 0 or factor < 1 or cap < base or (budget is not None and budget < 0):
+        raise ValueError("bad arguments")
+    out, total = [], 0
+    for k in range(attempts):
+        d = min(cap, base * factor ** k)
+        if budget is not None:
+            left = budget - total
+            if left <= 0:
+                break
+            d = min(d, left)
+        out.append(d)
+        total += d
+    return out
+--- test
+import pytest
+from mod import backoff_schedule
+
+
+def test_plain_and_cap():
+    assert backoff_schedule(1, 2, 10, 6) == [1, 2, 4, 8, 10, 10]
+    assert backoff_schedule(0.5, 3, 100, 3) == [0.5, 1.5, 4.5]
+    assert backoff_schedule(2, 1, 5, 3) == [2, 2, 2]
+    assert backoff_schedule(1, 2, 10, 0) == []
+    assert backoff_schedule(1, 2, 10, 1) == [1]
+
+
+def test_budget_truncates_last_delay():
+    assert backoff_schedule(1, 2, 10, 6, budget=10) == [1, 2, 4, 3]
+    assert backoff_schedule(1, 2, 10, 6, budget=7) == [1, 2, 4]
+    assert backoff_schedule(1, 2, 10, 6, budget=0) == []
+    assert backoff_schedule(1, 2, 10, 2, budget=100) == [1, 2]
+    assert backoff_schedule(4, 2, 5, 5, budget=12) == [4, 5, 3]
+    assert backoff_schedule(4, 2, 5, 2, budget=1) == [1]
+
+
+def test_validation():
+    for kw in [dict(base=1, factor=2, cap=5, attempts=-1), dict(base=0, factor=2, cap=5, attempts=1),
+               dict(base=1, factor=0.5, cap=5, attempts=1), dict(base=3, factor=2, cap=2, attempts=1),
+               dict(base=1, factor=2, cap=5, attempts=1, budget=-1)]:
+        with pytest.raises(ValueError):
+            backoff_schedule(**kw)

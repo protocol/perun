@@ -1,0 +1,507 @@
+### h_expr
+--- ticket
+evaluate(s) evaluates an arithmetic expression with + - * / ^, parentheses, decimal numbers and spaces. Precedence from loosest to tightest: + and - (left to right), * and / (left to right), unary minus/plus, ^ (right-associative, exponent may itself carry a sign). So -2^2 is -4, 2^3^2 is 512, -2*3 is -6, 2*-3 is -6, 2^-1 is 0.5 and --3 is 3. Division by zero raises ZeroDivisionError. Anything that is not a valid expression (empty input, unknown characters, unbalanced parentheses, a missing operand, two numbers in a row) raises ValueError.
+Observed: -2^2 gives 4, 2^3^2 gives 64, and garbage like "2 $ 3" or "(2" is silently accepted.
+--- src
+import re
+
+
+def evaluate(s):
+    toks = re.findall(r"\d+\.?\d*|\.\d+|[-+*/^()]", s)
+    pos = 0
+
+    def peek():
+        return toks[pos] if pos < len(toks) else None
+
+    def take():
+        nonlocal pos
+        t = peek()
+        pos += 1
+        return t
+
+    def expr():
+        v = term()
+        while peek() in ("+", "-"):
+            op = take()
+            r = term()
+            v = v + r if op == "+" else v - r
+        return v
+
+    def term():
+        v = power()
+        while peek() in ("*", "/"):
+            op = take()
+            r = power()
+            v = v * r if op == "*" else v / r
+        return v
+
+    def power():
+        v = atom()
+        while peek() == "^":
+            take()
+            v = v ** atom()
+        return v
+
+    def atom():
+        t = take()
+        if t == "-":
+            return -atom()
+        if t == "(":
+            v = expr()
+            take()
+            return v
+        return float(t)
+
+    return expr()
+--- fix
+import re
+
+
+def _tokens(s):
+    out, i = [], 0
+    while i < len(s):
+        if s[i].isspace():
+            i += 1
+            continue
+        m = re.match(r"\d+\.?\d*|\.\d+", s[i:])
+        if m:
+            out.append(float(m.group()))
+            i += m.end()
+        elif s[i] in "+-*/^()":
+            out.append(s[i])
+            i += 1
+        else:
+            raise ValueError(s[i])
+    return out
+
+
+def evaluate(s):
+    toks = _tokens(s)
+    pos = 0
+
+    def peek():
+        return toks[pos] if pos < len(toks) else None
+
+    def take():
+        nonlocal pos
+        t = peek()
+        pos += 1
+        return t
+
+    def expr():
+        v = term()
+        while peek() in ("+", "-"):
+            op = take()
+            r = term()
+            v = v + r if op == "+" else v - r
+        return v
+
+    def term():
+        v = unary()
+        while peek() in ("*", "/"):
+            op = take()
+            r = unary()
+            v = v * r if op == "*" else v / r
+        return v
+
+    def unary():
+        if peek() == "-":
+            take()
+            return -unary()
+        if peek() == "+":
+            take()
+            return unary()
+        return power()
+
+    def power():
+        base = atom()
+        if peek() == "^":
+            take()
+            return base ** unary()
+        return base
+
+    def atom():
+        t = take()
+        if isinstance(t, float):
+            return t
+        if t == "(":
+            v = expr()
+            if take() != ")":
+                raise ValueError("paren")
+            return v
+        raise ValueError("syntax")
+
+    v = expr()
+    if pos != len(toks):
+        raise ValueError("trailing")
+    return v
+--- test
+import pytest
+from mod import evaluate
+
+
+@pytest.mark.parametrize("s,want", [
+    ("2+3*4", 14), ("(2+3)*4", 20), ("2^3^2", 512), ("-2^2", -4), ("2^-1", 0.5), ("-2*3", -6),
+    ("2*-3", -6), ("10/4", 2.5), ("1.5+.5", 2.0), ("--3", 3), ("2 * (3 + 4) - 5", 9), ("8/4/2", 1),
+    ("10-4-3", 3), ("2^2*3", 12), ("+5", 5), ("-(1+2)^2", -9),
+])
+def test_values(s, want):
+    assert evaluate(s) == pytest.approx(want)
+
+
+@pytest.mark.parametrize("s", ["", "  ", "2+", "(2", "2)", "2 3", "2 $ 3", "abc", "*3", "()", "2^", "1..2"])
+def test_syntax_errors(s):
+    with pytest.raises(ValueError):
+        evaluate(s)
+
+
+def test_division_by_zero():
+    with pytest.raises(ZeroDivisionError):
+        evaluate("1/0")
+    with pytest.raises(ZeroDivisionError):
+        evaluate("4/(2-2)")
+
+
+### h_autocomplete
+--- ticket
+Autocomplete stores words (any characters, including punctuation, compared case-insensitively and kept lower-cased). add(word, weight=1) adds `weight` to the word's total (adding the same word again accumulates). remove(word) deletes the word and its weight and returns True, or returns False if it is not stored. suggest(prefix, k=5) returns up to k stored words that start with prefix (case-insensitive; the prefix itself counts if it is a stored word), best first: higher total weight first, equal weights in alphabetical order. k <= 0 gives []. len(ac) is the number of stored words.
+Observed: re-adding a word resets its weight, equal-weight words come out in reverse alphabetical order, suggest returns k-1 words, upper-case prefixes find nothing, and words containing "$" get mixed up.
+--- src
+class Autocomplete:
+    def __init__(self):
+        self.root = {}
+        self.size = 0
+
+    def add(self, word, weight=1):
+        node = self.root
+        for ch in word.lower():
+            node = node.setdefault(ch, {})
+        if "$" not in node:
+            self.size += 1
+        node["$"] = weight
+
+    def remove(self, word):
+        node = self.root
+        for ch in word.lower():
+            if ch not in node:
+                return False
+            node = node[ch]
+        if "$" not in node:
+            return False
+        del node["$"]
+        self.size -= 1
+        return True
+
+    def suggest(self, prefix, k=5):
+        node = self.root
+        for ch in prefix:
+            if ch not in node:
+                return []
+            node = node[ch]
+        found = []
+
+        def walk(n, acc):
+            for key, child in n.items():
+                if key == "$":
+                    found.append((child, acc))
+                else:
+                    walk(child, acc + key)
+
+        walk(node, prefix)
+        found.sort(reverse=True)
+        return [w for _, w in found[:k - 1]]
+
+    def __len__(self):
+        return self.size
+--- fix
+END = object()
+
+
+class Autocomplete:
+    def __init__(self):
+        self.root = {}
+        self.size = 0
+
+    def add(self, word, weight=1):
+        node = self.root
+        for ch in word.lower():
+            node = node.setdefault(ch, {})
+        if END not in node:
+            self.size += 1
+            node[END] = 0
+        node[END] += weight
+
+    def remove(self, word):
+        node = self.root
+        for ch in word.lower():
+            if ch not in node:
+                return False
+            node = node[ch]
+        if END not in node:
+            return False
+        del node[END]
+        self.size -= 1
+        return True
+
+    def suggest(self, prefix, k=5):
+        if k <= 0:
+            return []
+        prefix = prefix.lower()
+        node = self.root
+        for ch in prefix:
+            if ch not in node:
+                return []
+            node = node[ch]
+        found = []
+
+        def walk(n, acc):
+            for key, child in n.items():
+                if key is END:
+                    found.append((-child, acc))
+                else:
+                    walk(child, acc + key)
+
+        walk(node, prefix)
+        found.sort()
+        return [w for _, w in found[:k]]
+
+    def __len__(self):
+        return self.size
+--- test
+from mod import Autocomplete
+
+
+def build():
+    ac = Autocomplete()
+    ac.add("apple", 3)
+    ac.add("app", 5)
+    ac.add("apply")
+    ac.add("Apple", 2)
+    return ac
+
+
+def test_accumulate_and_order():
+    ac = build()
+    assert len(ac) == 3
+    assert ac.suggest("app") == ["app", "apple", "apply"]
+    assert ac.suggest("APP", 2) == ["app", "apple"]
+    assert ac.suggest("ap", 10) == ["app", "apple", "apply"]
+    assert ac.suggest("apple") == ["apple"]
+
+
+def test_k_and_misses():
+    ac = build()
+    assert ac.suggest("app", 0) == []
+    assert ac.suggest("app", 1) == ["app"]
+    assert ac.suggest("zzz") == []
+    assert ac.suggest("appleton") == []
+
+
+def test_remove():
+    ac = build()
+    assert ac.remove("APPLE") is True
+    assert ac.remove("apple") is False
+    assert len(ac) == 2
+    assert ac.suggest("appl") == ["apply"]
+    ac.add("apple")
+    assert ac.suggest("app") == ["app", "apple", "apply"]
+    assert ac.remove("ap") is False
+    assert len(ac) == 3
+
+
+def test_special_characters():
+    ac = Autocomplete()
+    ac.add("a$", 2)
+    ac.add("a")
+    ac.add("a$b", 3)
+    assert ac.suggest("a") == ["a$b", "a$", "a"]
+    assert ac.suggest("a$") == ["a$b", "a$"]
+    assert len(ac) == 3
+
+
+def test_empty_prefix():
+    ac = Autocomplete()
+    ac.add("b")
+    ac.add("a", 2)
+    assert ac.suggest("") == ["a", "b"]
+
+
+### h_money_split
+--- ticket
+split(total, weights) divides `total` cents (a non-negative int) between people in proportion to their integer weights and returns a list of ints (same length as weights) that always sums to exactly `total`. Each person first gets floor(total * weight / sum(weights)); the cents still left over are handed out one each to the people with the largest fractional remainders, ties going to the lower index. A weight of 0 gets 0. A negative total, a negative weight, or weights that sum to 0 raise ValueError.
+Observed: shares are sometimes off by a cent against each other, the last person always absorbs the rounding, and huge totals lose cents.
+--- src
+def split(total, weights):
+    W = sum(weights)
+    shares = [round(total * w / W) for w in weights]
+    shares[-1] += total - sum(shares)
+    return shares
+--- fix
+def split(total, weights):
+    if total < 0 or any(w < 0 for w in weights) or sum(weights) <= 0:
+        raise ValueError("bad input")
+    W = sum(weights)
+    shares = [total * w // W for w in weights]
+    rem = [total * w % W for w in weights]
+    left = total - sum(shares)
+    for i in sorted(range(len(weights)), key=lambda i: (-rem[i], i))[:left]:
+        shares[i] += 1
+    return shares
+--- test
+import pytest
+from mod import split
+
+
+def test_basic_remainders():
+    assert split(100, [1, 1, 1]) == [34, 33, 33]
+    assert split(10, [1, 2]) == [3, 7]
+    assert split(5, [1, 1]) == [3, 2]
+    assert split(0, [1, 2]) == [0, 0]
+
+
+def test_largest_remainder_then_lower_index():
+    assert split(7, [1, 1, 5]) == [1, 1, 5]
+    assert split(10, [3, 3, 3, 1]) == [3, 3, 3, 1]
+    assert split(2, [1, 1, 1]) == [1, 1, 0]
+    assert split(100, [2, 1]) == [67, 33]
+
+
+def test_zero_weights_get_zero():
+    assert split(1, [0, 5, 0]) == [0, 1, 0]
+    assert split(9, [0, 1, 0, 1]) == [0, 5, 0, 4]
+
+
+def test_sum_always_exact_even_for_huge_totals():
+    big = 10 ** 18
+    got = split(big, [1, 1, 1])
+    assert got == [333333333333333334, 333333333333333333, 333333333333333333]
+    for total in range(0, 60):
+        assert sum(split(total, [3, 5, 7, 11])) == total
+
+
+def test_validation():
+    for args in [(-1, [1]), (5, [0, 0]), (5, [1, -1, 3]), (5, [])]:
+        with pytest.raises(ValueError):
+            split(*args)
+
+
+### h_ttl_cache
+--- ticket
+TTLCache(capacity, ttl) is an LRU cache whose entries also expire. put(key, value, now) stores the value until now + ttl (an entry is expired when now >= stored_at + ttl); putting an existing key replaces the value, restarts its ttl and makes it the most recently used. get(key, now) returns the value, or None if missing or expired (expired entries are removed); a hit makes the key most recently used but does NOT extend its ttl. When a put needs room for a NEW key: first drop every expired entry, and only if the cache is still full evict the least recently used live entry. Updating an existing key never evicts anything. size(now) is the number of live entries. capacity <= 0 stores nothing.
+Observed: an updated key evicts a neighbour, live entries are evicted while expired ones stay, size() counts dead entries, and entries are returned at the instant they expire.
+--- src
+from collections import OrderedDict
+
+
+class TTLCache:
+    def __init__(self, capacity, ttl):
+        self.cap = capacity
+        self.ttl = ttl
+        self.d = OrderedDict()
+
+    def get(self, key, now):
+        if key not in self.d:
+            return None
+        v, exp = self.d[key]
+        if now > exp:
+            del self.d[key]
+            return None
+        return v
+
+    def put(self, key, value, now):
+        if len(self.d) >= self.cap:
+            self.d.popitem(last=False)
+        self.d[key] = (value, now + self.ttl)
+
+    def size(self, now):
+        return len(self.d)
+--- fix
+from collections import OrderedDict
+
+
+class TTLCache:
+    def __init__(self, capacity, ttl):
+        self.cap = capacity
+        self.ttl = ttl
+        self.d = OrderedDict()
+
+    def _purge(self, now):
+        for k in [k for k, (_, e) in self.d.items() if now >= e]:
+            del self.d[k]
+
+    def get(self, key, now):
+        if key not in self.d:
+            return None
+        v, exp = self.d[key]
+        if now >= exp:
+            del self.d[key]
+            return None
+        self.d.move_to_end(key)
+        return v
+
+    def put(self, key, value, now):
+        if self.cap <= 0:
+            return
+        self._purge(now)
+        if key in self.d:
+            del self.d[key]
+        elif len(self.d) >= self.cap:
+            self.d.popitem(last=False)
+        self.d[key] = (value, now + self.ttl)
+
+    def size(self, now):
+        self._purge(now)
+        return len(self.d)
+--- test
+from mod import TTLCache
+
+
+def test_expiry_boundary_and_size():
+    c = TTLCache(3, 10)
+    c.put("a", 1, 0)
+    c.put("b", 1, 5)
+    assert c.get("a", 9) == 1
+    assert c.get("a", 10) is None
+    assert c.size(10) == 1
+    assert c.size(15) == 0
+
+
+def test_hit_refreshes_recency_not_ttl():
+    c = TTLCache(2, 10)
+    c.put("a", "A", 0)
+    c.put("b", "B", 1)
+    assert c.get("a", 5) == "A"
+    c.put("c", "C", 6)
+    assert c.get("b", 6) is None
+    assert c.get("a", 6) == "A"
+    assert c.get("a", 10) is None
+
+
+def test_update_never_evicts_and_restarts_ttl():
+    c = TTLCache(2, 10)
+    c.put("a", 1, 0)
+    c.put("b", 1, 1)
+    c.put("a", 2, 5)
+    assert c.get("b", 6) == 1
+    assert c.get("a", 14) == 2
+    c.put("c", 3, 7)
+    assert c.get("b", 7) is None
+    assert c.get("a", 7) == 2
+
+
+def test_expired_dropped_before_live_evicted():
+    c = TTLCache(2, 10)
+    c.put("x", 1, 5)
+    c.put("y", 1, 0)
+    c.get("x", 6)
+    c.put("z", 1, 12)
+    assert c.get("x", 12) == 1
+    assert c.get("z", 12) == 1
+    assert c.size(12) == 2
+
+
+def test_zero_capacity():
+    c = TTLCache(0, 10)
+    c.put("a", 1, 0)
+    assert c.get("a", 0) is None
+    assert c.size(0) == 0

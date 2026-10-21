@@ -1,0 +1,490 @@
+### csv_line
+--- ticket
+`parse_csv_line('a,"b,c",d')` returns four fields instead of three. Quoted fields with commas must stay whole.
+--- src
+def parse_csv_line(line):
+    """Split one CSV line into fields. A field may be wrapped in double quotes, in which case commas inside it are kept and a doubled quote ("") is a literal quote. Unquoted fields are returned as-is (not stripped). A trailing comma gives a final empty field. The empty line gives ['']."""
+    return line.split(",")
+--- fix
+import csv
+
+
+def parse_csv_line(line):
+    """Split one CSV line into fields. A field may be wrapped in double quotes, in which case commas inside it are kept and a doubled quote ("") is a literal quote. Unquoted fields are returned as-is (not stripped). A trailing comma gives a final empty field. The empty line gives ['']."""
+    return next(csv.reader([line]), None) or [""]
+--- test
+from mod import parse_csv_line
+
+
+def test_plain():
+    assert parse_csv_line("a,b,c") == ["a", "b", "c"]
+    assert parse_csv_line(" a , b ") == [" a ", " b "]
+
+
+def test_quotes():
+    assert parse_csv_line('a,"b,c",d') == ["a", "b,c", "d"]
+    assert parse_csv_line('"say ""hi""",x') == ['say "hi"', "x"]
+    assert parse_csv_line('"",x') == ["", "x"]
+
+
+def test_empties():
+    assert parse_csv_line("a,") == ["a", ""]
+    assert parse_csv_line("") == [""]
+    assert parse_csv_line(",") == ["", ""]
+
+### compare_versions
+--- ticket
+`compare_versions("1.10", "1.9")` returns -1. Version 1.10 is newer than 1.9. Versions like `1.0` and `1.0.0` should be equal.
+--- src
+def compare_versions(a, b):
+    """Compare dotted numeric versions: -1 if a < b, 0 if equal, 1 if a > b. Compare each part as a number ('1.10' > '1.9', '01.2' == '1.2'). Missing trailing parts count as 0 ('1.0' == '1.0.0'). Empty or non-numeric parts raise ValueError."""
+    return (a > b) - (a < b)
+--- fix
+def compare_versions(a, b):
+    """Compare dotted numeric versions: -1 if a < b, 0 if equal, 1 if a > b. Compare each part as a number ('1.10' > '1.9', '01.2' == '1.2'). Missing trailing parts count as 0 ('1.0' == '1.0.0'). Empty or non-numeric parts raise ValueError."""
+    pa, pb = [int(p) for p in a.split(".")], [int(p) for p in b.split(".")]
+    n = max(len(pa), len(pb))
+    pa += [0] * (n - len(pa))
+    pb += [0] * (n - len(pb))
+    return (pa > pb) - (pa < pb)
+--- test
+import pytest
+from mod import compare_versions
+
+
+@pytest.mark.parametrize("a,b,r", [
+    ("1.10", "1.9", 1), ("1.9", "1.10", -1), ("1.0", "1.0.0", 0), ("2", "10", -1),
+    ("1.2.3", "1.2.4", -1), ("01.2", "1.2", 0), ("1.0.1", "1.0", 1), ("0.0", "0", 0),
+])
+def test_compare(a, b, r):
+    assert compare_versions(a, b) == r
+
+
+@pytest.mark.parametrize("a,b", [("1.", "1"), ("1.x", "1"), ("", "1"), ("1", "1..2"), ("1", "a")])
+def test_invalid(a, b):
+    with pytest.raises(ValueError):
+        compare_versions(a, b)
+
+### business_days
+--- ticket
+`business_days(date(2024, 1, 6), date(2024, 1, 14))` (Saturday to the following Sunday, end excluded) returns 6; there are only 5 working days in it. The weekend maths is wrong when the range starts on a weekend.
+--- src
+from datetime import date, timedelta
+
+
+def business_days(start, end):
+    """Number of Monday-to-Friday days from start up to but excluding end (both datetime.date). 0 if end <= start. Holidays are ignored."""
+    days = (end - start).days
+    return days - 2 * (days // 7)
+--- fix
+from datetime import date, timedelta
+
+
+def business_days(start, end):
+    """Number of Monday-to-Friday days from start up to but excluding end (both datetime.date). 0 if end <= start. Holidays are ignored."""
+    return sum(1 for i in range(max(0, (end - start).days)) if (start + timedelta(days=i)).weekday() < 5)
+--- test
+from datetime import date
+
+import pytest
+from mod import business_days
+
+D = date
+
+
+@pytest.mark.parametrize("s,e,n", [
+    (D(2024, 1, 1), D(2024, 1, 8), 5),
+    (D(2024, 1, 1), D(2024, 1, 6), 5),
+    (D(2024, 1, 6), D(2024, 1, 8), 0),
+    (D(2024, 1, 5), D(2024, 1, 8), 1),
+    (D(2024, 1, 3), D(2024, 1, 17), 10),
+    (D(2024, 1, 6), D(2024, 1, 14), 5),
+    (D(2024, 1, 7), D(2024, 1, 8), 0),
+    (D(2024, 1, 1), D(2024, 1, 2), 1),
+])
+def test_counts(s, e, n):
+    assert business_days(s, e) == n
+
+
+def test_empty_and_reversed():
+    assert business_days(D(2024, 1, 1), D(2024, 1, 1)) == 0
+    assert business_days(D(2024, 1, 10), D(2024, 1, 1)) == 0
+
+### truncate
+--- ticket
+`truncate("hello world foo", 11)` returns a 14-character string. The limit must include the trailing ellipsis.
+--- src
+def truncate(text, limit):
+    """Shorten text to at most `limit` characters, ellipsis included. Text that already fits is returned unchanged. Otherwise return the longest run of whole words that, followed by '...', fits in limit. If not even the first word fits, hard-cut to limit-3 characters and add '...'. limit < 4 raises ValueError."""
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "..."
+--- fix
+def truncate(text, limit):
+    """Shorten text to at most `limit` characters, ellipsis included. Text that already fits is returned unchanged. Otherwise return the longest run of whole words that, followed by '...', fits in limit. If not even the first word fits, hard-cut to limit-3 characters and add '...'. limit < 4 raises ValueError."""
+    if limit < 4:
+        raise ValueError(limit)
+    if len(text) <= limit:
+        return text
+    room = limit - 3
+    cut = text[:room + 1].rpartition(" ")[0]
+    return (cut or text[:room]) + "..."
+--- test
+import pytest
+from mod import truncate
+
+
+def test_fits():
+    assert truncate("short", 10) == "short"
+    assert truncate("aa bb cc", 8) == "aa bb cc"
+
+
+def test_word_boundary():
+    assert truncate("hello world foo", 11) == "hello..."
+    assert truncate("aa bb cc dd", 8) == "aa bb..."
+    assert truncate("aa bb cc dd", 9) == "aa bb..."
+    assert truncate("aa bb cc dd", 10) == "aa bb..."
+    assert truncate("aa bb cc dd ee", 11) =="aa bb cc..."
+
+
+def test_hard_cut():
+    assert truncate("abcdefghij klm", 8) == "abcde..."
+
+
+def test_length_bound():
+    for lim in range(4, 20):
+        assert len(truncate("the quick brown fox jumps over the lazy dog", lim)) <= lim
+
+
+def test_small_limit():
+    for lim in (3, 0, -1):
+        with pytest.raises(ValueError):
+            truncate("whatever text", lim)
+
+### snake_to_camel
+--- ticket
+`snake_to_camel("get_HTTP_code")` returns `getHttpCode`, losing the acronym. Names with leading underscores like `_private_name` also break.
+--- src
+def snake_to_camel(name):
+    """Convert snake_case to lowerCamelCase. Leading and trailing underscores are preserved ('_private_name' -> '_privateName', 'name_' -> 'name_', '__init__' -> '__init__'). Runs of inner underscores are one separator ('a__b' -> 'aB'). Each word after the first only has its first character uppercased; the rest is untouched ('get_HTTP_code' -> 'getHTTPCode', 'x_2d' -> 'x2d'). A name made only of underscores is returned unchanged."""
+    parts = name.split("_")
+    return parts[0] + "".join(p.title() for p in parts[1:])
+--- fix
+def snake_to_camel(name):
+    """Convert snake_case to lowerCamelCase. Leading and trailing underscores are preserved ('_private_name' -> '_privateName', 'name_' -> 'name_', '__init__' -> '__init__'). Runs of inner underscores are one separator ('a__b' -> 'aB'). Each word after the first only has its first character uppercased; the rest is untouched ('get_HTTP_code' -> 'getHTTPCode', 'x_2d' -> 'x2d'). A name made only of underscores is returned unchanged."""
+    core = name.strip("_")
+    if not core:
+        return name
+    lead = name[:len(name) - len(name.lstrip("_"))]
+    trail = name[len(name.rstrip("_")):]
+    words = [w for w in core.split("_") if w]
+    return lead + words[0] + "".join(w[:1].upper() + w[1:] for w in words[1:]) + trail
+--- test
+import pytest
+from mod import snake_to_camel
+
+
+@pytest.mark.parametrize("s,r", [
+    ("user_id", "userId"), ("single", "single"), ("a_b_c", "aBC"), ("get_HTTP_code", "getHTTPCode"),
+    ("x_2d", "x2d"), ("a__b", "aB"), ("_private_name", "_privateName"), ("name_", "name_"),
+    ("__init__", "__init__"), ("__a_b__", "__aB__"), ("", ""), ("_", "_"), ("___", "___"),
+])
+def test_cases(s, r):
+    assert snake_to_camel(s) == r
+
+### top_k
+--- ticket
+`top_k({"b": 5, "a": 5, "c": 9}, 2)` returns `["c", "b"]` — with equal scores the order depends on insertion. We need alphabetical tie-breaks. Negative k also returns junk.
+--- src
+def top_k(scores, k):
+    """scores: dict name -> number. Return the k best names, highest score first; equal scores are ordered alphabetically by name. k larger than len(scores) returns all names; k <= 0 returns []."""
+    ranked = sorted(scores, key=lambda n: scores[n], reverse=True)
+    return ranked[:k]
+--- fix
+def top_k(scores, k):
+    """scores: dict name -> number. Return the k best names, highest score first; equal scores are ordered alphabetically by name. k larger than len(scores) returns all names; k <= 0 returns []."""
+    ranked = sorted(scores, key=lambda n: (-scores[n], n))
+    return ranked[:max(k, 0)]
+--- test
+from mod import top_k
+
+
+def test_ties_alphabetical():
+    assert top_k({"b": 5, "a": 5, "c": 9}, 2) == ["c", "a"]
+    assert top_k({"z": 1, "y": 1, "x": 1}, 3) == ["x", "y", "z"]
+
+
+def test_k_bounds():
+    s = {"a": 1, "b": 2}
+    assert top_k(s, 0) == []
+    assert top_k(s, -1) == []
+    assert top_k(s, 10) == ["b", "a"]
+    assert top_k({}, 3) == []
+
+
+def test_numbers():
+    assert top_k({"a": -1.5, "b": -2, "c": 0}, 3) == ["c", "a", "b"]
+
+### ring_buffer
+--- ticket
+After pushing 1, 2, 3, 4 into a `RingBuffer(3)`, `items()` returns `[4, 2, 3]` and `pop()` returns 4. Overwriting the oldest value must make the next-oldest the head.
+--- src
+class RingBuffer:
+    """Fixed-capacity FIFO queue. push() appends; when full, the oldest item is overwritten. pop() removes and returns the oldest item, raising IndexError when empty. len() is the current item count. items() returns the contents oldest to newest. capacity < 1 raises ValueError."""
+
+    def __init__(self, capacity):
+        self.buf = [None] * capacity
+        self.head = 0
+        self.size = 0
+
+    def push(self, x):
+        self.buf[(self.head + self.size) % len(self.buf)] = x
+        if self.size < len(self.buf):
+            self.size += 1
+
+    def pop(self):
+        if self.size == 0:
+            raise IndexError("empty")
+        x = self.buf[self.head]
+        self.head += 1
+        self.size -= 1
+        return x
+
+    def __len__(self):
+        return self.size
+
+    def items(self):
+        return [self.buf[(self.head + i) % len(self.buf)] for i in range(self.size)]
+--- fix
+class RingBuffer:
+    """Fixed-capacity FIFO queue. push() appends; when full, the oldest item is overwritten. pop() removes and returns the oldest item, raising IndexError when empty. len() is the current item count. items() returns the contents oldest to newest. capacity < 1 raises ValueError."""
+
+    def __init__(self, capacity):
+        if capacity < 1:
+            raise ValueError(capacity)
+        self.buf = [None] * capacity
+        self.head = 0
+        self.size = 0
+
+    def push(self, x):
+        cap = len(self.buf)
+        self.buf[(self.head + self.size) % cap] = x
+        if self.size < cap:
+            self.size += 1
+        else:
+            self.head = (self.head + 1) % cap
+
+    def pop(self):
+        if self.size == 0:
+            raise IndexError("empty")
+        x = self.buf[self.head]
+        self.head = (self.head + 1) % len(self.buf)
+        self.size -= 1
+        return x
+
+    def __len__(self):
+        return self.size
+
+    def items(self):
+        return [self.buf[(self.head + i) % len(self.buf)] for i in range(self.size)]
+--- test
+import pytest
+from mod import RingBuffer
+
+
+def test_overwrite_oldest():
+    r = RingBuffer(3)
+    for i in (1, 2, 3, 4):
+        r.push(i)
+    assert r.items() == [2, 3, 4]
+    assert len(r) == 3
+    assert r.pop() == 2
+    assert r.items() == [3, 4]
+
+
+def test_wrap_around_many_times():
+    r = RingBuffer(2)
+    for i in range(10):
+        r.push(i)
+    assert r.items() == [8, 9]
+    assert r.pop() == 8
+    r.push(10)
+    r.push(11)
+    assert r.items() == [10, 11]
+
+
+def test_empty_and_capacity():
+    r = RingBuffer(2)
+    with pytest.raises(IndexError):
+        r.pop()
+    r.push(1)
+    assert r.pop() == 1
+    with pytest.raises(IndexError):
+        r.pop()
+    for bad in (0, -1):
+        with pytest.raises(ValueError):
+            RingBuffer(bad)
+
+### transpose
+--- ticket
+`transpose([[1, 2, 3], [4, 5]])` quietly returns `[[1, 4], [2, 5]]` and drops the 3. A ragged matrix is a caller bug and should be reported.
+--- src
+def transpose(rows):
+    """Transpose a list of equal-length rows into a list of lists. Rows of different lengths raise ValueError. transpose([]) is [] and a matrix of empty rows ([[], []]) is []."""
+    return [list(col) for col in zip(*rows)]
+--- fix
+def transpose(rows):
+    """Transpose a list of equal-length rows into a list of lists. Rows of different lengths raise ValueError. transpose([]) is [] and a matrix of empty rows ([[], []]) is []."""
+    if len({len(r) for r in rows}) > 1:
+        raise ValueError("ragged")
+    return [list(col) for col in zip(*rows)]
+--- test
+import pytest
+from mod import transpose
+
+
+def test_shapes():
+    assert transpose([[1, 2, 3], [4, 5, 6]]) == [[1, 4], [2, 5], [3, 6]]
+    assert transpose([[1]]) == [[1]]
+    assert transpose([[1], [2], [3]]) == [[1, 2, 3]]
+
+
+def test_empties():
+    assert transpose([]) == []
+    assert transpose([[], []]) == []
+
+
+@pytest.mark.parametrize("bad", [[[1, 2, 3], [4, 5]], [[1], [2, 3]], [[], [1]]])
+def test_ragged(bad):
+    with pytest.raises(ValueError):
+        transpose(bad)
+
+### rate_limiter
+--- ticket
+After a burst of blocked calls the limiter never recovers: `allow()` keeps returning False long after the window has passed. Rejected calls must not count against the limit.
+--- src
+class RateLimiter:
+    """Allow at most `limit` events in any sliding window of `window` seconds. allow(now) returns True and records the event when allowed; when not allowed it returns False and records nothing. An event exactly `window` seconds old no longer counts. Timestamps never decrease."""
+
+    def __init__(self, limit, window):
+        self.limit, self.window, self.events = limit, window, []
+
+    def allow(self, now):
+        self.events = [t for t in self.events if now - t < self.window]
+        self.events.append(now)
+        return len(self.events) <= self.limit
+--- fix
+class RateLimiter:
+    """Allow at most `limit` events in any sliding window of `window` seconds. allow(now) returns True and records the event when allowed; when not allowed it returns False and records nothing. An event exactly `window` seconds old no longer counts. Timestamps never decrease."""
+
+    def __init__(self, limit, window):
+        self.limit, self.window, self.events = limit, window, []
+
+    def allow(self, now):
+        self.events = [t for t in self.events if now - t < self.window]
+        if len(self.events) >= self.limit:
+            return False
+        self.events.append(now)
+        return True
+--- test
+from mod import RateLimiter
+
+
+def test_blocks_and_recovers():
+    r = RateLimiter(2, 10)
+    assert [r.allow(0), r.allow(1), r.allow(2), r.allow(3)] == [True, True, False, False]
+    assert r.allow(10) is True
+    assert r.allow(10.5) is False
+    assert r.allow(11) is True
+
+
+def test_rejections_not_recorded():
+    r = RateLimiter(1, 5)
+    assert r.allow(0) is True
+    for t in (1, 2, 3, 4):
+        assert r.allow(t) is False
+    assert r.allow(5) is True
+
+
+def test_zero_limit():
+    r = RateLimiter(0, 5)
+    assert r.allow(0) is False
+
+### retry
+--- ticket
+`retry(fn, attempts=3)` only calls `fn` twice, and when all attempts fail it returns None instead of raising the last error. It also sleeps after the final failure.
+--- src
+import time
+
+
+def retry(fn, attempts=3, delay=0.0, exceptions=(Exception,), sleep=time.sleep):
+    """Call fn() up to `attempts` times in total and return its first successful result. Only exceptions in `exceptions` trigger a retry; any other exception propagates immediately. Call sleep(delay) between attempts, but not after the last one. If every attempt fails, re-raise the last exception. attempts < 1 raises ValueError."""
+    for i in range(attempts - 1):
+        try:
+            return fn()
+        except exceptions:
+            sleep(delay)
+--- fix
+import time
+
+
+def retry(fn, attempts=3, delay=0.0, exceptions=(Exception,), sleep=time.sleep):
+    """Call fn() up to `attempts` times in total and return its first successful result. Only exceptions in `exceptions` trigger a retry; any other exception propagates immediately. Call sleep(delay) between attempts, but not after the last one. If every attempt fails, re-raise the last exception. attempts < 1 raises ValueError."""
+    if attempts < 1:
+        raise ValueError(attempts)
+    for i in range(attempts):
+        try:
+            return fn()
+        except exceptions:
+            if i == attempts - 1:
+                raise
+            sleep(delay)
+--- test
+import pytest
+from mod import retry
+
+
+def flaky(fail_times):
+    calls = []
+
+    def fn():
+        calls.append(1)
+        if len(calls) <= fail_times:
+            raise RuntimeError(str(len(calls)))
+        return "ok"
+
+    return fn, calls
+
+
+def test_succeeds_after_failures():
+    fn, calls = flaky(2)
+    assert retry(fn, attempts=3, sleep=lambda d: None) == "ok"
+    assert len(calls) == 3
+
+
+def test_exhausted_reraises_last():
+    fn, calls = flaky(10)
+    sleeps = []
+    with pytest.raises(RuntimeError, match="3"):
+        retry(fn, attempts=3, delay=0.5, sleep=sleeps.append)
+    assert len(calls) == 3
+    assert sleeps == [0.5, 0.5]
+
+
+def test_unlisted_exception_propagates_at_once():
+    calls = []
+
+    def fn():
+        calls.append(1)
+        raise KeyError("k")
+
+    with pytest.raises(KeyError):
+        retry(fn, attempts=5, exceptions=(ValueError,), sleep=lambda d: None)
+    assert len(calls) == 1
+
+
+def test_single_attempt_and_invalid():
+    fn, calls = flaky(0)
+    assert retry(fn, attempts=1) == "ok"
+    with pytest.raises(ValueError):
+        retry(fn, attempts=0)

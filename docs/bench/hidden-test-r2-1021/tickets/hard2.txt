@@ -1,0 +1,329 @@
+### h_visibility_queue
+--- ticket
+VisQueue(timeout) is a work queue with a visibility timeout, driven by a `now` argument. send(payload) returns an id (1, 2, ...). receive(now) returns (id, payload) for the lowest-id message that is visible, or None. A message is visible when its visible_at <= now (new messages are visible from time 0); receiving it hides it until now + timeout. ack(id, now) deletes a message and returns True only if the message exists and is currently held (received and now < visible_at); otherwise it returns False and changes nothing (an expired hold means someone else may get it, so a late ack must not delete it). extend(id, now, extra) sets visible_at = now + extra and returns True only under the same held condition, else False. A message may be delivered at most 3 times: when receive reaches a message that is visible again after 3 deliveries it moves it to the list q.dead as (id, payload) instead of delivering it and carries on with the next message.
+Observed: a message sent at time 0 cannot be received at time 0, a message is redelivered one tick late, ack of an expired or unknown id raises or deletes the wrong thing, extend pushes the deadline out from the old value, and poison messages are redelivered forever.
+--- src
+class VisQueue:
+    def __init__(self, timeout):
+        self.timeout = timeout
+        self.items = {}
+        self.dead = []
+        self.n = 0
+
+    def send(self, payload):
+        self.n += 1
+        self.items[self.n] = [payload, 0, 0]
+        return self.n
+
+    def receive(self, now):
+        for mid in sorted(self.items):
+            payload, vis, cnt = self.items[mid]
+            if vis < now:
+                self.items[mid] = [payload, now + self.timeout, cnt + 1]
+                return mid, payload
+        return None
+
+    def ack(self, mid, now):
+        del self.items[mid]
+        return True
+
+    def extend(self, mid, now, extra):
+        self.items[mid][1] += extra
+        return True
+--- fix
+class VisQueue:
+    MAX_RECEIVES = 3
+
+    def __init__(self, timeout):
+        self.timeout = timeout
+        self.items = {}
+        self.dead = []
+        self.n = 0
+
+    def send(self, payload):
+        self.n += 1
+        self.items[self.n] = [payload, 0, 0]
+        return self.n
+
+    def receive(self, now):
+        for mid in sorted(self.items):
+            payload, vis, cnt = self.items[mid]
+            if vis > now:
+                continue
+            if cnt >= self.MAX_RECEIVES:
+                self.dead.append((mid, payload))
+                del self.items[mid]
+                continue
+            self.items[mid] = [payload, now + self.timeout, cnt + 1]
+            return mid, payload
+        return None
+
+    def _held(self, mid, now):
+        it = self.items.get(mid)
+        return it is not None and it[2] > 0 and now < it[1]
+
+    def ack(self, mid, now):
+        if not self._held(mid, now):
+            return False
+        del self.items[mid]
+        return True
+
+    def extend(self, mid, now, extra):
+        if not self._held(mid, now):
+            return False
+        self.items[mid][1] = now + extra
+        return True
+--- test
+from mod import VisQueue
+
+
+def test_visibility_and_ack():
+    q = VisQueue(10)
+    a, b = q.send("a"), q.send("b")
+    assert (a, b) == (1, 2)
+    assert q.receive(0) == (a, "a")
+    assert q.receive(0) == (b, "b")
+    assert q.receive(0) is None
+    assert q.receive(9) is None
+    assert q.receive(10) == (a, "a")
+    assert q.ack(b, 5) is True
+    assert q.ack(b, 5) is False
+    assert q.ack(99, 5) is False
+
+
+def test_late_ack_does_not_delete():
+    q = VisQueue(10)
+    a = q.send("a")
+    q.receive(0)
+    assert q.ack(a, 10) is False
+    assert q.receive(10) == (a, "a")
+    assert q.ack(a, 19) is True
+
+
+def test_ack_of_never_received_message():
+    q = VisQueue(10)
+    a = q.send("a")
+    assert q.ack(a, 0) is False
+    assert q.receive(0) == (a, "a")
+
+
+def test_extend_from_now():
+    q = VisQueue(10)
+    a = q.send("a")
+    q.receive(0)
+    assert q.extend(a, 4, 20) is True
+    assert q.receive(23) is None
+    assert q.receive(24) == (a, "a")
+    assert q.extend(a, 40, 5) is False
+
+
+def test_dead_letter_after_three_deliveries():
+    q = VisQueue(10)
+    x = q.send("x")
+    for t in (0, 10, 20):
+        assert q.receive(t) == (x, "x")
+    y = q.send("y")
+    assert q.receive(25) == (y, "y")
+    assert q.receive(30) is None
+    assert q.dead == [(x, "x")]
+    assert q.ack(x, 30) is False
+    assert q.receive(35) == (y, "y")
+
+
+### h_wrap
+--- ticket
+wrap(text, width) returns a list of lines, each at most `width` characters. Words are separated by any whitespace (runs collapse to one space); a line is filled greedily and a line of exactly `width` characters is fine. A word longer than `width` is cut into pieces of `width` characters; the short remainder starts a new line that later words may continue. Paragraphs are separated by one or more blank lines; the result has exactly one "" between paragraphs. Empty or blank text gives []. width < 1 raises ValueError.
+Observed: lines stop one character short of the width, a word that exactly fills the width produces an empty line before it, long words overflow, and paragraph breaks are lost.
+--- src
+def wrap(text, width):
+    lines, line = [], ""
+    for w in text.split():
+        if len(line) + 1 + len(w) < width:
+            line = (line + " " + w).strip()
+        else:
+            lines.append(line)
+            line = w
+    lines.append(line)
+    return lines
+--- fix
+import re
+
+
+def wrap(text, width):
+    if width < 1:
+        raise ValueError("width")
+    paras = [p.split() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    out = []
+    for i, words in enumerate(paras):
+        if i:
+            out.append("")
+        line = ""
+        for w in words:
+            while len(w) > width:
+                if line:
+                    out.append(line)
+                    line = ""
+                out.append(w[:width])
+                w = w[width:]
+            if not line:
+                line = w
+            elif len(line) + 1 + len(w) <= width:
+                line += " " + w
+            else:
+                out.append(line)
+                line = w
+        if line:
+            out.append(line)
+    return out
+--- test
+import pytest
+from mod import wrap
+
+
+def test_exact_fill():
+    assert wrap("aaa bbb ccc", 7) == ["aaa bbb", "ccc"]
+    assert wrap("abc def", 3) == ["abc", "def"]
+
+
+def test_long_word_split_with_remainder_continuing():
+    assert wrap("abcdefgh x", 3) == ["abc", "def", "gh", "x"]
+    assert wrap("abcdefgh x", 4) == ["abcd", "efgh", "x"]
+    assert wrap("hi abcdefg y", 5) == ["hi", "abcde", "fg y"]
+
+
+def test_paragraphs_and_whitespace():
+    assert wrap("one two\n\n\nthree", 20) == ["one two", "", "three"]
+    assert wrap("a  b\nc", 5) == ["a b c"]
+    assert wrap("p1\n  \np2\n\np3", 9) == ["p1", "", "p2", "", "p3"]
+
+
+def test_empty_and_invalid():
+    assert wrap("", 5) == []
+    assert wrap("  \n \n", 5) == []
+    with pytest.raises(ValueError):
+        wrap("x", 0)
+
+
+### h_group_averages
+--- ticket
+group_averages(rows) takes (name, value) rows and returns a list of (label, average) sorted by name ignoring case. Names that differ only in letter case or surrounding whitespace are the same group; the label is the first spelling seen with surrounding whitespace removed. A value of None means "no reading" and is ignored (it is not zero and does not count); a group with no readings at all has average None. Values are numbers.
+Observed: the report lists both "North" and "north" as separate regions, regional averages come out too low, and a region with only missing readings shows 0.0.
+--- src
+def group_averages(rows):
+    sums, counts = {}, {}
+    for name, value in rows:
+        sums[name] = sums.get(name, 0) + (value or 0)
+        counts[name] = counts.get(name, 0) + 1
+    return sorted((n, sums[n] / counts[n]) for n in sums)
+--- fix
+def group_averages(rows):
+    groups = {}
+    for name, value in rows:
+        label = name.strip()
+        entry = groups.setdefault(label.casefold(), [label, []])
+        if value is not None:
+            entry[1].append(value)
+    return [(lab, sum(v) / len(v) if v else None) for _k, (lab, v) in sorted(groups.items())]
+--- test
+from mod import group_averages
+
+
+def test_case_and_whitespace_merge():
+    rows = [("North", 10), (" north", 20), ("south ", 5), ("NORTH ", 30)]
+    assert group_averages(rows) == [("North", 20.0), ("south", 5.0)]
+
+
+def test_none_ignored_and_all_none():
+    rows = [("a", 4), ("a", None), ("a", 8), ("b", None), ("B", None)]
+    assert group_averages(rows) == [("a", 6.0), ("b", None)]
+
+
+def test_sorted_ignoring_case_and_zero_values_count():
+    rows = [("beta", 0), ("Alpha", 2), ("beta", 4), ("alpha", 0)]
+    assert group_averages(rows) == [("Alpha", 1.0), ("beta", 2.0)]
+
+
+def test_empty():
+    assert group_averages([]) == []
+
+
+### h_config_env
+--- ticket
+load_config(defaults, env, prefix="APP_") returns a new config: defaults overridden by environment variables. A variable named PREFIX + PATH overrides the value at that path, where PATH is lower-cased and a double underscore separates nesting levels (APP_DB__MAX_CONNS overrides config["db"]["max_conns"]; a single underscore is part of the key name). The raw string is converted to the type of the default: bool accepts 1/true/yes/on and 0/false/no/off in any case and anything else raises ValueError; int and float are parsed; everything else stays a string. Variables without the prefix, and paths that do not exist in the defaults, are ignored. The defaults object must not be modified.
+Observed: APP_DEBUG=false turns debugging on, keys containing an underscore break the loader, an unknown variable crashes startup, and the defaults dict changes after loading.
+--- src
+def load_config(defaults, env, prefix="APP_"):
+    cfg = dict(defaults)
+    for k, raw in env.items():
+        if not k.startswith(prefix):
+            continue
+        path = k[len(prefix):].lower().split("_")
+        node = cfg
+        for p in path[:-1]:
+            node = node[p]
+        node[path[-1]] = type(node[path[-1]])(raw)
+    return cfg
+--- fix
+import copy
+
+
+def _coerce(raw, default):
+    if isinstance(default, bool):
+        low = raw.lower()
+        if low in ("1", "true", "yes", "on"):
+            return True
+        if low in ("0", "false", "no", "off"):
+            return False
+        raise ValueError(raw)
+    if isinstance(default, int):
+        return int(raw)
+    if isinstance(default, float):
+        return float(raw)
+    return raw
+
+
+def load_config(defaults, env, prefix="APP_"):
+    cfg = copy.deepcopy(defaults)
+    for k, raw in env.items():
+        if not k.startswith(prefix):
+            continue
+        path = k[len(prefix):].lower().split("__")
+        node = cfg
+        for p in path[:-1]:
+            node = node.get(p) if isinstance(node, dict) else None
+        if isinstance(node, dict) and path[-1] in node:
+            node[path[-1]] = _coerce(raw, node[path[-1]])
+    return cfg
+--- test
+import copy
+import pytest
+from mod import load_config
+
+DEFAULTS = {"debug": False, "name": "svc", "ratio": 0.5, "db": {"host": "localhost", "port": 5432, "max_conns": 10, "tls": True}}
+
+
+def test_overrides_and_types():
+    env = {"APP_DEBUG": "TRUE", "APP_DB__PORT": "6543", "APP_DB__MAX_CONNS": "20", "APP_RATIO": "1.5",
+           "APP_DB__TLS": "off", "APP_NAME": "other", "APP_DB__HOST": "db.example.com"}
+    cfg = load_config(DEFAULTS, env)
+    assert cfg == {"debug": True, "name": "other", "ratio": 1.5,
+                   "db": {"host": "db.example.com", "port": 6543, "max_conns": 20, "tls": False}}
+
+
+def test_ignored_variables():
+    env = {"OTHER": "1", "APP_NOPE": "x", "APP_DB__NOPE__DEEP": "1", "APP_NAME__X": "1", "APP_DB__PORT__X": "2"}
+    assert load_config(DEFAULTS, env) == DEFAULTS
+
+
+def test_defaults_not_modified():
+    snapshot = copy.deepcopy(DEFAULTS)
+    cfg = load_config(DEFAULTS, {"APP_DB__PORT": "1"})
+    assert cfg["db"]["port"] == 1
+    assert DEFAULTS == snapshot
+
+
+def test_bad_bool_and_custom_prefix():
+    with pytest.raises(ValueError):
+        load_config(DEFAULTS, {"APP_DEBUG": "maybe"})
+    assert load_config(DEFAULTS, {"X_DEBUG": "1", "APP_DEBUG": "1"}, prefix="X_")["debug"] is True
+    assert load_config(DEFAULTS, {"X_DEBUG": "1", "APP_DEBUG": "1"}, prefix="X_")["name"] == "svc"

@@ -391,6 +391,47 @@ Reproduce the flake and regression numbers with `bash scripts/test-train-flake-r
 
 Follow-up to H12. Reading Perun's R2 failures (counts only) found 5 of 13 over-claims were stale evidence (a check run before the last edit called `verified`) and the injected text never states that a claim needs a check run after the last edit over the whole claim. A 68-word rule saying so was added to the start of principle 2 in a bench arm (the skill itself was not edited), wording chosen on the R2 cases, then frozen by hash before any call and tested on 56 fresh fictional cases (107 items). Primary model Mistral-Small-3.2:24b, one run per arm: no skill 24.3% of items over-claimed, Perun without the rule 16.8%, Perun with the rule 17.8%, obra/superpowers 13.1%. Perun-with-rule minus superpowers is +4.7 points (95% interval 0.0 to +9.5), so it did not beat superpowers; Perun-with-rule minus Perun-without-rule is +0.9 (-1.9 to +4.5), so the rule changed nothing measurable. Stale evidence over-claimed 7 items in every arm including superpowers. Under-claim guardrail held (+4.7 over superpowers, 0.0 over old Perun). Preregistered KEEP needed the interval entirely below 0; verdict REVERT, skill text unchanged. Qwen3.5-397B-A17B (direction only): 15.9% none, 7.5% old Perun, 6.5% new, 5.6% superpowers; superpowers did better on stale evidence there (2 items against 5 to 6). Superpowers is ahead on point estimate; the primary interval (0.0 to +9.5) touches 0 and the Qwen interval includes 0, so this is not a significant loss either. Do not cite Perun as better on this axis. Gold written by the Perun side, one run per arm, about 1 point provider-side run-to-run variation. Deviations (one case near-duplicates an R2 case; the driver's helper `scripts/rival_eval.py` was not in the frozen list) are disclosed in the bench README; excluding the near-duplicate gives the same result (+4.8, 0.0 to +9.7). Method and tables: [`docs/bench/overclaim-r3-1021/README.md`](bench/overclaim-r3-1021/README.md).
 
+### H14. Hidden-test bug-fix outcome, five system-prompt arms, two splits (2026-10-21, free PCSS model, no paid call)
+
+Question: does skill text as the system prompt make a model fix more small Python bugs, judged by pytest tests the model never sees? Self-written tickets (buggy source, ticket text, hidden tests; fictional names), one free model (Qwen3.5-397B-A17B, non-thinking, temperature 0.7), 3 samples per ticket and arm, one turn, no tools. Arms: none; Perun (agentic-delivery plus the deep-code-review operating principles, definition of done and testing reference); perun-lean (about 0.56k tokens cut at run time from those same Perun files: the G4 and G5 gate rows, the `UNVERIFIED` rule, the change-approach-after-two-failures line and four principles); obra/superpowers (test-driven-development, systematic-debugging); addyosmani/agent-skills (test-driven-development, debugging-and-error-recovery). Rival texts are fetched at run time at the pinned commits in `docs/bench/hidden-test-1021/provenance.json` and are not committed. Score per ticket is the share of 3 samples whose corrected module passes every hidden test; CIs are 10,000-resample percentile bootstraps over tickets (seed 1), paired for differences (`results.json`). Splits are never pooled. The easy split (40 tickets) was at a ceiling, so a hard split (23 stateful, ordering, multi-bug and misleading-symptom tickets) was added.
+
+Easy split (40 tickets):
+
+| Arm | Hidden-test pass rate [95% CI] | Completion tokens per ticket | Prompt tokens per ticket |
+|---|---|---|---|
+| none | 0.867 [0.775, 0.950] | 387 | 298 |
+| Perun | 0.892 [0.800, 0.967] | 374 | 10,983 |
+| perun-lean | 0.917 [0.842, 0.975] | 592 | 858 |
+| superpowers | 0.925 [0.858, 0.983] | 1,035 | 5,135 |
+| agent-skills | 0.900 [0.808, 0.975] | 669 | 6,766 |
+
+Hard split (23 tickets):
+
+| Arm | Hidden-test pass rate [95% CI] | Completion tokens per ticket | Prompt tokens per ticket |
+|---|---|---|---|
+| none | 0.725 [0.565, 0.870] | 730 | 428 |
+| Perun | 0.536 [0.377, 0.696] | 678 | 11,113 |
+| perun-lean | 0.652 [0.507, 0.783] | 884 | 988 |
+| superpowers | 0.638 [0.478, 0.783] | 2,012 | 5,265 |
+| agent-skills | 0.638 [0.464, 0.797] | 1,136 | 6,896 |
+
+| A minus B (paired) | Easy: difference [95% CI] | Hard: difference [95% CI] |
+|---|---|---|
+| Perun - none | +0.025 [-0.033, +0.083] tie | -0.188 [-0.333, -0.043] none better |
+| perun-lean - none | +0.050 [0.000, +0.108] tie | -0.072 [-0.159, +0.014] tie |
+| superpowers - none | +0.058 [-0.008, +0.133] tie | -0.087 [-0.217, +0.029] tie |
+| agent-skills - none | +0.033 [-0.050, +0.125] tie | -0.087 [-0.217, +0.029] tie |
+| Perun - superpowers | -0.033 [-0.108, +0.025] tie | -0.101 [-0.217, +0.014] tie |
+| Perun - agent-skills | -0.008 [-0.075, +0.058] tie | -0.101 [-0.232, +0.029] tie |
+| perun-lean - superpowers | -0.008 [-0.083, +0.058] tie | +0.014 [-0.116, +0.145] tie |
+| perun-lean - agent-skills | +0.017 [-0.050, +0.083] tie | +0.014 [-0.116, +0.159] tie |
+| perun-lean - Perun | +0.025 [-0.017, +0.067] tie | +0.116 [0.000, +0.246] tie |
+
+Result, stated plainly: no skill text improved the hidden-test pass rate on either split. On the easy split every pair ties. On the hard split every skill arm has a lower point estimate than no skill text, and the full Perun text is significantly worse than none (-0.188, interval excludes 0); the other four differences against none include 0. perun-lean recovers 0.116 of Perun's hard-split deficit, but that interval has a lower bound of exactly 0, so it is a tie, and it still sits 0.072 below none. Perun ties both rivals on both splits. Cost: Perun carries 10,983 to 11,113 prompt tokens on every call (about 37 times none's prompt on the easy split), more than twice superpowers (5,135) and 1.6 times agent-skills (6,766), so it loses on input cost; perun-lean cuts that to 858 to 988 tokens, roughly one fifth to one sixth of superpowers' and one seventh to one eighth of agent-skills', but spends more completion tokens than full Perun (592 against 374 easy, 884 against 678 hard). The hard split missed its calibration target: the `none` rate is 0.725, not 40 to 60 percent (a pilot read 0.68 before 10 of the 20 always-solved tickets were dropped; baseline-selected tickets regress toward the mean). Caveats: one model and one turn without tools, so the run-the-test-first steps these skills prescribe could not be executed, and the skills mostly lengthened replies (superpowers truncated at the 4,000-token cap on 9 of 69 hard samples, each a failure); single-module tickets written by the Perun side, with no multi-file or real-thread cases; the perun-lean arm was designed after the easy results were seen, so its easy-split run is post-hoc; 9 comparisons per split with no multiple-comparison correction, so the one significant hard-split pair deserves caution; with 23 hard tickets a paired difference has a 95% half-width of about 12 to 15 points. Method, pilot and pruning disclosure and the reproduce command: `docs/bench/hidden-test-r2-1021/README.md` (this table is the exploratory pilot, `pilot/`). Tests: `scripts/test_hidden_test_bench.py`.
+
+Follow-up (2026-10-21, same model, hard split ablation then a preregistered fresh-seed check; REVERT, no skill change shipped). Ablation (exploratory, 23 hard tickets, 6 fresh samples per arm): none 0.688, Perun 0.652 (perun minus none -0.036, CI [-0.130, +0.043]), so the -0.188 above did not reproduce at that size. No block's removal significantly raised the pass rate: dropping the delivery process (`agentic-delivery`) +0.036, the testing guidance +0.014 (both ties); dropping the operating principles -0.065 or the definition of done -0.072 lowered it (the latter arm is significantly below none, -0.109, CI [-0.210, -0.014]), so those two carry the value and the delivery and testing blocks are the only candidates for cost, with no significant effect. Dropping delivery and testing together (`perun-core`, 1,669 prompt tokens) scored 0.688, equal to none. Preregistered check (`docs/bench/hidden-test-r2-1021/PREREGISTERED.md`, fresh samples with API seed 20261021 plus the sample index, 3 per ticket): hard none 0.652, Perun 0.609, perun-core 0.580; easy none 0.883, Perun 0.892, perun-core 0.917; prompt tokens perun-core 1,669 (hard) and 1,539 (easy) against superpowers 5,265 and 5,135. The keep rule (hard >= none - 0.05, easy >= none - 0.03, tokens <= superpowers) fails on the hard split (0.580 < 0.602), so the bug-fix route to `perun-core` was not shipped. Every hard-split comparison in this follow-up ties its CI with 0 (perun-core minus none -0.072, CI [-0.246, +0.101]); pooling all hard samples across the three runs (an exploratory mix of runs, 12 samples per ticket for none and Perun, 9 for perun-core) gives Perun minus none -0.076 [-0.156, +0.004] and perun-core minus none -0.036 [-0.122, +0.053]. Reading: the pooled point estimate for the full Perun text on hard single-module fixes is -0.076 (CI spans 0, so no measured cost), at more than twice the prompt tokens of the rivals; a 23-ticket bench cannot show a cost or show that a smaller Perun text fixes it (pooled numbers: `scripts/hidden_test_pool.py`). The fixed arm was chosen from the ablation, so the preregistered run is the only unselected test of it.
+
+
 ## 1. Review quality (measured, 2026-10-14)
 
 Sonnet `claude-sonnet-5-5`, 37 cases, one run per case, same harness and verifier for every arm. Full method and caveats: [`bench-results.md`](../.claude/skills/deep-code-review/scripts/fixtures/bench-results.md).

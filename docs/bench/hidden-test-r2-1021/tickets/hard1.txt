@@ -1,0 +1,699 @@
+### h_rate_window
+--- ticket
+RateWindow(limit, window) allows at most `limit` events in any sliding window of `window` seconds. allow(t) is called with non-decreasing times; it records the event and returns True if allowed. An event at time e counts toward the window at time t only while e > t - window (an event exactly `window` seconds old no longer counts). A rejected call must not consume quota. retry_after(t) returns how many seconds until a call would be allowed (0 if it would be allowed now) and does not record anything.
+Observed: after a burst of rejected calls legitimate callers stay blocked far longer than they should, one extra rejection happens exactly on the window boundary, and retry_after can return negative numbers or a wait when there is room.
+--- src
+from collections import deque
+
+
+class RateWindow:
+    def __init__(self, limit, window):
+        self.limit = limit
+        self.window = window
+        self.events = deque()
+
+    def allow(self, t):
+        self.events.append(t)
+        while self.events and self.events[0] < t - self.window:
+            self.events.popleft()
+        return len(self.events) <= self.limit
+
+    def retry_after(self, t):
+        return self.events[0] + self.window - t
+--- fix
+from collections import deque
+
+
+class RateWindow:
+    def __init__(self, limit, window):
+        self.limit = limit
+        self.window = window
+        self.events = deque()
+
+    def _evict(self, t):
+        while self.events and self.events[0] <= t - self.window:
+            self.events.popleft()
+
+    def allow(self, t):
+        self._evict(t)
+        if len(self.events) >= self.limit:
+            return False
+        self.events.append(t)
+        return True
+
+    def retry_after(self, t):
+        self._evict(t)
+        if len(self.events) < self.limit:
+            return 0
+        return self.events[0] + self.window - t
+--- test
+from mod import RateWindow
+
+
+def test_sequence():
+    a = RateWindow(2, 10)
+    assert [a.allow(t) for t in (0, 1, 2, 3, 10, 10, 11)] == [True, True, False, False, True, False, True]
+
+
+def test_retry_after():
+    a = RateWindow(2, 10)
+    a.allow(0)
+    a.allow(1)
+    assert a.retry_after(2) == 8
+    assert a.retry_after(5) == 5
+    assert a.allow(5) is False
+    assert a.retry_after(5) == 5
+    assert a.retry_after(10) == 0
+    assert a.retry_after(11) == 0
+
+
+def test_retry_after_does_not_record():
+    a = RateWindow(1, 5)
+    assert a.retry_after(0) == 0
+    assert a.retry_after(0) == 0
+    assert a.allow(0) is True
+    assert a.allow(0) is False
+
+
+### h_token_bucket
+--- ticket
+TokenBucket(capacity, rate, now=0) starts full. take(n, now) first refills `rate` tokens per second for the time since the previous call (fractional tokens are kept, the total never exceeds capacity), then removes n tokens and returns True if at least n tokens were available (exactly n is enough); otherwise it returns False and removes nothing (the refill still counts). If `now` is earlier than the previous call (clock stepped backwards) no tokens are added or removed and the bucket's notion of the last time does not move backwards.
+Observed: taking exactly the remaining tokens is refused, and after a clock step backwards the bucket loses tokens and then refills too slowly.
+--- src
+class TokenBucket:
+    def __init__(self, capacity, rate, now=0):
+        self.capacity = capacity
+        self.rate = rate
+        self.tokens = capacity
+        self.last = now
+
+    def take(self, n, now):
+        elapsed = now - self.last
+        self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
+        self.last = now
+        if self.tokens > n:
+            self.tokens -= n
+            return True
+        return False
+--- fix
+class TokenBucket:
+    def __init__(self, capacity, rate, now=0):
+        self.capacity = capacity
+        self.rate = rate
+        self.tokens = capacity
+        self.last = now
+
+    def take(self, n, now):
+        elapsed = max(0, now - self.last)
+        self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
+        self.last = max(self.last, now)
+        if self.tokens >= n:
+            self.tokens -= n
+            return True
+        return False
+--- test
+from mod import TokenBucket
+
+
+def test_exact_amount_allowed():
+    b = TokenBucket(10, 1)
+    assert b.take(10, 0) is True
+    assert b.take(1, 0) is False
+
+
+def test_fractional_refill_and_failed_take_keeps_tokens():
+    b = TokenBucket(10, 1)
+    assert b.take(10, 0) is True
+    assert b.take(1, 0.5) is False
+    assert b.take(1, 1) is True
+    assert b.take(1, 1) is False
+
+
+def test_cap():
+    b = TokenBucket(3, 5)
+    assert b.take(3, 100) is True
+    assert b.take(1, 100) is False
+
+
+def test_clock_backwards():
+    b = TokenBucket(5, 1)
+    assert b.take(5, 10) is True
+    assert b.take(1, 5) is False
+    assert b.last == 10
+    assert b.take(1, 11) is True
+
+
+### h_undo_editor
+--- ticket
+Editor keeps a text buffer with insert(pos, s), delete(pos, n) -> removed text, undo() and redo() (each returns True if something was undone or redone, else False). Rules: each insert or delete is one undoable step. A new insert or delete clears everything that could be redone. At most `limit` steps are kept; when more are made the OLDEST step is forgotten. An insert position past the end appends at the end (and undo must then remove exactly what was inserted). A delete that removes nothing (position past the end or n == 0) is not a step.
+Observed: undo after inserting past the end corrupts the text, redo works after a fresh edit, and with a small limit the most recent edit is the one that gets lost.
+--- src
+class Editor:
+    def __init__(self, limit=100):
+        self.text = ""
+        self.limit = limit
+        self.undo_stack = []
+        self.redo_stack = []
+
+    def insert(self, pos, s):
+        self.text = self.text[:pos] + s + self.text[pos:]
+        self._push(("ins", pos, s))
+
+    def delete(self, pos, n):
+        removed = self.text[pos:pos + n]
+        self.text = self.text[:pos] + self.text[pos + n:]
+        self._push(("del", pos, removed))
+        return removed
+
+    def _push(self, op):
+        self.undo_stack.append(op)
+        if len(self.undo_stack) > self.limit:
+            self.undo_stack.pop()
+
+    def undo(self):
+        if not self.undo_stack:
+            return False
+        kind, pos, s = self.undo_stack.pop()
+        if kind == "ins":
+            self.text = self.text[:pos] + self.text[pos + len(s):]
+        else:
+            self.text = self.text[:pos] + s + self.text[pos:]
+        self.redo_stack.append((kind, pos, s))
+        return True
+
+    def redo(self):
+        if not self.redo_stack:
+            return False
+        kind, pos, s = self.redo_stack.pop()
+        if kind == "ins":
+            self.text = self.text[:pos] + s + self.text[pos:]
+        else:
+            self.text = self.text[:pos] + self.text[pos + len(s):]
+        self.undo_stack.append((kind, pos, s))
+        return True
+--- fix
+class Editor:
+    def __init__(self, limit=100):
+        self.text = ""
+        self.limit = limit
+        self.undo_stack = []
+        self.redo_stack = []
+
+    def insert(self, pos, s):
+        pos = max(0, min(pos, len(self.text)))
+        self.text = self.text[:pos] + s + self.text[pos:]
+        self._push(("ins", pos, s))
+
+    def delete(self, pos, n):
+        removed = self.text[pos:pos + n]
+        if not removed:
+            return ""
+        self.text = self.text[:pos] + self.text[pos + n:]
+        self._push(("del", pos, removed))
+        return removed
+
+    def _push(self, op):
+        self.undo_stack.append(op)
+        self.redo_stack.clear()
+        if len(self.undo_stack) > self.limit:
+            self.undo_stack.pop(0)
+
+    def undo(self):
+        if not self.undo_stack:
+            return False
+        kind, pos, s = self.undo_stack.pop()
+        if kind == "ins":
+            self.text = self.text[:pos] + self.text[pos + len(s):]
+        else:
+            self.text = self.text[:pos] + s + self.text[pos:]
+        self.redo_stack.append((kind, pos, s))
+        return True
+
+    def redo(self):
+        if not self.redo_stack:
+            return False
+        kind, pos, s = self.redo_stack.pop()
+        if kind == "ins":
+            self.text = self.text[:pos] + s + self.text[pos:]
+        else:
+            self.text = self.text[:pos] + self.text[pos + len(s):]
+        self.undo_stack.append((kind, pos, s))
+        return True
+--- test
+from mod import Editor
+
+
+def test_insert_past_end_then_undo():
+    e = Editor()
+    e.insert(0, "abc")
+    e.insert(99, "X")
+    assert e.text == "abcX"
+    assert e.undo() is True
+    assert e.text == "abc"
+
+
+def test_new_edit_clears_redo():
+    e = Editor()
+    e.insert(0, "a")
+    e.undo()
+    e.insert(0, "b")
+    assert e.redo() is False
+    assert e.text == "b"
+
+
+def test_limit_forgets_oldest():
+    e = Editor(limit=2)
+    for ch in "abc":
+        e.insert(len(e.text), ch)
+    assert e.undo() and e.undo()
+    assert e.undo() is False
+    assert e.text == "a"
+
+
+def test_noop_delete_is_not_a_step():
+    e = Editor()
+    e.insert(0, "ab")
+    assert e.delete(5, 2) == ""
+    assert e.delete(0, 0) == ""
+    assert e.undo() is True
+    assert e.text == ""
+    assert e.undo() is False
+
+
+def test_delete_undo_redo_roundtrip():
+    e = Editor()
+    e.insert(0, "hello world")
+    assert e.delete(5, 6) == " world"
+    assert e.text == "hello"
+    e.undo()
+    assert e.text == "hello world"
+    e.redo()
+    assert e.text == "hello"
+
+
+### h_keyset_pages
+--- ticket
+page(items, limit, cursor=None) returns (chunk, next_cursor). items are dicts with "id" (unique, sortable) and "score". The order is score descending, ties by id ascending. The cursor is the (score, id) of the last item of the previous page and the next page starts strictly after that position in this order. next_cursor is None when there are no more items after this page (an exact multiple of the limit must not produce an extra empty page).
+Observed: items that share a score with the last item of a page are skipped or repeated, and the final page sometimes returns a cursor that leads to an empty page.
+--- src
+def page(items, limit, cursor=None):
+    ordered = sorted(items, key=lambda r: -r["score"])
+    if cursor is not None:
+        score, rid = cursor
+        ordered = [r for r in ordered if r["score"] < score]
+    chunk = ordered[:limit]
+    nxt = (chunk[-1]["score"], chunk[-1]["id"]) if len(chunk) == limit else None
+    return chunk, nxt
+--- fix
+def page(items, limit, cursor=None):
+    ordered = sorted(items, key=lambda r: (-r["score"], r["id"]))
+    if cursor is not None:
+        score, rid = cursor
+        ordered = [r for r in ordered if r["score"] < score or (r["score"] == score and r["id"] > rid)]
+    chunk = ordered[:limit]
+    nxt = (chunk[-1]["score"], chunk[-1]["id"]) if len(ordered) > limit else None
+    return chunk, nxt
+--- test
+from mod import page
+
+ITEMS = [{"id": i, "score": s} for i, s in [(5, 10), (2, 10), (9, 10), (1, 7), (3, 7), (4, 1)]]
+
+
+def walk(limit):
+    out, cur = [], None
+    while True:
+        chunk, cur = page(ITEMS, limit, cur)
+        out.append([r["id"] for r in chunk])
+        if cur is None:
+            return out
+
+
+def test_every_item_once_with_ties():
+    for limit in (1, 2, 3, 4, 5, 6, 10):
+        flat = [i for p in walk(limit) for i in p]
+        assert flat == [2, 5, 9, 1, 3, 4]
+
+
+def test_no_trailing_empty_page():
+    pages = walk(2)
+    assert pages == [[2, 5], [9, 1], [3, 4]]
+    assert all(pages)
+
+
+def test_empty_items():
+    assert page([], 3) == ([], None)
+
+
+### h_merge_events
+--- ticket
+merge_events(streams) merges several event streams into one list of (timestamp, payload). Each input stream is already sorted by timestamp. The output is ordered by timestamp; when timestamps are equal, events from the lower-numbered stream come first, and within one stream the original order is kept. An event that appears in more than one stream with the same timestamp AND the same payload is reported once (the first occurrence in output order); events with the same timestamp but different payloads are all kept. Payloads are strings. Streams may be empty.
+Observed: events that happen at the same instant disappear from the merged output and equal-timestamp events come out in alphabetical order of payload instead of stream order.
+--- src
+import heapq
+
+
+def merge_events(streams):
+    out = []
+    seen = set()
+    for ts, payload in heapq.merge(*streams):
+        if ts in seen:
+            continue
+        seen.add(ts)
+        out.append((ts, payload))
+    return out
+--- fix
+import heapq
+
+
+def merge_events(streams):
+    keyed = [[(ts, i, j, p) for j, (ts, p) in enumerate(s)] for i, s in enumerate(streams)]
+    out, seen = [], set()
+    for ts, _i, _j, p in heapq.merge(*keyed):
+        if (ts, p) in seen:
+            continue
+        seen.add((ts, p))
+        out.append((ts, p))
+    return out
+--- test
+from mod import merge_events
+
+
+def test_same_instant_kept_in_stream_order():
+    s0 = [(1, "b"), (2, "x")]
+    s1 = [(1, "a"), (2, "x"), (3, "c")]
+    assert merge_events([s0, s1]) == [(1, "b"), (1, "a"), (2, "x"), (3, "c")]
+
+
+def test_within_stream_order_kept():
+    s0 = [(1, "z"), (1, "y"), (1, "z")]
+    assert merge_events([s0]) == [(1, "z"), (1, "y")]
+
+
+def test_empty_streams():
+    assert merge_events([]) == []
+    assert merge_events([[], [(1, "a")], []]) == [(1, "a")]
+
+
+def test_dedupe_is_per_timestamp():
+    assert merge_events([[(1, "a"), (2, "a")], [(1, "a"), (2, "a")]]) == [(1, "a"), (2, "a")]
+
+
+### h_bank_transfer
+--- ticket
+Bank(balances) holds integer cents per account. transfer(src, dst, amount, key=None) moves `amount` from src to dst; the source also pays a fee of max(1, amount // 100) cents (the fee disappears, it is not credited anywhere). Rules: amount <= 0 or src == dst raises ValueError; an unknown account raises KeyError and must leave every balance untouched; if the source cannot afford amount + fee the call returns False and changes nothing; otherwise it returns True. When `key` is given, a repeated call with the same key returns the result of the first call (True OR False) and changes nothing.
+Observed: money disappears when the destination account does not exist, small transfers are free, and retrying a rejected transfer with the same key sometimes succeeds a second time.
+--- src
+class Bank:
+    def __init__(self, balances):
+        self.bal = dict(balances)
+        self.done = {}
+
+    def transfer(self, src, dst, amount, key=None):
+        if key in self.done:
+            return self.done[key]
+        if amount <= 0:
+            raise ValueError("amount")
+        fee = amount // 100
+        self.bal[src] -= amount + fee
+        if self.bal[src] < 0:
+            self.bal[src] += amount + fee
+            return False
+        self.bal[dst] += amount
+        if key:
+            self.done[key] = True
+        return True
+--- fix
+class Bank:
+    def __init__(self, balances):
+        self.bal = dict(balances)
+        self.done = {}
+
+    def transfer(self, src, dst, amount, key=None):
+        if key is not None and key in self.done:
+            return self.done[key]
+        if amount <= 0 or src == dst:
+            raise ValueError("amount")
+        if src not in self.bal or dst not in self.bal:
+            raise KeyError("account")
+        cost = amount + max(1, amount // 100)
+        ok = self.bal[src] >= cost
+        if ok:
+            self.bal[src] -= cost
+            self.bal[dst] += amount
+        if key is not None:
+            self.done[key] = ok
+        return ok
+--- test
+import pytest
+from mod import Bank
+
+
+def test_fee_minimum_and_percent():
+    b = Bank({"a": 1000, "b": 0})
+    assert b.transfer("a", "b", 50) is True
+    assert b.bal == {"a": 949, "b": 50}
+    assert b.transfer("a", "b", 300) is True
+    assert b.bal == {"a": 646, "b": 350}
+
+
+def test_unknown_account_changes_nothing():
+    b = Bank({"a": 100})
+    with pytest.raises(KeyError):
+        b.transfer("a", "ghost", 10)
+    with pytest.raises(KeyError):
+        b.transfer("ghost", "a", 10)
+    assert b.bal == {"a": 100}
+
+
+def test_validation():
+    b = Bank({"a": 100, "b": 0})
+    for args in [("a", "b", 0), ("a", "b", -5), ("a", "a", 5)]:
+        with pytest.raises(ValueError):
+            b.transfer(*args)
+
+
+def test_insufficient_funds_exact_boundary():
+    b = Bank({"a": 101, "b": 0})
+    assert b.transfer("a", "b", 100) is True
+    assert b.bal == {"a": 0, "b": 100}
+    b = Bank({"a": 100, "b": 0})
+    assert b.transfer("a", "b", 100) is False
+    assert b.bal == {"a": 100, "b": 0}
+
+
+def test_idempotency_key_remembers_failures_too():
+    b = Bank({"a": 50, "b": 0})
+    assert b.transfer("a", "b", 100, key="k1") is False
+    b.bal["a"] = 10000
+    assert b.transfer("a", "b", 100, key="k1") is False
+    assert b.bal["a"] == 10000
+    assert b.transfer("a", "b", 100, key="k2") is True
+    assert b.transfer("a", "b", 100, key="k2") is True
+    assert b.bal["b"] == 100
+
+
+### h_lfu_cache
+--- ticket
+LFUCache(capacity): get(key) returns the value or None; put(key, value) inserts or updates. When full, put of a NEW key evicts the least frequently used key; among keys with the same use count, the least recently used one is evicted. Every get hit and every put (new or update) counts as one use; a new key starts with count 1. Updating an existing key never evicts. capacity <= 0 stores nothing (put is a no-op, get returns None).
+Observed: after updating a key it is still evicted first, ties are evicted in insertion order instead of by recency, and a zero-capacity cache raises.
+--- src
+class LFUCache:
+    def __init__(self, capacity):
+        self.cap = capacity
+        self.data = {}
+        self.tick = 0
+
+    def get(self, key):
+        if key not in self.data:
+            return None
+        self.tick += 1
+        v, f, _ = self.data[key]
+        self.data[key] = [v, f + 1, self.tick]
+        return v
+
+    def put(self, key, value):
+        self.tick += 1
+        if key in self.data:
+            self.data[key][0] = value
+            return
+        if len(self.data) >= self.cap:
+            victim = min(self.data, key=lambda k: self.data[k][1])
+            del self.data[victim]
+        self.data[key] = [value, 1, self.tick]
+--- fix
+class LFUCache:
+    def __init__(self, capacity):
+        self.cap = capacity
+        self.data = {}
+        self.tick = 0
+
+    def get(self, key):
+        if key not in self.data:
+            return None
+        self.tick += 1
+        v, f, _ = self.data[key]
+        self.data[key] = [v, f + 1, self.tick]
+        return v
+
+    def put(self, key, value):
+        if self.cap <= 0:
+            return
+        self.tick += 1
+        if key in self.data:
+            _, f, _ = self.data[key]
+            self.data[key] = [value, f + 1, self.tick]
+            return
+        if len(self.data) >= self.cap:
+            victim = min(self.data, key=lambda k: (self.data[k][1], self.data[k][2]))
+            del self.data[victim]
+        self.data[key] = [value, 1, self.tick]
+--- test
+from mod import LFUCache
+
+
+def test_classic_sequence():
+    c = LFUCache(2)
+    c.put(1, 1)
+    c.put(2, 2)
+    assert c.get(1) == 1
+    c.put(3, 3)
+    assert c.get(2) is None
+    assert c.get(3) == 3
+    c.put(4, 4)
+    assert c.get(1) is None
+    assert c.get(3) == 3
+    assert c.get(4) == 4
+
+
+def test_update_counts_as_use():
+    c = LFUCache(2)
+    c.put(1, "a")
+    c.put(2, "b")
+    c.put(1, "A")
+    c.put(3, "c")
+    assert c.get(2) is None
+    assert c.get(1) == "A"
+
+
+def test_tie_broken_by_recency_not_insertion():
+    c = LFUCache(2)
+    c.put("x", 1)
+    c.put("y", 2)
+    c.get("y")
+    c.get("x")
+    c.put("z", 3)
+    assert c.get("y") is None
+    assert c.get("x") == 1
+
+
+def test_zero_capacity():
+    c = LFUCache(0)
+    c.put(1, 1)
+    assert c.get(1) is None
+
+
+def test_update_never_evicts():
+    c = LFUCache(1)
+    c.put(1, "a")
+    c.put(1, "b")
+    assert c.get(1) == "b"
+
+
+### h_event_bus
+--- ticket
+Bus lets code subscribe handlers to topics. on(topic, handler, priority=0) returns an unsubscribe function. emit(topic, *args) calls the handlers of that topic with args and returns how many handlers it called. Order: higher priority first; equal priorities in the order they were subscribed. During one emit: a handler that was unsubscribed by an earlier handler in the same emit is NOT called; a handler subscribed during the emit is NOT called until the next emit. Calling an unsubscribe function twice is harmless. The same function subscribed twice is two separate subscriptions and each unsubscribe function removes only its own.
+Observed: low priority runs first, handlers get skipped when another handler unsubscribes, and double unsubscribe raises ValueError.
+--- src
+class Bus:
+    def __init__(self):
+        self.subs = {}
+
+    def on(self, topic, handler, priority=0):
+        self.subs.setdefault(topic, []).append((priority, handler))
+        self.subs[topic].sort(key=lambda p: p[0])
+        return lambda: self.subs[topic].remove((priority, handler))
+
+    def emit(self, topic, *args):
+        n = 0
+        for _, h in self.subs.get(topic, []):
+            h(*args)
+            n += 1
+        return n
+--- fix
+class Bus:
+    def __init__(self):
+        self.subs = {}
+
+    def on(self, topic, handler, priority=0):
+        entry = [priority, handler, True]
+        self.subs.setdefault(topic, []).append(entry)
+        self.subs[topic].sort(key=lambda e: -e[0])
+
+        def off():
+            entry[2] = False
+            self.subs[topic] = [e for e in self.subs[topic] if e is not entry]
+
+        return off
+
+    def emit(self, topic, *args):
+        n = 0
+        for e in list(self.subs.get(topic, [])):
+            if not e[2]:
+                continue
+            e[1](*args)
+            n += 1
+        return n
+--- test
+from mod import Bus
+
+
+def test_priority_then_subscription_order():
+    b, seen = Bus(), []
+    b.on("t", lambda: seen.append("low"), -1)
+    b.on("t", lambda: seen.append("a"))
+    b.on("t", lambda: seen.append("high"), 5)
+    b.on("t", lambda: seen.append("b"))
+    assert b.emit("t") == 4
+    assert seen == ["high", "a", "b", "low"]
+
+
+def test_unsubscribe_during_emit_skips_target():
+    b, seen = Bus(), []
+    offs = {}
+    b.on("t", lambda: (seen.append("first"), offs["second"]()), 1)
+    offs["second"] = b.on("t", lambda: seen.append("second"), 0)
+    b.on("t", lambda: seen.append("third"), -1)
+    assert b.emit("t") == 2
+    assert seen == ["first", "third"]
+    seen.clear()
+    assert b.emit("t") == 2
+    assert seen == ["first", "third"]
+
+
+def test_subscribe_during_emit_waits_for_next_emit():
+    b, seen = Bus(), []
+
+    def adder():
+        seen.append("adder")
+        b.on("t", lambda: seen.append("late"), 10)
+
+    b.on("t", adder)
+    assert b.emit("t") == 1
+    assert seen == ["adder"]
+    seen.clear()
+    b.emit("t")
+    assert seen[0] == "late"
+
+
+def test_double_unsubscribe_and_duplicate_handler():
+    b, seen = Bus(), []
+
+    def h():
+        seen.append("h")
+
+    off1 = b.on("t", h)
+    b.on("t", h)
+    off1()
+    off1()
+    assert b.emit("t") == 1
+    assert seen == ["h"]
