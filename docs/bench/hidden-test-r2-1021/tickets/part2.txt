@@ -1,0 +1,506 @@
+### paginate
+--- ticket
+Page 1 of a 7-item list with page size 3 returns items 3 to 5, and `pages` says 2 instead of 3. The UI is off by one everywhere.
+--- src
+def paginate(items, page, size):
+    """Return {"items": slice, "page": page, "pages": total_pages, "has_next": bool}. Pages are 1-based. pages is the ceiling of len/size but at least 1 (an empty list has 1 page). A page past the end gives an empty slice. page < 1 or size < 1 raises ValueError."""
+    pages = len(items) // size
+    start = page * size
+    return {"items": items[start:start + size], "page": page, "pages": pages, "has_next": page < pages}
+--- fix
+def paginate(items, page, size):
+    """Return {"items": slice, "page": page, "pages": total_pages, "has_next": bool}. Pages are 1-based. pages is the ceiling of len/size but at least 1 (an empty list has 1 page). A page past the end gives an empty slice. page < 1 or size < 1 raises ValueError."""
+    if page < 1 or size < 1:
+        raise ValueError((page, size))
+    pages = max(1, -(-len(items) // size))
+    start = (page - 1) * size
+    return {"items": items[start:start + size], "page": page, "pages": pages, "has_next": page < pages}
+--- test
+import pytest
+from mod import paginate
+
+DATA = list(range(7))
+
+
+def test_pages():
+    p1 = paginate(DATA, 1, 3)
+    assert p1 == {"items": [0, 1, 2], "page": 1, "pages": 3, "has_next": True}
+    assert paginate(DATA, 3, 3)["items"] == [6]
+    assert paginate(DATA, 3, 3)["has_next"] is False
+
+
+def test_past_end_and_empty():
+    assert paginate(DATA, 4, 3) == {"items": [], "page": 4, "pages": 3, "has_next": False}
+    assert paginate([], 1, 5) == {"items": [], "page": 1, "pages": 1, "has_next": False}
+
+
+def test_exact_multiple():
+    assert paginate(list(range(6)), 2, 3) == {"items": [3, 4, 5], "page": 2, "pages": 2, "has_next": False}
+
+
+@pytest.mark.parametrize("page,size", [(0, 3), (1, 0), (-1, 3), (1, -2)])
+def test_invalid(page, size):
+    with pytest.raises(ValueError):
+        paginate(DATA, page, size)
+
+### normalize_email
+--- ticket
+`normalize_email("Jane.Smith+news@Example.COM")` returns `Jane.Smith@example.com`. Our dedupe treats it as a different user than `jane.smith@example.com`. Also `"+news@example.com"` slips through as `@example.com`.
+--- src
+def normalize_email(addr):
+    """Normalize an address for comparison: strip surrounding whitespace, lowercase everything, and drop a '+tag' suffix from the local part (everything from the first '+'). Exactly one '@' is required, and the local part (after removing the tag) and the domain must be non-empty; otherwise raise ValueError."""
+    local, domain = addr.strip().split("@")
+    return local.split("+")[0] + "@" + domain.lower()
+--- fix
+def normalize_email(addr):
+    """Normalize an address for comparison: strip surrounding whitespace, lowercase everything, and drop a '+tag' suffix from the local part (everything from the first '+'). Exactly one '@' is required, and the local part (after removing the tag) and the domain must be non-empty; otherwise raise ValueError."""
+    parts = addr.strip().lower().split("@")
+    if len(parts) != 2:
+        raise ValueError(addr)
+    local, domain = parts[0].split("+")[0], parts[1]
+    if not local or not domain:
+        raise ValueError(addr)
+    return local + "@" + domain
+--- test
+import pytest
+from mod import normalize_email
+
+
+def test_normalizes():
+    assert normalize_email(" Jane.Smith+news@Example.COM ") == "jane.smith@example.com"
+    assert normalize_email("a@b.c") == "a@b.c"
+    assert normalize_email("X+y+z@Q.org") == "x@q.org"
+
+
+@pytest.mark.parametrize("bad", ["no-at", "a@b@c", "+tag@example.com", "jane@", "@example.com", "", "  "])
+def test_invalid(bad):
+    with pytest.raises(ValueError):
+        normalize_email(bad)
+
+### apply_discount
+--- ticket
+`apply_discount(1005, 10)` returns 904 but our finance team expects 905 (904.5 rounds half up). Rounding is wrong in general: we always lose a cent.
+--- src
+def apply_discount(price_cents, percent):
+    """Price in integer cents after a percentage discount, rounded half up to the nearest cent. 0 <= percent <= 100 (int or float) else ValueError. Always returns an int. Percent values like 33.3 must be treated as exactly 33.3, not as a binary float approximation."""
+    return int(price_cents * (100 - percent) / 100)
+--- fix
+from fractions import Fraction
+
+
+def apply_discount(price_cents, percent):
+    """Price in integer cents after a percentage discount, rounded half up to the nearest cent. 0 <= percent <= 100 (int or float) else ValueError. Always returns an int. Percent values like 33.3 must be treated as exactly 33.3, not as a binary float approximation."""
+    if not 0 <= percent <= 100:
+        raise ValueError(percent)
+    q = Fraction(price_cents) * (100 - Fraction(str(percent))) / 100
+    return int(q + Fraction(1, 2))
+--- test
+import pytest
+from mod import apply_discount
+
+
+def test_half_up():
+    assert apply_discount(1005, 10) == 905
+    assert apply_discount(1, 50) == 1
+    assert apply_discount(999, 10) == 899
+
+
+def test_exact_decimal_percent():
+    assert apply_discount(250, 33.3) == 167
+    assert apply_discount(10, 12.5) == 9
+
+
+def test_bounds_and_type():
+    assert apply_discount(100, 0) == 100
+    assert apply_discount(100, 100) == 0
+    assert isinstance(apply_discount(100, 15), int)
+    for bad in (-1, 100.5, 101):
+        with pytest.raises(ValueError):
+            apply_discount(100, bad)
+
+### lru_cache
+--- ticket
+After `put("a")`, `put("b")`, `get("a")`, `put("c")` on a capacity-2 cache, `a` is evicted although we just read it. Reads must count as use.
+--- src
+class LRUCache:
+    """Least-recently-used cache. get() and put() both count as use. When put() would exceed capacity, evict the least recently used key. get() of a missing key returns None. capacity < 1 raises ValueError."""
+
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.data = {}
+
+    def get(self, key):
+        return self.data.get(key)
+
+    def put(self, key, value):
+        self.data[key] = value
+        if len(self.data) > self.capacity:
+            self.data.pop(next(iter(self.data)))
+--- fix
+class LRUCache:
+    """Least-recently-used cache. get() and put() both count as use. When put() would exceed capacity, evict the least recently used key. get() of a missing key returns None. capacity < 1 raises ValueError."""
+
+    def __init__(self, capacity):
+        if capacity < 1:
+            raise ValueError(capacity)
+        self.capacity = capacity
+        self.data = {}
+
+    def get(self, key):
+        if key not in self.data:
+            return None
+        value = self.data.pop(key)
+        self.data[key] = value
+        return value
+
+    def put(self, key, value):
+        self.data.pop(key, None)
+        self.data[key] = value
+        if len(self.data) > self.capacity:
+            self.data.pop(next(iter(self.data)))
+--- test
+import pytest
+from mod import LRUCache
+
+
+def test_get_counts_as_use():
+    c = LRUCache(2)
+    c.put("a", 1)
+    c.put("b", 2)
+    assert c.get("a") == 1
+    c.put("c", 3)
+    assert c.get("b") is None
+    assert c.get("a") == 1
+    assert c.get("c") == 3
+
+
+def test_overwrite_counts_as_use():
+    c = LRUCache(2)
+    c.put("a", 1)
+    c.put("b", 2)
+    c.put("a", 10)
+    c.put("c", 3)
+    assert c.get("b") is None
+    assert c.get("a") == 10
+
+
+def test_missing_and_capacity():
+    c = LRUCache(1)
+    assert c.get("x") is None
+    c.put("x", 1)
+    c.put("y", 2)
+    assert c.get("x") is None
+    assert c.get("y") == 2
+    for bad in (0, -3):
+        with pytest.raises(ValueError):
+            LRUCache(bad)
+
+### flatten
+--- ticket
+`flatten([1, [2, [3, [4]]]])` returns `[1, 2, [3, [4]]]`. It should flatten all the way down.
+--- src
+def flatten(nested):
+    """Flatten arbitrarily nested lists and tuples into one flat list, preserving order. Strings and bytes are leaves (not iterated). Every other value, including dicts and sets, is a leaf."""
+    out = []
+    for x in nested:
+        if isinstance(x, (list, tuple)):
+            out.extend(x)
+        else:
+            out.append(x)
+    return out
+--- fix
+def flatten(nested):
+    """Flatten arbitrarily nested lists and tuples into one flat list, preserving order. Strings and bytes are leaves (not iterated). Every other value, including dicts and sets, is a leaf."""
+    out = []
+    for x in nested:
+        if isinstance(x, (list, tuple)):
+            out.extend(flatten(x))
+        else:
+            out.append(x)
+    return out
+--- test
+from mod import flatten
+
+
+def test_deep():
+    assert flatten([1, [2, [3, [4]]]]) == [1, 2, 3, 4]
+    assert flatten([(1, 2), [3, (4, [5])]]) == [1, 2, 3, 4, 5]
+
+
+def test_leaves():
+    assert flatten(["ab", ["cd"]]) == ["ab", "cd"]
+    assert flatten([b"xy", [{"a": 1}, {1, 2}]]) == [b"xy", {"a": 1}, {1, 2}]
+
+
+def test_empty():
+    assert flatten([]) == []
+    assert flatten([[[]], []]) == []
+
+### bisect
+--- ticket
+`count_in_range([1, 2, 2, 3], 2, 2)` returns 0 but there are two 2s. It also gives wrong answers for float data.
+--- src
+def bisect_left(a, x):
+    """Index of the first element >= x in sorted list a, or len(a) if every element is smaller (same contract as bisect.bisect_left)."""
+    lo, hi = 0, len(a) - 1
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if a[mid] <= x:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def count_in_range(a, lo, hi):
+    """How many elements v of sorted list a satisfy lo <= v <= hi. Works for ints and floats."""
+    return bisect_left(a, hi + 1) - bisect_left(a, lo)
+--- fix
+def bisect_left(a, x):
+    """Index of the first element >= x in sorted list a, or len(a) if every element is smaller (same contract as bisect.bisect_left)."""
+    lo, hi = 0, len(a)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if a[mid] < x:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def _bisect_right(a, x):
+    lo, hi = 0, len(a)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if a[mid] <= x:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def count_in_range(a, lo, hi):
+    """How many elements v of sorted list a satisfy lo <= v <= hi. Works for ints and floats."""
+    return _bisect_right(a, hi) - bisect_left(a, lo)
+--- test
+from mod import bisect_left, count_in_range
+
+
+def test_bisect_left():
+    assert bisect_left([1, 2, 2, 3], 2) == 1
+    assert bisect_left([1, 2], 5) == 2
+    assert bisect_left([], 1) == 0
+    assert bisect_left([1, 2], 0) == 0
+    assert bisect_left([1, 1, 1], 1) == 0
+    assert bisect_left([1, 3, 5], 4) == 2
+
+
+def test_count_ints():
+    assert count_in_range([1, 2, 2, 3], 2, 2) == 2
+    assert count_in_range([1, 2, 2, 3], 0, 10) == 4
+    assert count_in_range([1, 2, 2, 3], 4, 9) == 0
+    assert count_in_range([], 0, 1) == 0
+
+
+def test_count_floats():
+    assert count_in_range([1.0, 1.5, 2.0, 2.5], 1.0, 2.0) == 3
+    assert count_in_range([0.5, 1.5, 2.5], 0.6, 2.4) == 1
+
+### roman
+--- ticket
+`roman_to_int("IV")` returns 6 and `"MCMXCIV"` returns 2194. Subtractive pairs are being added. Garbage input like `"ABC"` raises a `KeyError`.
+--- src
+_VALS = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+
+
+def roman_to_int(s):
+    """Convert an uppercase Roman numeral to an int using subtractive notation (IV=4, IX=9, XL=40, XC=90, CD=400, CM=900). Raises ValueError for empty input or any character that is not an uppercase Roman numeral letter."""
+    total = 0
+    for i, ch in enumerate(s):
+        v = _VALS[ch]
+        if i + 1 < len(s) and v < _VALS[s[i + 1]]:
+            total += v
+        else:
+            total += v
+    return total
+--- fix
+_VALS = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+
+
+def roman_to_int(s):
+    """Convert an uppercase Roman numeral to an int using subtractive notation (IV=4, IX=9, XL=40, XC=90, CD=400, CM=900). Raises ValueError for empty input or any character that is not an uppercase Roman numeral letter."""
+    if not s or any(ch not in _VALS for ch in s):
+        raise ValueError(s)
+    total = 0
+    for i, ch in enumerate(s):
+        v = _VALS[ch]
+        if i + 1 < len(s) and v < _VALS[s[i + 1]]:
+            total -= v
+        else:
+            total += v
+    return total
+--- test
+import pytest
+from mod import roman_to_int
+
+
+@pytest.mark.parametrize("s,n", [("III", 3), ("IV", 4), ("IX", 9), ("LVIII", 58), ("XL", 40), ("CD", 400), ("MCMXCIV", 1994), ("MMXXIV", 2024)])
+def test_values(s, n):
+    assert roman_to_int(s) == n
+
+
+@pytest.mark.parametrize("bad", ["", "ABC", "iv", "XIZ", " X"])
+def test_invalid(bad):
+    with pytest.raises(ValueError):
+        roman_to_int(bad)
+
+### rotate
+--- ticket
+`rotate([1, 2, 3, 4], 1)` should give `[4, 1, 2, 3]` (rotate right) but gives `[2, 3, 4, 1]`. Rotating by more than the length also misbehaves.
+--- src
+def rotate(items, k):
+    """Return a new list rotated right by k places: rotate([1, 2, 3, 4], 1) == [4, 1, 2, 3]. k may be negative (rotate left) or larger than len(items). Empty input gives []. Always returns a new list."""
+    return items[k:] + items[:k]
+--- fix
+def rotate(items, k):
+    """Return a new list rotated right by k places: rotate([1, 2, 3, 4], 1) == [4, 1, 2, 3]. k may be negative (rotate left) or larger than len(items). Empty input gives []. Always returns a new list."""
+    if not items:
+        return []
+    k %= len(items)
+    return items[-k:] + items[:-k] if k else list(items)
+--- test
+from mod import rotate
+
+L = [1, 2, 3, 4]
+
+
+def test_right_left():
+    assert rotate(L, 1) == [4, 1, 2, 3]
+    assert rotate(L, -1) == [2, 3, 4, 1]
+    assert rotate(L, 2) == [3, 4, 1, 2]
+
+
+def test_wrapping():
+    assert rotate(L, 5) == [4, 1, 2, 3]
+    assert rotate(L, -6) == [3, 4, 1, 2]
+    assert rotate(L, 4) == L
+    assert rotate(L, 0) == L
+
+
+def test_fresh_list_and_empty():
+    assert rotate(L, 0) is not L
+    assert rotate([], 3) == []
+    assert L == [1, 2, 3, 4]
+
+### group_by
+--- ticket
+`group_by(["apple", "avocado", "banana"], lambda s: s[0])` puts all three words in both groups.
+--- src
+def group_by(items, key):
+    """Return {key(item): [items]} with groups in first-seen key order and items in input order. items may be any iterable (including a generator, consumed once). Does not modify items."""
+    groups = dict.fromkeys(map(key, items), [])
+    for item in items:
+        groups[key(item)].append(item)
+    return groups
+--- fix
+def group_by(items, key):
+    """Return {key(item): [items]} with groups in first-seen key order and items in input order. items may be any iterable (including a generator, consumed once). Does not modify items."""
+    groups = {}
+    for item in items:
+        groups.setdefault(key(item), []).append(item)
+    return groups
+--- test
+from mod import group_by
+
+
+def test_basic():
+    assert group_by(["apple", "avocado", "banana"], lambda s: s[0]) == {"a": ["apple", "avocado"], "b": ["banana"]}
+    assert group_by([], len) == {}
+
+
+def test_order():
+    g = group_by(["bb", "a", "cc", "d"], len)
+    assert list(g) == [2, 1]
+    assert g[2] == ["bb", "cc"]
+
+
+def test_generator_and_calls():
+    calls = []
+
+    def k(x):
+        calls.append(x)
+        return x % 2
+
+    g = group_by((i for i in range(5)), k)
+    assert g == {0: [0, 2, 4], 1: [1, 3]}
+    assert len(calls) == 5
+
+
+def test_groups_independent():
+    g = group_by([1, 2, 3], lambda x: x)
+    g[1].append(99)
+    assert g[2] == [2]
+
+### running_balance
+--- ticket
+After calling `running_balance` our transaction dicts have a new `balance` key we did not add, and a debit of an unknown type like "refund" is silently treated as a debit. Negative or zero amounts are accepted too.
+--- src
+def running_balance(opening, transactions):
+    """Apply transactions in order. Each is a dict {"type": "credit" or "debit", "amount": positive int cents}. Returns (closing_balance, balances_after_each_transaction). Balance may go negative on a debit. Raises ValueError for an unknown type or an amount that is not a positive int, before changing anything. Does not modify the input transactions."""
+    balances = []
+    bal = opening
+    for t in transactions:
+        if t["type"] == "credit":
+            bal += t["amount"]
+        else:
+            bal -= t["amount"]
+        t["balance"] = bal
+        balances.append(bal)
+    return bal, balances
+--- fix
+def running_balance(opening, transactions):
+    """Apply transactions in order. Each is a dict {"type": "credit" or "debit", "amount": positive int cents}. Returns (closing_balance, balances_after_each_transaction). Balance may go negative on a debit. Raises ValueError for an unknown type or an amount that is not a positive int, before changing anything. Does not modify the input transactions."""
+    for t in transactions:
+        if t["type"] not in ("credit", "debit"):
+            raise ValueError(t["type"])
+        if not isinstance(t["amount"], int) or isinstance(t["amount"], bool) or t["amount"] <= 0:
+            raise ValueError(t["amount"])
+    balances = []
+    bal = opening
+    for t in transactions:
+        bal += t["amount"] if t["type"] == "credit" else -t["amount"]
+        balances.append(bal)
+    return bal, balances
+--- test
+import copy
+
+import pytest
+from mod import running_balance
+
+
+def test_basic():
+    tx = [{"type": "credit", "amount": 500}, {"type": "debit", "amount": 800}, {"type": "credit", "amount": 100}]
+    assert running_balance(1000, tx) == (800, [1500, 700, 800])
+    assert running_balance(5, []) == (5, [])
+
+
+def test_overdraw_allowed():
+    assert running_balance(0, [{"type": "debit", "amount": 50}]) == (-50, [-50])
+
+
+def test_input_not_modified():
+    tx = [{"type": "credit", "amount": 5}, {"type": "debit", "amount": 2}]
+    before = copy.deepcopy(tx)
+    running_balance(0, tx)
+    assert tx == before
+
+
+@pytest.mark.parametrize("bad", [
+    {"type": "refund", "amount": 5},
+    {"type": "credit", "amount": 0},
+    {"type": "debit", "amount": -5},
+    {"type": "credit", "amount": 2.5},
+])
+def test_invalid(bad):
+    with pytest.raises(ValueError):
+        running_balance(0, [{"type": "credit", "amount": 1}, bad])
