@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime
 import json
 import sys
+import unicodedata
 from pathlib import Path
 from typing import NoReturn
 
@@ -35,6 +36,15 @@ COUNCIL = (  # veche.py decision record (has "tally"); see references/council.md
 VERDICTS = {"HOLD", "REVISE", "PASS_TO_USER"}
 INDEPENDENCE = {"inline", "independent"}
 ORIGINS = {"owner-request", "agent-originated"}
+FINDING_CLASSES = {"real", "misread", "accepted-cost", "noise"}
+# Typographic variants fold to ASCII; zero-width characters vanish (norm in check_findings).
+_FOLD = {
+    **dict.fromkeys([*range(0x2018, 0x201C), 0x2032], "'"),  # curly single quotes, prime
+    **dict.fromkeys(range(0x201C, 0x2020), '"'),  # curly double quotes
+    **dict.fromkeys([*range(0x2010, 0x2016), 0x2212], "-"),  # dashes, minus
+    **dict.fromkeys([0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF, 0x00AD], None),  # zero-width, word joiner, soft hyphen
+}
+MIN_QUOTE = 12  # chars after normalizing; shorter quotes match almost anything
 # Phrases that read as a performative, non-attacking "attack" — a
 # strongest_attack_survived that reduces to one of these defeats the point
 # of the field (see idea-critic/SKILL.md, verdict schema).
@@ -57,10 +67,66 @@ def die(code: int, msg: str) -> NoReturn:
     raise SystemExit(code)
 
 
+def check_findings(data: dict, artifact: Path | None, council: bool) -> None:
+    """Optional findings: [{text, class, quote}]. Shape, class and quote length
+    are checked whenever present; an independent REVISE/HOLD then needs at
+    least one `real` finding. With --artifact each quote must also occur in the
+    artifact (NFKC, case-folded, quotes and dashes to ASCII, zero-width
+    characters dropped, whitespace collapsed) and the artifact makes findings
+    mandatory for that REVISE/HOLD. `"findings": null` is an error."""
+    if "findings" not in data and artifact is None:
+        return
+    found = data.get("findings", [])
+    if not isinstance(found, list):
+        die(1, "findings must be a list")
+
+    def norm(s: str) -> str:
+        s = unicodedata.normalize("NFKC", s).casefold().translate(_FOLD)
+        return " ".join(s.split())
+
+    for i, f in enumerate(found):
+        if not isinstance(f, dict):
+            die(1, f"findings[{i}] must be an object")
+        if not isinstance(f.get("class"), str) or f["class"] not in FINDING_CLASSES:
+            die(1, f"findings[{i}].class must be one of: {', '.join(sorted(FINDING_CLASSES))}")
+        for k in ("text", "quote"):
+            if not isinstance(f.get(k), str) or not f[k].strip():
+                die(1, f"findings[{i}].{k} must be a non-empty string")
+        if len(norm(f["quote"])) < MIN_QUOTE:
+            die(1, f"findings[{i}].quote must be at least {MIN_QUOTE} characters")
+    if artifact is not None:
+        try:
+            text = norm(artifact.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError):
+            die(2, "unreadable artifact")
+        for i, f in enumerate(found):
+            if norm(f["quote"]) not in text:
+                die(1, f"findings[{i}].quote is not in the artifact")
+    if (
+        not council
+        and data["verdict"] in ("REVISE", "HOLD")
+        and data["independence"] != "inline"
+        and not any(f["class"] == "real" for f in found)
+    ):
+        die(1, f"an independent {data['verdict']} requires at least one real finding")
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[1] not in ("--file", "-f"):
-        die(2, "usage: validate_verdict.py --file <verdict.json>")
-    path = Path(argv[2])
+    usage = "usage: validate_verdict.py --file <verdict.json> [--artifact <file>]"
+    opts: dict[str, str] = {}
+    args = iter(argv[1:])
+    for flag in args:
+        name = {"-f": "--file"}.get(flag, flag)
+        if name not in ("--file", "--artifact") or name in opts:
+            die(2, usage)
+        value = next(args, None)
+        if value is None or value.startswith("-"):
+            die(2, f"missing value for {flag}")
+        opts[name] = value
+    if "--file" not in opts:
+        die(2, usage)
+    path = Path(opts["--file"])
+    artifact = Path(opts["--artifact"]) if "--artifact" in opts else None
     if not path.is_file():
         die(2, f"not a file: {path}")
     try:
@@ -133,6 +199,7 @@ def main(argv: list[str]) -> int:
                 1,
                 "strongest_attack_survived reads as generic/performative, not a real attack",
             )
+    check_findings(data, artifact, council)
     print("validate_verdict: ok")
     return 0
 

@@ -184,14 +184,17 @@ remaining_risk         short
 ```
 
 Optional, checked when present (non-empty): `decision` (go | no-go | go-if
-<condition>), `leading_metric` (the metric to watch, with its review date).
+<condition>), `leading_metric` (the metric to watch, with its review date),
+`findings` (`[{text, class, quote}]`; class real | misread | accepted-cost |
+noise; quote ≥12 chars of artifact text). An independent REVISE/HOLD with
+findings needs one `real`; `--artifact FILE` also requires each quote in it.
 
 - `NONE` is valid for empty arrays. Missing evidence is `UNVERIFIED`, never pass.
 - Critics are reviewers, not evidence sources. Re-check objective claims.
 - `owner-request` + `HOLD` is illegal: attack, then `REVISE` or `PASS_TO_USER`.
-- `steelman` and `strongest_attack_survived` must not be empty. A `PASS_TO_USER` whose `strongest_attack_survived` is generic or performative ("none", "no issues found", "looks good") is rejected: an assigned dissent that never really attacked is measurably worse than no critic (Nemeth, Brown & Rogers 2001, `docs/standards-index.md`).
+- `steelman` and `strongest_attack_survived` must not be empty. A `PASS_TO_USER` whose `strongest_attack_survived` is generic or performative ("none", "no issues found", "looks good") is rejected: an assigned dissent that never really attacked is measurably worse than no critic (Nemeth, Brown & Rogers 2001, `docs/standards-index.md`). Also rejected: a finding whose quote is absent from `--artifact`, and an independent REVISE/HOLD with no `real` finding.
 
-Validate: `python3 scripts/validate_verdict.py --file <verdict.json>` (exit 0
+Validate: `python3 scripts/validate_verdict.py --file <verdict.json> [--artifact FILE]` (exit 0
 valid, 1 contract violation, 2 usage or unreadable input). The script ships
 next to this file and is copied by `install.sh`.
 
