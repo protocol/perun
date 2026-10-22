@@ -123,9 +123,10 @@ class Advise(unittest.TestCase):
         (self.project / ".mcp.json").write_text(json.dumps({"mcpServers": {"acme-docs": {}, "acme-crm": {}, "acme-wiki": {}}}))
         got = self.run_advise([line(0, tools=["mcp__acme-docs__search"]), line(1)])
         self.assertIn("mcp-unused", got)
-        idle = got["mcp-unused"]["evidence"].split(": ", 1)[1]
-        self.assertIn("acme-crm", idle)
-        self.assertNotIn("acme-docs", idle)
+        ev = got["mcp-unused"]["evidence"]
+        self.assertTrue(ev.startswith("2 of 3 MCP servers"), ev)  # a count: server names stay out of the evidence (and the nudge line)
+        for name in ("acme-docs", "acme-crm", "acme-wiki"):
+            self.assertNotIn(name, ev)
 
     def test_mcp_disabled_in_settings_is_not_recommended(self):
         (self.project / ".mcp.json").write_text(json.dumps({"mcpServers": {"acme-docs": {}, "acme-crm": {}, "acme-wiki": {}}}))

@@ -201,6 +201,14 @@ settings or the environment) is skipped; the subagent-model rule names no value,
 refused (exit 2); PATH.bak is written first, only if absent (its path is printed when created), keeping PATH's mode; the rewrite is atomic; only keys
 absent from PATH are added; a missing PATH in an existing directory is created (mode 0600); a second run prints
 "nothing to apply". Levers whose key is already set also drop out of the Lever lines and Top levers under --advise.
+`--nudge [--session P] [--project DIR]` prints ONE line, or nothing: the top --advise finding with its at-stake USD and the
+exact command to run, plus, for 14 days after an `--apply` backup, `since applying <keys>: input-eq/turn -N% (n turns before, m
+after)` (`unknown` under 20 main turns on either side of the backup's mtime; never a guess). Without --session it reads the newest
+transcript of --project. The receipt counts every project transcript within 14 days before the backup, so an --apply in an earlier session still
+reports; only a backup `--apply` wrote counts (it leaves an empty PATH.bak.perun marker), and with --nudge-cache the receipt is dropped (the advise
+line stays) when the files to read total over 256 MB or reading passes 30 s. It always exits 0 and prints nothing on any error. With --nudge-cache FILE
+a 60 s watchdog caches the line so far ("" if unfinished) and exits; any failure caches "" for that transcript and settings
+state (no retry until they change); FILE.lock is removed. session_brief.py runs it from SessionStart (policy `spend_nudge=off` mutes it).
 
 OUTPUT
 ------
@@ -236,10 +244,13 @@ import json
 import math
 import os
 import re
+import shlex
+import signal
 import statistics
 import subprocess
 import sys
 import tempfile
+import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -1563,8 +1574,8 @@ def _r_mcp_unused(f):
     norm = {s: re.sub(r"[^A-Za-z0-9_-]", "_", s) for s in live}
     idle = sorted(s for s, n in norm.items() if n not in f["used"])
     if len(idle) >= ADV["mcp_unused"]:
-        return (f"{len(idle)} of {len(norm)} MCP servers in .mcp.json were not called in this session: {', '.join(idle)}"
-                " (one session; other sessions may need them)", (None, []))
+        return (f"{len(idle)} of {len(norm)} MCP servers in .mcp.json were not called in this session"
+                " (one session; other sessions may need them; see .mcp.json for names)", (None, []))
 
 
 def _r_mcp_search_off(f):
@@ -1579,7 +1590,7 @@ def _r_tier(f):
            and s["output_tokens"] / s["tool_calls"] <= ADV["mech_out_per_call"]]
     if hit:
         return (f"{len(hit)} lane(s) on a top tier wrote at most {ADV['mech_out_per_call']} output tokens per tool call "
-                f"(mostly mechanical): {', '.join(s['label'] for s in hit)}"), _stake(merge_by_model([s["by_model"] for s in hit]), f["rates"])
+                f"(mostly mechanical): {', '.join(s['file'] for s in hit)}"), _stake(merge_by_model([s["by_model"] for s in hit]), f["rates"])
 
 
 def _r_main_tier(f):
@@ -1755,8 +1766,8 @@ def apply_plan(path: str, plan: dict):
 
     `path` is resolved through symlinks first. Raises ValueError (nothing half-written) if the file or its directory is
     unusable, or the file is not a JSON object with an object env. A missing file whose directory exists is created
-    exclusively (mode 0600). An existing file gets `path`.bak only if that is absent (the first original survives reruns),
-    then an atomic replace that keeps the file's mode. Writes nothing when no plan key is absent, so a rerun is a no-op.
+    exclusively (mode 0600). An existing file gets `path`.bak only if that is absent (the first original survives reruns), plus an
+    empty `path`.bak.perun marker beside a backup it just wrote, then an atomic replace that keeps the file's mode. Writes nothing when no plan key is absent, so a rerun is a no-op.
     """
     path = os.path.realpath(path)
     tmp = None
@@ -1791,6 +1802,8 @@ def apply_plan(path: str, plan: dict):
                 with os.fdopen(fd, "w", encoding="utf-8") as fh:
                     os.fchmod(fh.fileno(), mode)
                     fh.write(raw)
+                with contextlib.suppress(OSError):  # marks this `.bak` as ours: the nudge receipt ignores a backup another tool wrote
+                    os.close(os.open(path + APPLIED_SUFFIX, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
             except FileExistsError:
                 pass
             fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".settings-", suffix=".tmp")
@@ -1818,6 +1831,152 @@ def render_advice(a: dict) -> str:
     if not rows:
         lines.append("  none: no rule fired on this session")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Nudge: one line at session start (top lever + did-it-work receipt)
+# ---------------------------------------------------------------------------
+
+APPLIED_SUFFIX = ".bak.perun"  # apply_plan creates this empty file beside the `.bak` it writes; only such a backup feeds the receipt
+NUDGE_MIN_TURNS = 20 # starting value: main turns needed on EACH side of the apply time before a before/after number is shown
+NUDGE_RECEIPT_DAYS = 14  # the receipt is shown this long after the apply, then goes quiet
+NUDGE_MAX_BYTES = 128_000_000  # the hook skips bigger transcripts: build_report holds every line in memory (~18 MB took 2.3 s CPU)
+NUDGE_TIMEOUT_S = 60  # hard cap on one background refresh: the watchdog caches "" for that key and exits
+NUDGE_LOCK_TTL_S = NUDGE_TIMEOUT_S + 30  # session_brief.py treats the refresh lock as live this long: longer than the child can run
+NUDGE_RECEIPT_BYTES = 256_000_000  # total transcript bytes the receipt reads across files; over it the nudge keeps the advise line and drops the receipt
+NUDGE_RECEIPT_DEADLINE_S = 30  # monotonic budget for the receipt, well under NUDGE_TIMEOUT_S; checked between files
+_WATCH: dict = {}  # what the SIGALRM watchdog needs: cache path, key, and the line once known
+
+
+def _on_alarm(*_):
+    """Watchdog: cache the line known so far ("" until nudge() returns) under the same key, drop the lock, and exit.
+
+    It never raises, so no `except OSError` (TimeoutError is one) can swallow it; the cache and lock stay consistent."""
+    if _WATCH.get("key"):
+        write_nudge_cache(_WATCH["cache"], _WATCH["key"], _WATCH["line"])
+    with contextlib.suppress(OSError):
+        os.unlink(_WATCH["cache"] + ".lock")
+    os._exit(0)
+
+
+def project_transcripts(project: str, skip: str | None = None) -> list:
+    """Every `<session>.jsonl` DirEntry of `project`'s `~/.claude/projects/<encoded cwd>` dir (not lane files), ignoring session id `skip`; [] if absent."""
+    home = user_config_dir()
+    for p in dict.fromkeys((os.path.abspath(project), os.path.realpath(project))):  # the host names the dir after the cwd it saw (symlinks resolved or not)
+        try:
+            files = [e for e in os.scandir(os.path.join(home, "projects", re.sub(r"[^A-Za-z0-9]", "-", p))) if e.name.endswith(".jsonl") and e.name[:-6] != skip and e.is_file()]
+        except (OSError, TypeError):  # TypeError: no home resolves
+            continue
+        if files:
+            return files
+    return []
+
+
+def newest_transcript(project: str, skip: str | None = None):
+    """Newest `<session>.jsonl` (by mtime) of `project`, ignoring session id `skip`; None if absent."""
+    files = project_transcripts(project, skip)
+    return max(files, key=lambda e: e.stat().st_mtime).path if files else None
+
+
+def _settings_files(project: str) -> list:
+    home = user_config_dir()
+    return ([os.path.join(home, "settings.json")] if home else []) + [os.path.join(os.path.realpath(project), ".claude", n) for n in ("settings.json", "settings.local.json")]
+
+
+def nudge_key(session: str, project: str) -> dict:
+    """{"s": transcript path/mtime/size, "c": settings, `.bak` and apply-marker mtime/size, "d": UTC date}.
+
+    The cache is valid while all three are unchanged; the shown lever stays while "c" is. "d" makes the cache re-check once a day, so the
+    receipt window (a function of today) cannot go stale on an idle project."""
+    st = lambda p: [os.stat(p).st_mtime_ns, os.stat(p).st_size] if os.path.exists(p) else None  # noqa: E731
+    return {"s": [session, *st(session)], "c": [st(p) for f in _settings_files(project) for p in (f, f + ".bak", f + APPLIED_SUFFIX)],
+            "d": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
+
+
+def _keys(obj: dict) -> set:
+    return {k for k in obj if k != "env"} | {f"env.{k}" for k in (obj.get("env") or {})}
+
+
+def receipt(session: str, project: str, now=None, max_bytes: int | None = None):
+    """`since applying <keys>: input-eq/turn -N% (n turns before, m after)` for the newest `--apply` backup, else None.
+
+    The apply time is the mtime of a settings file's `.bak` (apply_plan writes it once, at the first apply, so a later apply is not seen);
+    the keys are those the file has now and the backup lacks. Input-equivalent per deduped main turn on each side of that time, over
+    `session` plus every transcript of `project` modified within NUDGE_RECEIPT_DAYS before the apply (a session started before the apply
+    and one started after both count; a resumed session's copied turns count once). A transcript over `max_bytes` is skipped unread.
+    `unknown` (never a guess) when either side has under NUDGE_MIN_TURNS turns or the before side has no spend. None when there is no
+    backup that apply_plan wrote (it leaves a `.bak.perun` marker; a `.bak` from another tool is ignored), it is older than
+    NUDGE_RECEIPT_DAYS, either settings file is unreadable, or (with `max_bytes`) the files to read total over NUDGE_RECEIPT_BYTES or
+    reading passes NUDGE_RECEIPT_DEADLINE_S. Reads usage and timestamps only.
+    """
+    baks = [(os.stat(f + ".bak").st_mtime, f) for f in _settings_files(project)
+            if os.path.isfile(f + ".bak") and os.path.isfile(f + APPLIED_SUFFIX) and os.path.isfile(f)]
+    if not baks:
+        return None
+    at, path = max(baks)
+    t0 = datetime.fromtimestamp(at, timezone.utc)
+    if (now or datetime.now(timezone.utc)) - t0 > timedelta(days=NUDGE_RECEIPT_DAYS):
+        return None
+    try:
+        with open(path, encoding="utf-8") as a, open(path + ".bak", encoding="utf-8") as b:
+            keys = sorted(_keys(json.load(a)) - _keys(json.load(b)))
+    except (OSError, ValueError, AttributeError):
+        return None
+    paths = {session} | {e.path for e in project_transcripts(project) if e.stat().st_mtime >= at - NUDGE_RECEIPT_DAYS * 86400}
+    paths = sorted((p for p in paths if not (max_bytes and os.path.getsize(p) > max_bytes)), key=os.path.getmtime)  # oldest first: the original owns a copied turn
+    if max_bytes and sum(os.path.getsize(p) for p in paths) > NUDGE_RECEIPT_BYTES:
+        return None  # over the total budget: the caller keeps its advise line without a receipt
+    deadline = time.monotonic() + NUDGE_RECEIPT_DEADLINE_S
+    seen: set = set()
+    turns = []
+    for p in paths:
+        if max_bytes and time.monotonic() > deadline:
+            return None
+        turns += [t for t in extract_turns(list(read_jsonl(p)), main=True, seen=seen)
+                  if not t.get("iter") and not t.get("dup") and t.get("model") != "<synthetic>" and t["timestamp"]]
+    before, after = [t for t in turns if t["timestamp"] < t0], [t for t in turns if t["timestamp"] >= t0]
+    head = f"since applying {', '.join(keys) or 'settings'}: input-eq/turn "
+    ie = lambda ts: sum_turns(ts)["input_equivalent"] / len(ts)  # noqa: E731
+    if min(len(before), len(after)) < NUDGE_MIN_TURNS or ie(before) <= 0:
+        return head + f"unknown ({len(before)} turns before, {len(after)} after; need {NUDGE_MIN_TURNS} each)"
+    return head + f"{(ie(after) / ie(before) - 1) * 100:+.0f}% ({len(before)} turns before, {len(after)} after)"
+
+
+def nudge(session: str, project: str = ".", rates=DEFAULT_RATES, now=None, max_bytes: int | None = None) -> str:
+    """ONE line, or "" when there is nothing to say: the top `--advise` finding (its at-stake USD and the exact command) plus the receipt.
+
+    Silent when no rule fires (a rule whose settings key is already set never fires) and no recent apply backup exists. Reads usage,
+    timestamps, model ids, tool names and settings keys only (lane evidence names file stems, never descriptions); no network.
+    `max_bytes` makes a bigger transcript return "" unread and the receipt skip any bigger project transcript; the receipt is its own
+    try, so an error or an over-budget corpus there leaves the advise line intact.
+    """
+    if max_bytes and os.path.getsize(session) > max_bytes:
+        return ""
+    report = build_report(session, None, 0, rates, project=None)
+    adv = advise(report, None, rates, project)
+    parts = []
+    if adv["advice"]:
+        a = adv["advice"][0]
+        flag = "--fix-plan" if adv["fix_plan"] else "--advise"  # a rule with no settings key has no patch to print
+        parts.append(f"[{a['id']}] {a['evidence']}; at stake {_usd(a['at_stake_usd'], a['unpriced_models'])}; "
+                     f"see: python3 {shlex.quote(os.path.abspath(__file__))} --session {shlex.quote(session)} {flag} --project {shlex.quote(project)}")
+    try:
+        r = receipt(session, project, now, max_bytes)
+    except Exception:  # a receipt failure must not take the advise line down with it
+        r = None
+    return "spend: " + " | ".join(parts + [r] if r else parts) if parts or r else ""
+
+
+def write_nudge_cache(path: str, key: dict, line: str):
+    """Atomically store {"key", "line"} at `path` for session_brief.py (an unwritable path is ignored)."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump({"key": key, "line": line}, fh)
+        os.replace(tmp, path)
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -1941,6 +2100,10 @@ def build_parser() -> argparse.ArgumentParser:
                         "and print one summary line plus the costliest sessions (--top, --since, --json apply)")
     p.add_argument("--by", choices=("day", "week"), help="with --rollup: add UTC day or week buckets (tokens, spend, per-model share, delta vs previous)")
     p.add_argument("--limit", type=float, metavar="N", help="your own weighted-token budget per 5h window; adds percent used and time to reach it to the active window")
+    p.add_argument("--nudge", action="store_true",
+                   help="print ONE line (top --advise lever, its at-stake USD, the command; plus the did-it-work receipt after an --apply), or nothing; "
+                        "uses --session or the newest transcript of --project; never fails")
+    p.add_argument("--nudge-cache", metavar="FILE", help="with --nudge: also store the line in FILE for session_brief.py and skip transcripts over %d bytes" % NUDGE_MAX_BYTES)
     p.add_argument("--selftest", action="store_true")
     return p
 
@@ -1953,6 +2116,29 @@ def main(argv=None) -> int:
     if args.selftest:
         return _selftest()
 
+    if args.nudge:  # fail-silent: a hook or a habit must never see an error from this
+        key, line = None, ""
+        try:
+            sess = args.session or newest_transcript(args.project)
+            key = nudge_key(sess, args.project)
+            if args.nudge_cache and hasattr(signal, "SIGALRM"):  # watchdog: on timeout it caches the line so far ("" if unfinished) and exits
+                _WATCH.update(cache=args.nudge_cache, key=key, line="")
+                signal.signal(signal.SIGALRM, _on_alarm)
+                signal.alarm(NUDGE_TIMEOUT_S)
+            line = nudge(sess, args.project, max_bytes=NUDGE_MAX_BYTES if args.nudge_cache else None)
+            _WATCH["line"] = line
+        except Exception:  # any failure is cached as "" for the same key (no retry until the transcript or settings change)
+            line = ""
+        if args.nudge_cache:
+            if hasattr(signal, "SIGALRM"):
+                signal.alarm(0)
+            if key:
+                write_nudge_cache(args.nudge_cache, key, line)
+            with contextlib.suppress(OSError):
+                os.unlink(args.nudge_cache + ".lock")
+        if line:
+            print(line)
+        return OK
     if args.by and not args.rollup:
         print("token_report.py: --by needs --rollup DIR", file=sys.stderr)
         return ERROR

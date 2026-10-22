@@ -17,10 +17,16 @@ Lines (each skipped when its input is missing; nothing is fetched from the netwo
      One line total, silent when consistent or unparsable; reads only those files.
   4. the top-ranked item in PRIORITIES.md (queue_guard.ranked_ids; claim status not checked
      offline).
+  5. `spend: ...` (after the priority line, so it is the first line cut when the cap bites): the top token_report.py --advise lever
+     (at-stake USD, exact command) and, after an --apply, the did-it-work receipt, from the newest prior transcript. Read from a
+     cache keyed by transcript, settings and date; a miss starts one detached token_report.py --nudge refresh per 90 s (a lock file; the
+     child stops after 60 s and caches "" on failure), so this hook never parses a transcript. A cached line older than 14 days is
+     dropped. Policy `spend_nudge=off` mutes it.
 Time: all subprocess calls share a 5s budget (BUDGET); once spent, the rest are skipped.
 Output: one JSON object with `additionalContext` (report lines plus the fixed HOST_RULES from subagent_start_inject.py, always) and, when there are report lines, `systemMessage` (shown to the user).
 Any error ends the hook silently with exit 0.
 """
+import hashlib
 import json
 import os
 import re
@@ -171,6 +177,65 @@ def priority_line(repo: Path):
     return f"top ranked in PRIORITIES.md: {title[:120]} (claim status not checked offline)"
 
 
+TOKEN_REPORT = HERE.parent.parent / "agentic-ceo/scripts/token_report.py"  # sibling skill; absent -> no spend line
+_SESSION = [None]  # this session's id (hook stdin), so its own fresh transcript is never "the prior one"
+
+
+def _spawn_refresh(cmd):
+    """Start token_report.py detached (it can take seconds on a big transcript); the next SessionStart reads what it cached."""
+    subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def _claim(lock: Path, ttl: float) -> bool:
+    """Write `lock` (this pid and the time) unless one younger than `ttl` seconds exists; True when this call owns it.
+
+    ponytail: check-then-write, so two hooks starting in the same instant may both spawn (the lock bounds a pile-up, it is not a mutex);
+    a stale lock is overwritten, never deleted (this hook deletes nothing). The refresh child removes its own lock when done."""
+    try:
+        if time.time() - lock.stat().st_mtime < ttl:
+            return False
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return False
+    try:
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        lock.write_text(f"{os.getpid()} {int(time.time())}")
+    except OSError:
+        return False
+    return True
+
+
+def spend_line(repo: Path):
+    """The cached `token_report.py --nudge` line for the newest prior transcript of `repo`; None when muted, absent or nothing fires.
+
+    Never parses a transcript here: a cache hit (same transcript, settings and UTC date) is a stat and a small JSON read. A miss
+    starts a detached refresh (transcripts over NUDGE_MAX_BYTES are skipped; one refresh per NUDGE_LOCK_TTL_S, guarded by `<cache>.lock`;
+    the child stops after NUDGE_TIMEOUT_S, shorter than the lock, and caches "" for a failure) and shows the cached line only while the settings are unchanged and the
+    cache is under NUDGE_RECEIPT_DAYS old, so an applied lever stops being advertised at once. Policy `spend_nudge=off` mutes it. No network."""
+    import perun_policy
+    if perun_policy.load(perun_policy.find_policy(str(repo))).get("spend_nudge") == "off" or not TOKEN_REPORT.is_file():
+        return None
+    if str(TOKEN_REPORT.parent) not in sys.path:
+        sys.path.append(str(TOKEN_REPORT.parent))
+    import token_report as tr
+    project = os.path.realpath(repo)
+    sess = tr.newest_transcript(project, _SESSION[0])
+    if not sess:
+        return None
+    key = tr.nudge_key(sess, project)
+    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "perun" / f"spend-nudge-{hashlib.sha1(project.encode()).hexdigest()[:16]}.json"
+    try:
+        c, age = json.loads(cache.read_text()), time.time() - cache.stat().st_mtime
+    except (OSError, ValueError):
+        c, age = None, 0
+    if not (isinstance(c, dict) and c.get("key") == key) and os.path.getsize(sess) <= tr.NUDGE_MAX_BYTES \
+            and _claim(cache.with_name(cache.name + ".lock"), tr.NUDGE_LOCK_TTL_S):
+        _spawn_refresh([sys.executable, str(TOKEN_REPORT), "--nudge", "--session", sess, "--project", project, "--nudge-cache", str(cache)])
+    live = isinstance(c, dict) and (c.get("key") or {}).get("c") == key["c"] and age < tr.NUDGE_RECEIPT_DAYS * 86400
+    return (c.get("line") or None) if live else None
+
+
 def merge_line(repo: Path):
     """One resume line when `merge_checkpoint.sh save` left .git/perun-merge-state (a stalled merge)."""
     gd = subprocess.run(["git", "rev-parse", "--absolute-git-dir"], cwd=repo, capture_output=True, text=True, timeout=3)
@@ -231,7 +296,7 @@ def brief(repo: Path) -> list:
     """The ≤3 report lines for `repo`; each section is independent and fails silent."""
     lines = []
     _deadline[0] = time.monotonic() + BUDGET
-    for fn in (merge_line, version_line, committed_line, hygiene_line, priority_line, drift_line):
+    for fn in (merge_line, version_line, committed_line, hygiene_line, priority_line, spend_line, drift_line):
         if time.monotonic() >= _deadline[0]:
             break  # budget spent: skip the remaining sections
         try:
@@ -298,7 +363,8 @@ def main() -> int:
         return _selftest()
     try:
         try:
-            cwd = json.load(sys.stdin).get("cwd")
+            hook = json.load(sys.stdin)
+            cwd, _SESSION[0] = hook.get("cwd"), hook.get("session_id")
         except Exception:
             cwd = None
         repo = Path(os.environ.get("CLAUDE_PROJECT_DIR") or cwd or os.getcwd())
