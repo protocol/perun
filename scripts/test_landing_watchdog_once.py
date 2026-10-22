@@ -41,6 +41,7 @@ class Once(Base):
 
     def test_reshown_after_ttl_so_compaction_recovers(self):
         t = time.time()
+        self.assertEqual(lw.STAMP_TTL_S, 15 * 60)
         first = self.hook("s1", t)
         self.assertIsNone(self.hook("s1", t + 60))
         self.assertEqual(self.hook("s1", t + lw.STAMP_TTL_S + 60), first)
@@ -54,6 +55,10 @@ class Once(Base):
         self.assertFalse(old.exists())
         with mock.patch("builtins.open", side_effect=OSError("ro")), mock.patch.object(lw, "_line", return_value="L"):
             self.assertEqual(self.hook("s3", t), "L")
+
+    def test_nul_in_session_id_still_returns_line(self):
+        with mock.patch.object(lw, "_line", return_value="L"):
+            self.assertEqual(self.hook("a\x00b", time.time()), "L")
 
 
 if __name__ == "__main__":

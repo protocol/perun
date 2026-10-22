@@ -24,7 +24,7 @@ Persisted artifacts stay normal English. Chat may be terse.
 **No files/tools (plain chat)?** Say so once; never claim a reference loaded or a command run. Write `would run: <cmd>`, mark skipped depth `unverified-depth`, answer first, reasoning short.
 
 **Route from the tables below; a match skips `INDEX.md`**, else read this
-skill's own. Delivery refs: `agentic-delivery`'s Task to entry table, else its read-when routing / `INDEX.md`.
+skill's own. Delivery refs: `agentic-delivery`'s Task to entry table, else read its `INDEX.md` and open only matching rows.
 
 ---
 

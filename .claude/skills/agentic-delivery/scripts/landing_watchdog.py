@@ -24,7 +24,7 @@ shares the same throttle, cache and CLI (`check` exits 1 for either line).
 
 Throttle: the remote is asked (one `git fetch` of the default branch, one `gh pr list`) at most once per 15 minutes
 per repo; the verdict is cached between probes, so a standing stall costs no network call; a prompt's line is emitted once per
-session and again when it changes or after an hour; a spawn always gets it, and a payload without session_id is not deduped. The cache is one small JSON file per repo under $PERUN_LANDING_DIR, else <cache>/perun/landing-watchdog
+session and again when it changes or after 15 minutes; a spawn always gets it, and a payload without session_id is not deduped. The cache is one small JSON file per repo under $PERUN_LANDING_DIR, else <cache>/perun/landing-watchdog
 (<cache> = $XDG_CACHE_HOME or ~/.cache, beside the other Perun hook state). The stamp is written before the calls, so a
 hanging or failing remote is not retried on every prompt.
 
@@ -45,7 +45,7 @@ import sys
 import time
 
 THROTTLE_S = 15 * 60
-STAMP_TTL_S = 60 * 60  # re-show a standing line after this long: a compaction may have dropped it
+STAMP_TTL_S = 15 * 60  # re-show a standing line after this long: a compaction may have dropped it
 PRUNE_S = 7 * 24 * 3600
 DEFAULT_MIN = 60
 DEFAULT_MODE = "warn"
@@ -165,7 +165,7 @@ def hook(data, now=None):
             with open(stamp) as f:
                 seen = f.read()
             fresh = (now or time.time()) - os.path.getmtime(stamp) < STAMP_TTL_S
-        except OSError:
+        except (OSError, ValueError):
             seen, fresh = "", False
         if (line or "") == seen and fresh:
             return None
@@ -176,7 +176,7 @@ def hook(data, now=None):
             q = os.path.join(d, n)
             if ".json." in n and time.time() - os.path.getmtime(q) > PRUNE_S:
                 os.remove(q)
-    except OSError:  # fail open: a stamp problem must not drop the warning
+    except (OSError, ValueError):  # fail open (ValueError: NUL in session_id): a stamp problem must not drop the warning
         pass
     return line
 
