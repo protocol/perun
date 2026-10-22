@@ -148,8 +148,7 @@ One skill, three hats. Default: run all three. Do not invent a fourth.
 ## How to run
 
 1. **Classify origin.** `owner-request` vs `agent-originated`. Only the latter may be withheld.
-2. **Write the packet:** claim, steelman, origin, blast, reversibility, evidence on hand, alternatives already rejected, what the parent wants to tell the owner.
-3. **Independence.** Low-blast / same-turn: the parent runs the hats and labels the verdict `inline`. High-blast, unsolicited, or owner-decision: a **different context** (another session, model, or throwaway checkout). Calling `inline` "independent" is a lie. A different context is weaker decorrelation than a different model family (a model favors its own outputs: Panickssery, Bowman & Feng, 2024; tested on GPT-4/Llama 2 only), so reserve a different model/vendor for owner-decision-grade or irreversible claims; same-model-different-context is the floor for the highest-blast tier. `independence` is a *declaration*, not proof a review ran.
+2. **Write the packet:** claim, steelman, origin, blast, reversibility, evidence on hand, alternatives already rejected, what the parent wants to tell the owner.3. **Independence.** Low-blast / same-turn: the parent runs the hats and labels the verdict `inline`. High-blast, unsolicited, or owner-decision: a **different context** (another session, model, or throwaway checkout). Calling `inline` "independent" is a lie. A different context is weaker decorrelation than a different model family (a model favors its own outputs: Panickssery, Bowman & Feng, 2024; tested on GPT-4/Llama 2 only), so reserve a different model/vendor for owner-decision-grade or irreversible claims; same-model-different-context is the floor for the highest-blast tier. `independence` is a *declaration*, not proof a review ran.
 4. **Return only the verdict schema, and validate it.** Validity proves the declaration is well formed, not independence or truth. A malformed or missing verdict is `HOLD`. A required review that *could not run* is `UNVERIFIED` (outside the enum): the absence of a review, not a rejection of the idea.
 5. **Act before any owner-facing message** (skipping a hat or about to emit `PASS_TO_USER`? see Anti-rationalization):
    - `HOLD`: do not recommend it. Owner hears nothing unless they asked.
@@ -184,14 +183,17 @@ remaining_risk         short
 ```
 
 Optional, checked when present (non-empty): `decision` (go | no-go | go-if
-<condition>), `leading_metric` (the metric to watch, with its review date).
+<condition>), `leading_metric` (the metric to watch, with its review date),
+`findings` (`[{text, class, quote}]`; class real | misread | accepted-cost |
+noise; quote ≥12 chars of artifact text). An independent REVISE/HOLD with
+findings needs one `real`; `--artifact FILE` also requires each quote in it.
 
 - `NONE` is valid for empty arrays. Missing evidence is `UNVERIFIED`, never pass.
 - Critics are reviewers, not evidence sources. Re-check objective claims.
 - `owner-request` + `HOLD` is illegal: attack, then `REVISE` or `PASS_TO_USER`.
-- `steelman` and `strongest_attack_survived` must not be empty. A `PASS_TO_USER` whose `strongest_attack_survived` is generic or performative ("none", "no issues found", "looks good") is rejected: an assigned dissent that never really attacked is measurably worse than no critic (Nemeth, Brown & Rogers 2001, `docs/standards-index.md`).
+- `steelman` and `strongest_attack_survived` must not be empty. A `PASS_TO_USER` whose `strongest_attack_survived` is generic or performative ("none", "no issues found", "looks good") is rejected: an assigned dissent that never really attacked is measurably worse than no critic (Nemeth, Brown & Rogers 2001, `docs/standards-index.md`). Also rejected: a finding whose quote is absent from `--artifact`, and an independent REVISE/HOLD with no `real` finding.
 
-Validate: `python3 scripts/validate_verdict.py --file <verdict.json>` (exit 0
+Validate: `python3 scripts/validate_verdict.py --file <verdict.json> [--artifact FILE]` (exit 0
 valid, 1 contract violation, 2 usage or unreadable input). The script ships
 next to this file and is copied by `install.sh`.
 

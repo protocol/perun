@@ -1813,3 +1813,9 @@ Every page was fetched on 2026-10-21. A lever these pages did not show is not re
 | Claude Code — Model configuration | https://code.claude.com/docs/en/model-config | `/effort` takes a level name, `auto` or `status`; levels `low`, `medium`, `high`, `xhigh`, `max` on supported models ("Models not listed here do not support effort"); the `effortLevel` setting and `CLAUDE_CODE_EFFORT_LEVEL` env var; the saved per-model level lives under `modelSettings`. "You are charged for all thinking tokens generated, even when collapsed or redacted." The `effort` rule stays silent when any of these is set. |
 | Claude Code — Commands | https://code.claude.com/docs/en/commands | Table rows: `/clear [name]` ("Start a new conversation with empty context"), `/compact [instructions]`, `/effort [level\|auto\|status\|ultracode [on\|off]]`, `/usage`. |
 | Claude Code — Settings reference | https://code.claude.com/docs/en/settings-reference | `effortLevel` ("Before v2.1.251, `/effort` wrote this key"), `modelSettings` (saved effort level per model, v2.1.251 or later), `promptCacheTtl` (v2.1.242 or later). Read by `effort` as already-set checks. |
+
+## Verified by direct fetch (2026-10-22) — idea-critic `findings` classes
+
+| Source | URL | What it grounds |
+|---|---|---|
+| addyosmani/agent-skills — doubt-driven-development | https://raw.githubusercontent.com/addyosmani/agent-skills/main/skills/doubt-driven-development/SKILL.md | Idea source only (re-implemented, not copied): a fresh-context reviewer gets the artifact and contract, not the claim, and each finding is sorted into one of four classes (contract misread, valid and actionable, valid trade-off, noise). `idea-critic` keeps four classes under its own names (`real`, `misread`, `accepted-cost`, `noise`). Verified 2026-10-22. |

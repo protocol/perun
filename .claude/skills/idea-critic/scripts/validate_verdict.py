@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime
 import json
 import sys
+import unicodedata
 from pathlib import Path
 from typing import NoReturn
 
@@ -35,6 +36,8 @@ COUNCIL = (  # veche.py decision record (has "tally"); see references/council.md
 VERDICTS = {"HOLD", "REVISE", "PASS_TO_USER"}
 INDEPENDENCE = {"inline", "independent"}
 ORIGINS = {"owner-request", "agent-originated"}
+FINDING_CLASSES = {"real", "misread", "accepted-cost", "noise"}
+MIN_QUOTE = 12  # chars after normalizing; shorter quotes match almost anything
 # Phrases that read as a performative, non-attacking "attack" — a
 # strongest_attack_survived that reduces to one of these defeats the point
 # of the field (see idea-critic/SKILL.md, verdict schema).
@@ -57,10 +60,57 @@ def die(code: int, msg: str) -> NoReturn:
     raise SystemExit(code)
 
 
+def check_findings(data: dict, artifact: Path | None, council: bool) -> None:
+    """Optional findings: [{text, class, quote}]. Shape, class and quote length
+    are checked whenever present; an independent REVISE/HOLD then needs at
+    least one `real` finding. With --artifact each quote must also occur in the
+    artifact (NFC, whitespace runs collapsed) and the artifact makes findings
+    mandatory for that REVISE/HOLD."""
+    found = data.get("findings")
+    if found is None and artifact is None:
+        return
+    if found is not None and not isinstance(found, list):
+        die(1, "findings must be a list")
+    found = found or []
+
+    def norm(s: str) -> str:
+        return " ".join(unicodedata.normalize("NFC", s).split())
+
+    for i, f in enumerate(found):
+        if not isinstance(f, dict):
+            die(1, f"findings[{i}] must be an object")
+        if not isinstance(f.get("class"), str) or f["class"] not in FINDING_CLASSES:
+            die(1, f"findings[{i}].class must be one of: {', '.join(sorted(FINDING_CLASSES))}")
+        for k in ("text", "quote"):
+            if not isinstance(f.get(k), str) or not f[k].strip():
+                die(1, f"findings[{i}].{k} must be a non-empty string")
+        if len(norm(f["quote"])) < MIN_QUOTE:
+            die(1, f"findings[{i}].quote must be at least {MIN_QUOTE} characters")
+    if artifact is not None:
+        try:
+            text = norm(artifact.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError):
+            die(2, "unreadable artifact")
+        for i, f in enumerate(found):
+            if norm(f["quote"]) not in text:
+                die(1, f"findings[{i}].quote is not in the artifact")
+    if (
+        not council
+        and data["verdict"] in ("REVISE", "HOLD")
+        and data["independence"] != "inline"
+        and not any(f["class"] == "real" for f in found)
+    ):
+        die(1, f"an independent {data['verdict']} requires at least one real finding")
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[1] not in ("--file", "-f"):
-        die(2, "usage: validate_verdict.py --file <verdict.json>")
-    path = Path(argv[2])
+    args = argv[1:]
+    artifact = None
+    if len(args) == 4 and args[2] == "--artifact":
+        artifact, args = Path(args[3]), args[:2]
+    if len(args) != 2 or args[0] not in ("--file", "-f"):
+        die(2, "usage: validate_verdict.py --file <verdict.json> [--artifact <file>]")
+    path = Path(args[1])
     if not path.is_file():
         die(2, f"not a file: {path}")
     try:
@@ -133,6 +183,7 @@ def main(argv: list[str]) -> int:
                 1,
                 "strongest_attack_survived reads as generic/performative, not a real attack",
             )
+    check_findings(data, artifact, council)
     print("validate_verdict: ok")
     return 0
 
