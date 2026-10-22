@@ -647,7 +647,8 @@ AGENT
 fi
 
 # Slash commands: copy commands/*.md into .claude/commands/, but only those whose skill is installed.
-# review, deliver always; cost-retro, perun, perun-run need agentic-ceo/agentic-delivery.
+# review, deliver always; cost-retro, perun, perun-run need agentic-ceo/agentic-delivery;
+# critic, council need idea-critic; idea needs idea-critic and agentic-delivery.
 # Never overwrites (write_gate_file writes <dest>.new); only files written fresh go in the uninstall record.
 if [[ -d "${SCRIPT_DIR}/commands" ]]; then
   for cmd in "${SCRIPT_DIR}"/commands/*.md; do
@@ -655,6 +656,8 @@ if [[ -d "${SCRIPT_DIR}/commands" ]]; then
     case "${name}" in
       review|deliver) ;;
       cost-retro|perun|perun-run) [[ "${WITH_CEO}" -eq 1 || "${WITH_DELIVERY}" -eq 1 ]] || continue ;;
+      critic|council) [[ "${WITH_CRITIC}" -eq 1 ]] || continue ;;
+      idea) [[ "${WITH_CRITIC}" -eq 1 && "${WITH_DELIVERY}" -eq 1 ]] || continue ;;
       *) continue ;;
     esac
     dest="${TARGET_DIR}/.claude/commands/${name}.md"
