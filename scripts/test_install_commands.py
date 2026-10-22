@@ -33,6 +33,14 @@ class InstallCommands(unittest.TestCase):
             install(repo, "--with-ceo")
             self.assertEqual(names(repo), ALWAYS | GATED)
 
+    def test_critic_commands_follow_idea_critic_and_delivery(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            install(repo, "--with-critic")
+            self.assertEqual(names(repo), ALWAYS | {"critic.md", "council.md"})
+            install(repo, "--with-critic", "--with-delivery")
+            self.assertEqual(names(repo), ALWAYS | GATED | {"critic.md", "council.md", "idea.md"})
+
     def test_existing_file_kept_new_written_and_uninstall_keeps_user_file(self):
         with tempfile.TemporaryDirectory() as d:
             repo = Path(d)

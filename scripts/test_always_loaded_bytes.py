@@ -14,8 +14,8 @@ import always_loaded_bytes as alb  # noqa: E402
 from trigger_coverage import description  # noqa: E402
 
 ROOT = os.path.dirname(HERE)
-# 3889 includes the restored "jurisdiction-specific" business-ops trigger (+23 B over 3866); baseline was 4000.
-BUDGET = 3889  # total bytes across skill_descriptions + command_descriptions + sessionstart_hooks (baseline 4000)
+# 3952 adds the /critic, /council, /idea command descriptions (+84 B over 3868 after trimming); 3889 included the restored "jurisdiction-specific" business-ops trigger (+23 B over 3866); baseline was 4000.
+BUDGET = 3952  # total bytes across skill_descriptions + command_descriptions + sessionstart_hooks (baseline 4000)
 
 # Trigger keywords each skill description must keep (the words a model matches a task against).
 KEYWORDS = {
@@ -55,7 +55,10 @@ KEYWORDS = {
 }
 COMMAND_KEYWORDS = {
     "cost-retro": ["session", "spent", "cheaper"],
+    "critic": ["idea-critic", "claim"],
+    "council": ["Veche", "council"],
     "deliver": ["gated"],
+    "idea": ["idea", "one-page"],
     "perun-run": ["owner-authorised", "autonomous run", "task ledger"],
     "perun": ["weekly value receipt"],
     "review": ["deep code review", "diff"],

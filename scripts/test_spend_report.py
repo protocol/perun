@@ -84,7 +84,7 @@ class Manifests(unittest.TestCase):
 
     def test_commands_have_frontmatter(self):
         cmds = sorted((ROOT / "commands").glob("*.md"))
-        self.assertEqual([c.stem for c in cmds], ["cost-retro", "deliver", "perun-run", "perun", "review"])
+        self.assertEqual([c.stem for c in cmds], ["cost-retro", "council", "critic", "deliver", "idea", "perun-run", "perun", "review"])
         for c in cmds:
             head = c.read_text().split("---")[1]
             self.assertIn("description:", head)
