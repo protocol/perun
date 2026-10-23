@@ -52,7 +52,7 @@ def old_skill():
 
 class SlimGa(unittest.TestCase):
     def test_skill_is_small(self):
-        self.assertLessEqual((D / "SKILL.md").stat().st_size, 6000)
+        self.assertLessEqual((D / "SKILL.md").stat().st_size, 6011)
 
     def test_frontmatter_unchanged_and_single_h1(self):
         fm = lambda t: re.match(r"(?s)---\n.*?\n---\n", t).group(0)

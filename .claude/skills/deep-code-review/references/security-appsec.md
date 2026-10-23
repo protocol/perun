@@ -30,6 +30,9 @@ sub-files; load one when the target or diff matches its trigger.
 | `appsec-tokens.md` | issues or verifies JWTs, implements OAuth / OIDC, rotates refresh tokens, or mints a one-shot approval bearer token (A07) |
 | `appsec-login.md` | implements passkeys / WebAuthn, push MFA, OTP, or a password policy (A07) |
 | `appsec-design.md` | asks for or relies on a threat model, adds a trust boundary or principal, wires a producer across a publish boundary, or renders user text as a trust cue (A06) |
+| `appsec-egress.md` | builds or changes an SSRF guard (a pinning transport, a custom `http.request` wrapper, per-hop redirect revalidation) or adds an outbound fetch of a user-influenced URL where a guard exists (A01) |
+| `appsec-flows.md` | has a flow that moves value or advances state (checkout, refund, balance, coupon, invite, quota, wizard, approval, tier change), a check-then-act redeem or claim, or a rate limiter whose key or failure mode is in question (A06) |
+| `appsec-corroboration.md` | rests a finding on taint, a live secret, a vulnerable version or reachability, or ingests scanner output (SARIF, OSV JSON) |
 
 ---
 
@@ -64,33 +67,12 @@ Depth: `appsec-edge.md` (gate proposals, proxy chains, caches), `appsec-scan-tes
   RFC-1918, CGNAT, link-local metadata (`169.254/16`), IPv4-mapped/6to4, `.internal`, dotless labels;
   `redirect: manual` and re-validate each hop. (Full range list stays here — don't restate a divergent copy in
   `SKILL.md`.)
-- **A hand-rolled `fetch` replacement built to enforce the resolve-validate-pin above re-introduces the bugs `fetch`
-  already solved.** Building a custom transport (typically a raw `http.request` wrapper) specifically so a guard can
-  pin the resolved IP before connecting trades a battle-tested implementation for a new one with its own footguns —
-  verify each: a `new Response(body, { status })` built for a 204/205/304 must pass a `null` body (a non-null body on
-  these statuses throws, and the throw can escape uncaught inside an event callback); the returned promise must
-  resolve on **headers received** with a streamed body, not once the body is fully buffered — resolving only after
-  full buffering turns a status-only check into an unbounded memory sink on a large or slow response; an
-  already-aborted `AbortSignal` passed in must be honored before the request starts, not only once it fires
-  mid-flight; `content-encoding` on the response must be decoded, or the response rejected, rather than handed back as
-  opaque compressed bytes; and the DNS `lookup` callback must handle the `{ all: true }` shape (the Happy Eyeballs /
-  dual-stack path), not just a single-address result. Separately, an opt-out that compares the caller's fetch
-  implementation against the *default* `fetch` by identity (`fetchImpl === fetch`) silently disables the pin whenever
-  a caller passes no override — the common case, since a default parameter *is* that same reference — use an
-  explicit test-only parameter instead. **Test:** exercise each footgun directly against the real wrapper, not
-  `fetch` itself — a 204 response, an aborted signal passed pre-request, a `content-encoding: gzip` body, and a DNS
-  answer carrying multiple addresses.
 - **Untrusted-egress caller census (after a guard lands):** inventory every call site fetching an untrusted or
   attacker-influenced URL (HTTP clients, redirect-following options, robots/calendar/sidecar scripts —
   language-neutral, not a single API name). Confirm each uses the guarded transport and hop-revalidates; a breaker or
   allowlist on **one** client while siblings still follow redirects bare is the same class of miss. A guard nothing
-  calls is a no-op. **Parallel-lane version drift is the same census miss with a timestamp, not a gap.** Two lanes
-  touching the same guard concurrently — one hardening it in place, the other extracting the *pre-hardening* copy
-  into a shared helper and reusing it (often with `redirect: "follow"`) for a brand-new outbound fetch — each pass
-  review individually: the hardening diff looks complete, the new-fetch diff looks like ordinary reuse of an
-  existing helper. When a DIFF adds a new outbound fetch of a user-influenced URL, don't just confirm it calls *a*
-  guard — diff that guard's body against every other guard/helper of the same name or purpose across the same DIFF
-  and the base branch, and re-run this census at merge time, not only at each lane's own review.
+  calls is a no-op. Parallel-lane version drift and the merge-time re-census: `appsec-egress.md`.
+- **Guard transport footguns and parallel-lane guard drift** (a custom pinning transport, a guard copied before it was hardened): `appsec-egress.md`, read when the diff builds or changes an SSRF guard or adds an outbound fetch of a user-influenced URL.
 
 **Two-principal matrix (mandatory beside the anonymous sweep).** Seed two accounts (different tenant/role when
 multi-tenant). For every object-bearing route: replay A's request with B's id / B's token / B's tenant. Expected:
@@ -212,26 +194,12 @@ coupon twice, or race a balance check)? Secure defaults, or must the operator re
 
 Depth (threat-model method, boundary crossings, trust-signal spoofing): `appsec-design.md`.
 
-**Detect steps, in order**
-- **Inventory the money/state machines.** List every flow that moves value or advances state: checkout, refund,
-  credit/balance, coupon, invite, quota, approval, tier change. For each, write the legal state transitions; anything
-  not listed must be rejected server-side, not merely un-rendered.
+**Detect steps for business flows** (money/state machines for checkout, refund, balance, coupon, invite, quota, wizard, approval, tier change; TOCTOU on redeem/balance; rate-limit key and failure mode): `appsec-flows.md`, read when the diff touches such a flow or a limiter.
+
 - **Client-trust fields.** Diff request bodies against what the server recomputes. `price`, `amount`, `currency`,
   `qty`, `discount`, `tier`, `step`, `status`, `isAdmin` arriving from the client and persisted without re-derivation
   from server state is a finding. Wizards: confirm the server validates the *whole* invariant on the final step, not
   just `step` monotonicity — a client can post the final step first.
-- **TOCTOU on redeem/balance.** Any check-then-act (coupon redeem, balance debit, seat claim, one-time token) needs a
-  single atomic mutation: conditional/compare-and-set update, `SELECT … FOR UPDATE`, or a unique constraint on the
-  redemption key. Read-then-write in separate statements without a transaction/lock → race. Verify by firing N
-  concurrent identical requests locally and asserting exactly one succeeds.
-- **Rate-limit key, burst, and failure mode.** Ask what the limiter is keyed on (IP alone is bypassable; key on
-  principal **and** target resource) — **and how cheaply that key is minted**: a self-service or unauthenticated
-  **session token, device id, or API key** an attacker rotates for free is no better than IP, because re-minting
-  resets the counter (the *rotating-key-vs-stable-identity* confusion). Key on a **scarce, verified** identity (a
-  verified account, a payment instrument, a credential that itself costs / is rate-limited to create), or rate-limit
-  the **minting** path itself. Then check whether burst is bounded (fixed windows allow 2× at the boundary), and what
-  happens when the counter store is unreachable — **fail-open on limiter error is the bug**, and it's common. Confirm
-  limits are enforced server-side for every entry point into the flow, not just the primary route.
 
 **Fix**: threat-model the flow, add server-side business-logic limits, make the safe path the default. Cross-reference
 OWASP API Security Top 10 (2023) API4 (Unrestricted Resource Consumption) and API6 (Unrestricted Access to Sensitive
@@ -364,30 +332,9 @@ compromised — rotate it, don't just delete it.
   owner-facing inventory/reminder template lives in the `agentic-delivery` overlay's `incident-response.md` — here
   it's the review-time check.)
 
-## Deterministic corroboration (cross-cutting) — an LLM claim rides on a proof it cannot generate
+## Corroboration (cross-cutting)
 
-Running the project's wired scanners is already Phase 1 (`method.md`), and re-verifying a finding against source and
-tests is already the fan-out discipline (`parallel-audit.md` §4–5). This adds the security-specific rule: for a class
-of finding a **deterministic engine can *prove***, corroborate the LLM's claim against that proof or mark it
-`unverified` — the review layers judgment on a proof no LLM reliably produces, it does not assert the proof.
-
-- **Code-level SAST / quality engines** to run and read (tool-agnostic — the project's own wired one): **Semgrep** /
-  OpenGrep (pattern + data-flow, autofix), **CodeQL** / GitHub code scanning (a query engine returning the source→sink
-  path), **SonarQube** (quality gate + security *hotspots* — a hotspot is a triage signal, not a confirmed defect),
-  **Snyk** (Code + Open Source), plus the ecosystem linters (`bandit`, `ruff`, `mypy`, `hadolint`).
-- **The proof ↔ claim map** (corroborate, don't assert):
-  - *"user input reaches this sink"* ↔ a **CodeQL taint / data-flow path** (source→sink); a claim with no path is
-    `unverified`, not a finding.
-  - *"this secret is real"* ↔ **TruffleHog** logging into the provider (Verified / Unverified / Unknown) — Unverified
-    is not "clean" (the `Secrets` rule above still holds: a committed secret is compromised).
-  - *"this dependency version is vulnerable"* ↔ an **exact version↔CVE match** against machine-readable ranges
-    (`osv-scanner` / Trivy / Grype — `dependency-currency-and-upgrades.md`), replacing the LLM's error-prone recall of
-    affected ranges.
-  - *"you're exposed because you depend on X"* ↔ **reachability** (Semgrep Supply Chain): a dep vuln matters only when
-    code matches the vulnerable pattern — importing ≠ executing.
-- **Ingestion:** pull deterministic findings through the standard interchange formats — **SARIF 2.1.0** (any scanner →
-  code-scanning alerts) and **OSV JSON** (advisory data) — so the review reasons over a machine-readable proof, not a
-  screen-scrape.
+Deterministic corroboration (the proof-to-claim map and SARIF/OSV ingestion): `appsec-corroboration.md`, read when a finding rests on taint, secret validity, a vulnerable version or reachability, or scanner output is ingested.
 
 API-specific overlay (API1–API10): `security-api.md`.
 
