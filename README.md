@@ -23,6 +23,8 @@ your team, a pilot plan, limits and an FAQ.
 
 **Choosing a bundle?** See [Perun vs other skill bundles](docs/perun-vs-rivals.md): measured ties, losses and token overhead. Rivals and gaps per capability: [capability matrix](docs/capability-matrix.md).
 
+[Scoreboard](docs/scoreboard.md): one generated row per Perun skill or feature and rival, with win/tie/loss, cost and token ratios, and UNMEASURED where no result exists.
+
 ## Why it matters
 
 **Bottom line (measured 2026-10-12):** on 39 held-out real bug fixes, Perun caught
