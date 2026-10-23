@@ -51,4 +51,5 @@ Per part, **tier 1** computes (pricing, unit economics, dilution), **tier 2** ex
 
 - `references/regulated-domain-triage.md`: a design-time compliance ask, new market or data type; names regimes and leads, routes the binding question.
 - `references/full-map.md`: you need memo and tier detail, pricing methods, What you never do, Design-time triage, Stage-awareness, Definition of done, the anti-rationalization table, Standards or Verification cases.
+- `scripts/bizops_check.py`: run this when the user gives numbers and limits; it checks only the limits the input states.
 - `evals/evals.json`: you change this skill and need the planted cases.
