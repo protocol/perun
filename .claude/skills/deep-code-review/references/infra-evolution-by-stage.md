@@ -6,7 +6,7 @@ when the ask is "how should I structure my infra / deploy / architecture now?" o
 "should this become its own package or a separate repo?"
 This is the **when-to-add** lens. The **how-to-secure / what-to-check** for infra
 that already exists lives in `infra-iac-containers.md` (domain L) — do not
-duplicate it. The stage model itself is in `SKILL.md` (Project stage).
+duplicate it. The stage model itself is in `full-map-principles.md` (Project stage).
 
 ## The rule: infrastructure is earned, not provisioned up front
 Start with the simplest thing that ships — one well-modularized deployable on
@@ -80,5 +80,5 @@ first (repo convention).
 
 Cross-references: the going-forward roadmap this feeds (`report-format.md`);
 how-to-secure existing infra (`infra-iac-containers.md`, domain L); the SLI/SLO
-lens (`role-coverage.md`, Platform/SRE); the stage model (`SKILL.md`, Project
+lens (`role-coverage.md`, Platform/SRE); the stage model (`full-map-principles.md`, Project
 stage).

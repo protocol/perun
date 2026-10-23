@@ -6,7 +6,7 @@ should I write down now?" This is the **which-docs-when** lens. The doc *types*
 (Diátaxis, C4, ADR, README/AGENTS.md) and the stage-independent rules (the dated
 `STATUS`/`HANDOFF` anti-pattern, single-source-of-truth, "a standards doc is
 context, not enforcement") live in `docs-and-dx.md` (domain O) — do not duplicate
-them. The stage model itself is in `SKILL.md` (Project stage).
+them. The stage model itself is in `full-map-principles.md` (Project stage).
 
 ## The spine: documents acquire normative force as the product matures
 A document's job changes with stage, and that is what sets when to write it:
@@ -57,4 +57,4 @@ version-specific detail (repo convention).
 
 Cross-references: the going-forward roadmap this feeds (`report-format.md`); doc
 types + the stage-independent rules (`docs-and-dx.md`, domain O); the stage model
-(`SKILL.md`, Project stage).
+(`full-map-principles.md`, Project stage).

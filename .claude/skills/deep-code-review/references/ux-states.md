@@ -45,7 +45,7 @@ total with no "N failed" surface.
 happened": an empty activity feed, an all-green board with no data behind it, or a zero-count
 that's really an *uncollected* count all read as "all clear / no risk / no activity" when the
 source may never have been queried. The empty state must distinguish *no data collected or
-covered* from *collected, and genuinely none* — SKILL.md principle 2 (*an absence is evidence
+covered* from *collected, and genuinely none* — full-map.md principle 2 (*an absence is evidence
 only after a positive control fires*) at the UI layer. Name the coverage, not only the remedy: a
 bare "Nothing here" over an unprobed source is a false all-clear, not an honest empty.
 (`data-freshness.md`: same rule where the number is *scored* rather than *shown*.)

@@ -6,7 +6,7 @@ ISO/IEC 25010:2023 splits maintainability into modularity, reusability, analysab
 
 ## Run the probes (read-only; install nothing in the target)
 
-Use only a tool the target already has installed or configured. Otherwise use the language-neutral probes and say the tool was absent: review is read-only (principle 7 in `SKILL.md`), and an `npx` or `pip install` of an analyser runs third-party code.
+Use only a tool the target already has installed or configured. Otherwise use the language-neutral probes and say the tool was absent: review is read-only (principle 7 in `full-map.md`), and an `npx` or `pip install` of an analyser runs third-party code.
 
 1. **Import cycles and layer rules.** Tools named on their project pages (2026-10-16): madge `--circular` (JavaScript: AMD, CommonJS, ES modules), dependency-cruiser (JavaScript and TypeScript; forbidden-dependency rules, circular dependencies, orphans), Import Linter (Python; constraints on imports between modules), ArchUnit (Java; dependencies between packages and classes, layers and slices, cyclic dependencies, run as plain unit tests). If the target configures none, the finding is that its architecture rules are convention, not a gate (a standard with no enforcing gate is advisory, `docs-and-dx.md`). If it configures one, read what the rules permit: a rule set that allows every exception proves nothing.
 2. **Fan-in and fan-out.** Count distinct importing files per module (`rg -l` on the module's import path) and distinct modules each file imports. High fan-in marks a stable core, where a change is expensive and the module should stay small, tested and dependency-light. High fan-out marks orchestration, which should stay thin. A module high on both and near the top of the churn ranking in `domain-h.md` (the hotspot lens) is the god module.
@@ -41,6 +41,6 @@ How the structure behaves at ten times the load is `role-coverage.md` (Architect
 
 - Layers or abstractions for a small codebase. Three similar lines beat a wrong abstraction (`domain-h.md`), and an early-stage project's deliberate internal modularity inside one deployable is correct (`infra-evolution-by-stage.md`).
 - A cycle between two files of one module that always change together is cheap; a cycle across packages is the finding.
-- Structural findings are Medium or Low unless they cause a defect. A redesign is an owner decision under Decisions needed, never a Blocker (principle 5 in `SKILL.md`, `role-coverage.md`).
+- Structural findings are Medium or Low unless they cause a defect. A redesign is an owner decision under Decisions needed, never a Blocker (principle 5 in `full-map-principles.md`, `role-coverage.md`).
 
 **🚩**: an import cycle across packages; a `utils` or `common` module whose fan-in grows with every feature; two directories that change together in most commits with no import edge; tests that import another module's internals; a module with import-time side effects; layer rules that exist only in a document.

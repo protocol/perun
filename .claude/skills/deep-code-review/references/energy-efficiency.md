@@ -27,7 +27,7 @@ A review does not compute an SCI without measurements. With no energy or carbon 
 
 ## Carbon-aware placement (an option for the owner, not a patch)
 
-I is region-specific in the SCI. Deferrable batch work that could run in a lower-carbon region is worth naming as an option. Check data residency, latency and cost first (`privacy-compliance.md`); moving work or data across regions is a design decision, not a review fix (principle 5 in `SKILL.md`).
+I is region-specific in the SCI. Deferrable batch work that could run in a lower-carbon region is worth naming as an option. Check data residency, latency and cost first (`privacy-compliance.md`); moving work or data across regions is a design decision, not a review fix (principle 5 in `full-map-principles.md`).
 
 ## Limits on this lens
 

@@ -13,7 +13,7 @@ metadata:
 
 # Deep Code Review
 
-You are a senior reviewer hunting defects that a change introduces. For a small DIFF (at most 300 changed lines, no blast-radius flag such as a removed guard, widened route or CORS origin, a check moved client-side, or a producer wired across a trust boundary) this file is the whole method: read nothing else, make one read of the patch, answer next turn. Anything else (FILE, FULL, large or flagged, or touching auth, crypto, payments, data deletion or another high-stakes gate): read `references/full-map.md` first; it holds scope modes, principles, the archetype load map, domain map, severity rubric and the routing to every other reference.
+You are a senior reviewer hunting defects that a change introduces. For a small DIFF (at most 300 changed lines, no blast-radius flag such as a removed guard, widened route or CORS origin, a check moved client-side, or a producer wired across a trust boundary) this file is the whole method: read nothing else, make one read of the patch, answer next turn. Anything else (FILE, FULL, large or flagged, or touching auth, crypto, payments, data deletion or another high-stakes gate): read `references/full-map.md` first; it holds scope modes, hard rules, load map, domain map, severity, routing; `references/full-map-principles.md`: principles 4-6, 10, 11, stage.
 
 1. Read every hunk. For each changed line ask what input, state or caller breaks: inverted or off-by-one conditions, wrong operator, nil/empty/zero/negative inputs, swallowed or fail-open errors, state not restored on exit, removed or renamed API, weakened validation, injection, resource leaks, data loss, output-format corruption, ordering bugs, unchecked assumptions about other files.
 2. A changed line that looks deliberate can still be the bug: compare what the new code does with what its name, comment, neighbouring branches and removed lines imply, and test each branch with an empty, missing, zero, repeated, nested and unusual-case input.
@@ -21,4 +21,4 @@ You are a senior reviewer hunting defects that a change introduces. For a small 
 4. One finding per distinct mechanism, most severe first, at most 8.
 5. Guarantees: for each guarantee-bearing comment, docstring or UI string in the diff (never, always, exactly once, consent enforced), name the test that forces the adversarial case it denies; an unpinned guarantee is a finding, High if it guards privacy, consent, money or data.
 
-OUTPUT. Final message: the severity-ranked findings, each as `file:line`, severity, mechanism and failing input in one or two sentences. Report template: `references/full-map.md` (Findings report section).
+OUTPUT. Final message: the severity-ranked findings, each as `file:line`, severity, mechanism and failing input in one or two sentences. Report template: `references/full-map-report.md`.

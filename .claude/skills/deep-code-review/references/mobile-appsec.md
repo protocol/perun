@@ -307,8 +307,8 @@ legitimate **defense in depth** to raise the cost of attack. Two review errors:
 - **(b) Over-flagging its absence.** MASVS-RESILIENCE applies to apps that
   process **high-value assets** or face a meaningful reverse-engineering threat.
   A typical app is **not** deficient for lacking anti-tamper, and a review that
-  demands root detection everywhere is **stricter than the standard** (respect
-  `SKILL.md` principle 4 — do no harm — and the stage lens).
+  demands root detection everywhere is **stricter than the standard** (see
+  `full-map-principles.md` principle 4 (no harm) and the stage lens).
 
 **Fix.** Keep resilience as **one layer**, never the boundary; never accept it as
 compensating for a storage / auth / network gap; calibrate the *demand* for it to

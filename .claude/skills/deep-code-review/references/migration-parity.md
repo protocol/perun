@@ -189,7 +189,7 @@ a claim is **scoped to the rows actually verified**, never phrased over the prod
 - **Enumerate every in-scope route/screen as a row before claiming parity.** Each row
   carries its own state: `verified` (rendered and compared, with the evidence) /
   `unverified` / `n-a (out of scope, reason)`. An unrendered screen is an **unprobed
-  surface** — `unverified`, not matched (`SKILL.md` principle 2: an absence is evidence only
+  surface** — `unverified`, not matched (`full-map.md` principle 2: an absence is evidence only
   after a positive control fires).
 - **A parity status is scoped to the `verified` rows and may never be phrased over the
   product.** Aggregate phrasing — "the app matches," "parity achieved," "all pages" — is
@@ -273,7 +273,7 @@ three buckets:
   capability to reach parity. Record who accepted it and where.
 
 **Severity.** Deleting — or recommending deletion of — app-only **functionality** without a
-named owner approval is **High** (do-no-harm, principle 4; `SKILL.md` severity rubric): it
+named owner approval is **High** (do-no-harm, principle 4; `full-map-principles.md` severity rubric): it
 **blocks** unless a named owner accepts the loss (the *owner-approved-removal* bucket **is**
 that acceptance). Removing pure **decoration** is not this finding — no capability is lost.
 

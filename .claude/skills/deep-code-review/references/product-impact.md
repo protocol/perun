@@ -39,4 +39,4 @@ Report the mechanism and the path it sits on, never an invented conversion loss.
 
 ## Limits
 
-Product ideas and priorities are owner decisions (`role-coverage.md`, principle 5 in `SKILL.md`). This lens verifies that the claim, the measurement and the way back exist; it does not rank features or predict outcomes. Severity: a missing emitter or guardrail on a claimed outcome is Medium. High only when the change touches money, safety or an irreversible user-facing action and has no kill switch.
+Product ideas and priorities are owner decisions (`role-coverage.md`, principle 5 in `full-map-principles.md`). This lens verifies that the claim, the measurement and the way back exist; it does not rank features or predict outcomes. Severity: a missing emitter or guardrail on a claimed outcome is Medium. High only when the change touches money, safety or an irreversible user-facing action and has no kill switch.

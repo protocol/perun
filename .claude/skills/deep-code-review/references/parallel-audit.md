@@ -429,7 +429,7 @@ sink is theater, not coverage.
 orchestrator acts on.** A lane's self-report about *why* something failed or
 succeeded (a misattributed regression, "this isn't a real bug," "this is now
 fixed") carries the same no-authority-on-its-own-say rule as a finding above
-(principle 2, `SKILL.md`). Before dispatching further work, closing an
+(principle 2, `full-map.md`). Before dispatching further work, closing an
 investigation, or merging on the strength of that claim, the conductor (or a
 human reviewer) checks the actual evidence the claim rests on — the real test
 output, the real CI log, an actual reproduction — never the lane's summary of
@@ -546,7 +546,7 @@ the fan-out's *shape***, reported **once** with a remedy — not one finding per
 the cheap path-filtered gate **will not catch browser-only regressions** until the
 local or labelled full run executes. A staged-CI recommendation that does **not name
 the uncovered regression class** is incomplete — an unrun matrix is `unverified`, not a
-pass (`SKILL.md` principle 2: an absence is evidence only after a positive control
+pass (`full-map.md` principle 2: an absence is evidence only after a positive control
 fires).
 
 **Severity.** The wasted-runner-minutes cost is **Medium at most**, batched as one

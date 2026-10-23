@@ -50,6 +50,6 @@ Pull-request cycle: `gh pr list --state merged -L 100 --json createdAt,mergedAt,
 
 ## Rating
 
-Medium or Low by default, calibrated by stage (a prototype does not need sharding). High when slowness stops a gate from running: a check people skip because it is too slow does not exist as a gate (principle 2 in `SKILL.md`), or time-to-green exceeds what a hotfix can wait. Never outranks a correctness, security or data-loss finding.
+Medium or Low by default, calibrated by stage (a prototype does not need sharding). High when slowness stops a gate from running: a check people skip because it is too slow does not exist as a gate (principle 2 in `full-map.md`), or time-to-green exceeds what a hotfix can wait. Never outranks a correctness, security or data-loss finding.
 
 **🚩 grep**: an install step with no cache; `needs:` with no `needs.*.outputs` or artifact use; `fetch-depth: 0` in a job that never runs `git log` or `git diff`; `retry` or `continue-on-error` around tests; `sleep ` in CI steps; `COPY . .` above a package install; no `.dockerignore`; a `CODEOWNERS` `*` line with one owner.

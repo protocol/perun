@@ -44,7 +44,7 @@ For each hazard the target can cause, walk all five. A hazard with no control un
 
 The security rule in `domain-b.md` (gates fail closed, prefer allow-lists) can point the opposite way from a safety state. A general-reference definition (Wikipedia, a tertiary source, 2026-10-16): fail-safe means a device "will not endanger lives or property when it fails"; fail-secure, "also called fail-closed", means access or data "will not fall into the wrong hands in a security failure". Its example is a fire: a fail-safe system unlocks doors for escape, a fail-secure one keeps them locked.
 
-For every control that denies or blocks, ask what its failure does to a person. If a block can trap, starve or endanger someone, the safe state may be the open one. Where security and safety conflict, surface both as an owner decision with the hazard named (principles 4 and 5 in `SKILL.md`). Do not choose silently, and do not relabel one as the other: a bare "this fails open" finding on a safety path can itself be the hazard.
+For every control that denies or blocks, ask what its failure does to a person. If a block can trap, starve or endanger someone, the safe state may be the open one. Where security and safety conflict, surface both as an owner decision with the hazard named (principles 4 and 5 in `full-map-principles.md`). Do not choose silently, and do not relabel one as the other: a bare "this fails open" finding on a safety path can itself be the hazard.
 
 ## Rating
 

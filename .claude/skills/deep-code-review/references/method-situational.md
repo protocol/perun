@@ -304,7 +304,7 @@ that can be the honest truth of the corpus, not a defect to engineer away. Befor
 fuzzy/approximate matching or counting non-independent sources, inflating the number
 **fabricates** it — the anti-fabrication rule applied to an "improve this metric" task
 (an inflated-but-fake number is worse than an honest flat one; empty beats fabricated,
-`SKILL.md` principle 3, *No fabrication*). The honest deliverable is to make the count **provable** —
+`full-map.md` principle 3, *No fabrication*). The honest deliverable is to make the count **provable** —
 retain the distinct corroborating evidence, add a gate that fails if a count ever
 outruns its evidence — not larger. (The scored / shown cousins live in
 `data-scoring.md` and the confidence-tier false-precision rule in

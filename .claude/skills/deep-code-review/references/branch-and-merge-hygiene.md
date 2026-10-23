@@ -23,7 +23,7 @@ triages branches that already exist.
 
 Every command below reads **local refs**, only as current as the last fetch — an un-refreshed or shallow clone
 makes a repo with a dozen open branches *look* empty, the exact "empty output is not a pass" trap the skill
-condemns (`SKILL.md` principle 2). Before any triage:
+condemns (`full-map.md` principle 2). Before any triage:
 
 - **Refresh and prune first:** `git fetch --all --prune`. A shallow clone
   (`git rev-parse --is-shallow-repository` → `true`) can't see full history, so its merged/unmerged answers
@@ -31,7 +31,7 @@ condemns (`SKILL.md` principle 2). Before any triage:
 - **Open-PR / merged-PR state is forge state, not git state.** Whether a branch has an open PR, or was already
   **squash/rebase-merged via a PR**, lives on GitHub/GitLab/etc., not local refs. Read it with
   `gh pr list --state all` (or the forge API). Absent that auth/tooling, the PR column is **`unverified`** —
-  name it as the resolving artifact (`SKILL.md` principle 3); do **not** infer "no PR" from its absence.
+  name it as the resolving artifact (`full-map.md` principle 3); do **not** infer "no PR" from its absence.
 - **Forge-only branches you never fetched are invisible to git entirely.** State the coverage honestly:
   "triaged N local + M fetched remote branches; forge PR state <read via gh | unverified: no forge auth>." A
   triage that silently omits un-fetched branches is a false all-clear.
@@ -160,7 +160,7 @@ Never recommend a direct push to a protected default branch (`SKILL.md` Phase 5)
 
 ## 6 — Safety rails (acting on the triage is destructive / shared-state)
 
-Triage is **advice**; carrying it out mutates shared state. Under `SKILL.md` principle 7 and the global
+Triage is **advice**; carrying it out mutates shared state. Under `full-map.md` principle 7 and the global
 "confirm before destructive/irreversible/shared-state" rule, produce the recommendation + the exact command,
 and **execute only on explicit approval** — the same opt-in bar as the Phase 6 imprint. The rails
 for **recommending or executing** a close / delete / merge row — a stacked-PR base, generated-artifact conflicts, a subset absorbed at a stale SHA,

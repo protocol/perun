@@ -78,7 +78,7 @@ task:
    for a viewer already authenticated to that host** (and can break even for the author, under
    cross-origin cookie scoping), showing a broken-image icon for everyone else viewing the PR; on a
    private repo, that's every reviewer reading the PR body cold. The markdown tag *exists* in the diff;
-   the evidence does not (existence is not content — SKILL.md principle 2, the same gap the pre-ship
+   the evidence does not (existence is not content — full-map.md principle 2, the same gap the pre-ship
    receipt check in `product-ux-quality.md` closes for a captured-but-blank image; this closes it for a
    captured-but-invisible one). Gate on **visibility, not presence**: an **uploaded attachment** (the
    review platform's own image upload, served through its own proxy) or an **in-repo, diff-able image

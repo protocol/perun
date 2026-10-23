@@ -158,7 +158,7 @@ When users call a web app "a mediocre prototype" — hover states that behave od
 smooth, pages that seem to take seconds to appear — the cause is rarely scattered per-page bugs; it's
 usually **one or two shared-primitive roots**, each producing the symptom on *every* surface that
 touches it, so one base fix repairs all of them and a symptom-by-symptom patch pass never converges.
-This is the diagnostic form of root-cause-not-symptom (SKILL.md principle 9): don't file N per-page
+This is the diagnostic form of root-cause-not-symptom (full-map.md principle 9): don't file N per-page
 tickets, find the shared root. Two roots recur often enough to check for by default:
 
 - **Root 1 — bespoke interactive elements bypass the design-system primitive and so lack the base

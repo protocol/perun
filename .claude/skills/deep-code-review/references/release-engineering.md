@@ -376,7 +376,7 @@ problem, not contention.
 - **One acceptance rule for cache and consumer.** The code that decides a cache entry is a hit and the code that
   consumes it must share one predicate (key, version, freshness, validity); two copies drift until the cache serves
   what the consumer would reject.
-- **Gate integrity: a pass covers the scope it claims.** Four checks, each a case of the positive-control rule (`SKILL.md`
+- **Gate integrity: a pass covers the scope it claims.** Four checks, each a case of the positive-control rule (`full-map.md`
   principle 2; planted-defect probe in `method.md`): a pass is evidence only for what the gate could see.
   1. *Scope = key = receipt = update path.* The scope a gate ran (full vs changed files, which suites, which
      platforms), the cache key it reads and writes, and the receipt it emits must name the same scope. A narrower run

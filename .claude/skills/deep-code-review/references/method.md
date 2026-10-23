@@ -144,7 +144,7 @@ and any wired security/dependency scanners. Then, before trusting "green":
   `references/testing-and-evals.md`).
 - **A gate reports only on the scopes that actually ran — a skipped scope is
   `unverified`, not clean.** A pass is evidence only where the enforcing surface
-  could **see** the artifact it checks (`SKILL.md` principle 2). A multi-scope gate
+  could **see** the artifact it checks (`full-map.md` principle 2). A multi-scope gate
   that **skips** a scope whose input is absent — a privacy gate whose *identifier*
   scan needs a pattern list (`.banlist.local.txt`, a `PRIVACY_BANLIST_EXTRA`) and,
   when it is missing, runs only the *secret* scan yet still exits 0 — has not
@@ -162,7 +162,7 @@ and any wired security/dependency scanners. Then, before trusting "green":
   (A gate the config *declares* excluded is a different gap — enumerate those per
   the gate-exclusion bullet above; this is the surface nothing pointed at.) Read
   the gate's coverage set and confirm it **includes** the surface in question
-  before reading its pass as a clearance — SKILL.md principle 2 (*an absence is
+  before reading its pass as a clearance — full-map.md principle 2 (*an absence is
   evidence only after a positive control fires*) at gate-coverage scope. This is
   the **unvisited** surface: distinct from a gate that cannot fail (above) and
   from a probe that observed the wrong thing (detector fidelity, `method-situational.md`) — here

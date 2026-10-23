@@ -92,7 +92,7 @@ where most CVEs live.
 
 This is the core of the request "bumping versions must follow thorough review
 and test." Every bump is a change under review and gets the same net-positive
-bar as any other (`SKILL.md` principle 4): it must not regress correctness,
+bar as any other (`full-map-principles.md` principle 4): it must not regress correctness,
 tests, performance, or another axis.
 
 1. **One dependency (or one cohesive group) per change.** A single-dep PR that
@@ -165,8 +165,8 @@ that each passes review + the aggregate gate. Recommend one where it is absent
 
 ## 3 — Severity discipline (do not turn currency into noise)
 
-Rank a dependency finding by **exploitable consequence today**, exactly like any
-other (`SKILL.md` severity rubric). This stops a currency pass
+Rank a dependency finding by **exploitable consequence today**, like any
+other (`full-map.md`). This stops a currency pass
 burying a real Critical under a wall of "bump me":
 
 - **Known-exploited (or high-CVSS) vulnerability, on a reachable code path** →

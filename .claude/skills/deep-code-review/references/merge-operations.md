@@ -345,7 +345,7 @@ delivery rate, so it jumps the queue ahead of a gate that only affects one chang
 A branch-protection **required check** gates merges only if some job actually reports a conclusion for *this*
 PR. When the required *name* isn't backed by a job that runs and concludes here, the check sits **pending
 forever** — indistinguishable from a hang, and merge-blocked exactly as a failure is (its enforcing surface
-never saw this PR — `SKILL.md` principle 2). Two ways it happens:
+never saw this PR — `full-map.md` principle 2). Two ways it happens:
 
 - **A required check with *no status* blocks merge — but distinguish "never ran" from "ran and reported
   skipped."** When `on: pull_request: paths:` filters a whole **workflow** out for an out-of-scope PR (only

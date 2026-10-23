@@ -155,7 +155,7 @@ A healthy repository ships more than code. Check for the community-health files
 and process controls below, but **rate each by the exposure the repo actually
 has** — on a private/internal repo most are Info/Low; each escalates when the
 repo is **public, distributed/packaged, or accepts outside contributions** (the
-same baseline-plus-trigger logic as the `SKILL.md` severity rubric). Don't emit a
+same baseline-plus-trigger logic as the `full-map.md` severity rubric). Don't emit a
 wall of Mediums on a private repo — batch the Info/Low items and let the trigger
 decide escalation.
 

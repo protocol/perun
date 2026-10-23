@@ -310,7 +310,7 @@ label accordingly.
 
 This *ran-green-but-once* residual and a *deferred / never-run* gate (`parallel-audit.md`'s "an
 unrun matrix is `unverified`, not a pass") resolve the same way — **name the residual, never a
-silent pass** (`SKILL.md` principle 2: an absence is evidence only after a positive control fires);
+silent pass** (`full-map.md` principle 2: an absence is evidence only after a positive control fires);
 they differ only in cause — here the gate ran green *once*, there it never ran.
 
 ## A gate's committed fixture is part of its contract — a clean-clone gate must be satisfiable without the gitignored data
@@ -331,7 +331,7 @@ The committed fixture is part of the gate's contract. Resolve it one of two ways
 Verify by running the gate from a **truly clean clone** (no gitignored data present), not from
 your populated tree: red there means the fixture or the assertion scope is wrong, and any "green
 from a clean clone" claim stays `unverified` until it holds — the resolving artifact is the clean
-run, not the convenient one (`SKILL.md` principle 3). **Signal:** when several contributors
+run, not the convenient one (`full-map.md` principle 3). **Signal:** when several contributors
 independently hit the *same* gate failure and each "fixes" it by copying the real gitignored data
 into their checkout, the defect is the fixture/gate contract, not their environments — the
 workaround masks a standing Definition-of-Done violation.
