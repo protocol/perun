@@ -45,6 +45,7 @@ Shape how a product is described to its market (value proposition, segment, diff
 ## Escalate: read this when
 
 - `references/full-map.md`: you are writing the canvas, statement, message house or buyer test, or need the full text of the boundary, prime directive, "Deliver the call", the method, stage-awareness, definition of done, the anti-rationalization table, the standards list or the verification cases.
+- `scripts/positioning_check.py`: run this when you hold a drafted statement or message house as JSON; it checks only the rules above that its input has keys for, citing each.
 - `evals/evals.json`: you change this skill and need the planted cases.
 
-Output structure follows `communication-structure` if installed. This skill has no scripts.
+Output structure follows `communication-structure` if installed.

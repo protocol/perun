@@ -93,6 +93,9 @@ Run `python3 <skill>/scripts/<name>` (`bash` for `.sh`). `name: purpose — argu
 - wired_check.py: warn when a NEW script has no caller. — BASE HEAD [--root DIR]
 - No documented CLI: _clean_union.sh, _dirty_guard.sh, _lock.sh, board_common.py, bypass_guard.py, ceo_altitude_guard.py, comms_guard.py, context_nudge.py, cost_statusline.py, destructive_guard.py, flake_ledger.py, gh_rest.py, handback_cap.py, handoff_inject.py, heavy_gate.py, host_safety.py, landing_watchdog.py, lane_cap.py, lane_resume_nudge.py, outcome_claim_guard.py, perun_auto_update.py, pipe_mask_guard.py, pipeline_profile.py, plan_gate.py, restore_ledger.py, scope_creep_check.py, session_brief.py, stall_guard.py, surface_check.py, terse_reply_check.py
 
+### business-ops
+- bizops_check.py: Deterministic arithmetic checks business-ops already states… — [input.json] (stdin when no path)
+
 ### communication-structure
 - comms_lint.py: score a human-facing draft against its artifact template. — --kind K [--file F] [--source S]…
 - status_update_lint.py: check a leadership status update against… — --file F
@@ -123,5 +126,17 @@ Run `python3 <skill>/scripts/<name>` (`bash` for `.sh`). `name: purpose — argu
 - token_differ.py: the tier-1 design<->app design-token VALUE parity gate. — --design <file> --app <file> [--map…
 - No documented CLI: binaries_gate.py, ci_cost_lint.py, closes_lint.py, reaper_lint.py, review_feedback.py, source_scan_tests.py, validate_status_claims.py
 
+### growth-analytics
+- readout_check.py: deterministic pass/fail checks on a finished two-arm A/B… — READOUT.json
+
 ### idea-critic
 - No documented CLI: council.py, validate_verdict.py, veche.py
+
+### positioning
+- positioning_check.py: Deterministic checks of a positioning draft against rules… — [input.json] (stdin when no path)
+
+### product-discovery
+- discovery_check.py: Deterministic checks of a product-discovery plan or readout… — [input.json] (stdin when no path)
+
+### product-output-safety
+- output_safety_check.py: Deterministic checks of a product's LLM-output handling… — [input.json] (stdin when no path)

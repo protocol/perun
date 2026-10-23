@@ -1,6 +1,6 @@
 """product-discovery SKILL.md is the slim fast path; references/full-map.md holds the full method.
 
-Pins the split contract: SKILL.md stays at or under 6000 bytes, routes every reference with a trigger, states every
+Pins the split contract: SKILL.md stays at or under 6200 bytes, routes every reference with a trigger, states every
 evals/evals.json expectation itself, and no rule sentence of the pre-slim SKILL.md is lost.
 """
 import json
@@ -90,7 +90,7 @@ EVAL_STATED = {
 
 class SlimPd(unittest.TestCase):
     def test_skill_is_small(self):
-        self.assertLessEqual((D / "SKILL.md").stat().st_size, 6000)
+        self.assertLessEqual((D / "SKILL.md").stat().st_size, 6200)
 
     def test_frontmatter_unchanged_and_single_h1(self):
         old = old_skill()

@@ -39,6 +39,7 @@ Governs the harm a product's **own outputs and automated decisions** do to its u
 ## Escalate: read this when
 
 - `references/full-map.md`: you are writing the harm inventory, the per-harm test plan, the model/data card, the confidence-tier rules, the stage call or the definition of done; or you need the full anti-rationalization table, the standards list (NIST AI RMF, model/data cards, Kent, Admiralty Code) or the verification cases. It holds the full text of every rule above.
+- `scripts/output_safety_check.py`: run this when you have the product's output-handling facts as JSON; it checks only rules stated here and SKIPs any input you did not give.
 - `evals/evals.json`: you change this skill and need the planted cases (certify ask, auto-action, legal duty, fabricated rate, missing card, regime coverage, bare confidence percentage, one test row per harm).
 
-Output structure follows `communication-structure` if installed. This skill has no scripts.
+Output structure follows `communication-structure` if installed.
