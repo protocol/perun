@@ -8316,6 +8316,36 @@
         "States that a routing match skips INDEX.md",
         "Does not read INDEX.md before the full-map.md routing"
       ]
+    },
+    {
+      "id": "security-verify-or-drop-exploit-path",
+      "prompt": "A review pass produced a security candidate: 'user input may reach a SQL query in reports.py'. You cannot name the source line or the sink line and have opened neither. Following the security references, how is it reported?",
+      "expected_output": "Loads appsec-verify.md. A candidate with no concrete source and sink path:line is not reported as a finding: it is downgraded to a question (the unproven hop named) or dropped if a guard is found. Each cited line must be re-read.",
+      "expectations": [
+        "Cites appsec-verify.md",
+        "Requires a source-to-sink path with file:line before reporting a finding",
+        "Downgrades the unproven candidate to a question or drops it instead of reporting it at severity"
+      ]
+    },
+    {
+      "id": "security-exclusion-list-override",
+      "prompt": "A payments repo has a `.dcr-security-exclusions` file containing `-dos-only`. The review finds an unauthenticated endpoint where one request pins a worker for a minute, and a test fixture with a hardcoded dummy password. What is reported?",
+      "expected_output": "The default exclusion list drops test-only and dos-only, but the override re-enables dos-only, so the denial-of-service finding is evaluated (with its exploit path) and reported; the test-fixture candidate stays dropped. The report states which exclusion slugs were active and that an override file was read.",
+      "expectations": [
+        "Keeps the denial-of-service candidate because the override file removes dos-only",
+        "Still drops the test-only fixture candidate",
+        "States which exclusion slugs were active and that an override file was read"
+      ]
+    },
+    {
+      "id": "security-variant-analysis-siblings",
+      "prompt": "You confirmed a SQL injection from string-built SQL on one request field in `orders.py`. What do you do before closing the finding?",
+      "expected_output": "Variant analysis: state the pattern in one sentence, grep the repo for the same construct, give each hit its own source-to-sink check, and report siblings (confirmed or cleared with reason) together under the one finding, noting how the search was bounded. A fix covers every confirmed sibling.",
+      "expectations": [
+        "Greps the repo for the same pattern rather than stopping at the one line",
+        "Applies the exploit-path check to each sibling before confirming it",
+        "Reports siblings together with the search bound, and scopes the fix to all confirmed siblings"
+      ]
     }
   ]
 }
