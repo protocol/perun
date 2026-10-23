@@ -4145,6 +4145,13 @@ else
   record 1 "impact_map/context_pack: callers, callees, caps, bounded pack on a synthetic repo"; tail -5 "$WORK/impact-map.log"
 fi
 
+# security_bench_score.py + seeded fixtures: own per-feature file (scripts/test_security_bench_score.py), one case here.
+if python3 "$ROOT/scripts/test_security_bench_score.py" >"$WORK/security-bench.log" 2>&1; then
+  record 0 "security_bench_score: seeded fixtures, precision/recall/decoy FP, fails closed on a missing arm"
+else
+  record 1 "security_bench_score: seeded fixtures, precision/recall/decoy FP, fails closed on a missing arm"; tail -5 "$WORK/security-bench.log"
+fi
+
 # install.sh AGENTS.md blocks are compact (<= 6 lines each, markers included)
 # and a re-run replaces them in place (idempotent), so a target repo's own
 # AGENTS.md size gate is not broken by the default install (#1309).
