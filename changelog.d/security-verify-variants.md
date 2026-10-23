@@ -1,0 +1,4 @@
+### Added
+- Security review path: new `references/appsec-verify.md` (routed from `security-appsec.md` and `full-map.md`) adds a verify-or-drop refuter (a finding needs a source-to-sink `file:line` path or drops to a question), a default false-positive exclusion list with a repo override file `.dcr-security-exclusions`, and variant analysis (search for siblings of a confirmed finding). `scripts/security_verify.py` checks the claim shape and applies the exclusions; `scripts/test_security_verify.py` is wired into `scripts/test-ci-gates.sh`; three `evals/evals.json` cases.
+- size-budget-raise: .claude/skills/deep-code-review/references/security-appsec.md 27956→28118 one index row routing appsec-verify.md
+- size-budget-raise: .claude/skills/deep-code-review/references/full-map.md 18720→18740 domain-B row names appsec-verify.md
