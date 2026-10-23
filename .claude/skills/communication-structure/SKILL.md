@@ -43,13 +43,16 @@ shorthand. This is about shape and length, not vocabulary. Lookup table:
   --file <draft>` scores each rule and prints the exact fix (exit 1 = below the bar).
   The operating layer's `agentic-delivery/scripts/comms_guard.py` hook runs it
   before a PR or tracker write and warns; it never blocks.
-- **Under 30 seconds.** ~150 words by default; the budgets in the reference
-  are the ceilings. Longer needs a reason per block, or a cut.
+- **Send-ready, complete.** Full sentences a reader can act on as written: no
+  `<placeholder>`, no note to the sender (word count, "owner/deadline" remark), no
+  emoji beyond ✅/⏳ marks. Length follows the facts the reader needs; the
+  reference budgets are lint ceilings, not targets, and cutting never drops a
+  source fact.
 - **Scannable.** Bold the one load-bearing sentence. Short paragraphs. A list
   only when every item is parallel and load-bearing; keep the 1-2 open
   questions that change the decision and push the rest to the doc or PR.
-- **Their next action, not your process.** Drop the reasoning trail; give what
-  changes what the reader does next.
+- **Their next action, not your process.** Drop how you worked; keep every option,
+  trade-off, cost and reason the source states, since those are what the reader decides on.
 - **A stakeholder-facing update states verified present-tense outcomes only:**
   what works on the surface they use, in plain value terms, checked there before
   you write it (✅ = verified, names where; ⏳ = pending; neutral facts unmarked).
@@ -90,6 +93,8 @@ gave one; if two are live, name both and who decides.
 2. Count the asks. More than one → split, or pick the one that blocks the reader.
 3. Every paragraph after the first changes what the reader does, or it's cut.
 4. Every number, date and name is in the source. Run `comms_lint.py`.
+5. To test a draft as a reader, run `scripts/reader_check.py` with a question set from
+   `evals/reader-checks.json` (decision, headline figure, costs and consequence answerable from the text alone).
 
 ## Before → After
 
@@ -115,4 +120,4 @@ unchecked claim is flagged in the lead, never asserted)
 **Progress status, exact vs. flattering.**
 Before: "Strong progress — we've closed the vast majority of the open items."
 After: "**<closed> / <total> backlog items closed.** Owner-blocked ones listed
-below." (the real counts go in place of the placeholders)
+below." (the source's counts replace the brackets; if it gives none, say the count is unknown)

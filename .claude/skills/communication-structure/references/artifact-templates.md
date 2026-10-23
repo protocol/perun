@@ -39,6 +39,8 @@ verified and command. Fenced code does not count toward the budget.
 
 ## Templates
 
+Angle brackets mark what you fill in; none may survive into the draft.
+
 **status** (project or weekly update; tracker `save_status_update`)
 
     **<Project>: <state>, <X of Y> (was <Z>), <date>.**
@@ -71,8 +73,8 @@ A leadership update for non-technical readers uses the seven labelled sections i
     - Not known: <the gap that could change the answer>
     <Reader>, please <decide or approve X> by <date, if given>.   |   (no ask: omit the line)
 
-Write "Recommend A" only when the author gave a view; otherwise "Decision needed between A and B". Cut the long
-report to the three findings that change what the reader does; the rest stays behind a link.
+Write "Recommend A" only when the author gave a view; otherwise "Decision needed between A and B". Keep every
+finding and option trade-off that changes what the reader does; the rest stays behind a link.
 
 **incident** (customer-facing summary)
 
