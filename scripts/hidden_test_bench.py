@@ -8,7 +8,7 @@ usage: hidden_test_bench.py validate                      (corpus check: buggy s
 Corpus: small self-written tickets in docs/bench/hidden-test-r2-1021/tickets/*.txt, 40 "easy" (part*.txt) and 23 "hard" (hard*.txt:
 stateful, ordering, multi-bug and misleading tickets, calibrated so the no-skill arm lands near half). Each has a ticket, buggy src, a reference
 fix and hidden pytest tests. The model sees only the ticket and the buggy src, never the tests. Arms differ only in the system
-prompt: none, perun (agentic-delivery SKILL.md + deep-code-review operating principles, definition of done and
+prompt: none, perun (agentic-delivery references/full-map.md + deep-code-review operating principles, definition of done and
 testing-and-evals reference), perun-lean (only the build/verify gate rows and the root-cause/verify principles, extracted from
 the same files), superpowers (test-driven-development + systematic-debugging), agent-skills (test-driven-development +
 debugging-and-error-recovery). Rival texts are fetched at run time into --cache from a pinned commit and are never committed.
@@ -126,7 +126,7 @@ def _dcr_map():
 def perun_text(skip=()):
     """The full perun arm; skip=(block, ...) from BLOCKS drops those pieces (ablation)."""
     dcr = _dcr_map().read_text()
-    parts = {"delivery": (SKILLS / "agentic-delivery/SKILL.md").read_text(), "principles": section(dcr, "Operating principles"),
+    parts = {"delivery": (SKILLS / "agentic-delivery/references/full-map.md").read_text(), "principles": section(dcr, "Operating principles"),
              "dod": section(dcr, "Definition of done"), "testing": (SKILLS / "deep-code-review/references/testing-and-evals.md").read_text()}
     return "\n\n".join(v for k, v in parts.items() if k not in skip)
 
@@ -135,7 +135,7 @@ def perun_lean_text():
     """The smallest Perun text that still carries the build/verify/root-cause steps, cut from the same files perun_text() reads
     (nothing is rewritten): the G4/G5 gate rows, the missing-evidence rule, principles 1-3 and 9, and the change-approach rule.
     Raises ValueError if the source files no longer contain exactly those pieces."""
-    gates = (SKILLS / "agentic-delivery/SKILL.md").read_text()
+    gates = (SKILLS / "agentic-delivery/references/full-map.md").read_text()
     pick = lambda md, pat, fl=re.M: re.findall(pat, md, fl)  # noqa: E731
     rows = pick(gates, r"^\| Gate \| .*$|^\|---\|---\|---\|---\|$|^\| G[45] .*$")
     rule = pick(gates, r"^\*\*Missing evidence is.*?(?=\n\n)", re.M | re.S)
