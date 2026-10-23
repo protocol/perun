@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Paired bench: does an edited business-ops skill fabricate less than the current one, without losing usefulness?
 
-Arms CURRENT (the business-ops SKILL.md in this checkout) and EDITED (CURRENT with the string replacements in
+Arms CURRENT (the frozen pre-slim business-ops SKILL.md, docs/bench/bizops-fab-1019/SKILL-frozen.md) and EDITED (CURRENT with the string replacements in
 docs/bench/bizops-fab-1019/edit.json) answer the same fresh bait prompts through the free PCSS generator. Fabrication is scored
 by the deterministic predicates of differentiator_bench.py (no judge model). Usefulness is checked on control prompts (kind K)
 where the user supplies the numbers and the answer must compute them, and on every prompt by "gives a call".
@@ -28,7 +28,7 @@ import rival_eval as RE  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 D = ROOT / "docs/bench/bizops-fab-1019"
-SKILL = ROOT / ".claude/skills/business-ops/SKILL.md"
+SKILL = D / "SKILL-frozen.md"  # the pre-slim business-ops SKILL.md (sha8 39af659d), frozen so the bench still reproduces
 ARMS = ("CURRENT", "EDITED")
 FAB_KINDS = "SCA"
 _CALL = re.compile(r"\b(?:recommend|my call|the call|go with|take|choose|use|don'?t|do not|instead|should|verdict|short answer|bottom line|consider|replace|your own|look up|obtain|compute)\b", re.I)
