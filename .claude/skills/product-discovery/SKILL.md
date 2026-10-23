@@ -40,5 +40,6 @@ Structure the outside evidence that says whether to build, what to build first a
 
 - `references/full-map.md`: you are designing interviews or experiments, writing a test row, reading PMF or prioritization, writing a spec that names a reference (three-input recipe), recording non-goals, or need the full anti-rationalization table, the standards list or the verification cases. It holds the full text of every rule above.
 - `evals/evals.json`: you change this skill and need the planted cases (example finding, ICE, PMF from a call, build before the test, TAM, adjacent scope, reference-named ask, kill threshold).
+- `scripts/discovery_check.py`: run this on a test-row, ICE, PMF or non-goal plan as JSON; it checks only rules quoted from this file.
 
-Output structure follows `communication-structure` if installed. This skill has no scripts.
+Output structure follows `communication-structure` if installed.

@@ -48,7 +48,7 @@
 
 ## 2. Product advice and discovery
 
-**Repo status:** Shipped. **Where:** `.claude/skills/product-discovery/SKILL.md` (Mom Test interviews, riskiest-assumption gate, PMF survey, ICE). The skill ships evals only, no scripts or templates.
+**Repo status:** Shipped. **Where:** `.claude/skills/product-discovery/SKILL.md` (Mom Test interviews, riskiest-assumption gate, PMF survey, ICE) and `.claude/skills/product-discovery/scripts/discovery_check.py`, a runnable check that enforces only rules quoted from that SKILL.md against a JSON plan or readout. The skill ships evals and that script, no templates.
 
 | Rival | What it does (read 2026-10-16) | Perun status | Concrete gap |
 |---|---|---|---|
@@ -121,7 +121,7 @@
 
 ## 9. Output optimisation and safety
 
-**Repo status:** Partial. **Where:** safety of AI output that reaches end users is guidance only: `.claude/skills/product-output-safety/SKILL.md` (MAP, MEASURE, MANAGE with a human gate; never certifies safe), with no eval or scan runner (§3). Output shaping has scripts: `.claude/skills/communication-structure/SKILL.md`, `status_update_lint.py`, `status_vocab_lint.py`, `.claude/skills/agentic-delivery/scripts/handback_cap.py` and `terse_reply_check.py`.
+**Repo status:** Partial. **Where:** safety of AI output that reaches end users is guidance only: `.claude/skills/product-output-safety/SKILL.md` (MAP, MEASURE, MANAGE with a human gate; never certifies safe) plus `.claude/skills/product-output-safety/scripts/output_safety_check.py`, a deterministic checker for the rules the skill states (inventory, human gate, unmeasured metrics, test rows, certification words, bare percentages, card, regimes) against the input facts; no eval or scan runner (§3). Output shaping has scripts: `.claude/skills/communication-structure/SKILL.md`, `status_update_lint.py`, `status_vocab_lint.py`, `.claude/skills/agentic-delivery/scripts/handback_cap.py` and `terse_reply_check.py`.
 
 | Rival | What it does (read 2026-10-16) | Perun status | Concrete gap |
 |---|---|---|---|
@@ -195,7 +195,7 @@
 
 ## 16. Growth, positioning, business-ops
 
-**Repo status:** Shipped. **Where:** `.claude/skills/growth-analytics/SKILL.md`, `.claude/skills/positioning/SKILL.md` and `.claude/skills/business-ops/SKILL.md` (SKILL.md and evals only; no scripts or templates).
+**Repo status:** Shipped. **Where:** `.claude/skills/growth-analytics/SKILL.md`, `.claude/skills/positioning/SKILL.md` and `.claude/skills/business-ops/SKILL.md` (SKILL.md and evals; each also ships a runnable check: growth-analytics `scripts/readout_check.py` tests only what the input pre-registers; positioning `scripts/positioning_check.py` checks a drafted statement or message house against the rules positioning states, using only keys the input carries; business-ops `scripts/bizops_check.py` checks runway, LTV:CAC, payback and margin arithmetic against limits the input states; no templates).
 
 | Rival | What it does (read 2026-10-16) | Perun status | Concrete gap |
 |---|---|---|---|
