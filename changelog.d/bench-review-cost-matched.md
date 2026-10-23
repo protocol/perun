@@ -1,0 +1,5 @@
+### Added
+- Bench: `docs/bench/review-cost-matched-1023/`, a preregistered matched-harness review-cost bench (not run, no paid call yet). The shipped `/review` command and the shipped pr-review-toolkit `code-reviewer` plugin agent both run on the default Claude Code system prompt with `--exclude-dynamic-system-prompt-sections`, on the 22 held-out cases, cap $4. The default mode of `matched.py` is a dry run that builds the 44 workspaces and asserts each arm's files.
+
+### Changed
+- Docs: the review-cost ratio against the toolkit (3.4 times in H7b and its quotes, the V2 bench) now carries a harness caveat. The toolkit arm ran as `--system-prompt`, which replaces Claude Code's system prompt, while the Perun arms ran on the default harness. The one matched pair, the V2 prompt (reverted, never shipped) against the toolkit, cost $.01887 against $.01791 per review, 1.05 times, so the shipped `/review` is unmeasured (`docs/bench/review-cost-v2-1019/ledger.jsonl`); `docs/bench/review-cost-v2-1019/README.md` holds the per-arm table.
