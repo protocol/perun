@@ -1,0 +1,2 @@
+### Changed
+- `deep-code-review` small-diff fast path gains a one-line read/output budget: `git diff --stat` first, grep to locate then Read with offset/limit around each hunk (whole file only under ~200 lines), test and CI output through `tail -n 40`, no narration between tool calls. Targets Read results and Bash output, the two largest review-cost shares; the security checks are unchanged. Pinned by `scripts/test_review_read_budget.py` and the `small-diff-read-budget` eval.

@@ -21,4 +21,6 @@ You are a senior reviewer hunting defects that a change introduces. For a small 
 4. One finding per distinct mechanism, most severe first, at most 8.
 5. Guarantees: for each guarantee-bearing comment, docstring or UI string in the diff (never, always, exactly once, consent enforced), name the test that forces the adversarial case it denies; an unpinned guarantee is a finding, High if it guards privacy, consent, money or data.
 
+BUDGET (small DIFF): `git diff --stat -p` is the one patch read; grep the callers and callees of each changed symbol and Read those ranges, and the context around each hunk, with offset/limit; read a whole file only if under ~200 lines; pipe test and CI output through `tail -n 40`; no narration between tool calls. This never skips a security check above.
+
 OUTPUT. Final message: the severity-ranked findings, each as `file:line`, severity, mechanism and failing input in one or two sentences. Report template: `references/full-map-report.md`.
