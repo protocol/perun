@@ -407,6 +407,40 @@ else
   record 1 "size-ratchet: FIRES on an undocumented raise and names the row (planted RED)"
 fi
 
+# Case B2: generated INDEX.md growth needs no raise line; same growth in a non-INDEX .md still fails.
+git -C "$ratchetroot" reset --hard "$ratchet_base" -q >/dev/null 2>&1
+printf '# unit: bytes\n.claude/skills/demo/SKILL.md\t12\n.claude/skills/demo/INDEX.md\t10\n.claude/skills/demo/NOTES.md\t10\n' \
+  >"$ratchetroot/scripts/size-budgets.tsv"
+printf '0123456789' >"$ratchetroot/.claude/skills/demo/INDEX.md"
+printf '0123456789' >"$ratchetroot/.claude/skills/demo/NOTES.md"
+git -C "$ratchetroot" add -A >/dev/null 2>&1
+git -C "$ratchetroot" commit -qm "index base" >/dev/null 2>&1
+ratchet_idx_base="$(git -C "$ratchetroot" rev-parse HEAD)"
+printf '# unit: bytes\n.claude/skills/demo/SKILL.md\t12\n.claude/skills/demo/INDEX.md\t20\n.claude/skills/demo/NOTES.md\t10\n' \
+  >"$ratchetroot/scripts/size-budgets.tsv"
+printf '01234567890123456789' >"$ratchetroot/.claude/skills/demo/INDEX.md"
+git -C "$ratchetroot" add -A >/dev/null 2>&1
+git -C "$ratchetroot" commit -qm "index grows" >/dev/null 2>&1
+gate "$GATES" size-ratchet --base "$ratchet_idx_base" --config "$ratchetroot/scripts/size-budgets.tsv" "$ratchetroot"
+if [ "$GATE_RC" -eq 0 ]; then
+  record 0 "size-ratchet: generated INDEX.md growth passes with no raise line"
+else
+  record 1 "size-ratchet: generated INDEX.md growth passes with no raise line"
+fi
+printf '# unit: bytes\n.claude/skills/demo/SKILL.md\t12\n.claude/skills/demo/INDEX.md\t20\n.claude/skills/demo/NOTES.md\t20\n' \
+  >"$ratchetroot/scripts/size-budgets.tsv"
+printf '01234567890123456789' >"$ratchetroot/.claude/skills/demo/NOTES.md"
+git -C "$ratchetroot" add -A >/dev/null 2>&1
+git -C "$ratchetroot" commit -qm "notes grows" >/dev/null 2>&1
+gate "$GATES" size-ratchet --base "$ratchet_idx_base" --config "$ratchetroot/scripts/size-budgets.tsv" "$ratchetroot"
+if [ "$GATE_RC" -ne 0 ] && grep -q 'RATCHET FAIL: .claude/skills/demo/NOTES.md raised 10->20' "$WORK/last.log" \
+   && ! grep -q 'RATCHET FAIL: .claude/skills/demo/INDEX.md' "$WORK/last.log" \
+   && grep -q 'paste into changelog.d/<slug>.md:  size-budget-raise: .claude/skills/demo/NOTES.md 10→20 <reason>' "$WORK/last.log"; then
+  record 0 "size-ratchet: non-INDEX .md growth without a raise line still FAILS and prints the paste line"
+else
+  record 1 "size-ratchet: non-INDEX .md growth without a raise line still FAILS and prints the paste line"
+fi
+
 # Case C: the SAME raise, but the marker is in the commit message -> passes.
 git -C "$ratchetroot" reset --hard "$ratchet_base" -q >/dev/null 2>&1
 printf '# unit: bytes\n.claude/skills/demo/SKILL.md\t20\n.claude/skills/demo/references/ref.md\t3\n' \

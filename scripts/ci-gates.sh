@@ -873,6 +873,10 @@ cmd_size_ratchet() {
     # row above the size is a budget and stays one).
     base_sz="$(git -C "$root" cat-file -s "${base}:${p}" 2>/dev/null)" && [ "$base_sz" -gt "$old_b" ] && old_b="$base_sz"
     [ "$new_b" -gt "$old_b" ] || continue
+    # Generated skill INDEX.md files are derived from reference files (themselves ratcheted) and regenerated
+    # by CI, never committed by lanes, so their growth needs no raise line. Absolute caps and the silent
+    # row-deletion check below still apply.
+    case "$p" in */INDEX.md|INDEX.md) continue ;; esac
 
     marker="size-budget-raise: $p ${old_b}→${new_b}"
     # here-strings, not `printf | grep -q`: under pipefail grep -q's early exit SIGPIPEs printf (141) on a big log
@@ -883,6 +887,7 @@ cmd_size_ratchet() {
     else
       printf 'RATCHET FAIL: %s raised %s->%s bytes with no "%s <reason>" line in the %s..HEAD commit range or among CHANGELOG.md / changelog.d lines added since base\n' \
         "$p" "$old_b" "$new_b" "$marker" "$base" >&2
+      printf '  fix: paste into changelog.d/<slug>.md:  %s <reason>\n' "$marker" >&2
       fail=1
     fi
   done
