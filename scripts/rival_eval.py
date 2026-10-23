@@ -92,8 +92,10 @@ def load_key():
     raise SystemExit("PCSS_KEY missing: set it in the environment or in the repo-root .env")
 
 
-def chat(model, system, user, max_tokens=6000, temperature=0.0, tries=3):
-    """One PCSS chat completion -> text with any <think> block removed. Raises RuntimeError after `tries` failures."""
+def chat(model, system, user, max_tokens=6000, temperature=0.0, tries=3, usage=None):
+    """One PCSS chat completion -> text with any <think> block removed. Raises RuntimeError after `tries` failures.
+    A `usage` dict is filled from the response `usage` (prompt_tokens, completion_tokens; spend_usd from usage.cost, else None = unmeasured) only
+    when the API reports it; failed retries are not counted."""
     req_body = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                 "max_tokens": max_tokens, "temperature": temperature}
     if model in NO_THINK:
@@ -103,9 +105,13 @@ def chat(model, system, user, max_tokens=6000, temperature=0.0, tries=3):
     for i in range(tries):
         try:
             req = urllib.request.Request(PCSS + "/chat/completions", body, {"Authorization": "Bearer " + load_key(), "Content-Type": "application/json"})
-            txt = json.load(urllib.request.urlopen(req, timeout=600))["choices"][0]["message"]["content"] or ""
+            resp = json.load(urllib.request.urlopen(req, timeout=600))
+            txt = resp["choices"][0]["message"]["content"] or ""
             txt = re.sub(r"<think>.*?</think>", "", txt, flags=re.S).strip()
             if txt:
+                u = resp.get("usage") or {}
+                if usage is not None and "prompt_tokens" in u and "completion_tokens" in u:
+                    usage.update(prompt_tokens=u["prompt_tokens"], completion_tokens=u["completion_tokens"], spend_usd=u.get("cost"))
                 return txt
             err = "empty output"
         except Exception as e:  # network, HTTP, JSON shape: retry then report the type only (never the key)
@@ -114,7 +120,7 @@ def chat(model, system, user, max_tokens=6000, temperature=0.0, tries=3):
     raise RuntimeError(f"{model}: {err}")
 
 
-def claude_call(system, user, st, reserve=0.10):
+def claude_call(system, user, st, reserve=0.10, usage=None):
     """One claude -p call, no tools -> text. The cap is checked against spend plus every in-flight reserve; the plan-quota
     reading must be present (fail closed). A timeout charges the reserve; a missing binary or timeout becomes a RuntimeError."""
     with st.lock:
@@ -126,7 +132,7 @@ def claude_call(system, user, st, reserve=0.10):
     cmd = ["claude", "-p", "--model", CLAUDE_MODEL, "--output-format", "stream-json", "--verbose", "--tools", "",
            "--no-session-persistence", "--setting-sources", "project,local", "--strict-mcp-config", "--disable-slash-commands",
            "--max-budget-usd", str(reserve), "--system-prompt", system]
-    txt, cost, util, seen, err = "", 0.0, 0.0, False, ""
+    txt, cost, util, seen, err, u = "", 0.0, 0.0, False, "", {}
     try:
         with tempfile.TemporaryDirectory(prefix="rival-") as w:
             p = subprocess.run(cmd, input=user, capture_output=True, text=True, cwd=w, timeout=900)
@@ -139,7 +145,7 @@ def claude_call(system, user, st, reserve=0.10):
                 ws = (j.get("rate_limit_info") or {}).get("unifiedWindows") or {}
                 util, seen = max([util] + [float(v.get("utilization") or 0) for v in ws.values()]), seen or bool(ws)
             elif j.get("type") == "result":
-                txt, cost = j.get("result") or "", float(j.get("total_cost_usd") or 0)
+                txt, cost, u = j.get("result") or "", float(j.get("total_cost_usd") or 0), (j.get("usage") or {}) if "total_cost_usd" in j else {}
     except subprocess.TimeoutExpired:
         cost, err = reserve, "claude: timed out"  # unknown spend: charge the whole reserve
     except FileNotFoundError:
@@ -155,11 +161,22 @@ def claude_call(system, user, st, reserve=0.10):
         raise Stop("no plan-quota utilization reading in the claude output (fail closed)")
     if not txt.strip():
         raise RuntimeError("claude: empty output")
+    if usage is not None and "input_tokens" in u and "output_tokens" in u:
+        usage.update(prompt_tokens=sum(u.get(k) or 0 for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")),
+                     completion_tokens=u["output_tokens"], spend_usd=cost)
     return txt
 
 
-def generate(backend, system, user, st):
-    return claude_call(system, user, st) if backend == "claude" else chat(GEN_MODEL, system, user, temperature=0.3)
+def generate(backend, system, user, st, usage=None):
+    return claude_call(system, user, st, usage=usage) if backend == "claude" else chat(GEN_MODEL, system, user, temperature=0.3, usage=usage)
+
+
+def arm_cost(arm_usage, n_items):
+    """Sum per-item usage dicts (items without a reported usage are left out, never estimated) -> per-arm cost record."""
+    paid = bool(arm_usage) and all(u.get("spend_usd") is not None for u in arm_usage)  # one missing price: dollars unmeasured
+    return dict(n_measured=len(arm_usage), n_items=n_items,
+                **{k: round(sum(u[k] for u in arm_usage), 6) for k in ("prompt_tokens", "completion_tokens")},
+                spend_usd=round(sum(u["spend_usd"] for u in arm_usage), 6) if paid else None)
 
 
 def boot(vals, n=10000, seed=1):
@@ -341,15 +358,21 @@ def run_skill(skill, split, backend, out, jobs, cap):
     systems = {a: arm_text(skill, a) for a in ARMS}
     key = sha("".join(systems.values()) + gen_task + (CLAUDE_MODEL if backend == "claude" else GEN_MODEL))[:8]
     d = out / skill / f"{split}-{key}"
-    outs, errs = {a: {} for a in ARMS}, []
+    outs, errs, uses = {a: {} for a in ARMS}, [], {a: {} for a in ARMS}
 
     def gen(a, sc):
         p = d / "outputs" / a / f"{sc['id']}-{sha(sc['prompt'])[:8]}.txt"
+        up = p.with_suffix(".usage.json")  # sidecar so a resumed run keeps the real numbers of cached outputs
         if not p.exists():
+            u = {}
             try:
-                save(p, generate(backend, systems[a], gen_task + sc["prompt"], st))
+                save(p, generate(backend, systems[a], gen_task + sc["prompt"], st, usage=u))
             except RuntimeError as e:
                 return errs.append(f"gen {a}/{sc['id']}: {e}")
+            if u:
+                up.write_text(json.dumps(u))
+        if up.exists():
+            uses[a][sc["id"]] = json.loads(up.read_text())
         outs[a][sc["id"]] = p.read_text()
 
     stopped = ""
@@ -383,7 +406,7 @@ def run_skill(skill, split, backend, out, jobs, cap):
     v = list(sc_scores.values())
     res = dict(skill=skill, split=split, rival=cfg["rival"]["name"], n=len(v), n_scenarios=len(scs),
                gen_model=CLAUDE_MODEL if backend == "claude" else GEN_MODEL, judge=used, slot1_rate=health,
-               spend_usd=round(st.spent, 4), per_scenario=sc_scores, errors=errs, stopped=stopped,
+               spend_usd=round(st.spent, 4), cost_per_arm={a: arm_cost(list(uses[a].values()), len(scs)) for a in ARMS}, per_scenario=sc_scores, errors=errs, stopped=stopped,
                perun_sha256=sha(systems["PERUN"])[:16], rival_sha256=sha(systems["RIVAL"])[:16],
                bootstrap="10000 resamples, seed 1, percentile, over scenarios")
     if v:
