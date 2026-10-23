@@ -4276,6 +4276,13 @@ else
   record 1 "finding gates: ground check + merge/dedupe/cap tests pass"; tail -5 "$WORK/finding-gates.log"
 fi
 
+# security_verify.py: verify-or-drop shape check and exclusion override behave (plain-assert suite).
+if python3 "$ROOT/scripts/test_security_verify.py" >"$WORK/security-verify.log" 2>&1; then
+  record 0 "security_verify: exploit-path triage + exclusion override tests pass"
+else
+  record 1 "security_verify: exploit-path triage + exclusion override tests pass"; tail -5 "$WORK/security-verify.log"
+fi
+
 # /perun-run command: exists, has frontmatter, names the drain test it depends on.
 if head -1 "$ROOT/commands/perun-run.md" | grep -q '^---$' \
   && grep -q 'description:' "$ROOT/commands/perun-run.md" \

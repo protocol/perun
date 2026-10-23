@@ -33,6 +33,7 @@ ADDED = (  # prefix of every line in the new files that the old file did not hav
     "| `appsec-egress.md` | builds or changes an SSRF guard",
     "| `appsec-flows.md` | has a flow that moves value or advances state (checkout, refund, balance, coupon, invite, quota, wizard, approval, tier change)",
     "| `appsec-corroboration.md` | rests a finding on taint",
+    "| `appsec-verify.md` | yields a finding",
     "  calls is a no-op. Parallel-lane version drift and the merge-time re-census: `appsec-egress.md`.",
     "- **Guard transport footguns and parallel-lane guard drift**",
     "**Detect steps for business flows** (money/state machines for checkout, refund, balance, coupon, invite, quota, wizard, approval, tier change;",

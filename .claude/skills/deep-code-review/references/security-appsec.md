@@ -33,6 +33,7 @@ sub-files; load one when the target or diff matches its trigger.
 | `appsec-egress.md` | builds or changes an SSRF guard (a pinning transport, a custom `http.request` wrapper, per-hop redirect revalidation) or adds an outbound fetch of a user-influenced URL where a guard exists (A01) |
 | `appsec-flows.md` | has a flow that moves value or advances state (checkout, refund, balance, coupon, invite, quota, wizard, approval, tier change), a check-then-act redeem or claim, or a rate limiter whose key or failure mode is in question (A06) |
 | `appsec-corroboration.md` | rests a finding on taint, a live secret, a vulnerable version or reachability, or ingests scanner output (SARIF, OSV JSON) |
+| `appsec-verify.md` | yields a finding |
 
 ---
 
