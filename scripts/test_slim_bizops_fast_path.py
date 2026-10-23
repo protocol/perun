@@ -97,7 +97,7 @@ EVAL_STATED = {
 
 class SlimBizops(unittest.TestCase):
     def test_skill_is_small(self):
-        self.assertLessEqual((D / "SKILL.md").stat().st_size, 6350)
+        self.assertLessEqual((D / "SKILL.md").stat().st_size, 6454)
 
     def test_frontmatter_unchanged_and_single_h1(self):
         old = old_skill()

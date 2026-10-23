@@ -53,4 +53,6 @@ Checked by `evals/evals.json`; the prose around the rules is advisory.
 - `references/full-map.md`: you need a moved section: One North Star, Read AARRR bottom-up, Event taxonomy, Instrument for the stage, Experiment rigor, Asked for a call, Deliver what was asked, Make every cut decide something, plus the definition of done, the Anti-rationalization table, standards and verification cases.
 - `evals/evals.json`: you change this skill and need the planted cases listed above.
 
-Output structure follows `communication-structure` if installed. This skill has no scripts.
+Output structure follows `communication-structure` if installed.
+
+- `scripts/readout_check.py`: run it when you read a finished A/B readout JSON; it checks only what the input pre-registers (SRM alpha, alpha, planned N and days), else SKIP.
