@@ -6,6 +6,7 @@ usage: rival_eval.py run [--skills a,b | --changed [BASE]] [--split heldout|tune
        rival_eval.py write SKILL SPLIT      (draw a scenario set from the skill's writer brief; never shows skill text)
        rival_eval.py changed [BASE]         (print the skills a diff touches)
        rival_eval.py check [SKILL ...]      (split hygiene only; offline)
+       rival_eval.py keys SKILL RUNDIR      (answer-key hit rate per arm from cached outputs; offline)
 
 Per skill: Perun arm = the skill's SKILL.md as a system prompt; rival arm = the rival's public text; both answer the same
 scenarios with no tools. A blind pairwise judge with no rubric picks the better answer, in both orders. The two answers
@@ -267,7 +268,87 @@ def check_split(skill):
         hs = shingles(h["prompt"])
         if any(len(hs & t) / max(1, min(len(hs), len(t))) > 0.5 for t in tsh):
             bad.append(f"heldout {h['id']} overlaps a tune prompt by more than half")
+    return bad + check_keys(skill)
+
+
+def load_keys(skill):
+    """-> {scenario id: {"must": {name: regex}, "mustnot": {...}, "mustnot_draft": {...}}} from <skill>/keys.json, or {} without one."""
+    f = FIX / skill / "keys.json"
+    return json.loads(f.read_text()) if f.is_file() else {}
+
+
+def check_keys(skill):
+    """Answer-key hygiene (empty = clean): every held-out id keyed, 3-6 must-hit and 1-3 must-not items, every regex compiles."""
+    keys, bad = load_keys(skill), []
+    if not keys:
+        return bad
+    for sc in load_scenarios(skill, "heldout"):
+        k = keys.get(sc["id"])
+        if not k:
+            bad.append(f"keys.json: no key for heldout {sc['id']}")
+            continue
+        no = len(k.get("mustnot", {})) + len(k.get("mustnot_draft", {}))
+        if not 3 <= len(k.get("must", {})) <= 6 or not 1 <= no <= 3:
+            bad.append(f"keys.json {sc['id']}: needs 3-6 must and 1-3 mustnot items")
+    for i, k in keys.items():
+        for grp in ("must", "mustnot", "mustnot_draft"):
+            for name, rx in k.get(grp, {}).items():
+                try:
+                    re.compile(rx)
+                except re.error as e:
+                    bad.append(f"keys.json {i}/{name}: bad regex ({e})")
     return bad
+
+
+def draft_text(t):
+    """Only the parts of an answer that read as a drafted public message: > quoted lines and fenced blocks."""
+    out, fence = [], False
+    for ln in t.splitlines():
+        if ln.lstrip().startswith("```"):
+            fence = not fence
+        elif fence or ln.lstrip().startswith(">"):
+            out.append(ln)
+    return "\n".join(out)
+
+
+NEG = re.compile(r"\b(never|don'?t|do not|doesn'?t|won'?t|shouldn'?t|avoid|not|no|without|omit|exclude|instead of)\b", re.I)
+
+
+def violated(rxs, text):
+    """Names of must-not regexes that match inside a sentence with no negation word before the match, so "never promise a
+    guaranteed profit" is not a violation. [placeholder] and <placeholder> spans are blanked first."""
+    text = re.sub(r"\[[^\]]*\]|<[^>]*>", " ", text)
+    out = []
+    for n, rx in rxs.items():
+        for s in re.split(r"(?<=[.!?])\s+|\n", text):
+            if any(not NEG.search(s[:m.start()]) for m in re.finditer(rx, s, re.I)):
+                out.append(n)
+                break
+    return out
+
+
+def key_score(skill, outs):
+    """Deterministic outcome score: per arm, mean fraction of must-hit items found (hit_rate) and share of scenarios with any
+    must-not hit (violation_rate). outs = {arm: {scenario id: answer text}}; only ids with a key and every arm's answer count.
+    Regex only, case-insensitive; must-nots skip negated sentences (see `violated`); `mustnot_draft` is checked against the
+    drafted-message lines only; `needs_draft` keys flag `no_draft` (counted as a violation) when the answer has none.
+    ponytail: keyword match proves presence, not quality; upgrade to a PCSS item-presence judge if regex misses paraphrases."""
+    keys = load_keys(skill)
+    ids = [i for i in keys if all(i in outs[a] for a in outs)]
+    res = {}
+    for a in outs:
+        per = {}
+        for i in ids:
+            t, k = outs[a][i], keys[i]
+            hit = [n for n, rx in k["must"].items() if re.search(rx, t, re.I | re.S)]
+            d = draft_text(t)
+            bad = violated(k.get("mustnot", {}), t) + violated(k.get("mustnot_draft", {}), d)
+            no_draft = bool(k.get("needs_draft")) and not d.strip()  # asked for a drafted message, none in a > quote or code fence
+            per[i] = dict(hits=len(hit), of=len(k["must"]), missed=sorted(set(k["must"]) - set(hit)), violated=bad, no_draft=no_draft)
+        n = len(per)
+        res[a] = dict(n=n, hit_rate=round(sum(p["hits"] / p["of"] for p in per.values()) / n, 3) if n else None,
+                      violation_rate=round(sum(bool(p["violated"]) or p["no_draft"] for p in per.values()) / n, 3) if n else None, per_scenario=per)
+    return res
 
 
 def arm_text(skill, arm):
@@ -386,6 +467,8 @@ def run_skill(skill, split, backend, out, jobs, cap):
                spend_usd=round(st.spent, 4), per_scenario=sc_scores, errors=errs, stopped=stopped,
                perun_sha256=sha(systems["PERUN"])[:16], rival_sha256=sha(systems["RIVAL"])[:16],
                bootstrap="10000 resamples, seed 1, percentile, over scenarios")
+    if load_keys(skill):
+        res["answer_key"] = {a: {k: x for k, x in r.items() if k != "per_scenario"} for a, r in key_score(skill, outs).items()}
     if v:
         lo, hi = boot(v)
         res.update(win_rate=round(sum(v) / len(v), 3), ci95=[round(lo, 3), round(hi, 3)])
@@ -471,6 +554,9 @@ def main(argv=None):
     w.add_argument("--force", action="store_true", help="overwrite a frozen held-out set")
     c = sub.add_parser("changed")
     c.add_argument("base", nargs="?", default="origin/main")
+    q = sub.add_parser("keys", help="rescore cached outputs against the skill's answer key (offline, no model call)")
+    q.add_argument("skill")
+    q.add_argument("dir", help="a run dir holding outputs/<ARM>/<id>-<hash>.txt")
     k = sub.add_parser("check")
     k.add_argument("skills", nargs="*")
     a = ap.parse_args(argv)
@@ -478,6 +564,12 @@ def main(argv=None):
         return write_set(a.skill, a.split, a.force)
     if a.cmd == "changed":
         return print("\n".join(changed_skills(a.base)))
+    if a.cmd == "keys":
+        for x in ARMS:
+            if not (Path(a.dir) / "outputs" / x).is_dir():
+                raise SystemExit(f"keys: missing arm directory {Path(a.dir) / 'outputs' / x}")
+        outs = {x: {f.stem.rsplit("-", 1)[0]: f.read_text() for f in (Path(a.dir) / "outputs" / x).glob("*.txt")} for x in ARMS}
+        return print(json.dumps({x: {k: v for k, v in r.items() if k != "per_scenario"} for x, r in key_score(a.skill, outs).items()}, indent=1))
     if a.cmd == "check":
         rc = 0
         for s in a.skills or skills():
