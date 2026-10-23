@@ -65,5 +65,25 @@ class Moved(unittest.TestCase):
         self.assertIn("`infra-evolution-by-stage.md`", SKILL)
 
 
+FAST_FLOOR = 3000  # bytes; SKILL.md (the small-DIFF fast path) was 2785 when set. Move DOWN only.
+# Phase 0-2 floor a large or flagged DIFF also loads; test_floor_refs_named_in_full_map keeps this list honest.
+FLOOR_REFS = ["full-map.md", "method.md", "testing-and-evals.md", "language-stack-redflags.md", "domain-checklists.md"]
+
+
+class FastPathFloor(unittest.TestCase):
+    def test_fast_path_under_floor_and_table(self):
+        fast = (D / "SKILL.md").stat().st_size
+        large = fast + sum((D / "references" / n).stat().st_size for n in FLOOR_REFS)
+        print(f"\n{'diff size':<24}{'must-load bytes':>16}{'est tokens':>12}")
+        for name, b in (("<=50 lines", fast), ("<=300 lines", fast), (">300 lines or flagged", large)):
+            print(f"{name:<24}{b:>16}{b // 4:>12}")
+        self.assertLessEqual(fast, FAST_FLOOR)
+        self.assertIn("references/full-map.md", (D / "SKILL.md").read_text())
+
+    def test_floor_refs_named_in_full_map(self):
+        for n in FLOOR_REFS[1:]:
+            self.assertIn(f"`{n}`", SKILL, n)
+
+
 if __name__ == "__main__":
     unittest.main()
