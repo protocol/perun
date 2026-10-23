@@ -15,7 +15,7 @@
 
 | # | Capability | Repo status | Rival rows | With a Perun result | Largest verified gap |
 |---|---|---|---|---|---|
-| 1 | Code review | Shipped | 4 | 2 (+1 README only) | Cost per review (about 3.4 times the toolkit's, H7b); no apply step (`--fix`) or GitLab posting; no packaged specialist agents |
+| 1 | Code review | Shipped | 4 | 2 (+1 README only) | Cost per review (about 3.4 times the toolkit's, H7b; not harness-matched, the toolkit ran as `--system-prompt`, the only matched pair, 1.05 times, is the V2 inline prompt, which was not shipped, so the shipped `/review` is unmeasured until the bench in `docs/bench/review-cost-matched-1023/PREREGISTERED.md` runs); no apply step (`--fix`) or GitLab posting; no packaged specialist agents |
 | 2 | Product advice and discovery | Shipped | 3 | 1 | Filled-in thresholds and templates (the rival led on the rubric-free judge, H1d); no connectors |
 | 3 | Delivery team (lanes, roles) | Shipped | 4 | 1 | No browser QA or deploy commands; no executable multi-agent runtime |
 | 4 | CEO or orchestrator | Partial | 3 | 0 | No runtime; no adapters for the agent-teams hook events |

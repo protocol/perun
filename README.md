@@ -122,7 +122,10 @@ Perun costs more than the cheapest rival, and its recall gain over it is not mea
 22 patch-only cases, with raw outputs committed: Perun caught 13 of 22 bugs at $0.093 per
 caught bug (review calls only), the Anthropic toolkit reviewer 12 of 22 at $0.030, about 3.1
 times as much. Recall was 0.591 against 0.545 (the intervals overlap), and false alarms
-were equal at 0.50 per case. Per case, review cost was $0.0551 against $0.0162 (3.4 times).
+were equal at 0.50 per case. Per case, review cost was $0.0551 against $0.0162 (3.4 times; the toolkit ran as `--system-prompt`,
+which replaces Claude Code's own system prompt, while Perun ran on the default one, so harness cost is mixed in. The
+only matched pair, the V2 prompt (reverted, never shipped) against the toolkit, cost $0.01887 against $0.01791, 1.05 times, so the shipped skill's matched ratio is unmeasured; see
+`docs/bench/review-cost-v2-1019/ledger.jsonl`).
 On the 37-case run above every arm caught 11 bugs, so cost per caught bug follows cost per
 case: $0.457 for Perun against $0.303 to $0.330 for the others (aggregates only; false
 alarms per case were not recorded there). Perun's measured edge is fewer false alarms
