@@ -69,7 +69,7 @@ PAIRS = [
 
 class SlimPositioning(unittest.TestCase):
     def test_skill_is_small(self):
-        self.assertLessEqual((D / "SKILL.md").stat().st_size, 5800)
+        self.assertLessEqual((D / "SKILL.md").stat().st_size, 5852)  # 5800 + the one-line positioning_check.py route
 
     def test_frontmatter_unchanged_and_single_h1(self):
         if OLD.returncode:
@@ -82,7 +82,9 @@ class SlimPositioning(unittest.TestCase):
     def test_every_reference_is_routed_with_a_trigger_and_no_scripts(self):
         for ref in sorted((D / "references").glob("*.md")):
             self.assertIn(f"`references/{ref.name}`:", SKILL, f"{ref.name} not routed with a trigger from SKILL.md")
-        self.assertFalse((D / "scripts").exists(), "scripts/ now exists: route it from SKILL.md")
+        scripts = sorted(p.name for p in (D / "scripts").glob("*.py")) if (D / "scripts").exists() else []
+        self.assertEqual(scripts, ["positioning_check.py"], "scripts/ changed: route every script from SKILL.md and update this list")
+        self.assertIn("`scripts/positioning_check.py`:", SKILL)
         self.assertIn("`evals/evals.json`:", SKILL)
 
     def test_escalate_names_every_moved_section(self):
