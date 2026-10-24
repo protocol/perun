@@ -288,7 +288,7 @@ def scores():
     if GL[2]: raise SystemExit(f"{GL[2]} gitleaks regexes failed to compile")
     pick = lambda n: [(l.split("\t")[0], l.split("\t", 1)[1].replace("@@", "")) for l in sc.rows(n)]
     leaks, decoys = pick("secret-leaks.txt"), pick("secret-decoys.txt")
-    dang, ben = sc.rows("destructive-dangerous.txt"), sc.rows("destructive-benign.txt")
+    dang, ben = sc.cmds("destructive-dangerous.txt"), sc.cmds("destructive-benign.txt")
     s = {"gitleaks": dict(n_leaks=len(leaks), n_decoys=len(decoys), rules=len(GL[1]),
                           missed=[n for n, t in leaks if not gitleaks_rule(t)], fp=[n for n, t in decoys if gitleaks_rule(t)])}
     s["hooks-mastery"] = dict(n=len(dang), n_ben=len(ben), missed=[c for c in dang if not hooks_mastery(c)], fp=[c for c in ben if hooks_mastery(c)])

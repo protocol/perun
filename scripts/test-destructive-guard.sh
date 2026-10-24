@@ -164,4 +164,13 @@ PY
 echo '{"tool_name":"Bash","tool_input":{"command":"git reset --hard"}}' | python3 "$G" 2>"$W/err"; [ $? -eq 2 ] && grep -q '`!` prefix' "$W/err"; ok $? "block message tells the owner to run it with the ! prefix"
 printf 'destructive-guard-allow: git reset --hard\n' >"$W/CLAUDE.md"
 echo '{"tool_name":"Bash","tool_input":{"command":"git reset --hard"}}' | CLAUDE_PROJECT_DIR="$W" DCR_OWNER_EMAIL=owner@example.com python3 "$G" 2>/dev/null; [ $? -eq 2 ]; ok $? "no grant mechanism: a CLAUDE.md allow line does not unblock"
+python3 -I - "$G" <<'PY'; ok $? "B64EXEC is not a ReDoS; kubectl delete skips option values"
+import importlib.util, sys, time
+s = importlib.util.spec_from_file_location("dg", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+for c in ("sh " * 1000 + "$(" * 1000,):
+    t = time.time(); m.check(c); assert time.time() - t < 0.5, time.time() - t
+assert m.check("kubectl delete -n foo ns bar") and m.check("kubectl delete --namespace=foo namespace bar")
+assert m.check("kubectl delete -l a=b -n x ns bar")
+assert not m.check("kubectl delete -n foo pod bar")
+PY
 echo "Tests: $p/$n passed"; exit "$fail"

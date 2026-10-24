@@ -2,8 +2,8 @@
 """Score Perun's secret gate and destructive guard on the frozen synthetic corpora in this directory.
 
 Offline and deterministic: no network, no model calls, nothing is executed (commands are only classified).
-Usage: python3 docs/bench/security-gates-1024/score.py [--corpus-dir DIR]   (DIR holds the corpora and a README.md with SHA256 lines; run from the repo root; exit 1 on any hash drift)
-Corpus files: tab-separated `name<TAB>text` (secrets) or one command per line; `#` lines are comments; `@@`
+Usage: python3 docs/bench/security-gates-1024/score.py [--corpus-dir DIR]   (DIR holds the corpora and SHA256 lines in SHA256-frozen.txt, else README.md; run from the repo root; exit 1 on any hash drift)
+Corpus files: tab-separated `name<TAB>text` (secrets) or `id<TAB>cmd` / one command per line; `#` lines are comments; `@@`
 inside a secret line is a marker deleted before scoring so the files never trip the repo privacy gate.
 """
 import hashlib, importlib.util, pathlib, subprocess, sys, tempfile
@@ -18,13 +18,19 @@ def rows(name):
     return [l for l in (D / name).read_text().splitlines() if l and not l.startswith("#")]
 
 
+def cmds(name):
+    """Command rows: `id<TAB>cmd` (the id is dropped) or a bare command per line."""
+    return [l.split("\t", 1)[-1] for l in rows(name)]
+
+
 def sha_ok():
-    """Compare corpus hashes with SHA256 lines in README.md; returns the list of drifted files."""
+    """Compare corpus hashes with the SHA256 lines of SHA256-frozen.txt (last line per path pins the file, earlier ones are disclosed amendments) or, without it, README.md; returns the list of drifted files."""
     want = {}
-    for l in (D / "README.md").read_text().splitlines():
+    fz = D / "SHA256-frozen.txt"
+    for l in (fz if fz.exists() else D / "README.md").read_text().splitlines():
         p = l.split()
-        if len(p) == 2 and len(p[0]) == 64 and p[1].endswith(".txt"):
-            want[p[1]] = p[0]
+        if len(p) == 2 and len(p[0]) == 64 and p[1].endswith((".txt", ".md") if fz.exists() else ".txt"):
+            want[pathlib.PurePath(p[1]).name] = p[0]
     return [f for f, h in want.items() if hashlib.sha256((D / f).read_bytes()).hexdigest() != h] or (
         [] if want else ["README.md has no sha256 lines"])
 
@@ -51,7 +57,7 @@ def main():
         fp = [n for n, t in decoys if secret_flagged(tmp, t)]
     print(f"secret gate: recall {len(leaks) - len(miss)}/{len(leaks)}  FP {len(fp)}/{len(decoys)}")
     print("  missed:", miss); print("  false positives:", fp)
-    dang, ben = rows("destructive-dangerous.txt"), rows("destructive-benign.txt")
+    dang, ben = cmds("destructive-dangerous.txt"), cmds("destructive-benign.txt")
     dmiss = [c for c in dang if not dg.check(c)]
     dfp = [c for c in ben if dg.check(c)]
     print(f"destructive guard: blocked {len(dang) - len(dmiss)}/{len(dang)}  FP {len(dfp)}/{len(ben)}")

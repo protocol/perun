@@ -177,7 +177,7 @@ def ledger_errs(d):
 def frozen_errs(d):
     """Rule e: every "<sha256>  <path>" line of SHA256-frozen.txt names a file that exists and still hashes to it.
 
-    The path resolves from REPO first, then from d (sha256sum -c run from the repo root or the bench dir;
+    The path resolves from REPO first (a bare filename, which could also name a repo-root file such as README.md, from d first), then from the other (sha256sum -c run from the repo root or the bench dir;
     a "../" path resolves from d only, so it never reaches outside the repo by way of REPO/..);
     the first base that holds the file is the one hashed. Reads only. No SHA256-frozen.txt gives no errors
     here (ledger_errs reports it). A line that is not "<64 hex>  <path>" is an error (fails closed).
@@ -196,7 +196,7 @@ def frozen_errs(d):
         p = m.group(2)
         if last[p] != n:  # an amendment re-lists the path below; ledger_errs makes it name a later ledger event
             continue
-        hit = None if p.startswith("/") else next((c for c in in_repo(REPO / p, d / p) if c.is_file()), None)
+        hit = None if p.startswith("/") else next((c for c in in_repo(*((d / p, REPO / p) if "/" not in p else (REPO / p, d / p))) if c.is_file()), None)
         if hit is None:
             out.append(f"{f}: {p} is missing (tried the repo root and the bench dir)")
         elif hashlib.sha256(hit.read_bytes()).hexdigest() != m.group(1).lower():

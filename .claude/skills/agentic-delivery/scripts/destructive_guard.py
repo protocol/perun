@@ -44,7 +44,10 @@ Denies (exit 2, one-line reason with the safe alternative on stderr; the host bl
   `docker volume rm|prune`, `docker system prune --volumes|-a`, `docker rm|rmi|kill $(...)` (global options like `-H x` are skipped), `kill ... -1|0`, `shutdown|reboot|halt|poweroff`, `shred`, `truncate -s 0`,
   `rsync --delete` (not with `-n`/`--dry-run`), SQL DROP/TRUNCATE/DELETE-all via psql/mysql/sqlite3, fork bombs,
   `git push --force-with-lease` to main/master, `git worktree remove --force`, a secret variable in a curl/wget
-  URL query.
+  URL query, `aws s3 rm --recursive|s3 rb --force|ec2 terminate-instances|rds delete-db-*`, `gcloud projects delete`,
+  `az group delete`, `terraform|tofu destroy|apply -destroy`, `kubectl delete namespace|all --all`,
+  `redis-cli FLUSHALL|FLUSHDB`, mongo `dropDatabase`, `wipefs` (not `-n`), `diskutil eraseDisk|eraseVolume|...`,
+  and `eval`/`sh` of a `$(... base64 -d ...)` payload.
 Everything else is allowed.
 
 No in-repo grant or allow list: anything an agent can write, an agent can forge. When the owner really wants a
@@ -86,6 +89,9 @@ SQLDROP = re.compile(r"\b(?:drop\s+(?:database|schema|table)|truncate\s+\w|delet
 DYNCMD = re.compile(r"(?:^|[;&|\n({]|\bthen\b|\bdo\b)\s*\"?(?:\$\([^()]{0,200}\)|`[^`]{0,200}`|\$\{?\w{1,64}\}?)\"?(?:\s+\S+){0,8}?\s+(?:-\w*(?:rf|fr)\w*|--hard)\b")
 FORKBOMB = re.compile(r"(\S{1,32})\(\)\s*\{\s*\1\s*\|\s*\1\s*&")
 SSH_VAL = "bcDEeFIiJLlmOopQRSWw"
+B64EXEC = re.compile(r"\b(?:eval|source|(?:ba|z|da|k|a)?sh)\b[^|;&\n]{0,300}(?:\$\(|`)[^)`]{0,300}\bbase64\b[^)`]{0,300}(?:\s-\w*[dD]|--decode)")
+KUBE_VAL = ("-n", "--namespace", "-l", "--selector", "-f", "--filename", "--context", "--cluster", "--kubeconfig", "--user", "-o", "--output", "--field-selector")
+DISKUTIL = ("erasedisk", "erasevolume", "secureerase", "zerodisk", "randomdisk", "partitiondisk")
 DOCKER_VAL = ("-H", "--host", "--context", "-c", "--config", "-l", "--log-level", "--tlscacert", "--tlscert", "--tlskey")
 HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)([A-Za-z_]\w*)\1[^\n]*\n(.*?)\n[ \t]*\2[ \t]*(?=\n|$)", re.S)
 MAXDEPTH = 6
@@ -95,6 +101,8 @@ FALLBACK = [re.compile(p) for p in (
     r"\bgit\b.*\b(?:reset\s+--ha|clean\s+-\w*f|checkout\s+(?:-f|--\s+\.|\.)|switch\s+-f|restore\s+\.|branch\s+-D|stash\s+(?:clear|drop))",
     r"\bgit\b.*\bpush\b.*(?:--for|\s-\w*f\w*\b|--del|--mir|\s[+:]\S)",
     r"\bfind\b.*(?:-delete|-exec\s+rm)", r"\bdd\b.*\bof=/dev/(?!null|zero|std)", r"\bmkfs",
+    r"\b(?:terraform|tofu)\b.*\bdestroy\b", r"\bkubectl\b.*\bdelete\s+(?:ns|namespaces?)\b",
+    r"\baws\b.*\b(?:terminate-instances|delete-db-|s3\s+rb)", r"\b(?:wipefs|redis-cli\s.*flush(?:all|db))\b",
     r"\b(?:chmod|chown)\s+(?:-\S+\s+)*-\w*R\w*\s+(?:\S+\s+)?[/~]", r"\b(?:pkill|killall)\b",
     r"\bkill\s+(?!(?:-0|-s\s+0)(?:\s+--)?\s+(?:\d+|\"?\$\{?\w+\}?\"?|\"\$\([^\"()]*\)\")\s*(?:[;&|\n]|$)).*[$`]", r"\b(?:curl|wget)\b.*\|\s*(?:sudo\s+)?(?:ba|z|da|k|fi)?sh\b",
 )]
@@ -242,6 +250,33 @@ def _cmd(name, a, ph):
         return "kill by pattern/substitution. `kill` the exact PID you started"
     if name in ("curl", "wget") and any(re.match(r"https?://\S*\?\S*\$\{?\w*(?:SECRET|TOKEN|PASSW|API_?KEY|PRIVATE)", t, re.I) for t in a):
         return "secret variable in a URL query string leaves the host. Send it in an Authorization header to a host you trust"
+    w = [t for t in a if not t.startswith("-")]  # positional words; option values may leak in, which only widens a match
+    pair = lambda *x: any(w[k:k + len(x)] == list(x) for k in range(len(w)))
+    if (name == "aws" and ((pair("s3", "rm") and "--recursive" in a) or (pair("s3", "rb") and "--force" in a)
+                           or pair("ec2", "terminate-instances") or any(t.startswith("delete-db-") for t in w) and "rds" in w)) \
+            or (name == "gcloud" and pair("projects", "delete")) or (name == "az" and pair("group", "delete")):
+        return f"{name} bulk or whole-resource delete. Name the exact resource and ask the owner"
+    if name in ("terraform", "tofu") and (w[:1] == ["destroy"] or (w[:1] == ["apply"] and any(t in ("-destroy", "--destroy") for t in a))):
+        return f"{name} destroy removes real infrastructure. Run `plan -destroy` and ask the owner"
+    if name == "kubectl" and "delete" in w:
+        r, k = [], a.index("delete") + 1 if "delete" in a else len(a)  # first positional after delete, skipping option values (`-n foo ns bar`)
+        while k < len(a) and not r:
+            if a[k] in KUBE_VAL:
+                k += 1
+            elif not a[k].startswith("-"):
+                r = [a[k]]
+            k += 1
+        r = r[0].split("/")[0].lower() if r else ""
+        if r in ("ns", "namespace", "namespaces") or (r == "all" and ("--all" in a or "-A" in a or "--all-namespaces" in a)):
+            return "kubectl delete namespace/all removes a whole workload. Delete exact named objects and ask the owner"
+    if name == "redis-cli" and any(t.upper() in ("FLUSHALL", "FLUSHDB") for t in a):
+        return "redis FLUSHALL/FLUSHDB wipes the keyspace. Ask the owner"
+    if name in ("mongo", "mongosh") and any(re.search(r"dropDatabase\s*\(", t) for t in a):
+        return "mongo dropDatabase. Ask the owner"
+    if name == "wipefs" and not any(t in ("-n", "--no-act") for t in a):
+        return "wipefs erases filesystem signatures on a device. Do it in a VM, never on the host"
+    if name == "diskutil" and w[:1] and w[0].lower() in DISKUTIL:
+        return "diskutil erase/partition wipes a disk. Do it in a VM, never on the host"
     if name == "ssh":  # the remote command is everything after the host
         k = 0
         while k < len(a) and a[k].startswith("-"):
@@ -353,12 +388,16 @@ def _feed(name, text):
 def _bodies(cmd):
     """Backtick and `$(...)` bodies of the raw text (balanced parens), scanned recursively by the caller."""
     out = re.findall(r"`([^`]*)`", cmd)
+    end = 0
     for m in re.finditer(r"\$\(", cmd):
+        if m.start() < end:
+            continue  # nested: the outer body already holds it and check() recurses into it (no fan-out blowup)
         depth, j = 1, m.end()
         while j < len(cmd) and depth:
             depth += (cmd[j] == "(") - (cmd[j] == ")")
             j += 1
         out.append(cmd[m.end():j - 1 if depth == 0 else j])
+        end = j
     return out
 
 
@@ -383,6 +422,8 @@ def check(cmd, _depth=0, _ph=None):
     cmd = re.sub(r"\$\{IFS\}|\$IFS\b", " ", cmd)  # rm${IFS}-rf is rm -rf
     if "()" in cmd and FORKBOMB.search(cmd):
         return "fork bomb. Never run it"
+    if "base64" in cmd and B64EXEC.search(cmd):
+        return "eval/shell of a decoded base64 payload cannot be vetted. Decode to a file, read it, then run it"
     if DYNCMD.search(cmd):
         return "command word built from a variable or substitution with -rf/--hard. Spell the command out"
     try:
@@ -461,7 +502,7 @@ def check(cmd, _depth=0, _ph=None):
         if r:
             return r
         src = src or hd[n] or name in ("echo", "printf", "cat", "tee") or (
-            name == "base64" and any(re.fullmatch(r"-[A-Za-z]*d[A-Za-z]*|--decode", t) for t in a))
+            name == "base64" and any(re.fullmatch(r"-[A-Za-z]*[dD][A-Za-z]*|--decode", t) for t in a))
         fetch = fetch or name in ("curl", "wget")
         feed = ([" ".join(a)] + a) if name in ("echo", "printf") else None  # joined, and each arg (printf FORMAT ARG)
         prev = name

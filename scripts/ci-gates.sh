@@ -166,6 +166,11 @@ cmd_privacy() {
     while IFS= read -r -d '' f; do
       skip=0
       for b in "${skip_bases[@]}"; do [ "${f##*/}" = "$b" ] && skip=1; done
+      # frozen synthetic leak/decoy corpora of the two held-out security-gates benches (exact paths, no glob): fictional values by design, immutable once landed
+      case "${f##*/}" in secret-leaks.txt|secret-decoys.txt)  # repo-relative path, so scanning a subdir still resolves it
+        local d top; d="$(cd "$(dirname "$f")" && pwd -P)"; top="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" || top=""
+        case "${d#"$top"/}/${f##*/}" in docs/bench/security-gates-heldout-1024/secret-leaks.txt|docs/bench/security-gates-heldout-1024/secret-decoys.txt|docs/bench/security-gates-heldout2-1024/secret-leaks.txt|docs/bench/security-gates-heldout2-1024/secret-decoys.txt) [ -n "$top" ] && skip=1 ;; esac ;;
+      esac
       [ "$skip" -eq 1 ] || scan+=("$f")
     done < <(scan_files "$t")
   done
