@@ -98,6 +98,7 @@ Run `python3 <skill>/scripts/<name>` (`bash` for `.sh`). `name: purpose — argu
 
 ### communication-structure
 - comms_lint.py: score a human-facing draft against its artifact template. — --kind K [--file F] [--source S]…
+- reader_check.py: Reader-accuracy check: can a reader answer fixed factual… — --checks evals/reader-checks.json --id…
 - status_update_lint.py: check a leadership status update against… — --file F
 - status_vocab_lint.py: flag unverified "live"/"done" claims in a human-facing update. — --file F
 
@@ -123,6 +124,7 @@ Run `python3 <skill>/scripts/<name>` (`bash` for `.sh`). `name: purpose — argu
 - post_review.sh: post review findings to a PR (opt-in). — <PR-number> <findings.json> [--post]
 - review_checks.sh: run local, read-only analyzers over the files changed since… — [--base REF] [--tests] [--timeout SECS]
 - score_review.py: Score a review's findings against a ground-truth file: recall… — GROUND_TRUTH.json FINDINGS.json…
+- security_verify.py: triage security findings: verify-or-drop plus a tunable… — [findings.json|-] [override-file]
 - token_differ.py: the tier-1 design<->app design-token VALUE parity gate. — --design <file> --app <file> [--map…
 - No documented CLI: binaries_gate.py, ci_cost_lint.py, closes_lint.py, reaper_lint.py, review_feedback.py, source_scan_tests.py, validate_status_claims.py
 
