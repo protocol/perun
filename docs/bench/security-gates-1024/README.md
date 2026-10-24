@@ -9,7 +9,9 @@ Frozen synthetic corpora for the H5 (secret gate) and H8 (destructive-command gu
 | destructive-dangerous.txt | 46 dangerous command strings, including interpreter, IFS, brace, quote-split and wrapper tricks |
 | destructive-benign.txt | 45 benign command strings |
 
-Run: `python3 docs/bench/security-gates-1024/score.py` (offline, deterministic, nothing executed). It fails on hash drift against the SHA256 lines below. Rival tools (gitleaks and others) were not run: not installed, owner gate.
+Run: `python3 docs/bench/security-gates-1024/score.py` (offline, deterministic, nothing executed). It fails on hash drift against the SHA256 lines below. Rival rules are scored by `python3 -I docs/bench/security-gates-1024/rivals/score_rivals.py` (pins and gaps in `rivals/SOURCES.md`).
+
+Caveat for the rival rows: rules ported to Python, not the rival binary; ported-rule fidelity is the main threat. Nothing downloaded was executed (data only). The safety-net port is a subset scored three-state (block, allow, unported); its number is a ported-subset result, not the tool's score. Unported rule families: heredocs, PowerShell and cmd, awk, parallel, policy files, strict and paranoid modes, worktree and temp-root relaxations, shell variable assignment tracking, filesystem-dependent path resolution, the raw-text fallback, the interpreter exec-sink check, `git rm`, `git rebase --abort`, `git reflog delete`, disk-erase tools and nested `$(...)` analysis. hooks-mastery targets only `rm -rf` and `.env` by design, so 13/46 is not a general quality comparison. `go2py` keeps Python's Unicode `\d`, `\w`, `\s` and `\b` where Go RE2 uses ASCII, which slightly favours gitleaks.
 
 Caveat: Perun fixes in the same change post-date this corpus, so the after-numbers are in-sample. The guard is a best-effort string check, not a security boundary.
 
@@ -29,6 +31,17 @@ d718d24caf1112adcfccc4bce1ea94a5170bbe2b0512d3f42919bbb060382d16 destructive-ben
 | Secret gate false positives | 1/34 (AWS documentation example key) | 1/34 (same) |
 | Destructive guard blocked | 29/46 | 46/46 |
 | Destructive guard false positives | 0/45 | 0/45 |
+
+Rival rows (ported rules, same corpus, `rivals/score_rivals.py`):
+
+| Tool (pinned) | Secret recall | Secret FP | Destructive blocked | Destructive FP |
+|---|---|---|---|---|
+| Perun | 30/31 | 1/34 | 46/46 | 0/45 |
+| gitleaks v8.30.1 default config | 22/31 | 0/34 | n/a | n/a |
+| claude-code-safety-net (subset port) | n/a | n/a | 27/46 ported-subset result (4 rows unported) | 0/45 |
+| hooks-mastery (exact port) | n/a | n/a | 13/46 | 5/45 |
+
+gitleaks misses 9: 5 fixtures are off the provider's real format (AWS keys with non-base32 digits, 35-character `ghs_`, short fine-grained PAT, short Anthropic key), 3 are header-only PEM lines, 1 is a connection URL. Decode-and-rescan and path rules are not ported.
 
 Remaining secret miss: `gh_ghs` is a 35-character `ghs_` fixture (the real format is 36), kept frozen and counted as a miss. The AWS documentation key stays a false positive because an ERE cannot exclude the `EXAMPLE` suffix. Held-out variants and decoys for each fix are in `scripts/test_security_gates_corpus.py`. The older 32-string guard corpus in `scripts/test-destructive-guard.sh` went from 30/32 to 31/32 (a secret piped to `curl -d @-` is still allowed).
 
