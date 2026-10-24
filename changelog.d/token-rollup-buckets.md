@@ -1,2 +1,0 @@
-### Added
-- `token_report.py --rollup DIR --by day|week` adds UTC day or Monday-start week buckets to the project rollup: raw tokens, priced spend, each model's token share and the delta versus the previous adjacent bucket. The existing cross-file requestId dedup is reused, a bucket holding an unpriced model stays UNPRICED (an all-unpriced bucket is never $0), and the buckets sum exactly to the plain rollup total. Tests: `scripts/test_token_rollup_buckets.py` (registered in `scripts/ci-tests.d/token-rollup-buckets.sh`), including a hand-computed fixture.

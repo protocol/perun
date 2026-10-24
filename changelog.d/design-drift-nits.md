@@ -1,2 +1,0 @@
-### Fixed
-- `design_drift.py`: `grid-gap`, `grid-row-gap` and `grid-column-gap` now count as spacing; uppercase units such as `16PX` parse as px (in `lint_ui_slop.px` and the token reader too); `calc(...)` spacing values are skipped like `var()` instead of having their inner lengths flagged; a DTCG token whose `$value` is a fontFamily array is read (joined, first family wins). Four new checks in `scripts/test_design_drift.py`.
