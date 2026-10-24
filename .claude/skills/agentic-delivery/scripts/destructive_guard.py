@@ -40,6 +40,11 @@ Denies (exit 2, one-line reason with the safe alternative on stderr; the host bl
 - `python -c`, `perl -e`, `node -e`, `awk` bodies that delete (`rmtree`, `os.remove`, `unlink`, `rm_rf`, ...)
   anything but a literal relative path, contain `rm -r` on a variable/root, or call `system()` on a
   non-literal command.
+- `${IFS}`/brace-expanded and variable-built command words with `-rf`/`--hard`, `ssh host CMD` (CMD is checked),
+  `docker volume rm|prune`, `docker system prune --volumes|-a`, `docker rm|rmi|kill $(...)` (global options like `-H x` are skipped), `kill ... -1|0`, `shutdown|reboot|halt|poweroff`, `shred`, `truncate -s 0`,
+  `rsync --delete` (not with `-n`/`--dry-run`), SQL DROP/TRUNCATE/DELETE-all via psql/mysql/sqlite3, fork bombs,
+  `git push --force-with-lease` to main/master, `git worktree remove --force`, a secret variable in a curl/wget
+  URL query.
 Everything else is allowed.
 
 No in-repo grant or allow list: anything an agent can write, an agent can forge. When the owner really wants a
@@ -74,7 +79,14 @@ GIT_OPT_VAL = ("-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-pa
 LIT = r"""['"][^'"/$@][^'"$@]*['"]"""  # a literal relative path
 DELAPI = re.compile(r"(rmtree|os\.(?:remove|unlink|rmdir|removedirs)|rmSync|rmdirSync|unlinkSync|\bfs\.rm|rm_rf"
                     r"|File\.delete|\bunlink|\brmdir)(?:\(|\s)(?!\s*" + LIT + r"\s*(?:[,);]|$))")
-BODYRM = re.compile(r"\brm\s+-\w*[rR]\w*\s+\S*[$/~*]")
+BODYRM = re.compile(r"\brm\s+-\w*[rR]\w*\s*(?:\S*[$/~*]|['\"]\s*\+|%s|\{)")  # variable/root path or string concatenation
+SQLCLI = ("psql", "mysql", "mariadb", "sqlite3", "mongosh", "sqlcmd")
+SQLCOMMENT = re.compile(r"/\*.*?\*/", re.S)
+SQLDROP = re.compile(r"\b(?:drop\s+(?:database|schema|table)|truncate\s+\w|delete\s+from\s+\w+\s*(?:;|$))", re.I)
+DYNCMD = re.compile(r"(?:^|[;&|\n({]|\bthen\b|\bdo\b)\s*\"?(?:\$\([^()]{0,200}\)|`[^`]{0,200}`|\$\{?\w{1,64}\}?)\"?(?:\s+\S+){0,8}?\s+(?:-\w*(?:rf|fr)\w*|--hard)\b")
+FORKBOMB = re.compile(r"(\S{1,32})\(\)\s*\{\s*\1\s*\|\s*\1\s*&")
+SSH_VAL = "bcDEeFIiJLlmOopQRSWw"
+DOCKER_VAL = ("-H", "--host", "--context", "-c", "--config", "-l", "--log-level", "--tlscacert", "--tlscert", "--tlskey")
 HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)([A-Za-z_]\w*)\1[^\n]*\n(.*?)\n[ \t]*\2[ \t]*(?=\n|$)", re.S)
 MAXDEPTH = 6
 PROBE_PID = re.compile(r"\d+|\$\w+|\$\{\w+\}|\$\([^()]*\)")
@@ -155,6 +167,11 @@ def _git(a):
         return "git reset --hard discards work. Use `git stash` or `git reset --soft`/`--mixed`"
     if sub == "clean" and (force or any(x.startswith("--f") for x in longs)) and not (has("--dry-run") or any("n" in t for t in flags)):
         return "git clean -f deletes untracked files. Preview with `git clean -n`, delete exact paths"
+    leased = [t.split("=", 1)[1].split(":")[0] for t in r if t.startswith("--force-with-lease=")]
+    if sub == "push" and has("--force-with-lease") and any(re.search(r"(?:^|[:/])(?:main|master)$", t) for t in leased + [t for t in r if not t.startswith("-")]):
+        return "force push to main/master rewrites shared history. Ask the owner first"
+    if sub == "worktree" and "remove" in r and force:
+        return "git worktree remove --force deletes uncommitted work. Check `git -C <path> status` and remove without --force"
     if sub == "push" and (force or dele or has("--mirror") or any(
             not t.startswith("-") and (t.startswith(("+", ":")) or ":+" in t or "*" in t) for t in r)):
         return "force/delete/mirror push rewrites shared history. Use `--force-with-lease` after the owner approves"
@@ -223,6 +240,34 @@ def _cmd(name, a, ph):
     if name == "kill" and not probe \
             and any(re.search(r"[$`]|pgrep|pidof", t) for t in a):
         return "kill by pattern/substitution. `kill` the exact PID you started"
+    if name in ("curl", "wget") and any(re.match(r"https?://\S*\?\S*\$\{?\w*(?:SECRET|TOKEN|PASSW|API_?KEY|PRIVATE)", t, re.I) for t in a):
+        return "secret variable in a URL query string leaves the host. Send it in an Authorization header to a host you trust"
+    if name == "ssh":  # the remote command is everything after the host
+        k = 0
+        while k < len(a) and a[k].startswith("-"):
+            k += 2 if a[k][-1] in SSH_VAL and len(a[k]) == 2 else 1
+        r = check(" ".join(a[k + 1:]), 1) if k + 1 < len(a) else ""
+        if r:
+            return r
+    if name == "docker":  # only genuinely destructive forms: volume rm/prune, system prune --volumes/-a, bulk rm via substitution
+        k = 0
+        while k < len(a) and a[k].startswith("-"):
+            k += 2 if a[k] in DOCKER_VAL else 1
+        d = a[k:]  # `$(` tokenizes to a bare `$`, so bulk rm shows as t == "$"
+        if d[:2] in (["volume", "rm"], ["volume", "prune"]) or (d[:2] == ["system", "prune"] and any(
+                t in ("--volumes", "--all") or _bundle(t, "a") for t in d)) or (
+                d[:1] in (["rm"], ["rmi"], ["kill"]) and any(t == "$" or "`" in t or "$(" in t for t in d)):
+            return "docker volume rm/prune, system prune --volumes/-a or bulk rm removes data. Name the exact container and ask the owner"
+    if name == "kill" and a and a[-1] in ("-1", "0") and a[-2:-1] not in (["-s"], ["-n"], ["--signal"]):
+        return "kill -1/0 signals every process or the whole process group. `kill` the exact PID"
+    if name in ("shutdown", "reboot", "halt", "poweroff") or (name == "systemctl" and any(t in ("poweroff", "reboot", "halt") for t in a)):
+        return f"{name} takes the host down. Never run it from an agent"
+    if name == "shred" or (name == "truncate" and re.search(r"(?:^|\s)(?:-s\s*0|--size[= ]0)(?:\s|$)", " ".join(a))):
+        return f"{name} irrecoverably destroys file contents. Write to a new file or ask the owner"
+    if name == "rsync" and any(t.startswith("--delete") for t in a) and not any(t == "--dry-run" or _bundle(t, "n") for t in a):
+        return "rsync --delete removes files at the destination. Preview with `--dry-run` and name an exact destination"
+    if name in SQLCLI and any(SQLDROP.search(SQLCOMMENT.sub(' ', t)) for t in a):
+        return "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
     if name in SHELLS + ("eval",) and any(re.search(r"\b(curl|wget)\b", t) for t in a):
         return "remote script run through a shell. Download, read it, then run it"
     if INTERP.match(name):
@@ -300,6 +345,8 @@ def _feed(name, text):
         return check(text, 1)
     if INTERP.match(name) or name in AWK:
         return _body(text)
+    if name in SQLCLI and SQLDROP.search(SQLCOMMENT.sub(' ', text)):
+        return "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
     return ""
 
 
@@ -333,6 +380,11 @@ def check(cmd, _depth=0, _ph=None):
         if r:
             return r
     cmd = HEREDOC.sub(lambda m: m.group(0).split("\n", 1)[0], cmd)
+    cmd = re.sub(r"\$\{IFS\}|\$IFS\b", " ", cmd)  # rm${IFS}-rf is rm -rf
+    if "()" in cmd and FORKBOMB.search(cmd):
+        return "fork bomb. Never run it"
+    if DYNCMD.search(cmd):
+        return "command word built from a variable or substitution with -rf/--hard. Spell the command out"
     try:
         lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|()<>\n")
         lex.whitespace, lex.whitespace_split = " \t\r", True
@@ -364,6 +416,8 @@ def check(cmd, _depth=0, _ph=None):
             if skip == "hs":
                 hs[-1] = t
             skip = None
+        elif not segs[-1] and re.fullmatch(r"\{[^{}\s,]*(?:,[^{}\s,]*)+\}", t):
+            segs[-1].extend(t[1:-1].split(","))  # `{rm,-rf,$X}` brace-expands to a command
         else:
             segs[-1].append(t)
     # fetch: curl/wget earlier in the pipeline; feed: echo/printf text; src: an earlier stage relays text

@@ -52,10 +52,10 @@ Rule: a Perun-versus-rival comparison is judged on a user-felt outcome metric pl
 | H1, H1b to H1g, H2 (n=10 and n=20 history) | Blind-judge preference, rubric or rubric-free | Proxy | None | A reader-outcome or answer-key measurement per pair; `comms-outcome-1019` covers communication-structure only |
 | H3 skill routing | First skill invoked is correct | Proxy | None | Whether the task went better after routing; guardrail measured: over-spawn tokens 1.07 times no pack (bar 1.2) |
 | H4 delivery | Tickets merged and escaped defects | Outcome | Measured: 21 of 21 merged for Perun and for Superpowers, 0 escaped defects for both, 5 for no pack | Guardrail measured: mean cost per run $0.210, $0.441, $0.237; n=3, no CI |
-| H5 secret gate and token accounting | Planted leaks found | Outcome | Measured: 17 of 20 against gitleaks 15 of 20; token totals within 0.11% of ccusage on 5 of 5 sessions | Own in-sample corpus; guardrail measured: 1 false positive on 20 decoys against 0 |
+| H5 secret gate and token accounting | Planted leaks found | Outcome | Measured: on the frozen 2026-10-24 corpus (`docs/bench/security-gates-1024`): 30 of 31 synthetic leaks (20 of 31 before the pattern additions); the earlier 17 of 20 against gitleaks 15 of 20 is not reproducible (corpus lost); gitleaks not run on the new corpus (not installed, owner gate); token totals within 0.11% of ccusage on 5 of 5 sessions | Own synthetic corpus, in-sample (patterns were added after seeing the misses); guardrail measured: 1 false positive on 34 decoys (the public AWS documentation example key) |
 | H6, H7, H7b and section 1 (code review) | Adjudicated recall, precision and F1 | Outcome | Measured: bugs credited by a blind verifier, per case | Guardrail measured: cost per case; same-vendor verifier, small samples, one run per case |
 | H7c (review-cost V2, `review-cost-v2-1019`) | Adjudicated F1 of an inlined single-read review prompt against the toolkit, plus tokens per review | Outcome | Measured: bugs credited per case by free PCSS judges, 21 of 22 held-out cases, one paid `claude -p` run (REVERT) | Guardrail measured: tokens per review and dollars; same-model host, judges are not Claude, one run per case, wide interval |
-| H8 destructive-command guard | Dangerous command strings blocked | Outcome | Measured: 30 of 32 blocked against 19 and 13 for the rivals, by string classification on a fixed 32-string corpus (the guard is best-effort, not a security boundary) | Real-agent transcripts; guardrail measured: 0 false positives of 30 benign strings |
+| H8 destructive-command guard | Dangerous command strings blocked | Outcome | Measured: on the frozen 2026-10-24 corpus (`docs/bench/security-gates-1024`): 46 of 46 blocked (29 of 46 before the rule additions), 0 of 45 benign blocked; rivals not run on it. Older 32-string corpus (kept in `scripts/test-destructive-guard.sh`): 31 of 32 now, 30 of 32 at 1.580.0, rivals 19 and 13 | Synthetic strings written by us, in-sample (rules were added after seeing the misses); best-effort string classification, not a security boundary; guardrail measured: 0 false positives of 45 and of 30 benign strings |
 | H9 vacuous-test detection | Vacuous tests caught | Outcome | Measured: caught of 20 per detector | Guardrail measured: false positives of 20; one 40-test corpus |
 | H10 install and update | Install time and typed commands, plus a host count | Mixed | Measured: Perun install time, typed commands and uninstall leftovers | Missing: any rival installer run (README reads only); the host count is a README count and 18 of 19 hosts were not run on a real host |
 | H11 merge train | Perun's own train on a fixture | Not a comparison | No rival was run | Nothing here is compared with a rival |
@@ -157,12 +157,13 @@ Only the three caller-trap tickets separate the arms, and only no pack failed th
 
 | Test | Perun | Rival | n and caveat |
 |---|---|---|---|
-| Planted leaks found (after PR 1502) | 17/20 (token 10/10, key 5/5, name or PII 2/5) | gitleaks 8.30.1 default config: 15/20 (token 10/10, key 5/5, PII 0/5) | n=20 positives, 20 decoys, our own corpus. In-sample: the patterns were fixed after seeing it. No CI. No trufflehog run |
-| False positives on 20 decoys | 1 (the public AWS documentation example key) | 0 | Perun loses on precision here |
+| Planted leaks found, frozen corpus 2026-10-24 (`docs/bench/security-gates-1024`, `score.py`) | 30/31 (before the pattern additions 20/31; the miss is a 35-character `ghs_` fixture, one character short of the real 36-character format) | not run: gitleaks and others not installed (owner gate) | n=31 synthetic leaks in common provider formats, no PII, 34 decoys. In-sample: the patterns were added after seeing the 11 misses. Offline, deterministic. Held-out variants in `scripts/test_security_gates_corpus.py` |
+| Planted leaks found (older corpus, after PR 1502) | 17/20 (token 10/10, key 5/5, name or PII 2/5) | gitleaks 8.30.1 default config: 15/20 (token 10/10, key 5/5, PII 0/5) | Corpus lost, not reproducible. n=20 positives, 20 decoys, our own corpus, in-sample. No CI. No trufflehog run |
+| False positives on 34 decoys (frozen corpus) | 1 (the public AWS documentation example key; an ERE cannot exclude the `EXAMPLE` suffix) | not run | Perun loses on precision against the older gitleaks result (0 of 20 decoys) |
 | Planted leaks found (before the fix) | 9/20, 3 false positives | 15/20, 0 | Same corpus; the fix is what moved 9 to 17 |
 | Token totals against ccusage 20.0.34 | Within 0.11% on 5 of 5 sessions (3 exact); cost within 0.35% | n/a | n=5 sessions, one machine, mostly one project. Earlier the gap was 2.8% to 3.0% on 2 Opus sessions because advisor spend was dropped |
 
-Perun's lead on secrets is the PII patterns only; on tokens and keys it ties gitleaks. Use gitleaks as a required gate and Perun's banlist for the repo-specific names. Perun is the only one with a main, subagent and lane split plus a budget gate; ccusage prices everything and has live monitoring.
+Perun's older lead on secrets was the PII patterns only; on tokens and keys it tied gitleaks (older corpus; the new corpus has no rival run). Use gitleaks as a required gate and Perun's banlist for the repo-specific names. Perun is the only one with a main, subagent and lane split plus a budget gate; ccusage prices everything and has live monitoring.
 
 ### H6. Review precision, confidence-floor arm (CF)
 
@@ -240,11 +241,12 @@ V2 minus toolkit: F1 +.063 [-.099, +.249], recall +.190 [0, +.429], precision -.
 | Tool | Blocked of 32 dangerous [95% CI] | False positives of 30 benign |
 |---|---|---|
 | Perun destructive guard (1.580.0) | 30 [.799, .983] | 0 [0, .114] |
+| Perun destructive guard (now), older 32-string corpus | 31 [.838, .994] | 0 [0, .114] |
 | claude-code-safety-net | 19 [.423, .745] | not reported |
 | hooks-mastery | 13 [.255, .577] | not reported |
 | Perun before the guard | 11 [.204, .517] | not reported |
 
-The guard is a best-effort string check, not a security boundary. Three adversarial reviews found residual bypasses (interpreter APIs such as `subprocess` and `exec`, IFS and brace-expansion tricks, exotic wrappers), rated medium. The OS sandbox is the boundary; keep it on. A 32-string corpus is small, so the lead over the rivals is indicative.
+On the frozen 2026-10-24 corpus (`docs/bench/security-gates-1024/score.py`, 46 dangerous including interpreter, IFS, brace, quote-split, variable-command and `ssh` wrapper tricks, 45 benign) the guard blocked 29 of 46 before the rule additions and 46 of 46 after, with 0 of 45 false positives; that is in-sample, written by us, and the rivals were not run on it (not installed, owner gate). The guard is a best-effort string check, not a security boundary. Three adversarial reviews found residual bypasses (interpreter APIs such as `subprocess` and `exec`, IFS and brace-expansion tricks, exotic wrappers), rated medium. The OS sandbox is the boundary; keep it on. A 32-string corpus is small, so the lead over the rivals is indicative.
 
 ### H9. Test quality, vacuous-test detection
 
