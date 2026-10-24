@@ -99,6 +99,11 @@ def _run(*a, **k):
         _add(u)
 
 
+def run_dir(out, skill, split):
+    """The run directory run_skill just wrote (newest results.json under <out>/<skill>/<split>-*)."""
+    return max((out / skill).glob(f"{split}-*/results.json"), key=lambda f: f.stat().st_mtime).parent
+
+
 def install():
     """Wrap rival_eval in place (idempotent). Call before rival_eval.main()."""
     if getattr(r, "_cost_installed", False):
@@ -126,7 +131,7 @@ def install():
     def run_skill_(skill, split, backend, out, jobs, cap):
         res = run_skill(skill, split, backend, out, jobs, cap)
         scs = r.load_scenarios(skill, split)
-        d = max((out / skill).glob(f"{split}-*/results.json"), key=lambda f: f.stat().st_mtime).parent  # the dir run_skill just wrote
+        d = run_dir(out, skill, split)
         uses = {a: [json.loads(f.read_text()) for sc in scs
                     if (f := d / "outputs" / a / f"{sc['id']}-{r.sha(sc['prompt'])[:8]}.usage.json").exists()] for a in r.ARMS}
         res["cost_per_arm"] = {a: arm_cost(uses[a], len(scs)) for a in r.ARMS}
