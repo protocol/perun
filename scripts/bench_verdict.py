@@ -25,7 +25,8 @@ NaN or infinite count as unmeasured, never a Win).
 exits 1 if a Verdict*/Result* cell claims a Win without `cost $A vs $B` (A <= B) plus
 `outcome <name> X vs Y (higher|lower) is better` (X not worse than Y), or a
 `bench: docs/bench/<dir>` whose verdict_spec.json recomputes to WIN, or labels a preference-only win without "unmeasured".
-Reads files only.
+`bench_verdict.py --cost results.json` prints per-arm cost per item and the Perun/rival ratio (see cost_report). Exit codes:
+0 Perun cost <= rival cost, 1 Perun costs more, 2 usage error (no file argument), 3 unmeasured (no usage, partial, mixed units). Reads files only.
 """
 import functools
 import json
@@ -177,7 +178,39 @@ def check_doc(text, root=REPO):
     return bad
 
 
+def cost_report(res):
+    """Per-arm cost per item and the Perun/rival ratio from a rival_eval results.json `cost_per_arm`, plus the cost check
+    (Perun <= rival). Unit is dollars when an arm has a positive spend_usd, else generator tokens (prompt + completion); arms
+    whose units differ are unmeasured. Arms with no usage, or with only some items measured, are unmeasured: ok is None, never guessed."""
+    arms = res.get("cost_per_arm") or {}
+    per = {}
+    for a in ("PERUN", "RIVAL"):
+        c = arms.get(a) or {}
+        if not c.get("n_measured") or c["n_measured"] != c.get("n_items"):
+            return {"unit": None, "ok": None, "reason": f"{a} cost unmeasured"}
+        per[a] = c
+    units = {a: "usd" if (c.get("spend_usd") or 0) > 0 else "tokens" for a, c in per.items()}
+    if len(set(units.values())) > 1:
+        return {"unit": None, "ok": None, "reason": f"arm units differ: {units}"}
+    unit = units["PERUN"]
+    each = {a: (c["spend_usd"] if unit == "usd" else c["prompt_tokens"] + c["completion_tokens"]) / c["n_measured"] for a, c in per.items()}
+    if not each["RIVAL"]:  # no ratio; Perun > 0 costs more, both zero means nothing was measured
+        return {"unit": unit, "per_item": each, "ratio": None, "ok": False if each["PERUN"] else None, "reason": "RIVAL cost is zero"}
+    return {"unit": unit, "per_item": each, "ratio": each["PERUN"] / each["RIVAL"], "ok": each["PERUN"] <= each["RIVAL"]}
+
+
 def main(argv):
+    if argv[:1] == ["--cost"]:
+        if len(argv) != 2:
+            print("usage: bench_verdict.py --cost results.json", file=sys.stderr)
+            return 2
+        try:
+            rep = cost_report(json.loads(Path(argv[1]).read_text()))
+        except (OSError, ValueError, AttributeError, KeyError, TypeError) as e:  # unreadable results: unmeasured, never "costs more"
+            print(f"cost unmeasured: {type(e).__name__}: {e}", file=sys.stderr)
+            return 3
+        print(json.dumps(rep, indent=2))
+        return 3 if rep["ok"] is None else 0 if rep["ok"] else 1
     if argv[:1] == ["--check-doc"]:
         bad = check_doc(Path(argv[1]).read_text())
         for row in bad:
