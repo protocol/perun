@@ -1,2 +1,0 @@
-### Changed
-- `agentic-ceo` no longer tells the reader to read `INDEX.md` first, which pulled in `agentic-delivery`'s 16.6 KB `INDEX.md` (about 4.1K tokens) at session start. A routing or table match now skips `INDEX.md`, and delivery references route through `agentic-delivery`'s Task to entry table. `agentic-ceo/SKILL.md` budget re-pinned 15731 → 15708. Tests: `scripts/test_ceo_start_load.py`, eval `ceo-route-skips-delivery-index`.

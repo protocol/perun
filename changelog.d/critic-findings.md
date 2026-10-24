@@ -1,4 +1,0 @@
-### Added
-- `idea-critic` verdicts take optional `findings: [{text, class, quote}]` (class: real, misread, accepted-cost, noise; quote at least 12 characters). An independent REVISE or HOLD that carries `findings` must include a `real` one. `validate_verdict.py --artifact FILE` also requires each quote to occur in the artifact (NFKC, case-folded, curly quotes and dashes mapped to ASCII, zero-width characters dropped, whitespace runs collapsed) and makes findings mandatory for an independent REVISE or HOLD. `"findings": null` is an error, and `--file` and `--artifact` may come in either order. Old verdicts without `findings` validate unchanged. Tests: `scripts/test_critic_findings.py` (registered in `scripts/ci-tests.d/critic-findings.sh`), plus a fabricated-quote fixture in the idea-critic `evals.json`.
-
-size-budget-raise: .claude/skills/idea-critic/SKILL.md 15575→15944 documents the optional findings schema and the --artifact validate usage

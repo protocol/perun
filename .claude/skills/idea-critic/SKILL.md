@@ -8,7 +8,7 @@ description: >-
 license: MIT
 metadata:
   author: deep-code-review contributors
-  version: "1.601.0"
+  version: "1.602.0"
 ---
 
 # Veles: the evil twin (idea-critic)

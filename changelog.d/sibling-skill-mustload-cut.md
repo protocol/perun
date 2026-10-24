@@ -1,2 +1,0 @@
-### Changed
-- Trimmed text that restates reference files or repeats itself from the `agentic-delivery` and `idea-critic` skill bodies (a merged install route, a merged lane-preamble pointer, reference-content summaries for the decision council and anti-rationalization, one pitfall bullet folded into the matching obligation), cutting tokens paid on every invocation: `agentic-delivery/SKILL.md` 23986 to 23897 bytes, `idea-critic/SKILL.md` 15930 to 15575 bytes. Reference routes and their triggers are kept; size budgets re-pinned downward.

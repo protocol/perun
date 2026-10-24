@@ -1,2 +1,0 @@
-### Fixed
-- The pre-push CI-parity gates now run CI's privacy scan over the files a push adds or changes, so a banned pattern is refused locally (file names only, matched content withheld) instead of first failing in CI. `scripts/test-prepush-ci-parity.sh` now also fails if a gate in CI's "Enforce documented gates" step has neither a pre-push counterpart nor a listed exemption, so a CI-only gate cannot be added silently.

@@ -1,6 +1,0 @@
-### Added
-- Benchmark: evil-twin (`idea-critic`) bench R2, `scripts/evil_twin_bench_r2.py` with `docs/bench/evil-twin-r2-1021/`, preregistered in an earlier commit than its results (alongside the R1 pilot; frozen list includes `scripts/rival_eval.py`). A calibrated corpus of 24 subtle planted-flaw proposals and 12 sound controls with minor issues; free PCSS generator and a different judge. Verdict REVERT: recall none 20/24 (0.833), perun 21/24 (0.875, lower bound 0.750, not above the no-skill point), brainstorm 21/24; false-kill 0/12 in every arm. No skill text changed. `scripts/test_evil_twin_bench_r2.py` replays the committed cache offline.
-- Judge caveat for R1: the R1 judge scored a "revise / do not approve yet" answer as KILLED, so perun's 2/6 false-kill (cases p15 and p25, both REVISE) was a judging-rule artifact that broke R1's false-kill guard (perun 2/6 against none 0/6 plus one case); R1 cases were not re-judged under the R2 rubric. R1 is a pilot, not preregistered, and INCONCLUSIVE (no headroom). R2 defines KILLED as abandon or reject only.
-
-### Fixed
-- R1 bench corpus: three real-looking third-party names replaced with fictional placeholders (disclosed amendment in R1's frozen list and ledger; cache rekeyed, no re-run, results unchanged; the model responses saw the old names).
