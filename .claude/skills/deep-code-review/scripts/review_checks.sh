@@ -6,7 +6,10 @@
 #
 # Tools, each run only when installed and only on matching changed files: shellcheck + bash -n (*.sh/*.bash),
 # python -m py_compile + ruff/pyflakes (*.py), node --check (*.js/*.mjs/*.cjs), tsc --noEmit (*.ts/*.tsx and a
-# root tsconfig.json), go vet (*.go and a root go.mod), jq empty (*.json). `--tests` also runs the command
+# root tsconfig.json), go vet (*.go and a root go.mod), jq empty (*.json). Optional security scanners:
+# gitleaks (changed files only; the secret value is redacted and never printed), osv-scanner (only when a
+# changed file is a lockfile and env REVIEW_OSV=1, since it queries the OSV API), semgrep (only with a local rules path in env REVIEW_SEMGREP_CONFIG; never
+# `--config auto`, which phones home). `--tests` also runs the command
 # declared in env REVIEW_TEST_CMD (opt-in; it executes project code). Never installs anything. A missing tool
 # or a timeout prints "review_checks: not run: <tool> (<why>)" on stderr and is not a failure.
 # Each tool is timeboxed (default 60s). Exit 0 even with findings; 2 on usage/unresolvable base.
@@ -116,6 +119,60 @@ if [ -n "$json_files" ] && have jq; then
     run_one jq jq empty "$f" || continue
     [ "$rc" = 0 ] || add jq "$f" "$(sed -nE 's/.*line ([0-9]+).*/\1/p' "$out" | head -n1)" invalid-json "$(head -n1 "$out")"
   done <<<"$json_files"
+fi
+
+# Scanner JSON (file $2, may have log noise before the JSON) of kind $1 -> TSV: file, line, rule, message.
+sjson() {
+  python3 - "$1" "$2" <<'PY' 2>/dev/null || true
+import json, sys
+kind = sys.argv[1]
+t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
+i = min([x for x in (t.find("{"), t.find("[")) if x >= 0], default=-1)
+d = json.JSONDecoder().raw_decode(t[i:])[0] if i >= 0 else []
+rows = []
+if kind == "gitleaks":  # Secret/Match fields are deliberately never read
+    rows = [(r.get("File"), r.get("StartLine"), r.get("RuleID"), r.get("Description") or "secret detected") for r in d]
+elif kind == "semgrep":
+    rows = [(r["path"], r["start"]["line"], r.get("check_id"), (r.get("extra") or {}).get("message", "")) for r in d.get("results") or []]
+else:
+    for r in d.get("results") or []:
+        for p in r.get("packages") or []:
+            pk = p.get("package") or {}
+            rows += [(r["source"]["path"], 0, v.get("id"), f"{pk.get('name')}@{pk.get('version')}: {v.get('summary', '')}")
+                     for v in p.get("vulnerabilities") or []]
+for row in rows:
+    print("\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in row))
+PY
+}
+
+if have gitleaks; then
+  rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX"); trap 'rm -f "$raw" "$out" "$rep"' EXIT
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    run_one gitleaks gitleaks detect --no-git --no-banner --redact --exit-code 0 -f json -r "$rep" -s "$f" || continue
+    sjson gitleaks "$rep" | while IFS=$'\t' read -r _ l r m; do add gitleaks "$f" "$l" "$r" "$m"; done
+    : >"$rep"
+  done <<<"$files"
+fi
+
+lock_files=$(changed '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.sum|Cargo\.lock|poetry\.lock|requirements[^/]*\.txt|composer\.lock)$')
+if [ -z "$lock_files" ]; then :
+elif [ "${REVIEW_OSV:-}" != 1 ]; then skip osv-scanner "REVIEW_OSV not set; osv-scanner queries the OSV API"
+elif have osv-scanner; then
+  while IFS= read -r f; do
+    run_one osv-scanner osv-scanner --format json -L "$f" || continue
+    sjson osv "$out" | while IFS=$'\t' read -r _ l r m; do add osv-scanner "$f" "$l" "$r" "$m"; done
+  done <<<"$lock_files"
+fi
+
+if [ -z "${REVIEW_SEMGREP_CONFIG:-}" ]; then skip semgrep "REVIEW_SEMGREP_CONFIG not set; --config auto is never used"
+elif [ ! -e "$REVIEW_SEMGREP_CONFIG" ]; then skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"
+elif have semgrep; then
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    run_one semgrep semgrep --config "$REVIEW_SEMGREP_CONFIG" --json --quiet --metrics=off --disable-version-check "$f" || continue
+    sjson semgrep "$out" | while IFS=$'\t' read -r _ l r m; do add semgrep "$f" "$l" "$r" "$m"; done
+  done <<<"$files"
 fi
 
 if [ "$tests" = 1 ]; then
