@@ -28,8 +28,8 @@ case "$tmo" in ''|*[!0-9]*) echo "review_checks: --timeout must be an integer" >
 git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "review_checks: unresolvable base '$base'" >&2; exit 2; }
 cd "$(git rev-parse --show-toplevel)"
 
-raw=$(mktemp "${TMPDIR:-/tmp}/review-raw.XXXXXX") out=$(mktemp "${TMPDIR:-/tmp}/review-out.XXXXXX")
-trap 'rm -f "$raw" "$out"' EXIT
+raw=$(mktemp "${TMPDIR:-/tmp}/review-raw.XXXXXX") out=$(mktemp "${TMPDIR:-/tmp}/review-out.XXXXXX") tsv=$(mktemp "${TMPDIR:-/tmp}/review-tsv.XXXXXX")
+trap 'rm -f "$raw" "$out" "$tsv"' EXIT
 files=$(git diff --name-only --diff-filter=ACMR "$base"...HEAD)
 rc=0
 
@@ -53,18 +53,21 @@ run_one() {
   case "$rc" in 124|142) skip "$tool" "timeout ${tmo}s"; return 1 ;; esac
   return 0
 }
+# scan_ok TOOL [OKRC...]: false (with a not-run line) when the last run_one exit code is not 0 or an OKRC (findings), i.e. a crash.
+scan_ok() { local t=$1 c; shift; for c in 0 "$@"; do [ "$rc" = "$c" ] && return 0; done; skip "$t" "exit $rc"; return 1; }
 # Findings parsed from $out by a sed script (TSV columns) land via `add`.
 sh_files=$(changed '\.(sh|bash)$')
 if [ -n "$sh_files" ]; then
   if have shellcheck; then
     while IFS= read -r f; do
-      run_one shellcheck shellcheck -f gcc "$f" || continue
+      run_one shellcheck shellcheck -f gcc "./$f" || continue
+      scan_ok shellcheck 1 || continue
       sed -nE 's/^.*:([0-9]+):[0-9]+: [a-z]+: (.*) \[(SC[0-9]+)\]$/\1\t\3\t\2/p' "$out" |
         while IFS=$'\t' read -r l r m; do add shellcheck "$f" "$l" "$r" "$m"; done
     done <<<"$sh_files"
   fi
   while IFS= read -r f; do
-    run_one bash-n bash -n "$f" || continue
+    run_one bash-n bash -n "./$f" || continue
     [ "$rc" = 0 ] || add bash-n "$f" "$(sed -nE 's/.*line ([0-9]+):.*/\1/p' "$out" | head -n1)" syntax "$(head -n1 "$out")"
   done <<<"$sh_files"
 fi
@@ -73,7 +76,7 @@ py_files=$(changed '\.py$')
 if [ -n "$py_files" ]; then
   if have python3; then
     while IFS= read -r f; do
-      run_one py_compile python3 -c 'import sys;compile(open(sys.argv[1],"rb").read(),sys.argv[1],"exec")' "$f" || continue
+      run_one py_compile python3 -c 'import sys;compile(open(sys.argv[1],"rb").read(),sys.argv[1],"exec")' "./$f" || continue
       [ "$rc" = 0 ] || add py_compile "$f" "$(sed -nE 's/.*[(,] ?line ([0-9]+).*/\1/p' "$out" | head -n1)" SyntaxError "$(tail -n1 "$out")"
     done <<<"$py_files"
   fi
@@ -84,7 +87,8 @@ if [ -n "$py_files" ]; then
   else skip "ruff/pyflakes" "not installed"; ln=; fi
   if [ -n "$ln" ]; then
     while IFS= read -r f; do
-      run_one "$ln" "${lint[@]}" "$f" || continue
+      run_one "$ln" "${lint[@]}" "./$f" || continue
+      scan_ok "$ln" 1 || continue
       sed -nE 's/^.*:([0-9]+):[0-9]+:? ([A-Z]+[0-9]+ )?(.*)$/\1\t\2\t\3/p' "$out" |
         while IFS=$'\t' read -r l r m; do add "$ln" "$f" "$l" "${r% }" "$m"; done
     done <<<"$py_files"
@@ -94,20 +98,20 @@ fi
 js_files=$(changed '\.(js|mjs|cjs)$')
 if [ -n "$js_files" ] && have node; then
   while IFS= read -r f; do
-    run_one node-check node --check "$f" || continue
+    run_one node-check node --check "./$f" || continue
     [ "$rc" = 0 ] || add node-check "$f" "$(sed -nE 's/^.*:([0-9]+)$/\1/p' "$out" | head -n1)" SyntaxError "$(grep -m1 'Error' "$out" || head -n1 "$out")"
   done <<<"$js_files"
 fi
 
 if [ -n "$(changed '\.(ts|tsx)$')" ] && [ -f tsconfig.json ] && have tsc; then
-  if run_one tsc tsc --noEmit -p tsconfig.json; then
+  if run_one tsc tsc --noEmit -p tsconfig.json && scan_ok tsc 1 2; then
     sed -nE 's/^(.*)\(([0-9]+),[0-9]+\): error (TS[0-9]+): (.*)$/\1\t\2\t\3\t\4/p' "$out" |
       while IFS=$'\t' read -r f l r m; do add tsc "$f" "$l" "$r" "$m"; done
   fi
 fi
 
 if [ -n "$(changed '\.go$')" ] && [ -f go.mod ] && have go; then
-  if run_one go-vet go vet ./...; then
+  if run_one go-vet go vet ./... && scan_ok go-vet 1; then
     sed -nE 's/^([^#[:space:]][^:]*\.go):([0-9]+):[0-9]+: (.*)$/\1\t\2\t\3/p' "$out" |
       while IFS=$'\t' read -r f l m; do add go-vet "$f" "$l" vet "$m"; done
   fi
@@ -116,42 +120,55 @@ fi
 json_files=$(changed '\.json$')
 if [ -n "$json_files" ] && have jq; then
   while IFS= read -r f; do
-    run_one jq jq empty "$f" || continue
+    run_one jq jq empty "./$f" || continue
     [ "$rc" = 0 ] || add jq "$f" "$(sed -nE 's/.*line ([0-9]+).*/\1/p' "$out" | head -n1)" invalid-json "$(head -n1 "$out")"
   done <<<"$json_files"
 fi
 
 # Scanner JSON (file $2, may have log noise before the JSON) of kind $1 -> TSV: file, line, rule, message.
+# Fails closed: missing, empty or malformed JSON exits non-zero instead of reading as "no findings".
 sjson() {
-  python3 - "$1" "$2" <<'PY' 2>/dev/null || true
+  python3 - "$1" "$2" <<'PY'
 import json, sys
 kind = sys.argv[1]
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 i = min([x for x in (t.find("{"), t.find("[")) if x >= 0], default=-1)
-d = json.JSONDecoder().raw_decode(t[i:])[0] if i >= 0 else []
+if i < 0:
+    sys.exit("sjson: no JSON in scanner output")
+d = json.JSONDecoder().raw_decode(t[i:])[0]
+# Wrong-shape JSON must not read as clean: gitleaks is a list, semgrep and osv an object with a "results" list.
+if kind == "gitleaks":
+    if not isinstance(d, list):
+        sys.exit("sjson: gitleaks report is not a list")
+elif not isinstance(d, dict) or not isinstance(d.get("results"), list):
+    sys.exit(f"sjson: {kind} output has no results list")
 rows = []
 if kind == "gitleaks":  # Secret/Match fields are deliberately never read
     rows = [(r.get("File"), r.get("StartLine"), r.get("RuleID"), r.get("Description") or "secret detected") for r in d]
 elif kind == "semgrep":
-    rows = [(r["path"], r["start"]["line"], r.get("check_id"), (r.get("extra") or {}).get("message", "")) for r in d.get("results") or []]
+    rows = [(r["path"], r["start"]["line"], r.get("check_id"), (r.get("extra") or {}).get("message", "")) for r in d["results"]]
 else:
-    for r in d.get("results") or []:
+    for r in d["results"]:
         for p in r.get("packages") or []:
             pk = p.get("package") or {}
             rows += [(r["source"]["path"], 0, v.get("id"), f"{pk.get('name')}@{pk.get('version')}: {v.get('summary', '')}")
                      for v in p.get("vulnerabilities") or []]
 for row in rows:
     print("\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in row))
+sys.exit(3 if kind == "semgrep" and d.get("errors") else 0)  # 3 = rows printed, but the scan was partial
 PY
 }
 
 if have gitleaks; then
-  rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX"); trap 'rm -f "$raw" "$out" "$rep"' EXIT
+  rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX"); trap 'rm -f "$raw" "$out" "$tsv" "$rep"' EXIT
   while IFS= read -r f; do
     [ -f "$f" ] || continue
-    run_one gitleaks gitleaks detect --no-git --no-banner --redact --exit-code 0 -f json -r "$rep" -s "$f" || continue
-    sjson gitleaks "$rep" | while IFS=$'\t' read -r _ l r m; do add gitleaks "$f" "$l" "$r" "$m"; done
-    : >"$rep"
+    : >"$rep" # a stale report from the previous file must never be read for this one
+    run_one gitleaks gitleaks detect --no-git --no-banner --redact --exit-code 0 -f json -r "$rep" -s "./$f" || continue
+    scan_ok gitleaks || continue
+    [ -s "$rep" ] || echo '[]' >"$rep" # gitleaks may leave an empty report for a clean file
+    sjson gitleaks "$rep" >"$tsv" || { skip gitleaks "unparseable report for $f"; continue; }
+    while IFS=$'\t' read -r _ l r m; do add gitleaks "$f" "$l" "$r" "$m"; done <"$tsv"
   done <<<"$files"
 fi
 
@@ -160,19 +177,28 @@ if [ -z "$lock_files" ]; then :
 elif [ "${REVIEW_OSV:-}" != 1 ]; then skip osv-scanner "REVIEW_OSV not set; osv-scanner queries the OSV API"
 elif have osv-scanner; then
   while IFS= read -r f; do
-    run_one osv-scanner osv-scanner --format json -L "$f" || continue
-    sjson osv "$out" | while IFS=$'\t' read -r _ l r m; do add osv-scanner "$f" "$l" "$r" "$m"; done
+    run_one osv-scanner osv-scanner --format json -L "./$f" || continue
+    scan_ok osv-scanner 1 || continue # exit 1 = vulnerabilities found
+    sjson osv "$out" >"$tsv" || { skip osv-scanner "unparseable output for $f"; continue; }
+    while IFS=$'\t' read -r _ l r m; do add osv-scanner "$f" "$l" "$r" "$m"; done <"$tsv"
   done <<<"$lock_files"
 fi
 
 if [ -z "${REVIEW_SEMGREP_CONFIG:-}" ]; then skip semgrep "REVIEW_SEMGREP_CONFIG not set; --config auto is never used"
 elif [ ! -e "$REVIEW_SEMGREP_CONFIG" ]; then skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"
 elif have semgrep; then
-  while IFS= read -r f; do
-    [ -f "$f" ] || continue
-    run_one semgrep semgrep --config "$REVIEW_SEMGREP_CONFIG" --json --quiet --metrics=off --disable-version-check "$f" || continue
-    sjson semgrep "$out" | while IFS=$'\t' read -r _ l r m; do add semgrep "$f" "$l" "$r" "$m"; done
-  done <<<"$files"
+  sg=()
+  while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
+  # One call per 200 files: typically a single run, but bounded argv and a timeout that is not shared by everything.
+  for ((i = 0; i < ${#sg[@]}; i += 200)); do
+    run_one semgrep semgrep --config "$REVIEW_SEMGREP_CONFIG" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
+    scan_ok semgrep || continue
+    e=0; sjson semgrep "$out" >"$tsv" || e=$?
+    if [ "$e" = 0 ] || [ "$e" = 3 ]; then
+      while IFS=$'\t' read -r p l r m; do add semgrep "$p" "$l" "$r" "$m"; done <"$tsv"
+      [ "$e" = 0 ] || skip semgrep "partial scan: semgrep reported errors"
+    else skip semgrep "unparseable output"; fi
+  done
 fi
 
 if [ "$tests" = 1 ]; then

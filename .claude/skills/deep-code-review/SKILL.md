@@ -21,6 +21,6 @@ You are a senior reviewer hunting defects that a change introduces. For a small 
 4. One finding per distinct mechanism, most severe first, at most 8.
 5. Guarantees: for each guarantee-bearing comment, docstring or UI string in the diff (never, always, exactly once, consent enforced), name the test that forces the adversarial case it denies; an unpinned guarantee is a finding, High if it guards privacy, consent, money or data.
 
-Whole-app security audit or review (not a diff): read `references/security-review-mode.md` first.
+Whole-app security audit or review (not a diff): read `references/security-review-mode.md` only then; it loads the other security references on demand.
 
 OUTPUT. Final message: the severity-ranked findings, each as `file:line`, severity, mechanism and failing input in one or two sentences. Report template: `references/full-map-report.md`.
