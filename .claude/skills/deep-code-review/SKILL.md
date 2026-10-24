@@ -23,4 +23,6 @@ You are a senior reviewer hunting defects that a change introduces. For a small 
 
 Whole-app security audit (not a diff): read only `references/security-review-mode.md`; it routes the rest.
 
+BUDGET (small DIFF): read `references/small-diff-read-budget.md` first.
+
 OUTPUT. Final message: the severity-ranked findings, each as `file:line`, severity, mechanism and failing input in one or two sentences. Report template: `references/full-map-report.md`.
