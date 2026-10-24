@@ -2,13 +2,13 @@
 """Score Perun's secret gate and destructive guard on the frozen synthetic corpora in this directory.
 
 Offline and deterministic: no network, no model calls, nothing is executed (commands are only classified).
-Usage: python3 docs/bench/security-gates-1024/score.py   (run from the repo root; exit 1 on any hash drift)
+Usage: python3 docs/bench/security-gates-1024/score.py [--corpus-dir DIR]   (DIR holds the corpora and a README.md with SHA256 lines; run from the repo root; exit 1 on any hash drift)
 Corpus files: tab-separated `name<TAB>text` (secrets) or one command per line; `#` lines are comments; `@@`
 inside a secret line is a marker deleted before scoring so the files never trip the repo privacy gate.
 """
 import hashlib, importlib.util, pathlib, subprocess, sys, tempfile
 
-D = pathlib.Path(__file__).resolve().parent
+D = pathlib.Path(sys.argv[sys.argv.index("--corpus-dir") + 1]).resolve() if "--corpus-dir" in sys.argv else pathlib.Path(__file__).resolve().parent
 ROOT = D.parents[2]
 GATES = ROOT / "scripts" / "ci-gates.sh"
 GUARD = ROOT / ".claude/skills/agentic-delivery/scripts/destructive_guard.py"
