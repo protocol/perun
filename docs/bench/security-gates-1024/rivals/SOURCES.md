@@ -1,10 +1,10 @@
 # Rival rule sources (data only, never executed)
 
-Rules ported to Python, not the rival binary; ported-rule fidelity is the main threat. Fetched 2026-10-24 over HTTPS from raw.githubusercontent.com at pinned tags or commits. `score_rivals.py` reads only the two vendored files below.
+Rules ported to Python, not the rival binary; ported-rule fidelity is the main threat. Fetched 2026-10-24 over HTTPS from raw.githubusercontent.com at pinned tags or commits. `score_rivals.py` and `scripts/secret_scan.py` read only the two vendored files below.
 
 | Rival | Pin | Source | sha256 |
 |---|---|---|---|
-| gitleaks default config | tag v8.30.1 | https://raw.githubusercontent.com/gitleaks/gitleaks/v8.30.1/config/gitleaks.toml (vendored as `gitleaks-v8.30.1.toml`, 97731 bytes upstream; the 17 `AIza` occurrences (16 public sample Google keys in an allowlist, 1 rule regex) carry `@@` markers after `AI` so the repo privacy gate passes, and deleting every `@@` restores the upstream bytes) | e163e53b9e7e8a8511e77271e2b323ed057759542a6d988258afe3a1fa329caf |
+| gitleaks default config | tag v8.30.1 | https://raw.githubusercontent.com/gitleaks/gitleaks/v8.30.1/config/gitleaks.toml (vendored as `scripts/gitleaks-v8.30.1.toml`, MIT licence, Copyright (c) 2019 Zachary Rice, scanned by the shared `scripts/secret_scan.py`, 97731 bytes upstream; the 17 `AIza` occurrences (16 public sample Google keys in an allowlist, 1 rule regex) carry `@@` markers after `AI` so the repo privacy gate passes, and deleting every `@@` restores the upstream bytes) | e163e53b9e7e8a8511e77271e2b323ed057759542a6d988258afe3a1fa329caf |
 | hooks-mastery `pre_tool_use.py` | commit 052ad1cbd5aeb1ec4a1def22012d1293c6225625 | https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/052ad1cbd5aeb1ec4a1def22012d1293c6225625/.claude/hooks/pre_tool_use.py (vendored as `hooks-mastery-pre_tool_use.py.txt`) | 78006866f793ccd394bc52011582ce48707ceef9d3496e474ab7bcb63365a5da |
 | claude-code-safety-net (read, not vendored) | commit 71baf747e2a5246bdf613a2894f2d6e7a5ad80bf | https://github.com/kenryu42/claude-code-safety-net, files under `src/` listed below | see below |
 

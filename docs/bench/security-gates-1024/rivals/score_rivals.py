@@ -6,104 +6,22 @@ Usage: python3 -I docs/bench/security-gates-1024/rivals/score_rivals.py   (offli
 These are ports of the rivals' published rules, NOT the rival binaries: ported-rule fidelity is the main threat
 to every number printed here (see README.md next to this file's parent and SOURCES.md for pins and gaps).
   gitleaks        full port of the pinned default config (keywords prefilter, regex, secret group, entropy,
-                  rule and global allowlists). Not ported: decode-and-rescan of base64/hex/percent, path rules.
+                  rule and global allowlists; shared with the privacy gate as scripts/secret_scan.py). Not ported: decode-and-rescan of base64/hex/percent, path rules.
   hooks-mastery   exact port of the rm and .env regexes of the pinned pre_tool_use.py.
   safety-net      a documented SUBSET port of a large shell-AST analyzer, scored three-state: block / allow /
                   unported. "unported" rows are counted in neither the lower bound nor as a rival miss.
 """
-import importlib.util, math, pathlib, posixpath, re, shlex, sys, tomllib
+import importlib.util, pathlib, posixpath, re, shlex, sys
 
 R = pathlib.Path(__file__).resolve().parent
 D = R.parent
 spec = importlib.util.spec_from_file_location("score", D / "score.py")
 sc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sc)
-
-# ---------------------------------------------------------------- gitleaks
-POSIX = {"alnum": "0-9A-Za-z", "alpha": "A-Za-z", "digit": "0-9", "lower": "a-z", "upper": "A-Z", "space": r"\t\n\v\f\r ",
-         "punct": r"!-/:-@\[-`{-~", "xdigit": "0-9A-Fa-f", "word": r"0-9A-Za-z_"}
-PATH = "input.txt"  # path handed to path allowlists; real scans pass the file name
-
-
-def go2py(p):
-    """Translate a Go RE2 pattern to Python re: scoped inline flags, `$`/`\\z` as end-of-text, POSIX classes."""
-    out, i, cls, stack = [], 0, False, [0]
-    while i < len(p):
-        c = p[i]
-        if c == "\\":
-            out.append(r"\Z" if p[i + 1:i + 2] == "z" else p[i:i + 2]); i += 2; continue
-        if cls:
-            if p.startswith("[:", i):
-                j = p.index(":]", i); out.append(POSIX[p[i + 2:j]]); i = j + 2; continue
-            cls = c != "]"; out.append(c); i += 1; continue
-        if c == "[":
-            cls = True; out.append(c); i += 1
-            if p[i:i + 1] == "^": out.append("^"); i += 1
-            if p[i:i + 1] == "]": out.append(r"\]"); i += 1
-            continue
-        if c == "(":
-            m = re.match(r"\(\?([imsU]+)\)", p[i:])
-            if m: out.append(f"(?{m.group(1)}:"); stack[-1] += 1; i += m.end(); continue
-            stack.append(0)
-        elif c == ")" and len(stack) > 1:
-            out.append(")" * stack.pop())
-        elif c == "$":
-            out.append(r"\Z"); i += 1; continue
-        out.append(c); i += 1
-    return "".join(out) + ")" * stack[0]
-
-
-def entropy(s):
-    return -sum(s.count(c) / len(s) * math.log2(s.count(c) / len(s)) for c in set(s)) if s else 0.0
-
-
-class AL:
-    def __init__(s, d):
-        c = lambda xs: [re.compile(go2py(x)) for x in xs]
-        s.rx, s.paths = c(d.get("regexes", [])), c(d.get("paths", []))
-        s.stop, s.rt, s.cond = [w.lower() for w in d.get("stopwords", [])], d.get("regexTarget", ""), d.get("condition", "OR")
-
-    def hit(s, secret, match, line):
-        t = {"": secret, "secret": secret, "match": match, "line": line}[s.rt]
-        ch = ([any(r.search(t) for r in s.rx)] if s.rx else []) + ([any(w in secret.lower() for w in s.stop)] if s.stop else []) \
-            + ([any(r.search(PATH) for r in s.paths)] if s.paths else [])
-        return bool(ch) and (all(ch) if s.cond == "AND" else any(ch))
-
-
-def load_gitleaks():
-    # the vendored copy carries `@@` markers inside public sample Google keys (privacy gate); deleting them restores upstream bytes
-    cfg = tomllib.loads((R / "gitleaks-v8.30.1.toml").read_text().replace("@@", ""))
-    glob = [AL(a) for a in cfg.get("allowlists", [])] + ([AL(cfg["allowlist"])] if "allowlist" in cfg else [])
-    rules, fail = [], 0
-    for r in cfg["rules"]:
-        if "regex" not in r: continue  # path-only rules (file-type rules) do not apply to text strings
-        try: rx = re.compile(go2py(r["regex"]))
-        except re.error: fail += 1; continue
-        pr = re.compile(go2py(r["path"])) if "path" in r else None
-        als = [AL(a) for a in r.get("allowlists", [])] + ([AL(r["allowlist"])] if "allowlist" in r else [])
-        rules.append((r["id"], rx, [k.lower() for k in r.get("keywords", [])], r.get("secretGroup", 0), r.get("entropy", 0.0), als, pr))
-    return glob, rules, fail
-
-
-GL = load_gitleaks()
-
-
-def gitleaks_rule(text):
-    """Return the ids of every rule that flags text (scanned as a file body); empty means clean."""
-    glob, rules, _ = GL
-    frag = text + "\n"; low = frag.lower(); out = []
-    for rid, rx, kw, sg, ent, als, pr in rules:
-        if (kw and not any(k in low for k in kw)) or (pr and not pr.search(PATH)): continue
-        for m in rx.finditer(frag):
-            line = frag[frag.rfind("\n", 0, m.start()) + 1:frag.find("\n", m.end())]
-            if "gitleaks:allow" in line: continue
-            gs = [g for g in m.groups() if g]
-            sec = m.group(sg) or "" if sg else (gs[0] if gs else m.group(0))
-            if ent and entropy(sec) <= ent: continue
-            if any(a.hit(sec, m.group(0), line) for a in glob + als): continue
-            out.append(rid); break
-    return out
-
+spec = importlib.util.spec_from_file_location("secret_scan", D.parents[2] / "scripts" / "secret_scan.py")
+ss = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ss)
+go2py, gitleaks_rule, GL = ss.go2py, ss.gitleaks_rule, ss.GL  # the one shared gitleaks port; its rules are the data file next to it
 
 # ---------------------------------------------------------------- hooks-mastery (exact port of pre_tool_use.py)
 HM_RM = [r'\brm\s+.*-[a-z]*r[a-z]*f', r'\brm\s+.*-[a-z]*f[a-z]*r', r'\brm\s+--recursive\s+--force',

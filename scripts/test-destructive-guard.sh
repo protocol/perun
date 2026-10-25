@@ -167,8 +167,10 @@ echo '{"tool_name":"Bash","tool_input":{"command":"git reset --hard"}}' | CLAUDE
 python3 -I - "$G" <<'PY'; ok $? "B64EXEC is not a ReDoS; kubectl delete skips option values"
 import importlib.util, sys, time
 s = importlib.util.spec_from_file_location("dg", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
-for c in ("sh " * 1000 + "$(" * 1000,):
-    t = time.time(); m.check(c); assert time.time() - t < 0.5, time.time() - t
+B64 = "Zm9vYmFyYmF6cXV4cXV1eHF1dXV4"
+for c in ("sh " * 5000 + "$(" * 5000, "$(" * 2000 + "echo " + B64 + " | base64 -d" + ")" * 2000, "sh " * 5000 + "eval $(echo " + B64 + " | base64 -d)"):
+    t = time.time(); r = m.check(c); assert time.time() - t < 0.5, time.time() - t
+assert m.check("eval $(echo " + B64 + " | base64 -d)") and m.check("$(" * 2000 + "eval $(echo " + B64 + " | base64 -d)"), "B64EXEC must still block"
 assert m.check("kubectl delete -n foo ns bar") and m.check("kubectl delete --namespace=foo namespace bar")
 assert m.check("kubectl delete -l a=b -n x ns bar")
 assert not m.check("kubectl delete -n foo pod bar")
