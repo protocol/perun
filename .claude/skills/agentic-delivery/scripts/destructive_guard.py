@@ -64,6 +64,10 @@ Denies (exit 2, one-line reason with the safe alternative on stderr; the host bl
   other arguments of rm/chmod/chown/dd/shred/mkfs/diskutil (only a lone one is usage) still gets the full check.
   Residuals: a `/tmp/<name>` symlink to elsewhere, or an unset `$TMPDIR` (`$TMPDIR/x` becomes `/x`), is trusted; `> file` over
   a system path is caught (so is `cp`/`mv`/`ln`/`rsync`/`scp` onto one, `.bak` copies included); `pip uninstall` is blocked only for xargs or `-r`.
+Wave 16 (`scripts/test_security_gates_heldout21_blind.py`): `mdadm --zero-superblock|--create`, `cryptsetup erase|luksErase|luksFormat|luksKillSlot|luksRemoveKey`,
+`docker swarm leave --force`, a delete verb fed by `xargs` (redis-cli, kubectl, docker, ...), `aws s3 sync --delete`, `gsutil rsync -d`, writes to `/proc/sysrq-trigger` or
+`/proc/self/mem`, `crontab` fed empty input, rsync `--del`/`--remove-source-files` (an option value such as `--exclude -n` is not a flag). Allowed: `${TMPDIR:?}/child`, removing the
+dir of a bare `mktemp -d`, a named child of `~/.cache`, `find . -type f -name '*.orig' -exec rm -f`, rsync into a named child of `/var/www`.
 Everything else is allowed.
 
 No in-repo grant or allow list: anything an agent can write, an agent can forge. When the owner really wants a
@@ -118,6 +122,12 @@ DECODE = re.compile(r"\bbase64\b.{0,300}(?:\s-\w*[dD]|--decode)|\bxxd\b.{0,100}\
                     r"|\bpython[\d.]*\b.{0,200}(?:b64decode|b32decode|decodebytes|a2b_base64|unhexlify|fromhex)", re.S)
 DRY = ("--dry-run", "--dryrun", "--dry-run=client", "--dry-run=server")  # `--dry-run=none` really runs, so it is not listed
 BLKDEV = re.compile(r"/dev/(?:[hsv]d|xvd|nvme|r?disk|mmcblk|loop|dm-|md|mapper/|sr|zd|nbd|k?mem|n?st\d|sg\d|bsg/|ada\d|nvd\d|mtd)", re.I)  # a raw disk: any write to it destroys the data on it
+WWW = re.compile(r"/var/www/\w[\w.-]*(?:/\w[\w.-]*)*/?")
+XTOOLS = ("redis-cli", "valkey-cli", "kubectl", "oc", "docker", "podman", "nerdctl", "gh", "glab", "az", "gcloud", "gsutil", "aws", "helm", "heroku", "doctl", "rclone")
+XDEL = re.compile(r"(?i)del|unlink|delete|remove|rm|rmi|destroy|drop|purge|terminate|hdel|srem|zrem")
+RMTEMP = re.compile(r"(\brm(?:[ \t]+-[\w-]+)*[ \t]+(?:--[ \t]+)?)([\"]?)(?:\$\(mktemp -d\)|`mktemp -d`)\2(?=[ \t]*(?:$|[;&|)\n]))")
+CACHEOP = re.compile(r"(?<=\s)([\"']?)(?:~|\$HOME|\$\{HOME\})/\.cache/(\w[\w.-]*)(?=[\"']?(?:\s|$))")
+RAWPROC = re.compile(r"/proc/(?:sysrq-trigger|(?:self|thread-self|\d+)/mem|kcore)", re.I)  # a write here reboots, crashes or rewrites the live kernel
 TOPLEVEL = re.compile(r"\$\(git rev-parse --show-toplevel\)/((?:build|dist|out|target|node_modules|__pycache__|coverage)(?:/\w[\w.-]*)*)")  # repo-root child; a failed git leaves `/child`, so only disposable build dirs
 MKTEMP = re.compile(r"(?:^|[;\n])[ \t]*(\w{1,32})=[\"]?(?:\$\(mktemp -d\)|`mktemp -d`)[\"]?[ \t]*(?=;|&&|\n|$)")
 IMGFILE = re.compile(r"(?:\./)?\w[\w.-]*\.(?:img|raw)")  # a relative disk-image file, not a device
@@ -200,8 +210,34 @@ def _kstdin(a, j):
 
 
 def _blk(t):
-    """A write target that is a raw disk device (`/dev/sda`, `/dev/nvme0n1`, `/dev/disk2`, ...)."""
-    return bool(BLKDEV.match(posixpath.normpath(re.sub("/+", "/", _upbase(t) or t))))
+    """A write target that is a raw disk device (`/dev/sda`, `/dev/nvme0n1`, `/dev/disk2`, ...) or live-kernel file (`/proc/sysrq-trigger`, `/proc/self/mem`)."""
+    p = posixpath.normpath(re.sub("/+", "/", _upbase(t) or t))
+    return bool(BLKDEV.match(p) or RAWPROC.fullmatch(p))
+
+
+def _empty(seg):
+    """True when the command `seg` prints nothing but blanks (`:`, `true`, `echo ""`, `printf '\\n'`): its pipe feeds an empty file."""
+    return seg in EMPTYSRC or (seg[:1] in (["echo"], ["printf"]) and all(not re.sub(r"\\[ntr]|%[sb]|\s", "", t) for t in seg[1:] if not re.fullmatch(r"-[neE]+", t)))
+
+
+def _cronin(a):
+    """`crontab` reads its table from stdin (`-` or no file) and is not a listing/edit."""
+    fl = [t for k, t in enumerate(a) if not (t.startswith("-") and t != "-") and not (k and a[k - 1] == "-u")]
+    return fl in ([], ["-"]) and not any(_bundle(t, "l") or _bundle(t, "e") for t in a)
+
+
+RSYNCVAL = ("--rsh", "--exclude", "--include", "--filter", "--exclude-from", "--include-from", "--files-from", "--rsync-path", "--partial-dir", "--backup-dir", "--suffix",
+            "--log-file", "--temp-dir", "--compare-dest", "--copy-dest", "--link-dest", "--block-size", "--bwlimit", "--timeout", "--port", "--max-size", "--min-size",
+            "--chmod", "--chown", "--remote-option", "--out-format", "--info", "--debug", "--address", "--sockopts", "--modify-window", "--read-batch", "--write-batch", "--only-write-batch")
+
+
+def _rsyncopts(a):
+    """rsync arguments without the values of value-taking options (`--exclude -n`, `-e ssh`): such a value is not a flag."""
+    out, i = [], 0
+    while i < len(a):
+        out.append(a[i])
+        i += 2 if a[i] in RSYNCVAL or (BUNDLE.fullmatch(a[i]) and a[i][-1] in "efTBM") else 1
+    return out
 
 
 def _brace(t):
@@ -705,8 +741,11 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
             st.append(a[k])
             k += 1
         sc = bool(st) and all(_scoped(x) for x in st)  # scratch space: deleting there is fine, other -exec bodies still run through check
-        ext = a[k:k + 1] in (["-name"], ["-iname"]) and bool(ARTGLOB.fullmatch(a[k + 1] if k + 1 < len(a) else "")) \
-            and _narrow(a[k + 2:])  # build-artifact glob, optionally narrowed by -not/! -path|-name exclusions
+        kk = k
+        while "-delete" not in a and a[kk:kk + 1] in (["-type"], ["-maxdepth"], ["-mindepth"]) and a[kk + 1:kk + 2] and not re.search(r"[$`]", a[kk + 1]):  # `-type f` / `-maxdepth 2` before the name narrow an `-exec rm` (a `-delete` keeps the name-first rule)
+            kk += 2
+        ext = a[kk:kk + 1] in (["-name"], ["-iname"]) and bool(ARTGLOB.fullmatch(a[kk + 1] if kk + 1 < len(a) else "")) \
+            and _narrow(a[kk + 2:])  # build-artifact glob, optionally narrowed by -not/! -path|-name exclusions
         # the cwd-tree exemption needs ONE action, no alternatives, no symlink following and no earlier cd out of the tree
         one = len([t for t in a[k:] if t in ("-delete", "-exec", "-execdir", "-ok", "-okdir")]) == 1 \
             and not any(x in ("-o", "-or", ",", "(", "\\(") for x in a[k:]) and not any(x in ("-L", "-H") for x in a[:k]) and "-follow" not in a \
@@ -785,8 +824,10 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
     tdir = lambda x: len(x) > 3 and "--target-directory".startswith(x.split("=")[0])  # getopt long-option prefixes
     dest = [y for x in a[-1:] + [x for j, x in enumerate(a) if j and (a[j - 1] == "-t" or (tdir(a[j - 1]) and "=" not in a[j - 1]))]
             + [x.split("=", 1)[1] for x in a if x.startswith("--t") and "=" in x and tdir(x)] + [x[2:] for x in a if x.startswith("-t") and x[2:3] in ("/", "~", "$")] for y in _brace(x)]
-    if name in ("cp", "mv", "install", "ln", "rsync", "scp") and not (name == "rsync" and any(t == "--dry-run" or _bundle(t, "n") for t in a)) and any(
-            not t.startswith("-") and (_sysw(re.sub(r"^[^/:\s]{2,}:(?!//)", "", t) if name in ("rsync", "scp") else t) or _blk(t)) for t in dest):
+    ra = _rsyncopts(a) if name == "rsync" else a  # option values are not flags
+    www = lambda t: name == "rsync" and bool(WWW.fullmatch(re.sub(r"^[^/:\s]{2,}:(?!//)", "", t)))  # deploying into a named child of /var/www adds web content, it is not a system file
+    if name in ("cp", "mv", "install", "ln", "rsync", "scp") and not (name == "rsync" and any(t == "--dry-run" or _bundle(t, "n") for t in ra)) and any(
+            not t.startswith("-") and not www(t) and (_sysw(re.sub(r"^[^/:\s]{2,}:(?!//)", "", t) if name in ("rsync", "scp") else t) or _blk(t)) for t in dest):
         return f"{name} onto a system path. Edit a copy and ask the owner"
     if name == "ln" and any(HOMEP.match(t) for t in dest):
         return "ln onto a shell startup file or ~/.ssh|.aws|.gnupg replants a persistent hook. Ask the owner"
@@ -822,9 +863,9 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
                     return r
     if name == "brew" and w[:1] in (["uninstall"], ["remove"], ["rm"]) and "--ignore-dependencies" in a:
         return "brew uninstall --ignore-dependencies breaks dependants. Ask the owner"
-    if (name == "aws" and ((pair("s3", "rm") and "--recursive" in a) or (pair("s3", "rb") and "--force" in a)
+    if (name == "aws" and ((pair("s3", "rm") and "--recursive" in a) or (pair("s3", "rb") and "--force" in a) or (pair("s3", "sync") and any(t.startswith("--del") for t in a))
                            or pair("ec2", "terminate-instances") or any(t.startswith("delete-db-") for t in w) and "rds" in w)) \
-            or (name == "gcloud" and pair("projects", "delete")) or (name == "az" and pair("group", "delete")):
+            or (name == "gcloud" and pair("projects", "delete")) or (name == "az" and pair("group", "delete")) or (name == "gsutil" and "rsync" in w and any(_bundle(t, "d") for t in a)):
         return f"{name} bulk or whole-resource delete. Name the exact resource and ask the owner"
     if name in ("terraform", "tofu", "terragrunt") and (w[:1] == ["destroy"] or w[:2] == ["state", "rm"] or (
             w[:1] == ["apply"] and any(t in ("-destroy", "--destroy") for t in a)) or (name == "terragrunt" and "destroy" in w)):
@@ -931,6 +972,13 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
     if name == "wipefs" and not any(t in ("-n", "--no-act") for t in a) and any(
             t.startswith(("--all", "--offset")) or _bundle(t, "a") or _bundle(t, "o") for t in a):
         return "wipefs erases filesystem signatures on a device. Do it in a VM, never on the host"
+    pre = lambda t, f: len(t) >= 5 and t.startswith("--") and f.startswith(t.split("=")[0])  # getopt long-option prefix
+    if name == "mdadm" and any(pre(t, "--zero-superblock") or pre(t, "--create") or _bundle(t, "C") for t in a):
+        return "mdadm --zero-superblock/--create erases RAID metadata on member disks. Do it in a VM, never on the host"
+    if name == "cryptsetup" and any(x in ("luksErase", "erase", "luksFormat", "luksKillSlot", "luksRemoveKey", "reencrypt") for x in w[:3]):
+        return "cryptsetup erase/luksFormat/luksKillSlot/luksRemoveKey destroys the key slots, so the data is gone for good. Do it in a VM, never on the host"
+    if ph is not None and name in XTOOLS and any(XDEL.fullmatch(x) or x.startswith(("delete-", "terminate-", "purge-")) for x in w[:6]):
+        return f"{name} delete fed by xargs removes a whole piped list that cannot be vetted. Delete exact named objects and ask the owner"
     if name == "blkdiscard" and not any(t in ("-V", "--version", "-h", "--help") for t in a):
         return "blkdiscard discards every block of a device for good. Do it in a VM, never on the host"
     if name == "diskutil" and w[:1] and w[0].lower() in DISKUTIL:
@@ -973,7 +1021,8 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
         # `$(` tokenizes to a bare `$`, so bulk rm shows as t == "$"
         if d[:2] in (["volume", "rm"], ["volume", "prune"]) or (d[:2] == ["system", "prune"] and any(
                 t in ("--volumes", "--all") or _bundle(t, "a") for t in d)) or (
-                d[:1] in (["rm"], ["rmi"], ["kill"]) and any(t == "$" or "`" in t or "$(" in t for t in d)):
+                d[:1] in (["rm"], ["rmi"], ["kill"]) and any(t == "$" or "`" in t or "$(" in t for t in d)) or (
+                d[:2] == ["swarm", "leave"] and any(t == "--force" or _bundle(t, "f") for t in d)):
             return "docker volume rm/prune, system prune --volumes/-a or bulk rm removes data. Name the exact container and ask the owner"
     if name == "kill" and a and a[-1] in ("-1", "0") and a[-2:-1] not in (["-s"], ["-n"], ["--signal"]):
         return "kill -1/0 signals every process or the whole process group. Use `kill` on the exact PID"
@@ -985,8 +1034,8 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
     if (name == "shred" and not _shred_ok(a)) or (name == "truncate" and any(_sens(t) for t in tg)) or (name == "truncate" and re.search(r"(?:^|\s)(?:-s\s*0|--size[= ]0)(?:\s|$)", " ".join(a))
                            and not (tg and all(not t.startswith(("/", "~", "$")) and ".." not in t.split("/") and re.search(r"\.(?:log|out|err|tmp|txt)$", t) and not re.search(r"[*?\[`$]", t) for t in tg))):
         return f"{name} irrecoverably destroys file contents. Write to a new file or ask the owner"
-    if name == "rsync" and any(t.startswith("--delete") for t in a) and not any(t == "--dry-run" or _bundle(t, "n") for t in a):
-        return "rsync --delete removes files at the destination. Preview with `--dry-run` and name an exact destination"
+    if name == "rsync" and any(t.startswith(("--delete", "--remove-")) or t in ("--del", "--dele", "--delet") for t in ra) and not any(t == "--dry-run" or _bundle(t, "n") for t in ra):
+        return "rsync --delete (or --remove-source-files) removes files. Preview with `--dry-run` and name an exact destination"
     if name in SQLCLI:  # `psql -f FILE`, `--file=FILE`, `--queries-file FILE`
         for j, t in enumerate(a):
             f = t.split("=", 1)[1] if t.startswith(("--file=", "--queries-file=")) else a[j + 1] if t in ("-f", "--file", "--queries-file") and j + 1 < len(a) else ""
@@ -1214,6 +1263,12 @@ def check(cmd, _depth=0, _ph=None):
     for m in itertools.islice(MKTEMP.finditer(cmd), 8) if not re.search(r"\bmktemp\s*\(|\bfunction\s+mktemp\b|\balias\b|\bhash\b|\bPATH=", cmd) else ():  # `td=$(mktemp -d)`, set once and never reassigned (`${td:=x}`, read, for), is a fresh dir: `rm -rf "$td"` removes only it
         if len(re.findall(r"(?<![\w$])" + m[1] + r"\b(?!\})", cmd)) == 1:
             cmd = cmd[:m.end()] + re.sub(r"(\brm(?:[ \t]+-[\w-]+)*[ \t]+(?:--[ \t]+)?)(\"?)\$(?:" + m[1] + r"|\{" + m[1] + r"\})\2(?=[ \t]*(?:$|[;&|)\n]))", r"\1/tmp/mktemp-dir", cmd[m.end():])
+    if "mktemp" in cmd and not re.search(r"\bmktemp\s*\(|\bfunction\s+mktemp\b|\balias\b|\bhash\b|\bPATH=", cmd):  # `rm -rf $(mktemp -d)` removes the fresh empty dir it just made, as the sole operand
+        cmd = RMTEMP.sub(r"\1/tmp/mktemp-dir", cmd)
+    if "${TMPDIR:?" in cmd and "TMPDIR" not in re.sub(r"\$\{TMPDIR(?::\?[^}$`]*)?\}|\$TMPDIR\b", "", cmd):  # `${TMPDIR:?}/x` is `$TMPDIR/x` (fails when unset); any assignment or other mention of TMPDIR keeps it unscoped
+        cmd = re.sub(r"\$\{TMPDIR:\?[^}$`]*\}(?=/)", "$TMPDIR", cmd)
+    if "/.cache/" in cmd and "HOME" not in re.sub(r"\$\{HOME\}|\$HOME\b", "", cmd):  # removing a named child of the cache dir (no `..`, glob or variable), HOME never reassigned
+        cmd = re.sub(r"\brm\b[^;&|\n]*", lambda m: CACHEOP.sub(r"\1/tmp/hc-\2", m[0]), cmd)
     if SYMLN.search(cmd) and re.search(r"\bmkfs[^;&|\n]*\.(?:img|raw)\b", cmd):
         return "mkfs of an image after `ln -s` in the same command: the link may point at a device. Run the steps separately"
     if SYMLN.search(cmd) and RMREC.search(cmd) and re.search(r"(?:\$TMPDIR|\$\{TMPDIR\}|/tmp)/\w", cmd):
@@ -1379,8 +1434,10 @@ def check(cmd, _depth=0, _ph=None):
         if not r and op == "|" and feed:
             r = next((x for x in (_feed(name, f) for f in feed) if x), "")
         if not r and name == "tee" and not any(x == "--append" or _bundle(x, "a") for x in a) and any(_trunc(x) for x in a if not x.startswith("-")) \
-                and (ri[n] == "/dev/null" or (op == "|" and pseg in EMPTYSRC)):
+                and (ri[n] == "/dev/null" or (op == "|" and _empty(pseg))):
             r = "tee of empty input truncates a key/credential or database file. Back it up and ask the owner"
+        if not r and name == "crontab" and _cronin(a) and (ri[n] == "/dev/null" or (here is not None and not here.strip()) or (op == "|" and _empty(pseg))):
+            r = "crontab fed empty input replaces the whole table with nothing, like `crontab -r`. Back up with `crontab -l > file`, then ask the owner"
         if not r and op == "|" and fetch and (name in SHELLS or INTERP.match(name)):
             r = "curl/wget piped to a shell/interpreter. Download, read it, then run it"
         if r:

@@ -105,6 +105,8 @@ _Q = r"""['"](?![$<{%*])"""  # opening quote, not followed by a template/placeho
 # Identifier-shaped values are code references, not secrets: dotted paths and env refs (os.environ[X], config.secret_key_value), snake_case or
 # SCREAMING_CASE names, and camelCase words (passwordRequired). Random secrets have no such word structure.
 IDENT = re.compile(r"\w+(?:\.\w+)+|[\w.]*[\[\](){}][\w.\[\](){}]*|[a-z]+(?:_[a-z0-9]+)+|[A-Z]+(?:_[A-Z0-9]+)+|[a-z]+(?:[A-Z][a-z]{2,})+\d*", re.A)
+# a credential slot that holds only the word for it (curl -u user:PASSWORD) is a template, not a leak
+WORDSEC = re.compile(r"(?:YOUR_)?(?:PASSWORD|PASS|SECRET|TOKEN|API_KEY)")  # uppercase only: a lowercase `secret` can be a real password
 EXTRA = [(i, re.compile(r), g, e) for i, r, g, e in [
     ("discord-webhook", r"discord(?:app)?\.com/api/webhooks/\d{17,20}/([\w-]{50,})", 1, 3.5),
     ("url-password", r"\b[a-z][a-z0-9+.-]*://[^\s:/]*:(?![^\s@/]*\*\*@)([^\s@/$<>{}%]{8,})@[\w.-]+", 1, 3.0),
@@ -148,6 +150,19 @@ EXTRA = [(i, re.compile(r), g, e) for i, r, g, e in [
     ("xml-password-element", r"""(?i)<\w{0,20}(?:password|passwd|secret|token)>(?![$<{%*])(?=[^<\s]*\d)([^<\s]{8,})</""", 1, 3.0),
     ("bracket-secret-assign", r"""(?i)\[\s*['"]\w{0,40}(?:secret|passw(?:or)?d|token|(?:api|signing|private|access|auth|encryption|master)_?key)\w{0,40}['"]\s*\]\s*=\s*['"](?![$<{%*/~]|\./|[^'"\s]*(?:://|arn:|\.[a-z]{2,4}['"]))(?=[^'"\s]*\d)([^'"\s]{16,})['"]""", 1, 3.5),  # PHP $config['jwt_secret'], os.environ["SIGNING_KEY"]
     ("vault-token", r"\bhv[sbr]\.([\w-]{24,})", 1, 3.5),
+    # held-out-10 additions; skipped on purpose: L009 (a spring.datasource.password of letters only: no digit and no symbol once the corpus marker is removed, so no shape of its own)
+    ("php-var-pass", r"""(?i)\$(?!\w{0,20}(?:encrypt|hash|digest|crypt))\w{0,20}pass\b\s*=\s*['"](?![$<{%*])(?=[^'"\s]*\d)(?=[^'"\s]*[a-z])([^'"\s]{8,})['"]""", 1, 3.0),  # $dbpass = "..." (the bare _pass suffix is not matched by password-literal)
+    ("wp-key-salt-define", r"""(?i)\bdefine\(\s*['"]\w{0,30}_(?:key|salt)['"]\s*,\s*['"]((?=[^'"\s]*\d)[^'"\s]{32,})['"]""", 1, 3.5),  # WordPress AUTH_KEY, NONCE_SALT
+    ("basic-auth-symbol-password", r"""(?i)\bcurl\b[^\n]*?\s(?:-u|--user)[ =]['"]?[\w.@-]{1,40}:(?![$<{%*])(?=[^\s'"]*\d)(?=[^\s'"]*[^\w\s'"])([^\s'"]{8,})""", 1, 3.0),  # gitleaks curl-auth-user stops at a symbol such as !
+    ("azure-sas-sig", r"""[?&]sv=\d{4}-\d{2}-\d{2}&[^\s"']{0,300}?\bsig=([^&\s"']{30,})""", 1, 3.5),
+    # held-out-11 additions; skipped on purpose: L056 (a bare `pass = ` ini key with 16 letters and no digit: the name collides with the Python keyword and the value has no shape)
+    ("slack-webhook-any-host", r"/services/T[A-Z0-9]{8,12}/B[A-Z0-9]{8,12}/([A-Za-z0-9]{24})\b", 1, 3.5),  # gitleaks slack-webhook-url wants hooks.slack.com; proxies and mirrors keep the path
+    ("aws-secret-access-key-assign", r"""(?i:aws_secret_access_key)['"]?[\s=:]+['"]?(?=[A-Za-z0-9/+]*\d)(?=[A-Za-z0-9/+]*[a-z])(?=[A-Za-z0-9/+]*[A-Z])([A-Za-z0-9/+]{40})(?![A-Za-z0-9/+=])""", 1, 3.5),  # `aws configure set aws_secret_access_key <40>`, `= <40>`
+    ("typed-password-literal", r"""(?i)\b\w*(?:password|passwd|_pass)\s*:\s*[\w.\[\]]+\s*=\s*['"](?![$<{%*])(?=[^'"\s]*\d)([^'"\s]{8,})['"]""", 1, 3.0),  # Python `password: str = "..."`, TypeScript `password: string = "..."`
+    ("datadog-key-assign", r"""(?i)\b(?:datadog|dd)_(?:api|app)_key['"]?\s*[=:]\s*['"]?([0-9a-f]{32}(?:[0-9a-f]{8})?)\b""", 1, 3.0),  # 32-hex API key, 40-hex application key
+    ("plaid-secret-assign", r"""(?i)\bplaid_(?:client_)?secret\w{0,10}['"]?\s*[=:]\s*['"]?([0-9a-f]{30})\b""", 1, 3.0),  # Plaid secrets are 30 hex characters
+    ("ldap-dn-password", r"""\bldaps?://\w+=[^\s:/@]*:(?![^\s@/]*\*\*@)(?=[^\s@/]*\d)([^\s@/$<>{}%]{8,})@[\w.-]+""", 1, 3.0),  # ldap://cn=admin,dc=acme,dc=com:secret@host (the DN has no `/`; checked for placeholders on the password alone)
+    ("redis-cli-auth", r"""(?i)\bredis-cli\b[^\n]*?\s-a\s+['"]?(?![$<{%*'"-])(?=[^'"\s]*\d)([^'"\s]{8,})""", 1, 3.0),  # redis-cli -a PASSWORD (cli-password only knows -p)
 ]]
 
 
@@ -163,14 +178,14 @@ def gitleaks_rule(text, path="input.txt", precise=False):
             line = frag[frag.rfind("\n", 0, m.start()) + 1:frag.find("\n", m.end())]
             gs = [g for g in m.groups() if g]
             sec = m.group(sg) or "" if sg else (gs[0] if gs else m.group(0))
-            if "gitleaks:allow" in line or (precise and (PLACEHOLDER.search(m.group(0)) or (rid == "gcp-api-key" and pubkey_ok(frag[m.end():frag.find("\n", m.end())])) or (rid == "jwt" and sec.endswith(".")))): continue
+            if "gitleaks:allow" in line or (precise and (PLACEHOLDER.search(m.group(0)) or (rid == "gcp-api-key" and pubkey_ok(frag[m.end():frag.find("\n", m.end())])) or (rid == "jwt" and sec.endswith(".")) or WORDSEC.fullmatch(sec.rpartition(":")[2]))): continue
             if ent and entropy(sec) <= ent: continue
             if any(a.hit(sec, m.group(0), line, path) for a in glob + als): continue
             out.append(rid); break
     xf = frag.replace("\\n", "\n")  # a literal backslash-n (JSON, logs, one-line fixtures) is a line break for the extra rules
     for rid, rx, g, ent in EXTRA if precise else ():
         for m in rx.finditer(xf):
-            if not PLACEHOLDER.search(m.group(0)) and entropy(m.group(g)) > ent and not (g and IDENT.fullmatch(m.group(g))) and "gitleaks:allow" not in xf[xf.rfind("\n", 0, m.start()) + 1:xf.find("\n", m.end())]:
+            if not PLACEHOLDER.search(m.group(g) if rid == "ldap-dn-password" else m.group(0)) and entropy(m.group(g)) > ent and not (g and IDENT.fullmatch(m.group(g))) and "gitleaks:allow" not in xf[xf.rfind("\n", 0, m.start()) + 1:xf.find("\n", m.end())]:
                 out.append(rid); break
     return out
 

@@ -57,6 +57,14 @@ LIVE.update({"resend-key": "re" "_" + tok("r1", 8) + "_" + tok("r2", 24), "okta-
              "pass-key-assign": "ansible_become_pass: " + tok("p1", 18), "url-query-token": "GET /v1/items?access_token=" + tok("u1", 32) + "&limit=10",
              "xml-add-key-value": '<add key="StorageKey" value="' + tok("x1", 42) + '==" />', "xml-password-element": "<pass" "word>" + tok("x5", 14) + "</pass" "word>",
              "bracket-secret-assign": "$config['jwt_sec" "ret'] = '" + tok("b1", 40) + "';"})
+# Rules added after held-out-10 (decoy twins: test_secret_extra_rules_w7.py).
+LIVE.update({"php-var-pass": '$db' 'pass = "' + tok("w7a", 22) + '";', "wp-key-salt-define": "define('AUTH_" "KEY', '" + tok("w7b", 64) + "');",
+             "basic-auth-symbol-password": "cur" "l -u deploy:P4ssw0rd!x https://x.example.com", "azure-sas-sig": "https://a.example.com/c?sv=2022-11-02&sig=" + tok("w7c", 44) + "%3D&se=1"})
+# Rules added after held-out-11 (decoy twins: test_secret_extra_rules_w8.py).
+LIVE.update({"slack-webhook-any-host": "https://hooks.example.com/serv" "ices/T" + tok("w8a", 9).upper() + "/B" + tok("w8b", 10).upper() + "/" + tok("w8c", 24),
+             "aws-secret-access-key-assign": "aws configure set aws_secret_" "access_key " + tok("w8d", 12) + "aA1" + tok("w8e", 25), "typed-password-literal": 'password: str = "' + tok("w8f", 14) + '#7"',
+             "datadog-key-assign": "DATADOG_API_" "KEY=" + hashlib.sha256(b"w8g").hexdigest()[:32], "plaid-secret-assign": "PLAID_SE" "CRET=" + hashlib.sha256(b"w8h").hexdigest()[:30],
+             "ldap-dn-password": "ldap://cn=admin,dc=acme,dc=example,dc=com:" + tok("w8i", 18) + "9@ldap.example.com", "redis-cli-auth": "redis-cli -h cache.example.com -a " + tok("w8j", 24)})
 LIVE["password-assign"] = "DB_PASS" "WORD=" + tok("pa", 11) + "!047"
 LIVE["password-env-netrc"] = "ENV ADMIN_PASS" "WORD " + tok("pe", 11) + "!047"
 LIVE["conn-string-password"] = "jdbc:sqlserver://h:1433;user=jane;pass" "word=" + tok("cp", 16)
