@@ -17,7 +17,7 @@ Fails (exit 1, one line per problem) when a bench dir:
      and its timestamp is not later than that line's. Each line after k (appended later)
      must have its file hash appear as a value in a later ledger event, else it is
      uncovered and fails. The canonical event is "preregistered" and the canonical key
-     "sha256"; event "prereg_frozen" and keys "sha", "preregistered_sha256",
+     "sha256"; event "prereg_frozen" and keys "sha256_frozen_txt", "sha", "preregistered_sha256",
      "frozen_list_sha256" and "sha256_of_SHA256-frozen.txt" are accepted. Timestamps are
      "ts" or "iso" (epoch number or ISO-8601); an unparseable one fails, a missing one
      leaves line order as the only check;
@@ -62,7 +62,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 N = 10
-KEYS = ("sha256", "sha", "preregistered_sha256", "frozen_list_sha256", "sha256_of_SHA256-frozen.txt")
+KEYS = ("sha256", "sha256_frozen_txt", "sha", "preregistered_sha256", "frozen_list_sha256", "sha256_of_SHA256-frozen.txt")
 PREREG = ("preregistered", "prereg_frozen")
 REPO = Path(__file__).resolve().parent.parent
 

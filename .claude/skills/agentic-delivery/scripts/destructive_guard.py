@@ -47,7 +47,14 @@ Denies (exit 2, one-line reason with the safe alternative on stderr; the host bl
   URL query, `aws s3 rm --recursive|s3 rb --force|ec2 terminate-instances|rds delete-db-*`, `gcloud projects delete`,
   `az group delete`, `terraform|tofu destroy|apply -destroy`, `kubectl delete namespace|all --all`,
   `redis-cli FLUSHALL|FLUSHDB`, mongo `dropDatabase`, `wipefs` (not `-n`), `diskutil eraseDisk|eraseVolume|...`,
-  and `eval`/`sh` of a `$(... base64 -d ...)` payload.
+  and `eval`/`sh` of a `$(... base64 -d|xxd -r|printf hex-escape ...)` payload; also package `unpublish|yank|purge`, any
+  `aws <svc> delete-*|terminate-*|purge-*`, `gcloud ... delete`, `gsutil rm -r`, `az ... delete|purge`, `kubectl delete --all|drain`,
+  `helm uninstall`, `pulumi destroy`, `terraform state rm`, `parted mklabel`, `cqlsh` DROP, `git filter-branch`, `> /etc/...`, an
+  alias to a destructive command and one-step `x=rm; $x -rf` indirection. Allowed: `--help`/`-help`, `--dry-run`/`--dryrun`
+  (not `=none`; aws/kubectl/helm only), and `rm`/`find -delete` inside a named child of `$TMPDIR` or `/tmp`. A `--help` after
+  other arguments of rm/chmod/chown/dd/shred/mkfs/diskutil (only a lone one is usage) still gets the full check.
+  Residuals: a `/tmp/<name>` symlink to elsewhere, or an unset `$TMPDIR` (`$TMPDIR/x` becomes `/x`), is trusted; `> file` over
+  a system path is caught but `tee`/`cp`/`mv` onto one are out of scope; `pip uninstall` is blocked only for xargs or `-r`.
 Everything else is allowed.
 
 No in-repo grant or allow list: anything an agent can write, an agent can forge. When the owner really wants a
@@ -83,13 +90,20 @@ LIT = r"""['"][^'"/$@][^'"$@]*['"]"""  # a literal relative path
 DELAPI = re.compile(r"(rmtree|os\.(?:remove|unlink|rmdir|removedirs)|rmSync|rmdirSync|unlinkSync|\bfs\.rm|rm_rf"
                     r"|File\.delete|\bunlink|\brmdir)(?:\(|\s)(?!\s*" + LIT + r"\s*(?:[,);]|$))")
 BODYRM = re.compile(r"\brm\s+-\w*[rR]\w*\s*(?:\S*[$/~*]|['\"]\s*\+|%s|\{)")  # variable/root path or string concatenation
-SQLCLI = ("psql", "mysql", "mariadb", "sqlite3", "mongosh", "sqlcmd")
+SQLCLI = ("psql", "mysql", "mariadb", "sqlite3", "mongosh", "sqlcmd", "cqlsh")
 SQLCOMMENT = re.compile(r"/\*.*?\*/", re.S)
-SQLDROP = re.compile(r"\b(?:drop\s+(?:database|schema|table)|truncate\s+\w|delete\s+from\s+\w+\s*(?:;|$))", re.I)
+SQLDROP = re.compile(r"\b(?:drop\s+(?:database|schema|keyspace|table)|truncate\s+\w|delete\s+from\s+\w+\s*(?:;|$))", re.I)
 DYNCMD = re.compile(r"(?:^|[;&|\n({]|\bthen\b|\bdo\b)\s*\"?(?:\$\([^()]{0,200}\)|`[^`]{0,200}`|\$\{?\w{1,64}\}?)\"?(?:\s+\S+){0,8}?\s+(?:-\w*(?:rf|fr)\w*|--hard)\b")
 FORKBOMB = re.compile(r"(\S{1,32})\(\)\s*\{\s*\1\s*\|\s*\1\s*&")
 SSH_VAL = "bcDEeFIiJLlmOopQRSWw"
-B64EXEC = re.compile(r"\b(?:eval|source|(?:ba|z|da|k|a)?sh)\b[^|;&\n]{0,300}(?:\$\(|`)[^)`]{0,300}\bbase64\b[^)`]{0,300}(?:\s-\w*[dD]|--decode)")
+# eval/shell fed a substitution that decodes base64, hex (`xxd -r`) or printf escapes; scanned in bounded windows after at most 64
+# shell words and 8 substitutions each (more than that alongside a decoder fails closed), so the cost is linear in the input, never quadratic
+DECSTART = re.compile(r"\b(?:eval|source|(?:ba|z|da|k|a)?sh)\b")
+SUBST = re.compile(r"\$\(|`")
+DECODE = re.compile(r"\bbase64\b.{0,300}(?:\s-\w*[dD]|--decode)|\bxxd\b.{0,100}\s-\w*r|\bprintf\b.{0,300}\\(?:x[0-9a-fA-F]|[0-7]{3})", re.S)
+DRY = ("--dry-run", "--dryrun", "--dry-run=client", "--dry-run=server")  # `--dry-run=none` really runs, so it is not listed
+SCOPED = re.compile(r"(?:\$TMPDIR|\$\{TMPDIR\}|/tmp)/\w[^/$`{}]*(?:/[^$`{}]*)?")  # under the temp dir, inside a named child
+SYSFILE = re.compile(r"/(?:etc|boot|bin|sbin|lib|lib64|usr|System|Library|root|private/etc|var/(?:lib|db|root))(?:/|$)")
 KUBE_VAL = ("-n", "--namespace", "-l", "--selector", "-f", "--filename", "--context", "--cluster", "--kubeconfig", "--user", "-o", "--output", "--field-selector")
 DISKUTIL = ("erasedisk", "erasevolume", "secureerase", "zerodisk", "randomdisk", "partitiondisk")
 DOCKER_VAL = ("-H", "--host", "--context", "-c", "--config", "-l", "--log-level", "--tlscacert", "--tlscert", "--tlskey")
@@ -122,6 +136,11 @@ def _far(t):
     return p in ("/", "..") or p.startswith("../..") or (p.startswith("/") and p.count("/") <= 2)
 
 
+def _scoped(t):
+    """A path inside a named child of `$TMPDIR` or `/tmp` (no `..`, no variable below it): scratch space, not a host path."""
+    return bool(SCOPED.fullmatch(t)) and ".." not in t.split("/")
+
+
 def _tree(t):
     """A git pathspec naming the whole work tree (or its parent)."""
     if t in ("*", ":/", ":(top)", ":(top)*"):
@@ -146,6 +165,8 @@ def _rm(args, ph):
         return "rm -r with targets from xargs. List them first (`ls`), then `rm` the exact paths"
     for t in tg:
         n = posixpath.normpath(re.sub("/+", "/", t) or ".")
+        if _scoped(t) and not (ph and any(p in t for p in ph if p)):
+            continue
         if re.search(r"[$`*?\[]|\{[^}]*(?:,|\.\.)", t) or (ph and any(p in t for p in ph if p)) or n == "." or _far(t) \
                 or n.startswith("..") or re.match(r"/(Users|home|usr|etc|var|opt)/", n):
             return f"rm -r on `{t}` (variable, glob, placeholder, `.`, `..`, root, home or system path). Delete an exact, quoted in-project path, or use a container/VM"
@@ -171,6 +192,10 @@ def _git(a):
     flags = [t for t in r if re.fullmatch(r"-[A-Za-z]+", t)]
     force = has("--force") or any("f" in t for t in flags)
     dele = has("--delete") or any("d" in t for t in flags)
+    if sub in ("filter-branch", "filter-repo"):
+        return "git filter-branch/filter-repo rewrites the whole history. Work on a fresh clone and ask the owner"
+    if sub == "push" and has("--dry-run"):
+        return ""
     if sub == "reset" and has("--hard"):
         return "git reset --hard discards work. Use `git stash` or `git reset --soft`/`--mixed`"
     if sub == "clean" and (force or any(x.startswith("--f") for x in longs)) and not (has("--dry-run") or any("n" in t for t in flags)):
@@ -212,19 +237,34 @@ def _body(t):
 
 
 def _cmd(name, a, ph):
+    strict = name in ("rm", "chmod", "chown", "dd", "shred", "diskutil") or name.startswith("mkfs")  # a lone --help only
+    if (a in (["--help"], ["-help"]) or (not strict and any(t in ("--help", "-help") for t in a))) \
+            and not (name in SHELLS + AWK + ("ssh", "eval", "su", "git") or INTERP.match(name)):
+        return ""  # prints usage and exits
+    dr = [t for t in a if re.match(r"--(?:no-)?dry-?run", t)]
+    if name in ("aws", "kubectl", "helm") and dr and all(t in DRY for t in dr) and dr[-1] in DRY:
+        return ""  # any `--no-dry-run` or `--dry-run=none` among them means the command really runs
     if name == "rm":
         return _rm(a, ph)
     if name == "git":
         return _git(a)
     if name == "find":
-        if "-delete" in a:
+        k = 0
+        while k < len(a) and a[k] in ("-H", "-L", "-P"):
+            k += 1
+        st = []
+        while k < len(a) and not a[k].startswith(("-", "(", "!")):
+            st.append(a[k])
+            k += 1
+        sc = bool(st) and all(_scoped(x) for x in st)  # scratch space: deleting there is fine, other -exec bodies still run through check
+        if "-delete" in a and not sc:
             return "find -delete. List with `find ... -print` first, then remove exact paths"
         for j, t in enumerate(a[:-1]):
             if t in ("-exec", "-execdir", "-ok"):
                 k = next((m for m in range(j + 1, len(a)) if a[m] in (";", "+")), len(a))
                 sub = a[j + 1:k]
                 u = _unwrap(sub)[0]  # sudo/env/nice rm
-                if u < len(sub) and os.path.basename(sub[u]) in ("rm", "shred"):
+                if u < len(sub) and os.path.basename(sub[u]) in ("rm", "shred") and not sc:
                     return "find -exec rm. List with `find ... -print` first, then remove exact paths"
                 r = check(" ".join(shlex.quote(x) for x in sub), 1)
                 if r:
@@ -256,8 +296,31 @@ def _cmd(name, a, ph):
                            or pair("ec2", "terminate-instances") or any(t.startswith("delete-db-") for t in w) and "rds" in w)) \
             or (name == "gcloud" and pair("projects", "delete")) or (name == "az" and pair("group", "delete")):
         return f"{name} bulk or whole-resource delete. Name the exact resource and ask the owner"
-    if name in ("terraform", "tofu") and (w[:1] == ["destroy"] or (w[:1] == ["apply"] and any(t in ("-destroy", "--destroy") for t in a))):
-        return f"{name} destroy removes real infrastructure. Run `plan -destroy` and ask the owner"
+    if name in ("terraform", "tofu", "terragrunt") and (w[:1] == ["destroy"] or w[:2] == ["state", "rm"] or (
+            w[:1] == ["apply"] and any(t in ("-destroy", "--destroy") for t in a)) or (name == "terragrunt" and "destroy" in w)):
+        return f"{name} destroy/state rm removes real infrastructure or its record. Run `plan -destroy` and ask the owner"
+    recur = any(t == "--recursive" or _bundle(t, "r") or _bundle(t, "R") for t in a)
+    if (name == "aws" and len(w) > 1 and re.match(r"(?:delete|terminate|purge)-", w[1])) \
+            or (name == "gcloud" and ("delete" in w or ("rm" in w and recur))) \
+            or (name == "gsutil" and "rm" in w and recur) \
+            or (name == "az" and any(t in ("delete", "purge") for t in w)) \
+            or (name == "pulumi" and (w[:1] == ["destroy"] or w[:2] == ["stack", "rm"])) \
+            or (name == "helm" and w[:1] in (["uninstall"], ["delete"], ["un"], ["del"])) \
+            or (name == "kubectl" and (w[:1] == ["drain"] or ("delete" in w and any(
+                t in ("--all", "--all-namespaces") or _bundle(t, "A") for t in a)))):
+        return f"{name} deletes cloud/cluster resources. Name the exact resource and ask the owner"
+    if (name in ("npm", "pnpm", "yarn") and "unpublish" in w) or (name in ("cargo", "gem") and "yank" in w and "--undo" not in a) \
+            or (name in ("apt", "apt-get", "aptitude") and ("--allow-remove-essential" in a or (
+                    ("purge" in w or "remove" in w) and any(re.search(r"[*?\[]", t) for t in w)))
+                and not any(t in ("-s", "--simulate", "--just-print", "--dry-run", "--no-act") for t in a)) \
+            or (name in ("pip", "pip3") and "uninstall" in w and (ph is not None or any(
+                t in ("-r", "--requirement") or t.startswith("--requirement=") for t in a))):
+        return f"{name} unpublish/yank/purge/bulk uninstall is hard to undo. Name the exact package and ask the owner"
+    if name == "parted" and any(t in ("mklabel", "mktable", "rm") for t in w):
+        return "parted rewrites a partition table. Do it in a VM, never on the host"
+    if name == "alias" and any(  # `alias ls='rm -rf'`: probe the value with a dangerous target appended
+            check(t.split("=", 1)[1] + " $X", 1) or check(t.split("=", 1)[1] + " /", 1) for t in a if "=" in t):
+        return "alias to a destructive command. Spell the command out"
     if name == "kubectl" and "delete" in w:
         r, k = [], a.index("delete") + 1 if "delete" in a else len(a)  # first positional after delete, skipping option values (`-n foo ns bar`)
         while k < len(a) and not r:
@@ -401,6 +464,23 @@ def _bodies(cmd):
     return out
 
 
+def _decexec(cmd):
+    """True when a shell word is followed (no `|;&` or newline between, within 300 chars) by a decoding substitution."""
+    if not re.search(r"base64|xxd|printf", cmd):
+        return False
+    for n, m in enumerate(DECSTART.finditer(cmd)):
+        if n >= 64:
+            return True
+        w = cmd[m.end():m.end() + 600]
+        g = re.search(r"[|;&\n]", w[:300])
+        for k, sub in enumerate(SUBST.finditer(w[:g.start() if g else 300])):
+            if k >= 8:
+                return True  # fail closed on a pile of substitutions after one shell word
+            if DECODE.search(re.split(r"[)`]", w[sub.end():sub.end() + 400], 1)[0]):
+                return True
+    return False
+
+
 def _fallback(cmd):
     """Regex scan of raw text for the destructive classes; used when parsing fails."""
     cmd = cmd.replace("\\\n", "")
@@ -422,8 +502,16 @@ def check(cmd, _depth=0, _ph=None):
     cmd = re.sub(r"\$\{IFS\}|\$IFS\b", " ", cmd)  # rm${IFS}-rf is rm -rf
     if "()" in cmd and FORKBOMB.search(cmd):
         return "fork bomb. Never run it"
-    if "base64" in cmd and B64EXEC.search(cmd):
-        return "eval/shell of a decoded base64 payload cannot be vetted. Decode to a file, read it, then run it"
+    if _decexec(cmd):
+        return "eval/shell of a decoded base64/hex payload cannot be vetted. Decode to a file, read it, then run it"
+    if not _depth and "=" in cmd and "$" in cmd:  # `x=rm; $x -rf /`: expand simple assignments once and re-check
+        env = {m[1]: m[2][1:-1] if re.fullmatch(r"'[^']*'|\"[^\"]*\"", m[2]) else m[2]
+               for m in re.finditer(r"(?:^|[;&|\n]\s*)(\w{1,32})=('[^']{0,200}'|\"[^\"]{0,200}\"|[^\s;&|'\"]{0,200})", cmd)}
+        ex = re.sub(r"\$(?:\{(\w+)\}|(\w+))", lambda m: env.get(m[1] or m[2], m[0]), cmd)
+        if env and ex != cmd:
+            r = check(ex, 1)
+            if r:
+                return r
     if DYNCMD.search(cmd):
         return "command word built from a variable or substitution with -rf/--hard. Spell the command out"
     try:
@@ -442,7 +530,7 @@ def check(cmd, _depth=0, _ph=None):
         if re.fullmatch(r"[;&|()<>\n]+", t):
             if t == "(" and not segs[-1] and ops[-1] == "|":
                 continue  # `| (sh)`: stay in the pipeline
-            if re.search(r"[;|()\n]", t) or not re.search(r"[<>]", t):
+            if (re.search(r"[;|()\n]", t) and t != ">|") or not re.search(r"[<>]", t):
                 segs.append([])
                 hs.append(None)
                 hd.append(False)
@@ -451,9 +539,11 @@ def check(cmd, _depth=0, _ph=None):
             else:  # redirection: the next token is its target; the command continues
                 if segs[-1] and segs[-1][-1].isdigit():
                     segs[-1].pop()
-                skip = "hs" if t.endswith("<<<") else "t"
+                skip = "hs" if t.endswith("<<<") else "t>" if t in (">", ">|", "&>") else "t"
                 hd[-1] = hd[-1] or "<<" in t
         elif skip:
+            if skip == "t>" and SYSFILE.match(posixpath.normpath(re.sub("/+", "/", t))):
+                return "redirect truncates a system file. Edit a copy and ask the owner"
             if skip == "hs":
                 hs[-1] = t
             skip = None

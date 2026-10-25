@@ -15,7 +15,9 @@ GUARD = ROOT / ".claude/skills/agentic-delivery/scripts/destructive_guard.py"
 
 
 def rows(name):
-    return [l for l in (D / name).read_text().splitlines() if l and not l.startswith("#")]
+    """Corpus rows of `name`; a corpus file that is absent (a destructive-only corpus) has none."""
+    f = D / name
+    return [l for l in f.read_text().splitlines() if l and not l.startswith("#")] if f.exists() else []
 
 
 def cmds(name):
