@@ -113,8 +113,9 @@ EXTRA = [(i, re.compile(r), g, e) for i, r, g, e in [
     ("google-client-secret", r"\bGOCSPX-[\w-]{20,}", 0, 0),
     ("uuid-credential", r"(?i)\b\w*(?:api[_-]?key|secret[_-]?key|client[_-]?secret|access[_-]?key|access[_-]?token|auth[_-]?token)\w*=([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})\b", 1, 0),
     ("auth-header-token", r"(?i)\bauthorization\W{1,3}(?:bearer|token)\s+([\w.~+/=-]{24,})", 1, 3.5),
-    ("password-literal", rf"(?i)\bpassword['\"]?\s*[=:]\s*{_Q}([^'\"\s]{{8,}})['\"]", 1, 3.0),
+    ("password-literal", rf"""(?i)\b\w*password['"]?\s*[=:]\s*['"](?![$<{{%]|\*\*)([^'"\s]{{8,}})['"]""", 1, 3.0),
     ("cli-password", rf"(?i)\b(?:mysql(?:dump)?|psql|sshpass|redis-cli|mongo(?:sh)?)\b[^\n]*?\s-p\s*{_Q}([^'\"\s]{{6,}})['\"]", 1, 3.0),
+    ("docker-login-password", r"""(?i)\bdocker\s+login\b[^\n]*?\s(?:-p|--password)[\s=]+['"]?(?![$<{%*-])([^'"\s]{6,})""", 1, 3.0),
     ("telegram-bot-token", r"\b\d{8,10}:(?:AA[\w-]{30,}|[\w-]{35}\b)", 0, 3.0),
     ("sentry-dsn", r"\bhttps://\w{16,}:(\w{16,})@[\w.-]*ingest[\w.-]*/\d+", 1, 3.0),  # legacy key:secret form only; a key-only DSN is public by design
     ("cli-token-flag", r"""(?i)\s--(?:token|api[_-]?key|password|secret)(?:=|\s+)['"]?(?![$<{%*])(?![^\s'"]*/)(?![^\s'"]*\.(?:ya?ml|json|txt|pem|key|env|conf|cfg|ini|toml|crt|p12)(?:[\s'"]|$))([^\s'"]{16,})""", 1, 3.5),
@@ -123,6 +124,12 @@ EXTRA = [(i, re.compile(r), g, e) for i, r, g, e in [
     ("password-env-netrc", r"""(?i)(?:\b(?:env|arg)\s+\w*passw(?:or)?d\w*|\blogin\s+\S+\s+password)\s+(?=[a-z\d])(?!(?:\w*passw(?:or)?d|secret|admin|qwerty|letmein)[\d!]{0,6}(?![^\s'",;]))(?=\S*\d)(?=\S*[a-z])([^\s'",;]{8,})""", 1, 3.0),
     ("conn-string-password", r"""(?i)[;?&](?:password|pwd)=(?![$<{%*])([^;&\s'"]{8,})""", 1, 3.0),
     ("auth-basic", r"(?i)\bauthorization\W{1,3}basic\s+([A-Za-z0-9+/]{16,}={0,2})", 1, 3.5),
+    ("sentry-org-token", r"\bsntrys_eyJ[\w+/=-]{40,}", 0, 3.5),
+    ("fcm-server-key", r"\bAAAA[\w-]{7}:APA91b[\w-]{100,}", 0, 3.5),
+    ("twitter-bearer", r"(?i)\b\w*bearer\w*\W{1,4}A{20,}([%\w-]{50,})", 1, 3.5),  # bearer context
+    ("twitter-bearer-url", r"\bA{21,}(?!A)(?=[\w-]*%[0-9A-F]{2})([%\w-]{50,})", 1, 3.5),  # no context: 21+ A then a URL-encoded body; a bare base64 blob has no %XX
+    # `": "`, `': '`, and a YAML block scalar (`: |` then newline, real or literal `\n`, and indent) all sit between the key and the base64
+    ("dockerconfigjson-auth", r"\.dockerconfigjson(?:\W|\\n){1,12}(eyJhdXRocy[A-Za-z0-9+/]{40,}={0,2})", 1, 3.5),
     ("vault-token", r"\bhv[sbr]\.([\w-]{24,})", 1, 3.5),
 ]]
 
