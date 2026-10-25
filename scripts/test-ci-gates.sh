@@ -127,6 +127,11 @@ gate "$GATES" privacy --banlist "$WORK/banlist.valid" "$WORK/scan2"
 if [ "$GATE_RC" -ne 0 ]; then record 0 "privacy: security-gates-new/secret-leaks.txt is not skipped"; else record 1 "privacy: security-gates-new/secret-leaks.txt is not skipped"; fi
 gate "$GATES" privacy --banlist "$WORK/banlist.valid" "$WORK/scan3"
 if [ "$GATE_RC" -eq 0 ]; then record 0 "privacy: frozen heldout-1024 secret-leaks.txt is skipped"; else record 1 "privacy: frozen heldout-1024 secret-leaks.txt is skipped"; fi
+# a same-named file in a nested dir under a frozen corpus dir is not the frozen path and must be scanned (inside a git repo)
+mkdir -p "$WORK/scan3/docs/bench/security-gates-heldout-1024/sub"
+printf 'aws_key = %s\n' "$planted" >"$WORK/scan3/docs/bench/security-gates-heldout-1024/sub/secret-leaks.txt"
+gate "$GATES" privacy --banlist "$WORK/banlist.valid" "$WORK/scan3"
+if [ "$GATE_RC" -ne 0 ]; then record 0 "privacy: nested heldout-1024/sub/secret-leaks.txt is scanned"; else record 1 "privacy: nested heldout-1024/sub/secret-leaks.txt is scanned"; fi
 
 # A banlist carrying an invalid extended regular expression (a lone opening
 # bracket has no closing `]`). The gate must fail closed: an unusable pattern

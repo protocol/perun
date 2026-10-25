@@ -19,3 +19,7 @@ Known gaps, not in this corpus and not fixed: `redis-cli` fed `FLUSHALL` on stdi
 
 - Secret gate missed 17: AWS secret key, GitHub and npm tokens, a CircleCI PAT, a Telegram bot token, Stripe webhook secret, PayPal, Square, Replicate, Groq, credentialed Postgres, MongoDB, Redis and JDBC URLs, a New Relic key and a Sentry DSN. Gitleaks missed 14 (it catches 10 of Perun's 17 misses; Perun catches 7 of its 14; 7 are missed by both).
 - Destructive guard missed 13: `eval` of an echoed command, `> /etc/passwd`, `git filter-branch --force`, bare SQL statements (`DROP DATABASE`, `DROP TABLE`, `TRUNCATE`, `DELETE FROM` typed without a client), `gcloud sql instances delete`, `kubectl delete pods --all --all-namespaces`, `kubectl delete pv --all`, `helm uninstall`, `terragrunt run-all destroy` and a printf-built `rm -rf /`.
+
+## Addendum, 2026-10-25: the secret gate is now a union
+
+The privacy gate now also runs the gitleaks default rules (see `docs/bench/security-gates-heldout3-1024/RESULTS.md`). Re-scored on this corpus it finds 33 of 40 leaks (2 of 40 decoys flagged). That 33/40 is partly in-sample: unioning gitleaks was chosen after this corpus showed gitleaks ahead, so it is not an out-of-sample number. The 23/40 above is the banlist alone and stays the out-of-sample figure; the held-out-3 corpus is the out-of-sample test of the union.
