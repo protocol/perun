@@ -49,12 +49,13 @@ Denies (exit 2, one-line reason with the safe alternative on stderr; the host bl
   `redis-cli FLUSHALL|FLUSHDB`, mongo `dropDatabase`, `wipefs` (not `-n`), `diskutil eraseDisk|eraseVolume|...`,
   and `eval`/`sh` of a `$(... base64 -d|xxd -r|printf hex-escape ...)` payload; also package `unpublish|yank|purge`, any
   `aws <svc> delete-*|terminate-*|purge-*`, `gcloud ... delete`, `gsutil rm -r`, `az ... delete|purge`, `kubectl delete --all|drain`,
+  `docker|podman|nerdctl exec|run IMG CMD` and `kubectl exec -- CMD` (CMD is checked), `>>`/`tee` onto a system file, `gh <noun> delete`, `curl -X DELETE`,
   `helm uninstall`, `pulumi destroy`, `terraform state rm`, `parted mklabel`, `cqlsh` DROP, `git filter-branch`, `> /etc/...`, an
   alias to a destructive command and one-step `x=rm; $x -rf` indirection. Allowed: `--help`/`-help`, `--dry-run`/`--dryrun`
   (not `=none`; aws/kubectl/helm only), and `rm`/`find -delete` inside a named child of `$TMPDIR` or `/tmp`. A `--help` after
   other arguments of rm/chmod/chown/dd/shred/mkfs/diskutil (only a lone one is usage) still gets the full check.
   Residuals: a `/tmp/<name>` symlink to elsewhere, or an unset `$TMPDIR` (`$TMPDIR/x` becomes `/x`), is trusted; `> file` over
-  a system path is caught but `tee`/`cp`/`mv` onto one are out of scope; `pip uninstall` is blocked only for xargs or `-r`.
+  a system path is caught but `cp`/`mv` onto one are out of scope; `pip uninstall` is blocked only for xargs or `-r`.
 Everything else is allowed.
 
 No in-repo grant or allow list: anything an agent can write, an agent can forge. When the owner really wants a
@@ -88,7 +89,7 @@ SAFE_DEV = ("/dev/null", "/dev/zero", "/dev/stdout", "/dev/stderr")
 GIT_OPT_VAL = ("-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env")
 LIT = r"""['"][^'"/$@][^'"$@]*['"]"""  # a literal relative path
 DELAPI = re.compile(r"(rmtree|os\.(?:remove|unlink|rmdir|removedirs)|rmSync|rmdirSync|unlinkSync|\bfs\.rm|rm_rf"
-                    r"|File\.delete|\bunlink|\brmdir)(?:\(|\s)(?!\s*" + LIT + r"\s*(?:[,);]|$))")
+                    r"|File\.delete|\bunlink|\brmdir)(?:\(|\s)(?!\s*(?:" + LIT + r"\s*(?:[,);]|$)|(?:tempfile\.)?mkdtemp\(\s*\)\s*[,);]))")
 BODYRM = re.compile(r"\brm\s+-\w*[rR]\w*\s*(?:\S*[$/~*]|['\"]\s*\+|%s|\{)")  # variable/root path or string concatenation
 SQLCLI = ("psql", "mysql", "mariadb", "sqlite3", "mongosh", "sqlcmd", "cqlsh")
 SQLCOMMENT = re.compile(r"/\*.*?\*/", re.S)
@@ -100,12 +101,17 @@ SSH_VAL = "bcDEeFIiJLlmOopQRSWw"
 # shell words and 8 substitutions each (more than that alongside a decoder fails closed), so the cost is linear in the input, never quadratic
 DECSTART = re.compile(r"\b(?:eval|source|(?:ba|z|da|k|a)?sh)\b")
 SUBST = re.compile(r"\$\(|`")
-DECODE = re.compile(r"\bbase64\b.{0,300}(?:\s-\w*[dD]|--decode)|\bxxd\b.{0,100}\s-\w*r|\bprintf\b.{0,300}\\(?:x[0-9a-fA-F]|[0-7]{3})", re.S)
+DECODE = re.compile(r"\bbase64\b.{0,300}(?:\s-\w*[dD]|--decode)|\bxxd\b.{0,100}\s-\w*r|\bprintf\b.{0,300}\\(?:x[0-9a-fA-F]|[0-7]{3})|\bopenssl\s+enc\b.{0,100}\s-(?:d\b|base64\b|a\b)"
+                    r"|\bpython[\d.]*\b.{0,200}(?:b64decode|b32decode|decodebytes|a2b_base64|unhexlify|fromhex)", re.S)
 DRY = ("--dry-run", "--dryrun", "--dry-run=client", "--dry-run=server")  # `--dry-run=none` really runs, so it is not listed
 SCOPED = re.compile(r"(?:\$TMPDIR|\$\{TMPDIR\}|/tmp)/\w[^/$`{}]*(?:/[^$`{}]*)?")  # under the temp dir, inside a named child
-SYSFILE = re.compile(r"/(?:etc|boot|bin|sbin|lib|lib64|usr|System|Library|root|private/etc|var/(?:lib|db|root))(?:/|$)")
+SYSFILE = re.compile(r"/(?:etc|boot|bin|sbin|lib|lib64|usr|System|Library|root|private/etc|(?:private/)?var(?=/(?!tmp(?:/|$)|folders(?:/|$)))|(?:private/)?var$)(?:/|$)", re.I)
 KUBE_VAL = ("-n", "--namespace", "-l", "--selector", "-f", "--filename", "--context", "--cluster", "--kubeconfig", "--user", "-o", "--output", "--field-selector")
 DISKUTIL = ("erasedisk", "erasevolume", "secureerase", "zerodisk", "randomdisk", "partitiondisk")
+CTR_VAL = ("--name", "--network", "--net", "--entrypoint", "--env", "--volume", "--workdir", "--user", "--publish", "--label",
+           "--hostname", "--memory", "--mount", "--cpus", "--env-file", "--restart", "--platform", "--cap-add", "--cap-drop", "--device",
+           "--add-host", "--dns", "--pid", "--ipc", "--group-add", "--tmpfs", "--shm-size", "--log-driver", "--security-opt", "--ulimit")
+KUBE_LONG = ("--namespace", "--container", "--context", "--cluster", "--kubeconfig", "--user", "--filename", "--pod-running-timeout", "--server", "--token")
 DOCKER_VAL = ("-H", "--host", "--context", "-c", "--config", "-l", "--log-level", "--tlscacert", "--tlscert", "--tlskey")
 HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)([A-Za-z_]\w*)\1[^\n]*\n(.*?)\n[ \t]*\2[ \t]*(?=\n|$)", re.S)
 MAXDEPTH = 6
@@ -124,6 +130,94 @@ FALLBACK = [re.compile(p) for p in (
 
 def _bundle(t, ch):
     return bool(re.fullmatch(r"-[A-Za-z]+", t)) and ch in t
+
+
+def _sysw(t, app=False):
+    """A write target on a system path (case-insensitive for macOS; 2+ leading `..` count as suspect; `/var/log` is exempt for appends)."""
+    parts = t.split("/")
+    v = next((i for i, x in enumerate(parts) if "$" in x or "`" in x or x.startswith("~")), None)
+    if v is not None:  # an unexpanded base followed by `..` may land anywhere: judge what remains after the `..` run
+        rest = parts[v + 1:]
+        n = next((i for i, x in enumerate(rest) if x != ".."), len(rest))
+        if not n:
+            return False
+        t = "/" + "/".join(rest[n:])
+    p = posixpath.normpath(re.sub("/+", "/", t) or ".")
+    if p.startswith("../.."):
+        p = re.sub(r"^(?:\.\./)+", "/", p + "/")
+    return bool(SYSFILE.match(p)) and not (app and re.match(r"/(?:private/)?var/log(?:/|$)", p, re.I))
+
+
+def _mkfs_dry(name, a):
+    """`mkfs.ext* -n` / `mkfs.xfs -N` as a flag, not as the value of an option that takes one (`-L -n`)."""
+    flag, val = ("-n", "bdeEgGiIjJlLmMNoOrtTUC") if name.startswith("mkfs.ext") else ("-N", "bdilmnrsLp") if name == "mkfs.xfs" else (None, "")
+    i = 0
+    while i < len(a):
+        if a[i] == flag:
+            return True
+        i += 2 if len(a[i]) == 2 and a[i][0] == "-" and a[i][1] in val else 1
+    return False
+
+
+SQLSH = re.compile(r"(?:^|\n)[ \t]*\.(?:shell|system|sh)[ \t]+(.+)|(?:^|\n)[ \t]*\.read[ \t]+\|[ \t]*(.+)", re.I)
+SQLFILE = re.compile(r"\battach\b(?:[ \t]+database)?[ \t]+['\"]?([^\s'\";]+)|(?:^|\n)[ \t]*\.(?:open|save|backup|output|once|import|read)[ \t]+(?:--\w+[ \t]+)*['\"]?([^\s'\"]+)", re.I)
+
+
+def _sqlite(texts, depth):
+    """sqlite3 dot-commands run shell (`.shell|.system|.sh CMD`, `.read |CMD`: CMD is checked); ATTACH/`.open`/`.output` of a system path is refused."""
+    for t in texts:
+        for m in SQLSH.finditer(t):
+            r = check(m[1] or m[2], depth + 1)
+            if r:
+                return r
+        for m in SQLFILE.finditer(t):
+            if _sysw(m[1] or m[2]):
+                return "sqlite3 ATTACH/.open/.output on a system path. Use a copy and ask the owner"
+    return ""
+
+
+def _inner(cmd, depth):
+    """Check a container/pod command; past MAXDEPTH it is refused (fail closed)."""
+    if depth + 1 > MAXDEPTH:
+        return "container/pod command nested too deep to vet. Run one step at a time"
+    return check(" ".join(shlex.quote(x) for x in cmd), depth + 1)
+
+
+def _ctr(a, depth, sv, lv):
+    """`a` = tokens after exec/run. Image/pod is the first positional; unknown `--opt` may or may not take a value, so every
+    positional within (unknown options + 1) is a candidate image and what follows it a command. `--entrypoint X` heads the command."""
+    pos, unk, ep, i = [], 0, None, 0
+    while i < len(a):
+        t = a[i]
+        if t == "--":
+            pos += range(i + 1, len(a))
+            break
+        if t.startswith("--"):
+            n = t.split("=")[0]
+            if n == "--entrypoint":
+                ep = t.split("=", 1)[1] if "=" in t else (a[i + 1] if i + 1 < len(a) else "")
+                i += 1 if "=" in t else 2
+                continue
+            if "=" in t:
+                i += 1
+            elif n in lv:
+                i += 2
+            else:
+                unk += 1
+                i += 1
+        elif t.startswith("-") and t != "-":
+            i += 2 if len(t) == 2 and t[1] in sv else 1
+        else:
+            pos.append(i)
+            i += 1
+    if unk > 16:
+        return "container command behind too many unrecognised options cannot be vetted. Spell the options out"
+    for m in pos[:unk + 1]:
+        cmd = ([ep] if ep else []) + a[m + 1:]
+        r = _inner(cmd, depth) if cmd else ""
+        if r:
+            return r
+    return ""
 
 
 def _far(t):
@@ -168,7 +262,8 @@ def _rm(args, ph):
         if _scoped(t) and not (ph and any(p in t for p in ph if p)):
             continue
         if re.search(r"[$`*?\[]|\{[^}]*(?:,|\.\.)", t) or (ph and any(p in t for p in ph if p)) or n == "." or _far(t) \
-                or n.startswith("..") or re.match(r"/(Users|home|usr|etc|var|opt)/", n):
+                or n.startswith("..") or re.match(r"/(Users|home|usr|etc|var|opt|root|private/etc)/", n) or (
+                    re.match(r"/private/(?:etc|var|root|usr|opt|home|Users)/", n) and not re.match(r"/private/var/(?:folders|tmp)/", n)):
             return f"rm -r on `{t}` (variable, glob, placeholder, `.`, `..`, root, home or system path). Delete an exact, quoted in-project path, or use a container/VM"
     return ""
 
@@ -236,7 +331,7 @@ def _body(t):
     return ""
 
 
-def _cmd(name, a, ph):
+def _cmd(name, a, ph, depth=0):
     strict = name in ("rm", "chmod", "chown", "dd", "shred", "diskutil") or name.startswith("mkfs")  # a lone --help only
     if (a in (["--help"], ["-help"]) or (not strict and any(t in ("--help", "-help") for t in a))) \
             and not (name in SHELLS + AWK + ("ssh", "eval", "su", "git") or INTERP.match(name)):
@@ -257,7 +352,9 @@ def _cmd(name, a, ph):
             st.append(a[k])
             k += 1
         sc = bool(st) and all(_scoped(x) for x in st)  # scratch space: deleting there is fine, other -exec bodies still run through check
-        if "-delete" in a and not sc:
+        ext = a[k:][:1] in (["-name"], ["-iname"]) and len(a) - k == 3 and a[-1] == "-delete" \
+            and re.fullmatch(r"\*\.(?:pyc|o|tmp|log|orig|class)", a[k + 1])  # sole predicate: a known build-artifact glob
+        if "-delete" in a and not sc and not (ext and st and not any(_far(x) or ".." in x.split("/") or "$" in x or x.startswith("/") for x in st)):
             return "find -delete. List with `find ... -print` first, then remove exact paths"
         for j, t in enumerate(a[:-1]):
             if t in ("-exec", "-execdir", "-ok"):
@@ -266,13 +363,20 @@ def _cmd(name, a, ph):
                 u = _unwrap(sub)[0]  # sudo/env/nice rm
                 if u < len(sub) and os.path.basename(sub[u]) in ("rm", "shred") and not sc:
                     return "find -exec rm. List with `find ... -print` first, then remove exact paths"
-                r = check(" ".join(shlex.quote(x) for x in sub), 1)
+                r = check(" ".join(shlex.quote(x) for x in sub), depth + 1)
                 if r:
                     return r
+    if name == "tee" and any(not t.startswith("-") and _sysw(t, any(x == "--append" or _bundle(x, "a") for x in a)) for t in a):
+        return "tee writes a system file. Edit a copy and ask the owner"
+    if name == "mv" and a[-1:] == ["/dev/null"]:
+        return "mv to /dev/null destroys the source. Use `rm` on an exact path if you mean it"
+    if name in ("curl", "wget") and any(re.fullmatch(r"-X\s*DELETE|--request[= ]DELETE|--method=DELETE", t, re.I) or (
+            t.upper() == "DELETE" and k and a[k - 1] in ("-X", "--request", "--method")) for k, t in enumerate(a)):
+        return "HTTP DELETE to a remote API is hard to undo. Ask the owner"
     if name == "dd" and any(t.startswith("of=") and (lambda p: p.startswith("/dev/") and p not in SAFE_DEV)(
             posixpath.normpath(re.sub("/+", "/", t[3:]) or ".")) for t in a):
         return "dd to a device. Write to a file image, or do it in a VM"
-    if name.startswith("mkfs"):
+    if name.startswith("mkfs") and not _mkfs_dry(name, a):
         return "mkfs formats a device. Do it in a VM, never on the host"
     if name in ("chmod", "chown") and any(t == "--recursive" or _bundle(t, "R") for t in a) \
             and any(_far(t) for t in a if not t.startswith("-")):
@@ -292,6 +396,12 @@ def _cmd(name, a, ph):
         return "secret variable in a URL query string leaves the host. Send it in an Authorization header to a host you trust"
     w = [t for t in a if not t.startswith("-")]  # positional words; option values may leak in, which only widens a match
     pair = lambda *x: any(w[k:k + len(x)] == list(x) for k in range(len(w)))
+    if name == "gh" and w[1:2] == ["delete"]:
+        return "gh delete is irreversible on the remote. Ask the owner"
+    if name == "vault" and (w[:2] == ["kv", "destroy"] or w[:3] == ["kv", "metadata", "delete"]):
+        return "vault kv destroy/metadata delete removes secret versions for good. Ask the owner"
+    if name == "brew" and w[:1] in (["uninstall"], ["remove"], ["rm"]) and "--ignore-dependencies" in a:
+        return "brew uninstall --ignore-dependencies breaks dependants. Ask the owner"
     if (name == "aws" and ((pair("s3", "rm") and "--recursive" in a) or (pair("s3", "rb") and "--force" in a)
                            or pair("ec2", "terminate-instances") or any(t.startswith("delete-db-") for t in w) and "rds" in w)) \
             or (name == "gcloud" and pair("projects", "delete")) or (name == "az" and pair("group", "delete")):
@@ -344,14 +454,31 @@ def _cmd(name, a, ph):
         k = 0
         while k < len(a) and a[k].startswith("-"):
             k += 2 if a[k][-1] in SSH_VAL and len(a[k]) == 2 else 1
-        r = check(" ".join(a[k + 1:]), 1) if k + 1 < len(a) else ""
+        r = check(" ".join(a[k + 1:]), depth + 1) if k + 1 < len(a) else ""
         if r:
             return r
-    if name == "docker":  # only genuinely destructive forms: volume rm/prune, system prune --volumes/-a, bulk rm via substitution
+    kv = next((x for x in w if x in ("exec", "run", "debug", "rsh")), "") if name in ("kubectl", "oc") else ""
+    if kv:  # the pod command is everything after `--`, else (exec, rsh) after the pod name
+        r = _inner(a[a.index("--") + 1:], depth) if "--" in a else _ctr(a[a.index(kv) + 1:], depth, "ncf", KUBE_LONG) if kv in ("exec", "rsh") else ""
+        if r:
+            return r
+    if name in ("docker", "podman", "nerdctl", "docker-compose"):  # only genuinely destructive forms: volume rm/prune, system prune --volumes/-a, bulk rm via substitution
         k = 0
         while k < len(a) and a[k].startswith("-"):
             k += 2 if a[k] in DOCKER_VAL else 1
-        d = a[k:]  # `$(` tokenizes to a bare `$`, so bulk rm shows as t == "$"
+        d = a[k:]
+        if d[:1] in (["compose"], ["container"]):
+            d = d[1:]
+        if name == "docker-compose" or a[k:k + 1] == ["compose"]:  # compose options (-f FILE, -p NAME) precede the verb
+            v = next((m for m, t in enumerate(d[:16]) if t in ("exec", "run")), None)
+            d = d[v:] if v is not None else d
+        if d[:1] in (["exec"], ["run"]):  # `docker run [opts] IMG CMD...`: the container command is checked
+            r = _ctr(d[1:], depth, "euwvplhmac", CTR_VAL)
+            if r:
+                return r
+        if d[:2] == ["system", "reset"] and name != "docker":
+            return f"{name} system reset removes all images, containers and volumes. Ask the owner"
+        # `$(` tokenizes to a bare `$`, so bulk rm shows as t == "$"
         if d[:2] in (["volume", "rm"], ["volume", "prune"]) or (d[:2] == ["system", "prune"] and any(
                 t in ("--volumes", "--all") or _bundle(t, "a") for t in d)) or (
                 d[:1] in (["rm"], ["rmi"], ["kill"]) and any(t == "$" or "`" in t or "$(" in t for t in d)):
@@ -364,7 +491,11 @@ def _cmd(name, a, ph):
         return f"{name} irrecoverably destroys file contents. Write to a new file or ask the owner"
     if name == "rsync" and any(t.startswith("--delete") for t in a) and not any(t == "--dry-run" or _bundle(t, "n") for t in a):
         return "rsync --delete removes files at the destination. Preview with `--dry-run` and name an exact destination"
-    if name in SQLCLI and any(SQLDROP.search(SQLCOMMENT.sub(' ', t)) for t in a):
+    if name == "sqlite3":
+        r = _sqlite(a, depth)
+        if r:
+            return r
+    if name in SQLCLI and not (name == "sqlite3" and ":memory:" in a and not re.search(r"attach|\.shell|\.system|\.read", " ".join(a), re.I)) and any(SQLDROP.search(SQLCOMMENT.sub(' ', t)) for t in a):
         return "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
     if name in SHELLS + ("eval",) and any(re.search(r"\b(curl|wget)\b", t) for t in a):
         return "remote script run through a shell. Download, read it, then run it"
@@ -443,6 +574,8 @@ def _feed(name, text):
         return check(text, 1)
     if INTERP.match(name) or name in AWK:
         return _body(text)
+    if name == "sqlite3" and _sqlite([text], 1):
+        return _sqlite([text], 1)
     if name in SQLCLI and SQLDROP.search(SQLCOMMENT.sub(' ', text)):
         return "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
     return ""
@@ -464,19 +597,31 @@ def _bodies(cmd):
     return out
 
 
+def _subbody(t, tick):
+    """Text of a substitution up to its matching `)` (nested `$(...)` counted) or closing backtick; whole `t` when unclosed."""
+    if tick:
+        return t.split("`", 1)[0]
+    depth = 1
+    for j, c in enumerate(t):
+        depth += (c == "(") - (c == ")")
+        if not depth:
+            return t[:j]
+    return t
+
+
 def _decexec(cmd):
     """True when a shell word is followed (no `|;&` or newline between, within 300 chars) by a decoding substitution."""
-    if not re.search(r"base64|xxd|printf", cmd):
+    if not re.search(r"base64|b64|xxd|printf|openssl", cmd):
         return False
     for n, m in enumerate(DECSTART.finditer(cmd)):
         if n >= 64:
-            return True
+            return bool(DECODE.search(cmd))  # the cap fails closed only when a decoder is somewhere in the text
         w = cmd[m.end():m.end() + 600]
         g = re.search(r"[|;&\n]", w[:300])
         for k, sub in enumerate(SUBST.finditer(w[:g.start() if g else 300])):
             if k >= 8:
-                return True  # fail closed on a pile of substitutions after one shell word
-            if DECODE.search(re.split(r"[)`]", w[sub.end():sub.end() + 400], 1)[0]):
+                return bool(DECODE.search(cmd))  # fail closed on a pile of substitutions after one shell word
+            if DECODE.search(_subbody(w[sub.end():sub.end() + 400], w[sub.start()] == "`")):
                 return True
     return False
 
@@ -539,11 +684,11 @@ def check(cmd, _depth=0, _ph=None):
             else:  # redirection: the next token is its target; the command continues
                 if segs[-1] and segs[-1][-1].isdigit():
                     segs[-1].pop()
-                skip = "hs" if t.endswith("<<<") else "t>" if t in (">", ">|", "&>") else "t"
+                skip = "hs" if t.endswith("<<<") else "t>" if t in (">", ">|", "&>") else "ta" if t in (">>", "&>>") else "t"
                 hd[-1] = hd[-1] or "<<" in t
         elif skip:
-            if skip == "t>" and SYSFILE.match(posixpath.normpath(re.sub("/+", "/", t))):
-                return "redirect truncates a system file. Edit a copy and ask the owner"
+            if skip in ("t>", "ta") and _sysw(t, skip == "ta"):
+                return "redirect writes a system file. Edit a copy and ask the owner"
             if skip == "hs":
                 hs[-1] = t
             skip = None
@@ -567,9 +712,16 @@ def check(cmd, _depth=0, _ph=None):
         if i >= len(seg):
             continue
         name, a = os.path.basename(seg[i]), seg[i + 1:]
-        r = _cmd(name, a, ph)
+        r = _cmd(name, a, ph, _depth)
         if not r and name == "eval":
             r = check(" ".join(a), _depth + 1, ph)
+            for b in _bodies(" ".join(a)):  # eval "$(echo 'rm -rf /')": the echoed text is the command
+                try:
+                    e = shlex.split(b)
+                except ValueError:
+                    e = []
+                if not r and e[:1] in (["echo"], ["printf"]):
+                    r = check(" ".join(e[1:]), _depth + 1, ph)
         if not r and name in SHELLS + ("su",):
             for j, t in enumerate(a[:-1]):
                 if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", t):
