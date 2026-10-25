@@ -32,7 +32,7 @@ OK = {
     "aws_doc_secret": "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiC" "YEXAMPLEKEY",
     "aws_secret_ref": "aws_secret_access_key = ${AWS_SECRET}",
     "aws_secret_short": "aws_secret_access_key = abc123",
-    "twilio_token_short": "auth_token = " + H[:20],
+    # twilio_token_short (a bare 20-hex auth_token) is now flagged by the gitleaks half of the gate (generic-api-key), by design
     "sha1_commit": "commit " + H + H[:8],
     "jwt_header_only": 'header {"alg":"HS256"} eyJ' "hbGciOiJIUzI1NiJ9 decoded",
     "monkey_key": "monkey" "-" + H,
@@ -77,7 +77,8 @@ with tempfile.TemporaryDirectory() as t:
     subprocess.run(["git", "-C", str(t), "init", "-q"], check=True)
     for d, name in (("security-gates-heldout-1024", "secret-leaks.txt"), ("security-gates-x", "secret-leaks.txt")):
         (t / "docs/bench" / d).mkdir(parents=True)
-        (t / "docs/bench" / d / name).write_text(leak + "\n")
+        # the exempt path is skipped only while its bytes match the pin, so it carries the real frozen file
+        (t / "docs/bench" / d / name).write_bytes((ROOT / "docs/bench" / d / name).read_bytes() if d.startswith("security-gates-heldout") else (leak + "\n").encode())
     r = subprocess.run(["bash", str(ROOT / "scripts/ci-gates.sh"), "privacy", "--banlist", str(t / ".banlist.txt"), str(t / "docs")], capture_output=True, text=True)
     fail += [] if "security-gates-x/secret-leaks.txt" in r.stderr and "heldout-1024" not in r.stderr else ["corpus exemption: wrong files flagged: " + r.stderr]
 print("\n".join(fail) or f"PASS  security gates held-out fixes ({len(BAD)}+{len(LEAK)} caught, {len(GOOD)}+{len(OK)} allowed)")

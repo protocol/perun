@@ -39,6 +39,14 @@ die() { printf 'ci-gates: %s\n' "$*" >&2; exit 1; }
 # `patterns` array. Bash's dynamic scoping makes that caller-local array visible
 # here, so both the committed primary banlist and its optional sibling local
 # override funnel through one collector.
+# frozen_pinned FILE REPO_RELATIVE_PATH: true if scripts/secret-scan-allow.txt pins that path and FILE still hashes to the pin.
+frozen_pinned() {
+  local want
+  # awk-v-ok: one repo-relative path
+  want="$(awk -v p="$2" '$2 == p { print $1 }' "$(dirname "${BASH_SOURCE[0]}")/secret-scan-allow.txt")"
+  [ -n "$want" ] && [ "$(shasum -a 256 <"$1" | cut -d' ' -f1)" = "$want" ]
+}
+
 collect_patterns() {
   local _line _trimmed
   while IFS= read -r _line || [ -n "$_line" ]; do
@@ -166,10 +174,10 @@ cmd_privacy() {
     while IFS= read -r -d '' f; do
       skip=0
       for b in "${skip_bases[@]}"; do [ "${f##*/}" = "$b" ] && skip=1; done
-      # frozen synthetic leak/decoy corpora of the two held-out security-gates benches (exact paths, no glob): fictional values by design, immutable once landed
+      # frozen synthetic leak/decoy corpora of the three held-out security-gates benches (exact paths, no glob, and the sha256 pinned in secret-scan-allow.txt, so an edited file is scanned): fictional values by design, immutable once landed
       case "${f##*/}" in secret-leaks.txt|secret-decoys.txt)  # repo-relative path, so scanning a subdir still resolves it
         local d top; d="$(cd "$(dirname "$f")" && pwd -P)"; top="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" || top=""
-        case "${d#"$top"/}/${f##*/}" in docs/bench/security-gates-heldout-1024/secret-leaks.txt|docs/bench/security-gates-heldout-1024/secret-decoys.txt|docs/bench/security-gates-heldout2-1024/secret-leaks.txt|docs/bench/security-gates-heldout2-1024/secret-decoys.txt) [ -n "$top" ] && skip=1 ;; esac ;;
+        case "${d#"$top"/}/${f##*/}" in docs/bench/security-gates-heldout-1024/secret-leaks.txt|docs/bench/security-gates-heldout-1024/secret-decoys.txt|docs/bench/security-gates-heldout2-1024/secret-leaks.txt|docs/bench/security-gates-heldout2-1024/secret-decoys.txt|docs/bench/security-gates-heldout3-1024/secret-leaks.txt|docs/bench/security-gates-heldout3-1024/secret-decoys.txt) [ -n "$top" ] && frozen_pinned "$f" "${d#"$top"/}/${f##*/}" && skip=1 ;; esac ;;
       esac
       [ "$skip" -eq 1 ] || scan+=("$f")
     done < <(scan_files "$t")
@@ -205,8 +213,19 @@ cmd_privacy() {
     esac
   done
 
+  # Union with the gitleaks default rules (scripts/secret_scan.py): live-format secrets the banlist has no pattern for.
+  # Fail closed: python3 missing or the scanner erroring blocks, never passes.
+  if [ "${#scan[@]}" -gt 0 ]; then
+    local sstatus=0 sout
+    sout="$(printf '%s\0' "${scan[@]}" | xargs -0 -n 1000 -P 8 python3 -I "$(dirname "${BASH_SOURCE[0]}")/secret_scan.py")" || sstatus=$?
+    if [ "$sstatus" -eq 0 ]; then :
+    elif [ -n "$sout" ]; then printf 'BLOCK: a gitleaks rule matched (content withheld); files:\n%s\n' "$sout" >&2; hit=1
+    else die "privacy: secret_scan.py failed (exit $sstatus); failing closed"
+    fi
+  fi
+
   [ "$hit" -eq 0 ] || die "privacy: banned pattern(s) present (see files above)"
-  printf 'privacy: clean (%d pattern(s) scanned)\n' "${#patterns[@]}"
+  printf 'privacy: clean (%d pattern(s) + gitleaks rules scanned)\n' "${#patterns[@]}"
 }
 
 # ---------------------------------------------------------------------------

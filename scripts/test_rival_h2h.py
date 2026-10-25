@@ -16,7 +16,7 @@ sr = importlib.util.module_from_spec(spec); spec.loader.exec_module(sr)
 PINS = {"gitleaks-v8.30.1.toml": "e163e53b9e7e8a8511e77271e2b323ed057759542a6d988258afe3a1fa329caf",
         "hooks-mastery-pre_tool_use.py.txt": "78006866f793ccd394bc52011582ce48707ceef9d3496e474ab7bcb63365a5da"}
 for f, h in PINS.items():  # the gitleaks copy carries `@@` privacy markers; removing them must give the upstream bytes
-    assert hashlib.sha256((RIV / f).read_bytes().replace(b"@@", b"")).hexdigest() == h, f"rival source drifted: {f}"
+    assert hashlib.sha256(((ROOT / "scripts" if f.endswith(".toml") else RIV) / f).read_bytes().replace(b"@@", b"")).hexdigest() == h, f"rival source drifted: {f}"
 
 s = sr.scores()
 g, h, n = s["gitleaks"], s["hooks-mastery"], s["safety-net"]
