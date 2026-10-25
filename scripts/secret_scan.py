@@ -87,7 +87,7 @@ LINE_MAX = 4096  # a secret starting past 4 KB of one line (minified bundles) is
 
 # Lines that mark a match as a non-secret: documentation words, filler runs, Stripe test-mode and publishable keys, browser-exposed
 # env vars (NEXT_PUBLIC_), Mapbox public tokens, CSRF nonces. Applied to the matched text only (never the rest of the line), only by the gate (precise=True), never to the rival bench.
-PLACEHOLDER = re.compile(r"(?<![A-Za-z])(?:[Ee]xample|EXAMPLE)(?![a-z]|\.[a-z])|[A-Z0-9]EXAMPLE(?:KEY)?(?![A-Za-z0-9])|(?i:dummy|fake|placeholder|redacted|revoked|replace[_-]?me|changeme|x{8,}|0{10,}|[sp]k_test_|pk_live_|next_public_|\bpk\.eyJ|[cx]srf)|(?<![A-Za-z])your[_-]|dXNlcm5hbWU6cGFzc3dvcmQ|dXNlcjpwYXNz|QWxhZGRpbjpvcGVuIHNlc2FtZQ")
+PLACEHOLDER = re.compile(r"(?<![A-Za-z])(?:[Ee]xample|EXAMPLE)(?![a-z]|\.[a-z])|[A-Z0-9]EXAMPLE(?:KEY)?(?![A-Za-z0-9])|(?i:dummy|fake|placeholder|redacted|revoked|replace[_-]?me|changeme|x{8,}|0{10,}|[sp]k_test_|pk_live_|next_public_|\bpk\.eyJ|[cx]srf|sitekey|\bcache[_-]?key\b|eyJyb2xlIjoiYW5vbiJ9)|(?<![A-Za-z])your[_-]|dXNlcm5hbWU6cGFzc3dvcmQ|dXNlcjpwYXNz|QWxhZGRpbjpvcGVuIHNlc2FtZQ")
 
 
 # A Google API key whose own line says it is a referrer-restricted public (browser) key is public by design; an unsigned JWT (empty signature) is not a credential.
@@ -107,14 +107,15 @@ _Q = r"""['"](?![$<{%*])"""  # opening quote, not followed by a template/placeho
 IDENT = re.compile(r"\w+(?:\.\w+)+|[\w.]*[\[\](){}][\w.\[\](){}]*|[a-z]+(?:_[a-z0-9]+)+|[A-Z]+(?:_[A-Z0-9]+)+|[a-z]+(?:[A-Z][a-z]{2,})+\d*", re.A)
 EXTRA = [(i, re.compile(r), g, e) for i, r, g, e in [
     ("discord-webhook", r"discord(?:app)?\.com/api/webhooks/\d{17,20}/([\w-]{50,})", 1, 3.5),
-    ("url-password", r"\b[a-z][a-z0-9+.-]*://[^\s:/]*:([^\s@/$<>{}*%]{8,})@[\w.-]+", 1, 3.0),
+    ("url-password", r"\b[a-z][a-z0-9+.-]*://[^\s:/]*:(?![^\s@/]*\*\*@)([^\s@/$<>{}%]{8,})@[\w.-]+", 1, 3.0),
     ("secret-key-literal", rf"(?i)secret_key\W{{0,4}}[=:]\s*{_Q}([^'\"\s]{{16,}})['\"]", 1, 3.5),
     ("jwt-literal-secret", rf"\bjwt\.(?:sign|verify)\([^,()]+,\s*{_Q}([^'\"\s]{{16,}})['\"]", 1, 3.0),
     ("google-client-secret", r"\bGOCSPX-[\w-]{20,}", 0, 0),
     ("uuid-credential", r"(?i)\b\w*(?:api[_-]?key|secret[_-]?key|client[_-]?secret|access[_-]?key|access[_-]?token|auth[_-]?token)\w*=([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})\b", 1, 0),
     ("auth-header-token", r"(?i)\bauthorization\W{1,3}(?:bearer|token)\s+([\w.~+/=-]{24,})", 1, 3.5),
-    ("password-literal", rf"(?i)\bpassword['\"]?\s*[=:]\s*{_Q}([^'\"\s]{{8,}})['\"]", 1, 3.0),
+    ("password-literal", rf"""(?i)\b\w*(?:password|passwd|_pass)['"]?\s*[=:]\s*['"](?![$<{{%]|\*\*)([^'"\s]{{8,}})['"]""", 1, 3.0),
     ("cli-password", rf"(?i)\b(?:mysql(?:dump)?|psql|sshpass|redis-cli|mongo(?:sh)?)\b[^\n]*?\s-p\s*{_Q}([^'\"\s]{{6,}})['\"]", 1, 3.0),
+    ("docker-login-password", r"""(?i)\bdocker\s+login\b[^\n]*?\s(?:-p|--password)[\s=]+['"]?(?![$<{%*-])([^'"\s]{6,})""", 1, 3.0),
     ("telegram-bot-token", r"\b\d{8,10}:(?:AA[\w-]{30,}|[\w-]{35}\b)", 0, 3.0),
     ("sentry-dsn", r"\bhttps://\w{16,}:(\w{16,})@[\w.-]*ingest[\w.-]*/\d+", 1, 3.0),  # legacy key:secret form only; a key-only DSN is public by design
     ("cli-token-flag", r"""(?i)\s--(?:token|api[_-]?key|password|secret)(?:=|\s+)['"]?(?![$<{%*])(?![^\s'"]*/)(?![^\s'"]*\.(?:ya?ml|json|txt|pem|key|env|conf|cfg|ini|toml|crt|p12)(?:[\s'"]|$))([^\s'"]{16,})""", 1, 3.5),
@@ -123,6 +124,20 @@ EXTRA = [(i, re.compile(r), g, e) for i, r, g, e in [
     ("password-env-netrc", r"""(?i)(?:\b(?:env|arg)\s+\w*passw(?:or)?d\w*|\blogin\s+\S+\s+password)\s+(?=[a-z\d])(?!(?:\w*passw(?:or)?d|secret|admin|qwerty|letmein)[\d!]{0,6}(?![^\s'",;]))(?=\S*\d)(?=\S*[a-z])([^\s'",;]{8,})""", 1, 3.0),
     ("conn-string-password", r"""(?i)[;?&](?:password|pwd)=(?![$<{%*])([^;&\s'"]{8,})""", 1, 3.0),
     ("auth-basic", r"(?i)\bauthorization\W{1,3}basic\s+([A-Za-z0-9+/]{16,}={0,2})", 1, 3.5),
+    ("sentry-org-token", r"\bsntrys_eyJ[\w+/=-]{40,}", 0, 3.5),
+    ("fcm-server-key", r"\bAAAA[\w-]{7}:APA91b[\w-]{100,}", 0, 3.5),
+    ("twitter-bearer", r"(?i)\b\w*bearer\w*\W{1,4}A{20,}([%\w-]{50,})", 1, 3.5),  # bearer context
+    ("twitter-bearer-url", r"\bA{21,}(?!A)(?=[\w-]*%[0-9A-F]{2})([%\w-]{50,})", 1, 3.5),  # no context: 21+ A then a URL-encoded body; a bare base64 blob has no %XX
+    # `": "`, `': '`, and a YAML block scalar (`: |` then newline, real or literal `\n`, and indent) all sit between the key and the base64
+    ("dockerconfigjson-auth", r"\.dockerconfigjson(?:\W|\\n){1,12}(eyJhdXRocy[A-Za-z0-9+/]{40,}={0,2})", 1, 3.5),
+    ("environ-default-secret", r"""(?i)\b(?:environ\.get|getenv)\(\s*['"]\w{0,40}?(?:pass|passwd|password|secret|token|key)\w{0,40}['"]\s*,\s*['"](?![$<{%*]|[a-z]+(?:[-_][a-z]+)+['"]|[^'"\s]*(?:://|arn:))(?=[^'"\s]*\d)([^'"\s]{8,})['"]""", 1, 3.0),  # a hard-coded fallback for a secret-named variable
+    ("typed-secret-literal", r"""(?i)\b(?:let|const|static)\s+(?:mut\s+)?\w{0,40}(?:secret|token|api_?key|passw(?:or)?d)\w{0,40}\s*:\s*&?(?:'static\s+)?(?:str|string)\s*=\s*"(?![$<{%*]|[^"\s]*(?:://|arn:))(?=[^"\s]*\d)([^"\s]{16,})\"""", 1, 3.5),  # Rust and TypeScript typed declarations
+    ("terraform-variable-default", r"""(?i)\bvariable\s+"\w*(?:password|passwd|secret|token|api_?key)\w*"\s*\{[^}]*?\bdefault\s*=\s*"(?![$<{%*]|[^"\s]*(?:://|arn:))(?=[^"\s]*\d)([^"\s]{8,})\"""", 1, 3.0),
+    ("k8s-env-value", r"""(?i)\bname:\s*['"]?\w*(?:password|passwd|secret|token|api_?key)\w*['"]?[ \t]*\n\s*value:\s*['"](?![$<{%*]|[^'"\s]*(?:://|arn:))(?=[^'"\s]*\d)([^'"\s]{8,})['"]""", 1, 3.0),
+    ("dockerfile-env-secret", r"""(?m)^[ \t]*(?:ENV|ARG)\s+(?i:\w*(?:secret|token|api_?key)\w*)\s+(?![/$.]|\w+://|arn:)(?=\S*\d)(?=\S*[A-Za-z])([\w+/=-]{20,})\s*$""", 1, 3.5),
+    ("netrc-password", r"""(?i)\bmachine\s+\S+\s+login\s+\S+\s+password\s+(?![$<{%*])([^\s'",;]{8,})""", 1, 3.0),
+    ("pagerduty-key", r"""(?i)pagerduty\w*['"]?\s*[=:]\s*['"]?(u\+[\w-]{18})\b""", 1, 3.0),
+    ("mysqli-password", r"""(?i)\bnew\s+mysqli\(\s*['"][^'"]*['"]\s*,\s*['"][^'"]*['"]\s*,\s*['"](?![$<{%*])([^'"\s]{8,})['"]""", 1, 3.0),
     ("vault-token", r"\bhv[sbr]\.([\w-]{24,})", 1, 3.5),
 ]]
 

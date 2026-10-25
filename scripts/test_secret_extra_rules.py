@@ -43,6 +43,15 @@ LIVE["cli-password-sshpass"] = "sshpass -p '" + tok("w", 16) + "' ssh deploy@bui
 # Rules added after held-out-5/6 (decoy twins and more live shapes: test_secret_extra_rules_w3.py).
 LIVE.update({"sentry-dsn": "SENTRY_DSN=https://" + tok("sd", 32) + ":" + tok("se", 32) + "@o848691.ingest.sentry.io/1498296", "cli-token-flag": "./deploy.sh --token " + tok("tf", 40),
              "auth-basic": "Authorization: Basic " + tok("ab", 24), "vault-token": "VAULT_TOKEN=hvs." + tok("vt", 40)})
+# Rules added after held-out-7 (decoy twins and more live shapes: test_secret_extra_rules_w4.py).
+LIVE.update({"sentry-org-token": "SENTRY_AUTH_TOKEN=sntrys_eyJ" + tok("so", 45) + tok("sp", 45), "fcm-server-key": "key = AAAA" + tok("fk", 7) + ":APA91b" + tok("fl", 60) + tok("fm", 60) + tok("fn", 20),
+             "twitter-bearer": "TWITTER_BEARER_TOKEN=" + "A" * 21 + tok("tb", 40) + tok("tc", 40), "dockerconfigjson-auth": ".dockerconfigjson: eyJhdXRocyI6eyJnaGNyLmlvIjp7" + tok("dj", 60),
+             "twitter-bearer-url": "x = " + "A" * 22 + tok("tu", 60) + "%2F" + tok("tv", 10), "docker-login-password": "docker login -u ci -p " + tok("dl", 18) + " ghcr.io"})
+# Rules added after held-out-8 (decoy twins and more live shapes: test_secret_extra_rules_w5.py).
+LIVE.update({"environ-default-secret": "x = os.environ.get('DB_PASS', '" + tok("ed", 16) + "')", "typed-secret-literal": 'let secret: &str = "' + tok("ts", 40) + '";',
+             "terraform-variable-default": 'variable "db_pass' 'word" {\n  default = "' + tok("tv2", 20) + '"\n}', "k8s-env-value": '- name: DB_PASS' 'WORD\n  value: "' + tok("ke", 20) + '"',
+             "dockerfile-env-secret": "ENV SESSION_SECRET " + tok("de", 40), "netrc-password": "machine git.acme.example.com login ci pass" "word " + tok("np", 14),
+             "pagerduty-key": "PAGERDUTY_KEY=u+" + tok("pk", 18), "mysqli-password": "$m = new mysqli('10.4.1.7', 'root', '" + tok("my", 16) + "', 'shop');"})
 LIVE["password-assign"] = "DB_PASS" "WORD=" + tok("pa", 11) + "!047"
 LIVE["password-env-netrc"] = "ENV ADMIN_PASS" "WORD " + tok("pe", 11) + "!047"
 LIVE["conn-string-password"] = "jdbc:sqlserver://h:1433;user=jane;pass" "word=" + tok("cp", 16)
