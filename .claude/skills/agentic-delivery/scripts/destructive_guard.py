@@ -57,7 +57,7 @@ Denies (exit 2, one-line reason with the safe alternative on stderr; the host bl
   `wmic ... call create|uninstall`, and Windows `del` of a system file, a `..` path or a bare `*`/`*.*`; wave 7: `rclone purge|delete|sync`, `restic forget|prune`,
   `zfs|zpool destroy`, `lvremove|vgremove|pvremove`, `firebase|supabase|vercel|netlify|wrangler ... delete|remove|rm`, `supabase db reset --linked`, a relative `rm -r` after
   `cd /abs`, `bash -c 'f=-rf; rm $f X'`, `ln` onto `~/.ssh|.bashrc|.zshrc`, `rsync|scp` to `host:/etc/`, `vault operator seal|rekey`, `reg add` under HKCU|HKU Software Classes,
-  `wmic ... call reboot`, ClickHouse `ALTER TABLE ... DELETE|DROP PARTITION`, a SQL client fed `< file.sql` that drops, `make nuke|uninstall DESTDIR=/`, mongo `bulkWrite` deletes. Wave 8: `sgdisk` zap/clear/delete/new/load, truncating a private key or credential file (`> f`, `: > f`, `truncate`, `cp /dev/null`), `npm deprecate|owner rm`, `restic key remove|unlock --remove-all`, `lvresize` unless growing, `pvcreate|vgcreate -f`, `zfs receive -F`, `zpool create -f`, and a padded 20 KB+ body using a variable (fail closed); `git clean -f` of named relative paths (no `.git`, no -C/GIT_DIR) and `git stash drop stash@{N}` are allowed. Wave 9: `rm` of a credential file (cloud and registry CLI configs, `.netrc`, `.envrc`, `.git-credentials`, service-account JSON), `gpg --delete-*keys`, `security delete-*`; the quoted payload of gh/glab `--body|--title|-b|-t|--notes|--message` and `git commit -m` is text, not a command, and `gh ... --remove-label` is allowed; every block reason ends with a rewrite hint (`scripts/test_security_gates_guard_w9.py`). Wave 10: `ssh-add -D`, `git update-ref -d`, `rm -r` of `.git`, `compose down -v|--rmi`, `Remove-Item` with no target, `cipher /w`; a payload a shell runs later (a pipeline ending in a bare shell, text written to a file the same command runs, `tee >(sh)`, `eval "$(cat)"` with a heredoc, a heredoc read by `ssh` or a container shell); `gh alias set` bodies and git config values git runs (alias, `core.sshCommand`, pager, editor); more credential files (`.npmrc`, `.ssh/*` but `known_hosts`, `*.pem`, `*.key`); `git <verb> --help|-h` is allowed and a bare `credentials` is not a credential (`scripts/test_security_gates_guard_w10.py`). Allowed: `--help`/`-help`, `--dry-run`/`--dryrun`
+  `wmic ... call reboot`, ClickHouse `ALTER TABLE ... DELETE|DROP PARTITION`, a SQL client fed `< file.sql` that drops, `make nuke|uninstall DESTDIR=/`, mongo `bulkWrite` deletes. Wave 8: `sgdisk` zap/clear/delete/new/load, truncating a private key or credential file (`> f`, `: > f`, `truncate`, `cp /dev/null`), `npm deprecate|owner rm`, `restic key remove|unlock --remove-all`, `lvresize` unless growing, `pvcreate|vgcreate -f`, `zfs receive -F`, `zpool create -f`, and a padded 20 KB+ body using a variable (fail closed); `git clean -f` of named relative paths (no `.git`, no -C/GIT_DIR) and `git stash drop stash@{N}` are allowed. Wave 9: `rm` of a credential file (cloud and registry CLI configs, `.netrc`, `.envrc`, `.git-credentials`, service-account JSON), `gpg --delete-*keys`, `security delete-*`; the quoted payload of gh/glab `--body|--title|-b|-t|--notes|--message` and `git commit -m` is text, not a command, and `gh ... --remove-label` is allowed; every block reason ends with a rewrite hint (`scripts/test_security_gates_guard_w9.py`). Wave 10: `ssh-add -D`, `git update-ref -d`, `rm -r` of `.git`, `compose down -v|--rmi`, `Remove-Item` with no target, `cipher /w`; a payload a shell runs later (a pipeline ending in a bare shell, text written to a file the same command runs, `tee >(sh)`, `eval "$(cat)"` with a heredoc, a heredoc read by `ssh` or a container shell); `gh alias set` bodies and git config values git runs (alias, `core.sshCommand`, pager, editor); more credential files (`.npmrc`, `.ssh/*` but `known_hosts`, `*.pem`, `*.key`); `git <verb> --help|-h` is allowed and a bare `credentials` is not a credential (`scripts/test_security_gates_guard_w10.py`). Wave 11: `blkdiscard`, truncating a database file or server data dir (`: > x.sqlite`, `cp /dev/null`, `dd of=`, `tee`, `exec >`; temp, build and cache dirs exempt), `git push --force-with-lease|--force-if-includes` when it targets a shared branch (`main|master|develop|trunk|prod|stable|staging|release*|hotfix*|HEAD`) or names no branch, PowerShell `iex`/`Invoke-Expression` of downloaded content, `docker|podman container|image|volume|network prune -f` (a `--filter` scopes it; `system prune -f` stays allowed without `-a|--volumes`), `kubectl delete node` ; the output of `$(printf|echo ...)` that a shell runs is checked as a command, `$PWD/<child>` and a variable assigned once (statement level, before use) a relative path are in-tree (`scripts/test_security_gates_guard_w11.py`). Allowed: `--help`/`-help`, `--dry-run`/`--dryrun`
   (not `=none`; aws/kubectl/helm only), `rm`/`find -delete|-exec rm`/`shred` inside a named child of `$TMPDIR` or `/tmp`, a single `find ./dir ... -delete|-exec rm {}` under a
   named relative dir (no `-L`, no second action, no earlier `cd` out), `echo ./a | xargs -I{} rm -rf {}` of literal relative paths (same cd rule). A `--help` after
   other arguments of rm/chmod/chown/dd/shred/mkfs/diskutil (only a lone one is usage) still gets the full check.
@@ -136,7 +136,13 @@ HOMEP = re.compile(r"(?:~|\$HOME|\$\{HOME\}|/(?:Users|home)/[^/]+|/root)/\.(?:ss
 ARTGLOB = re.compile(r"\*\.(?:pyc|o|tmp|log|orig|class|map|bak|swp)")
 LITPATH = re.compile(r"(?:\./)?\w[\w.-]*(?:/\w[\w.-]*)*/?")  # a plain relative path word
 SENS = re.compile(r"(?i)(?:id_(?:rsa|dsa|ecdsa|ed25519)|[^/]*\.(?:pem|key|p12|pfx|jks|kdbx|keystore)|\.env(?:\.(?!example|sample|template|dist)\w+)?|\.netrc|\.pgpass|\.htpasswd|\.envrc|\.git-credentials|service[-_]?account[^/]*\.json|[^/]*credentials[^/]*\.json|authorized_keys|credentials|shadow|master\.key)")  # private keys and credential files
-EMPTYSRC = ([], [":"], ["true"], ["false"], ["echo"], ["echo", "-n"], ["printf"], ["printf", ""], ["printf", "%s"], ["printf", "%b"], ["cat", "/dev/null"])  # commands whose `>` target is only truncated
+EMPTYSRC = ([], [":"], ["true"], ["false"], ["echo"], ["echo", "-n"], ["printf"], ["printf", ""], ["printf", "%s"], ["printf", "%b"], ["cat", "/dev/null"], ["exec"])  # commands whose `>` target is only truncated
+SHARED = re.compile(r"(?i)(?:refs/\w+/)?(?:main|master|develop|development|trunk|dev|prod|production|stable|staging|gh-pages|lts|next|(?:release|releases|hotfix|lts)(?:[-_./].*)?)")  # a branch other people build on
+PWDP = re.compile(r"^\$(?:PWD|\{PWD\})/")
+DBFILE = re.compile(r"(?i)\.(?:sqlite3?|db3?|mdb|ldb|rdb|duckdb|mdf|ndf|ldf|ibd|frm|myd|myi|aof)$|(?:^|/)(?:var/lib/(?:postgresql|mysql|mariadb|mongodb|redis)|pgdata|mysql-data)(?:/|$)")  # database file or server data dir
+SCRATCHDIR = re.compile(r"(?:^|/)(?:build|dist|out|target|node_modules|\.?cache|__pycache__|\.?tmp|fixtures?|testdata)/")  # build and cache output is disposable
+PSDL = re.compile(r"(?i)\b(?:iwr|irm|invoke-webrequest|invoke-restmethod|downloadstring|downloaddata|curl|wget|webclient|start-bitstransfer)\b")
+PSEXEC = re.compile(r"(?i)(?:^|[;&|({])[ \t]*(?:iex|invoke-expression)\b(?![ \t]*(['\"])[^$`]*\1)|\[scriptblock\]::create\s*\(")  # not a literal string
 PROBE_PID = re.compile(r"\d+|\$\w+|\$\{\w+\}|\$\([^()]*\)")
 FALLBACK = [re.compile(p) for p in (
     r"\brm\s+(?:-\S+\s+)*-\w*[rR]\w*\s+(?:\S*[$`*~{]|/|\.\.?(?:\s|$))",
@@ -387,6 +393,16 @@ def _sens(t):
     return bool(HOMEP.search(t) or re.search(r"(?:^|/)\.(?:docker|kube)(?:/|$)|(?:^|/)\.config/(?:gcloud|gh)(?:/|$)", t) or SENS.fullmatch(posixpath.basename(t.rstrip("/"))))
 
 
+def _db(t):
+    """A database file or server data dir that is not scratch (temp dir, build/cache output)."""
+    return bool(DBFILE.search(t)) and not _scoped(t) and not SCRATCHDIR.search(t)
+
+
+def _trunc(t):
+    """A file whose truncation is unrecoverable: private key, credential file or database."""
+    return _sens(t) or _db(t)
+
+
 def _cred(t):
     """A credential file `rm` must not delete: cloud/registry/gpg configs, `.netrc`, `.envrc`, `.git-credentials`, service-account JSON, private keys."""
     return bool(CREDDIR.search(t) or CREDBASE.fullmatch(posixpath.basename(t.rstrip("/"))))
@@ -437,7 +453,7 @@ def _sqlfile(p):
         return ""
 
 
-def _rm(args, ph):
+def _rm(args, ph, moved=False):
     rec, tg = False, []
     for i, t in enumerate(args):
         if t == "--":
@@ -455,6 +471,8 @@ def _rm(args, ph):
     if not tg and ph:
         return "rm -r with targets from xargs. List them first (`ls`), then `rm` the exact paths"
     for t in tg:
+        if not moved:  # after a cd/pushd/popd `$PWD` is somewhere else
+            t = PWDP.sub(lambda m: "" if _rel(t[m.end():]) else m[0], t, 1)  # `$PWD/build` is `build`
         n = posixpath.normpath(re.sub("/+", "/", t) or ".")
         if _scoped(t) and not (ph and any(p in t for p in ph if p)):
             continue
@@ -507,6 +525,7 @@ def _git(a, cwd="", genv=False):
 
     def has(full):  # unique-prefix long option (>= 4 chars, e.g. --ha, --mir, --forc)
         return any(len(x) >= 4 and full.startswith(x) for x in longs)
+    leased = [t.split("=", 1)[1].split(":")[0] for t in r if t.startswith("--force-with-lease=")]  # `--force-with-lease=REF:EXPECT`
     flags = [t for t in r if re.fullmatch(r"-[A-Za-z]+", t)]
     force = has("--force") or any("f" in t for t in flags)
     dele = has("--delete") or any("d" in t for t in flags)
@@ -525,14 +544,15 @@ def _git(a, cwd="", genv=False):
     if sub == "clean" and (force or any(x.startswith("--f") for x in longs)) and not (has("--dry-run") or any("n" in t for t in flags)) \
             and not (cp and not away and not genv and not cwd and all(_rel(x) and not x.startswith(":") and ".git" not in x.split("/") and posixpath.normpath(x) != "." for x in cp)):
         return "git clean -f deletes untracked files. Preview with `git clean -n`, delete exact paths"
-    leased = [t.split("=", 1)[1].split(":")[0] for t in r if t.startswith("--force-with-lease=")]
-    if sub == "push" and has("--force-with-lease") and any(re.search(r"(?:^|[:/])(?:main|master)$", t) for t in leased + [t for t in r if not t.startswith("-")]):
-        return "force push to main/master rewrites shared history. Ask the owner first"
+    if sub == "push" and (has("--force-with-lease") or has("--force-if-includes")):  # a lease still overwrites the remote ref when it matches: only a named non-shared branch is exempt
+        refs = [t.rpartition(":")[2].removeprefix("refs/heads/").lstrip("+") for t in [x for x in r if not x.startswith("-")][1:] + leased]
+        if any(SHARED.fullmatch(x) or re.search(r"[$`]", x) for x in refs):  # a bare push, HEAD, --all and --tags resolve at run time and stay allowed
+            return "force push (even --force-with-lease/--force-if-includes) to a shared or computed branch overwrites shared history. Use a new commit, or ask the owner first"
     if sub == "worktree" and "remove" in r and force:
         return "git worktree remove --force deletes uncommitted work. Check `git -C <path> status` and remove without --force"
     if sub == "push" and (force or dele or has("--mirror") or any(
             not t.startswith("-") and (t.startswith(("+", ":")) or ":+" in t or "*" in t) for t in r)):
-        return "force/delete/mirror push rewrites shared history. Use `--force-with-lease` after the owner approves"
+        return "force/delete/mirror push rewrites shared history. Use a new commit instead, or ask the owner"
     if sub in ("checkout", "switch") and (force or has("--discard-changes")):
         return "git checkout/switch -f discards uncommitted changes. Use `git stash` or name the exact file"
     if sub in ("checkout", "restore") and any(_tree(t) for t in r if not t.startswith("-")) \
@@ -568,6 +588,10 @@ def _body(t):
 
 
 def _cmd(name, a, ph, depth=0, cwd="", genv=False):
+    if name in ("k3s", "microk8s", "minikube") and a[:1] == ["kubectl"]:  # `minikube kubectl -- delete ...`
+        name, a = "kubectl", [t for k, t in enumerate(a[1:]) if not (k == 0 and t == "--")]
+    elif name == "oc":
+        name = "kubectl"
     strict = name in ("rm", "chmod", "chown", "dd", "shred", "diskutil") or name.startswith("mkfs")  # a lone --help only
     hl = [t for t in a if t in ("--help", "-help", "-h")]  # usage only when it is the sole flag: `terraform destroy -h`, never beside other flags, paths or payloads
     rest = [t for t in a if t not in hl]
@@ -582,7 +606,7 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
     if name in ("aws", "kubectl", "helm") and dr and all(t in DRY for t in dr) and dr[-1] in DRY:
         return ""  # any `--no-dry-run` or `--dry-run=none` among them means the command really runs
     if name in ("rm", "unlink"):
-        return _rm(a, ph)
+        return _rm(a, ph, bool(cwd))
     if name == "git":
         return _git(a, cwd, genv)
     if name == "find":
@@ -617,9 +641,9 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
                     return r
     if name == "tee" and any(not t.startswith("-") and _sysw(t, any(x == "--append" or _bundle(x, "a") for x in a)) for t in a):
         return "tee writes a system file. Edit a copy and ask the owner"
-    if name in ("cp", "mv", "install") and any(t in ("/dev/null", "/dev/zero") for t in a[:-1]) and _sens(a[-1] if a else ""):
+    if name in ("cp", "mv", "install") and any(t in ("/dev/null", "/dev/zero") for t in a[:-1]) and _trunc(a[-1] if a else ""):
         return f"{name} of /dev/null onto a key/credential file empties it. Back it up and ask the owner"
-    if name == "dd" and any(t.startswith("of=") and _sens(t[3:]) for t in a):
+    if name == "dd" and any(t.startswith("of=") and _trunc(t[3:]) for t in a):
         return "dd onto a key/credential file overwrites it. Back it up and ask the owner"
     if name == "mv" and a[-1:] == ["/dev/null"]:
         return "mv to /dev/null destroys the source. Use `rm` on an exact path if you mean it"
@@ -752,6 +776,9 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
                 r = [a[k]]
             k += 1
         r = r[0].split("/")[0].lower() if r else ""
+        kinds = set(r.split(",")) | {t.split("/")[0].lower() for t in a[a.index("delete"):] if "/" in t and not t.startswith("-") and not t.endswith((".yaml", ".yml", ".json"))}  # `pods,nodes`, `pod/a node/b`
+        if kinds & {"node", "nodes", "no"}:
+            return "kubectl delete node removes the node from the cluster and strands its pods. Use `kubectl cordon` and ask the owner"
         if r in ("ns", "namespace", "namespaces") or (r == "all" and ("--all" in a or "-A" in a or "--all-namespaces" in a)):
             return "kubectl delete namespace/all removes a whole workload. Delete exact named objects and ask the owner"
     if name == "ssh-add" and any(t == "--delete-all" or _bundle(t, "D") for t in a):
@@ -810,6 +837,8 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
     if name == "wipefs" and not any(t in ("-n", "--no-act") for t in a) and any(
             t.startswith(("--all", "--offset")) or _bundle(t, "a") or _bundle(t, "o") for t in a):
         return "wipefs erases filesystem signatures on a device. Do it in a VM, never on the host"
+    if name == "blkdiscard" and not any(t in ("-V", "--version", "-h", "--help") for t in a):
+        return "blkdiscard discards every block of a device for good. Do it in a VM, never on the host"
     if name == "diskutil" and w[:1] and w[0].lower() in DISKUTIL:
         return "diskutil erase/partition wipes a disk. Do it in a VM, never on the host"
     if name == "ssh":  # the remote command is everything after the host
@@ -829,6 +858,10 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
         while k < len(a) and a[k].startswith("-"):
             k += 2 if a[k] in DOCKER_VAL else 1
         d = a[k:]
+        pr = next((x for x in ("container", "image", "volume", "network", "builder", "buildx", "plugin", "config", "pod") if d[:2] == [x, "prune"]), "")  # `prune -f` skips the prompt
+        fl = [d[2:][m + 1] if t == "--filter" and m + 1 < len(d[2:]) else t[9:] for m, t in enumerate(d[2:]) if t == "--filter" or t.startswith("--filter=")]
+        if pr and any(t == "--force" or _bundle(t, "f") for t in d[2:]) and not (fl and all(re.match(r"(?:until|label|dangling)=", x) for x in fl)):  # only age, label=KEY or dangling= filters scope it
+            return f"{name} {pr} prune -f deletes unused objects without a prompt. Run it without -f to review, or name exact objects and ask the owner"
         if d[:1] in (["compose"], ["container"]):
             d = d[1:]
         if name == "docker-compose" or a[k:k + 1] == ["compose"]:  # compose options (-f FILE, -p NAME) precede the verb
@@ -880,6 +913,37 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
         for t in a:
             if _body(t):
                 return _body(t)
+    return ""
+
+
+def _emitted(cmd, depth):
+    """Reason when a shell word (`bash -c`, `eval`, `source`) runs the output of `$(printf ...)` / `$(echo ...)`: that output is the command."""
+    if not re.search(r"printf|echo", cmd):
+        return ""
+    for n, m in enumerate(DECSTART.finditer(cmd)):
+        if n >= 64:
+            break
+        w = cmd[m.end():m.end() + 600]
+        g = re.search(r"[|;&\n]", w[:300])
+        for k, su in enumerate(SUBST.finditer(w[:g.start() if g else 300])):
+            if k >= 8:
+                break
+            body = re.match(r"\s*(printf|echo)\s+(.*)", _subbody(w[su.end():su.end() + 400], w[su.start()] == "`"), re.S)
+            if not body:
+                continue
+            try:
+                args = shlex.split(body[2])
+            except ValueError:
+                continue
+            if "\\" in body[2] or (body[1] == "printf" and args and len(args) > 1 and len(args) - 1 > len(re.findall(r"%[-+# 0-9.]*[a-zA-Z]", args[0].replace("%%", ""))) > 0):
+                return "output of printf/echo run by a shell uses escapes or a reused format and cannot be vetted. Write the command out, read it, then run it"  # fail closed
+            args = [t for t in args if not (body and body[1] == "echo" and re.fullmatch(r"-[neE]+", t))]
+            if not args:
+                continue
+            out = " ".join(args) if body[1] == "echo" else re.sub(r"%[sb]", lambda _, it=iter(args[1:]): next(it, ""), args[0])
+            r = check(out, depth + 1)
+            if r:
+                return r
     return ""
 
 
@@ -1052,6 +1116,8 @@ def check(cmd, _depth=0, _ph=None):
     r = _windel(cmd)
     if r:
         return r
+    if any(PSDL.search(x) and PSEXEC.search(x) for x in cmd.split("\n")):
+        return "iex/Invoke-Expression of downloaded content cannot be vetted. Download to a file, read it, then run it"
     ifs = re.search(r"\bIFS=(['\"]?)([^\s$'\"\w])\1", cmd)  # `IFS=,; set -- rm,-rf,/; "$@"`: split on the custom separator, then judge `set --` words
     sp = cmd.replace(ifs[2], " ") if ifs else cmd
     lastpos = max((x.end() for x in re.finditer(r"\$@|\$\*|\$\{[@*]\}", sp)), default=-1)  # one scan; each `set --` is judged against it
@@ -1063,6 +1129,9 @@ def check(cmd, _depth=0, _ph=None):
     cmd = re.sub(r"\$\{IFS\}|\$IFS\b", " ", cmd)  # rm${IFS}-rf is rm -rf
     if "()" in cmd and FORKBOMB.search(cmd):
         return "fork bomb. Never run it"
+    r = _emitted(cmd, _depth)
+    if r:
+        return r
     if _decexec(cmd):
         return "eval/shell of a decoded base64/hex payload cannot be vetted. Decode to a file, read it, then run it"
     if (_depth < 1 or (_depth < 2 and len(cmd) < 20000)) and "=" in cmd and "$" in cmd:  # `x=rm; $x -rf /` (also inside `bash -c`): expand simple assignments and re-check; depth-capped so `a=$b; b=$a` ends
@@ -1073,6 +1142,10 @@ def check(cmd, _depth=0, _ph=None):
             r = check(ex, _depth + 1)
             if r:
                 return r
+            used = re.findall(r"\$(?:\{(\w+)\}|(\w+))", cmd)
+            once = {v: m for v in env for m in [re.search(r"(?:^|[;\n])\s*" + v + r"=[^\s;&|]*(?=\s*(?:;|\n|&&|$))", cmd)] if m and len(re.findall(r"(?<![\w$])" + v + "=", cmd)) == 1}
+            if used and len(cmd) < 20000 and all((a or b) in once and once[a or b].start() < cmd.index("$" + ("{" if a else "") + (a or b)) and re.fullmatch(r"\.?/?[\w.-]+(?:/[\w.-]+)*", env[a or b]) for a, b in used):
+                cmd = ex  # every variable is a plain path set once, at statement level, before use: judge the expanded command only
     elif _depth == 1 and len(cmd) >= 20000 and "=" in cmd and re.search(r"\$\{?\w", cmd):  # padding must not switch expansion off: fail closed
         return "padded command with variable use cannot be vetted. Shorten it and spell the command out"
     if DYNCMD.search(cmd):
@@ -1110,8 +1183,8 @@ def check(cmd, _depth=0, _ph=None):
         elif skip:
             if skip in ("t>", "ta") and _sysw(t, skip == "ta"):
                 return "redirect writes a system file. Edit a copy and ask the owner"
-            if skip == "t>" and segs[-1] in EMPTYSRC and _sens(t):
-                return "redirect truncates a key/credential file. Back it up and ask the owner"
+            if skip == "t>" and segs[-1] in EMPTYSRC and _trunc(t):
+                return "redirect truncates a key/credential or database file. Back it up and ask the owner"
             if skip in ("t>", "ta"):
                 ro[-1] = t
             if skip == "hs":
@@ -1142,7 +1215,9 @@ def check(cmd, _depth=0, _ph=None):
         if i >= len(seg):
             continue
         name, a = os.path.basename(seg[i]), seg[i + 1:]
-        if name in ("cd", "pushd"):  # a cd out of the tree makes later relative `rm` targets absolute (`cd /srv && rm -rf acme`); `cd` alone is home
+        if name == "popd":
+            cwd = "~"  # back to an unknown earlier directory
+        elif name in ("cd", "pushd"):  # a cd out of the tree makes later relative `rm` targets absolute (`cd /srv && rm -rf acme`); `cd` alone is home
             d = ([t for t in a if not t.startswith("-")] or ["~"])[0]
             cwd = d.rstrip("/") or "/" if d.startswith(("/", "~", "$")) or ".." in d.split("/") or d == "-" else cwd + "/" + d if cwd else ""
         elif name == "rm" and cwd:
@@ -1183,9 +1258,9 @@ def check(cmd, _depth=0, _ph=None):
             r = next((x for x in (_sqlfile(f) for f in ([ri[n]] if ri[n] else []) + (catf or [])) if x), "")
         if not r and op == "|" and feed:
             r = next((x for x in (_feed(name, f) for f in feed) if x), "")
-        if not r and name == "tee" and not any(x == "--append" or _bundle(x, "a") for x in a) and any(_sens(x) for x in a if not x.startswith("-")) \
+        if not r and name == "tee" and not any(x == "--append" or _bundle(x, "a") for x in a) and any(_trunc(x) for x in a if not x.startswith("-")) \
                 and (ri[n] == "/dev/null" or (op == "|" and pseg in EMPTYSRC)):
-            r = "tee of empty input truncates a key/credential file. Back it up and ask the owner"
+            r = "tee of empty input truncates a key/credential or database file. Back it up and ask the owner"
         if not r and op == "|" and fetch and (name in SHELLS or INTERP.match(name)):
             r = "curl/wget piped to a shell/interpreter. Download, read it, then run it"
         if r:

@@ -230,7 +230,7 @@ COUNTS = {
     ('agentic-delivery/scripts/destructive_guard.py', 'curl-pipe', '9ca4e05d'): 1,
     ('agentic-delivery/scripts/destructive_guard.py', 'curl-pipe', 'c58f03f2'): 1,
     ('agentic-delivery/scripts/destructive_guard.py', 'curl-pipe', 'cfdfc69f'): 1,
-    ('agentic-delivery/scripts/destructive_guard.py', 'sensitive-write', '120f801b'): 1,
+    ('agentic-delivery/scripts/destructive_guard.py', 'sensitive-write', '4ee4f357'): 1,
     ('agentic-delivery/scripts/destructive_guard.py', 'sensitive-write', 'e7c7ca02'): 1,
     ('agentic-delivery/scripts/destructive_guard.py', 'rm-broad', '4044645b'): 1,
     ('agentic-delivery/scripts/destructive_guard.py', 'rm-broad', 'a182264c'): 1,
