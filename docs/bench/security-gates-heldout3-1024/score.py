@@ -2,8 +2,8 @@
 """Score the secret gate on held-out-3: Perun-union (the real privacy gate), Perun-banlist-only, and gitleaks alone.
 
 Usage: python3 -I docs/bench/security-gates-heldout3-1024/score.py   (run from anywhere; offline, deterministic; exit 1 on hash drift)
-Rows are `id<TAB>text`; `@@` markers are deleted before scoring. Union is the actual `ci-gates.sh privacy` run; it must equal
-banlist OR gitleaks, which this script asserts so the three columns can never disagree about the gate.
+Rows are `id<TAB>text`; `@@` markers are deleted before scoring. Union is the actual `ci-gates.sh privacy` run; it may only drop
+hits of banlist OR gitleaks (the placeholder pass), which this script asserts; banlist and gitleaks columns are the raw rules.
 """
 import hashlib, importlib.util, pathlib, subprocess, sys, tempfile
 
@@ -37,7 +37,7 @@ def scores():
                                    capture_output=True, text=True).returncode != 0
                 b = any(subprocess.run(["grep", "-qE", "-e", p, str(f)]).returncode == 0 for p in pats)
                 g = bool(ss.gitleaks_rule(text + "\n"))
-                assert u == (b or g), (i, u, b, g)
+                assert u <= (b or g or bool(set(ss.gitleaks_rule(text + "\n", precise=True)) & {r[0] for r in ss.EXTRA})), (i, u, b, g)  # the gate may drop raw hits (placeholder pass) or add only its EXTRA rules (secret_scan.py)
                 for k, v in (("union", u), ("banlist", b), ("gitleaks", g)):
                     if v: res[k].append(i)
             out[name] = res

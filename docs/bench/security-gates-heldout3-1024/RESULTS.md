@@ -16,3 +16,13 @@
 
 - Missed by the union: L004, L006, L021, L045, L056, L057 (also missed by both parts).
 - Flagged decoys: 16 of 60 (D004, D006, D007, D008, D009, D020, D021, D025, D029, D030, D032, D033, D037, D038, D040, D050). Placeholder-looking `generic-api-key` hits dominate the gitleaks side; the banlist side flags 12 of them already.
+
+## Precision pass (in-sample, after seeing this corpus)
+
+The blind rows above stay the out-of-sample result. After they were scored, the gate gained a placeholder pass (`PLACEHOLDER` in `scripts/secret_scan.py`): a hit is dropped when the matched text itself (never the rest of its line) carries a documentation word (example, dummy, fake, placeholder, redacted, revoked, replace-me, changeme), a filler run (8+ `x`, 10+ `0`), a Stripe test-mode or publishable key prefix, a `NEXT_PUBLIC_` variable name, a Mapbox public token or a CSRF key name. The gitleaks half applies it to every match; the banlist half applies it only to patterns under its secret headers (names and PII are never relaxed) and fails closed when it cannot verify a file. `example.com` host names do not count as the word. An earlier draft judged the whole line and let a real token through when a placeholder word sat elsewhere on it; that was a bug and is fixed, with regression tests.
+
+| System (in-sample, re-scored on this corpus) | Leaks found (60) | Decoys flagged (60) |
+|---|---|---|
+| Perun union with placeholder pass (the shipped gate) | 54 | 8 |
+
+Recall is unchanged (same six misses); decoys flagged fell from 16 to 8 (D007, D021, D025, D032, D037, D038, D040, D050: the placeholder cue sits in a trailing comment or a key name outside the match, which the gate deliberately ignores). This is tuned on the rows it is scored on, so treat 8/60 as an upper bound on the gain until a fresh corpus confirms it. Pins: `scripts/test_security_gates_heldout3.py`, `scripts/test_secret_precision.py`.

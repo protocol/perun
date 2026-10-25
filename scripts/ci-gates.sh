@@ -47,14 +47,19 @@ frozen_pinned() {
   [ -n "$want" ] && [ "$(shasum -a 256 <"$1" | cut -d' ' -f1)" = "$want" ]
 }
 
+# Patterns under a "# --- Secret" or "# --- Hard-coded credential" header also join `secret_pats`: a file hit there is re-checked and
+# dropped when every match's own text looks like a placeholder (secret_scan.py PLACEHOLDER). Names and PII patterns are never relaxed.
 collect_patterns() {
-  local _line _trimmed
+  local _line _trimmed _sec=0
   while IFS= read -r _line || [ -n "$_line" ]; do
     _trimmed="${_line#"${_line%%[![:space:]]*}"}"   # strip leading whitespace
     case "$_trimmed" in
+      '# --- Secret'*|'# --- Hard-coded credential'*) _sec=1; continue ;;
+      '# ---'*) _sec=0; continue ;;
       ''|'#'*) continue ;;
     esac
     patterns+=("$_trimmed")
+    [ "$_sec" -eq 0 ] || secret_pats+=("$_trimmed")
   done < "$1"
 }
 
@@ -122,7 +127,7 @@ cmd_privacy() {
 
   # The committed primary banlist supplies the baseline policy and must, as
   # before, hold at least one actionable (non-blank, non-comment) pattern.
-  local -a patterns=()
+  local -a patterns=() secret_pats=()
   collect_patterns "$banlist"
   [ "${#patterns[@]}" -gt 0 ] \
     || die "privacy: banlist has no actionable patterns (only blanks/comments): $banlist"
@@ -169,15 +174,15 @@ cmd_privacy() {
   # Enumerate once (git ls-files in a repo root, see scan_files); the banlists
   # are skipped by basename so they can never match themselves.
   local -a scan=()
-  local t f b skip
+  local t f b skip sp
   for t in "${targets[@]}"; do
     while IFS= read -r -d '' f; do
       skip=0
       for b in "${skip_bases[@]}"; do [ "${f##*/}" = "$b" ] && skip=1; done
-      # frozen synthetic leak/decoy corpora of the three held-out security-gates benches (exact paths, no glob, and the sha256 pinned in secret-scan-allow.txt, so an edited file is scanned): fictional values by design, immutable once landed
+      # frozen synthetic leak/decoy corpora of the held-out secret benches (exact paths, no glob, and the sha256 pinned in secret-scan-allow.txt, so an edited file is scanned): fictional values by design, immutable once landed
       case "${f##*/}" in secret-leaks.txt|secret-decoys.txt)  # repo-relative path, so scanning a subdir still resolves it
         local d top; d="$(cd "$(dirname "$f")" && pwd -P)"; top="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" || top=""
-        case "${d#"$top"/}/${f##*/}" in docs/bench/security-gates-heldout-1024/secret-leaks.txt|docs/bench/security-gates-heldout-1024/secret-decoys.txt|docs/bench/security-gates-heldout2-1024/secret-leaks.txt|docs/bench/security-gates-heldout2-1024/secret-decoys.txt|docs/bench/security-gates-heldout3-1024/secret-leaks.txt|docs/bench/security-gates-heldout3-1024/secret-decoys.txt) [ -n "$top" ] && frozen_pinned "$f" "${d#"$top"/}/${f##*/}" && skip=1 ;; esac ;;
+        case "${d#"$top"/}/${f##*/}" in docs/bench/security-gates-heldout-1024/secret-leaks.txt|docs/bench/security-gates-heldout-1024/secret-decoys.txt|docs/bench/security-gates-heldout2-1024/secret-leaks.txt|docs/bench/security-gates-heldout2-1024/secret-decoys.txt|docs/bench/security-gates-heldout3-1024/secret-leaks.txt|docs/bench/security-gates-heldout3-1024/secret-decoys.txt|docs/bench/secrets-heldout4-1025/secret-leaks.txt|docs/bench/secrets-heldout4-1025/secret-decoys.txt|docs/bench/secrets-heldout5-1025/secret-leaks.txt|docs/bench/secrets-heldout5-1025/secret-decoys.txt|docs/bench/secrets-heldout6-1025/secret-leaks.txt|docs/bench/secrets-heldout6-1025/secret-decoys.txt) [ -n "$top" ] && frozen_pinned "$f" "${d#"$top"/}/${f##*/}" && skip=1 ;; esac ;;
       esac
       [ "$skip" -eq 1 ] || scan+=("$f")
     done < <(scan_files "$t")
@@ -203,6 +208,14 @@ cmd_privacy() {
         *) status=$cs; break ;;
       esac
     done
+    if [ "$status" -eq 0 ]; then
+      for sp in ${secret_pats[@]+"${secret_pats[@]}"}; do
+        [ "$sp" = "$pat" ] || continue
+        files="$(printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 python3 -I "$(dirname "${BASH_SOURCE[0]}")/secret_scan.py" --refilter "$pat")" \
+          || die "privacy: secret_scan.py --refilter failed; failing closed"
+        [ -n "$files" ] || status=1
+      done
+    fi
     case "$status" in
       0)
         printf 'BLOCK: a banned pattern matched (content withheld); files:\n' >&2

@@ -1,0 +1,3 @@
+Fifth blind held-out secrets corpus (60 live-format leaks, 60 hard decoys), authored 2026-10-25 by Claude Opus 5.5 without reading any scanner, gate, banlist, allowlist, gitleaks config, scorer, or any other corpus's rows or results; only the heldout-4 README was consulted, for format. Every live-format value contains `@@` and is fictional (placeholders only: acme, example.com, jane), so none is a valid token. Format: `id<TAB>text`; a literal backslash-n inside a row means a newline. Frozen by SHA256 (`SHA256-frozen.txt`) and preregistered in `ledger.jsonl` before any scoring; not scored at authoring time.
+
+Blind at authoring (2026-10-25); in-sample after the wave 3 rule tuning, so any score on this corpus after that is not out-of-sample.
