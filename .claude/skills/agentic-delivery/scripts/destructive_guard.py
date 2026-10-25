@@ -115,6 +115,10 @@ SUBST = re.compile(r"\$\(|`")
 DECODE = re.compile(r"\bbase64\b.{0,300}(?:\s-\w*[dD]|--decode)|\bxxd\b.{0,100}\s-\w*r|\bprintf\b.{0,300}\\(?:x[0-9a-fA-F]|[0-7]{3})|\bopenssl\s+enc\b.{0,100}\s-(?:d\b|base64\b|a\b)"
                     r"|\bpython[\d.]*\b.{0,200}(?:b64decode|b32decode|decodebytes|a2b_base64|unhexlify|fromhex)", re.S)
 DRY = ("--dry-run", "--dryrun", "--dry-run=client", "--dry-run=server")  # `--dry-run=none` really runs, so it is not listed
+BLKDEV = re.compile(r"/dev/(?:[hsv]d|xvd|nvme|r?disk|mmcblk|loop|dm-|md|mapper/|sr|zd|nbd|k?mem|n?st\d|sg\d|bsg/|ada\d|nvd\d|mtd)", re.I)  # a raw disk: any write to it destroys the data on it
+TOPLEVEL = re.compile(r"\$\(git rev-parse --show-toplevel\)/((?:build|dist|out|target|node_modules|__pycache__|coverage)(?:/\w[\w.-]*)*)")  # repo-root child; a failed git leaves `/child`, so only disposable build dirs
+MKTEMP = re.compile(r"(?:^|[;\n])[ \t]*(\w{1,32})=[\"]?(?:\$\(mktemp -d\)|`mktemp -d`)[\"]?[ \t]*(?=;|&&|\n|$)")
+IMGFILE = re.compile(r"(?:\./)?\w[\w.-]*\.(?:img|raw)")  # a relative disk-image file, not a device
 SYMLN = re.compile(r"\bln\b[^;&|\n]*\s(?:-\w*s|--symbolic\b)")  # a symlink made in the same line can point a scratch path at the host
 RMREC = re.compile(r"\brm\b[^;&|\n]*\s(?:-\w*[rR]|--rec)")
 SCOPED = re.compile(r"(?:\$TMPDIR|\$\{TMPDIR\}|/tmp)/\w[^/$`{}]*(?:/[^$`{}]*)?")  # under the temp dir, inside a named child
@@ -135,7 +139,7 @@ DATAFLAG = re.compile(r"""((?:^|[;&|\n(])[ \t]*(?:\w+=\S*[ \t]+)*(?:(?:gh|glab)\
 PAAS = ("firebase", "supabase", "vercel", "netlify", "wrangler", "railway", "pscale", "neonctl", "turso", "convex", "appwrite")
 PAASDEL = re.compile(r"(?:^|[:_-])(?i:delete|remove|rm|del|destroy|drop|purge|unset)(?![a-z])")  # also deleteSite
 HOMEP = re.compile(r"(?:~|\$HOME|\$\{HOME\}|/(?:Users|home)/[^/]+|/root)/\.(?:ssh|bashrc|bash_profile|bash_login|bash_logout|profile|zshrc|zprofile|zshenv|zlogin|zlogout|inputrc|gitconfig|netrc|npmrc|aws|gnupg)(?:/|$)")
-ARTGLOB = re.compile(r"\*\.(?:pyc|o|tmp|log|orig|class|map|bak|swp)")
+ARTGLOB = re.compile(r"\*\.(?:pyc|o|tmp|log|orig|class|map|bak|swp)|node_modules|__pycache__|\.pytest_cache|\.mypy_cache")  # build artifacts, and caches named exactly
 LITPATH = re.compile(r"(?:\./)?\w[\w.-]*(?:/\w[\w.-]*)*/?")  # a plain relative path word
 SENS = re.compile(r"(?i)(?:id_(?:rsa|dsa|ecdsa|ed25519)|[^/]*\.(?:pem|key|p12|pfx|jks|kdbx|keystore)|\.env(?:\.(?!example|sample|template|dist)\w+)?|\.netrc|\.pgpass|\.htpasswd|\.envrc|\.git-credentials|service[-_]?account[^/]*\.json|[^/]*credentials[^/]*\.json|authorized_keys|credentials|shadow|master\.key)")  # private keys and credential files
 EMPTYSRC = ([], [":"], ["true"], ["false"], ["echo"], ["echo", "-n"], ["printf"], ["printf", ""], ["printf", "%s"], ["printf", "%b"], ["cat", "/dev/null"], ["exec"])  # commands whose `>` target is only truncated
@@ -168,24 +172,76 @@ def _bundle(t, ch):
     return ch in t and bool(BUNDLE.fullmatch(t))
 
 
-def _sysw(t, app=False):
-    """A write target on a system path (case-insensitive for macOS; 2+ leading `..` count as suspect; `/var/log` is exempt for appends)."""
+def _upbase(t):
+    """`t` unchanged, or, after an unexpanded base (variable, `~`) followed by `..`, the path left once the `..` run is applied
+    (an unexpanded base may land anywhere, so judge what remains); None when no `..` climbs past the base."""
     parts = t.split("/")
     v = next((i for i, x in enumerate(parts) if "$" in x or "`" in x or x.startswith("~")), None)
-    if v is not None:  # an unexpanded base followed by `..` may land anywhere: judge what remains after the `..` run
-        up, st = 0, []
-        for x in parts[v + 1:]:
-            if x == "..":
-                up, _ = (up, st.pop()) if st else (up + 1, 0)
-            elif x not in ("", "."):
-                st.append(x)
-        if not up:
-            return False
-        t = "/" + "/".join(st)
+    if v is None:
+        return t
+    up, st = 0, []
+    for x in parts[v + 1:]:
+        if x == "..":
+            up, _ = (up, st.pop()) if st else (up + 1, 0)
+        elif x not in ("", "."):
+            st.append(x)
+    return "/" + "/".join(st) if up else None
+
+
+def _kstdin(a, j):
+    """`a[j]` is a kubectl `-f`/`--filename` (also bundled, `-Rf`, or `-fV`) whose manifest comes from stdin: `-`, /dev/stdin, an fd path, or nothing (`-f <(...)`)."""
+    m = re.fullmatch(r"--filename(?:=(.*))?|-[A-Za-z]*?f=?(.*)", a[j])
+    if not m:
+        return False
+    v = m[1] or m[2] or (a[j + 1] if j + 1 < len(a) else "-")
+    return bool(re.fullmatch(r"-|/dev/(?:stdin|fd/\d+)|/proc/(?:self|\d+)/fd/\d+", posixpath.normpath(re.sub("/+", "/", v)) if v.startswith("/") else v))
+
+
+def _blk(t):
+    """A write target that is a raw disk device (`/dev/sda`, `/dev/nvme0n1`, `/dev/disk2`, ...)."""
+    return bool(BLKDEV.match(posixpath.normpath(re.sub("/+", "/", _upbase(t) or t))))
+
+
+def _brace(t):
+    """Bash brace expansions of `t` (one comma group at a time); a long, wide or deeply multiplied brace word fails closed to `/`."""
+    m = re.search(r"\{([^{}]*,[^{}]*)\}", t)
+    if not m:
+        return [t]
+    xs = m[1].split(",")
+    if len(t) > 256 or len(xs) > 16:
+        return ["/"]
+    r = [y for x in xs for y in _brace(t[:m.start()] + x + t[m.end():])]
+    return r if len(r) <= 64 else ["/"]
+
+
+def _sysw(t, app=False):
+    """A write target on a system path (case-insensitive for macOS; 2+ leading `..` count as suspect; `/var/log` is exempt for appends)."""
+    t = _upbase(t)
+    if t is None:
+        return False
     p = posixpath.normpath(re.sub("/+", "/", t) or ".")
     if p.startswith("../.."):
         p = re.sub(r"^(?:\.\./)+", "/", p + "/")
     return bool(SYSFILE.match(p)) and not (app and re.match(r"/(?:private/)?var/log(?:/|$)", p, re.I))
+
+
+def _testsql(name, a):
+    """`psql -h localhost -d acme_test -c 'DROP TABLE [IF EXISTS] t'`: one throwaway table in a local test/tmp database. Whitelist only: other
+    options (-f, -U, URIs, port), a second statement, `\\` meta-commands and non-local hosts keep the block. ponytail: localhost can be a port-forward; a
+    test/tmp database name is the second key."""
+    o, j = {}, 0
+    while j < len(a):
+        if a[j] in ("-h", "-d", "-c") and j + 1 < len(a):
+            o.setdefault(a[j], []).append(a[j + 1])
+            j += 2
+        elif a[j] in ("-X", "-q"):
+            j += 1
+        else:
+            return False
+    d, c = o.get("-d", [""]), o.get("-c", [""])
+    return name == "psql" and o.get("-h") in (["localhost"], ["127.0.0.1"], ["::1"]) and len(d) == 1 and len(c) == 1 \
+        and bool(re.fullmatch(r"(?:\w+[_-])?(?:test|tmp)", d[0])) \
+        and bool(re.fullmatch(r"\s*(?:drop\s+table\s+(?:if\s+exists\s+)?|truncate\s+(?:table\s+)?)\w+(?:\.\w+)?\s*;?\s*", c[0], re.I))
 
 
 def _mkfs_dry(name, a):
@@ -428,8 +484,10 @@ def _rel(x):
 
 
 def _narrow(r):
-    """True if `r` is an action (-delete|-exec|-execdir), or literal `-not|!` `-path|-name|-iname` exclusions (each with a word character, no `$`)
-    followed by `-delete` only: the exclusions just narrow a `-delete`, they never open `-exec` or `-quit` combinations."""
+    """True if `r` is an action (-delete|-exec|-execdir), optionally after `-type d` / `-prune`, or literal `-not|!` `-path|-name|-iname` exclusions
+    (each with a word character, no `$`) followed by `-delete` only: the exclusions just narrow a `-delete`, they never open `-exec` or `-quit` combinations."""
+    while r[:2] == ["-type", "d"] or r[:1] == ["-prune"]:
+        r = r[2:] if r[:1] == ["-type"] else r[1:]
     if r[:1] in (["-delete"], ["-exec"], ["-execdir"]):
         return True
     while r[:1] in (["-not"], ["!"]) and r[1:2] in (["-path"], ["-name"], ["-iname"]) and len(r) > 2 and re.search(r"\w", r[2]) and not re.search(r"[$`]", r[2]):
@@ -442,10 +500,14 @@ SYSROOT = re.compile(r"/(?:private/)?(?:(?:etc|usr|bin|sbin|boot|lib|lib64|var|o
 
 def _mvsys(t):
     """A mv operand that is a system root, `/*`, a subpath of /usr or /System, or an absolute path whose first component is a glob or a variable/quote concat."""
-    if t.startswith("-") or not t.startswith("/"):
+    if t.startswith("-"):
+        return False
+    if not t.startswith("/"):  # `~/../../etc`, `$HOME/../..`: the `..` run climbs out of the unexpanded base
+        t = ".." in t.split("/") and _upbase(t) or t
+    if not t.startswith("/"):
         return False
     p = posixpath.normpath(re.sub("/+", "/", t))
-    return bool(SYSROOT.fullmatch(p) or re.match(r"/(?:usr|System)/", p, re.I) or re.search(r"[*?\[$`]", p.split("/")[1] if p.count("/") else ""))
+    return bool(SYSROOT.fullmatch(p) or re.match(r"/(?:usr|System)/", p, re.I) or re.search(r"[*?\[$`{]", p.split("/")[1] if p.count("/") else ""))
 
 
 def _shred_ok(a):
@@ -662,23 +724,24 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
                 r = check(" ".join(shlex.quote(x) for x in sub), depth + 1)
                 if r:
                     return r
-    if name == "tee" and any(not t.startswith("-") and _sysw(t, any(x == "--append" or _bundle(x, "a") for x in a)) for t in a):
+    if name == "tee" and any(not t.startswith("-") and (_sysw(t, any(x == "--append" or _bundle(x, "a") for x in a)) or _blk(t)) for t in a):
         return "tee writes a system file. Edit a copy and ask the owner"
     if name in ("cp", "mv", "install") and any(t in ("/dev/null", "/dev/zero") for t in a[:-1]) and _trunc(a[-1] if a else ""):
         return f"{name} of /dev/null onto a key/credential file empties it. Back it up and ask the owner"
     if name == "dd" and any(t.startswith("of=") and _trunc(t[3:]) for t in a):
         return "dd onto a key/credential file overwrites it. Back it up and ask the owner"
-    if name == "mv" and any(_mvsys(t) for t in a):
+    if name == "mv" and any(_mvsys(x) for t in a for x in _brace(t)):
         return "mv of a system directory (or /) breaks the host. Ask the owner"
     if name == "mv" and a[-1:] == ["/dev/null"]:
         return "mv to /dev/null destroys the source. Use `rm` on an exact path if you mean it"
     if name in ("curl", "wget") and any(re.fullmatch(r"-X\s*DELETE|--request[= ]DELETE|--method=DELETE", t, re.I) or (
             t.upper() == "DELETE" and k and a[k - 1] in ("-X", "--request", "--method")) for k, t in enumerate(a)):
         return "HTTP DELETE to a remote API is hard to undo. Ask the owner"
-    if name == "dd" and any(t.startswith("of=") and (lambda p: p.startswith("/dev/") and p not in SAFE_DEV)(
-            posixpath.normpath(re.sub("/+", "/", t[3:]) or ".")) for t in a):
+    if name == "dd" and any(t.startswith("of=") and (_blk(t[3:]) or (lambda p: p.startswith("/dev/") and p not in SAFE_DEV)(
+            posixpath.normpath(re.sub("/+", "/", t[3:]) or "."))) for t in a):
         return "dd to a device. Write to a file image, or do it in a VM"
-    if name.startswith("mkfs") and not _mkfs_dry(name, a):
+    pos = [t for t in a if not t.startswith("-")]  # ponytail: a relative *.img/*.raw file is not a device; a symlink planted by an earlier command is out of sight
+    if name.startswith("mkfs") and not _mkfs_dry(name, a) and not (pos and all(IMGFILE.fullmatch(t) and not os.path.realpath(t).startswith("/dev/") for t in pos)):
         return "mkfs formats a device. Do it in a VM, never on the host"
     if name in ("chmod", "chown") and any(t == "--recursive" or _bundle(t, "R") for t in a) \
             and any(_far(t) for t in a if not t.startswith("-")):
@@ -717,9 +780,11 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
         return f"{name} drops a database or role. Ask the owner"
     if name in ("mongo", "mongosh") and any(re.search(r"\.drop\s*\(|delete(?:Many|One)\b|findOneAndDelete\s*\(|\.remove\s*\(|\.dropIndex(?:es)?\s*\(", t) for t in a):
         return "mongo drop/deleteMany removes documents or collections. Ask the owner"
-    dest = a[-1:] + [x for j, x in enumerate(a) if j and a[j - 1] in ("-t", "--target-directory")]
+    tdir = lambda x: len(x) > 3 and "--target-directory".startswith(x.split("=")[0])  # getopt long-option prefixes
+    dest = [y for x in a[-1:] + [x for j, x in enumerate(a) if j and (a[j - 1] == "-t" or (tdir(a[j - 1]) and "=" not in a[j - 1]))]
+            + [x.split("=", 1)[1] for x in a if x.startswith("--t") and "=" in x and tdir(x)] + [x[2:] for x in a if x.startswith("-t") and x[2:3] in ("/", "~", "$")] for y in _brace(x)]
     if name in ("cp", "mv", "install", "ln", "rsync", "scp") and not (name == "rsync" and any(t == "--dry-run" or _bundle(t, "n") for t in a)) and any(
-            not t.startswith("-") and _sysw(re.sub(r"^[^/:\s]{2,}:(?!//)", "", t) if name in ("rsync", "scp") else t) for t in dest):
+            not t.startswith("-") and (_sysw(re.sub(r"^[^/:\s]{2,}:(?!//)", "", t) if name in ("rsync", "scp") else t) or _blk(t)) for t in dest):
         return f"{name} onto a system path. Edit a copy and ask the owner"
     if name == "ln" and any(HOMEP.match(t) for t in dest):
         return "ln onto a shell startup file or ~/.ssh|.aws|.gnupg replants a persistent hook. Ask the owner"
@@ -806,6 +871,8 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
             return "kubectl delete node removes the node from the cluster and strands its pods. Use `kubectl cordon` and ask the owner"
         if r in ("ns", "namespace", "namespaces") or (r == "all" and ("--all" in a or "-A" in a or "--all-namespaces" in a)):
             return "kubectl delete namespace/all removes a whole workload. Delete exact named objects and ask the owner"
+    if name == "kubectl" and "delete" in w and any(_kstdin(a, j) for j in range(len(a))):
+        return "kubectl delete -f - deletes whatever manifest is piped in, which cannot be vetted. Write it to a file, read it, then delete by exact name"
     if name == "ssh-add" and any(t == "--delete-all" or _bundle(t, "D") for t in a):
         return "ssh-add -D removes every loaded key from the agent. Use `ssh-add -d KEYFILE` or ask the owner"
     if name == "cipher" and any(t.lower().startswith("/w") for t in a):
@@ -926,7 +993,7 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
         r = _sqlite(a, depth)
         if r:
             return r
-    if name in SQLCLI and not (name == "sqlite3" and ":memory:" in a and not re.search(r"attach|\.shell|\.system|\.read", " ".join(a), re.I)) and any(SQLDROP.search(SQLCOMMENT.sub(' ', re.sub(r"^-[A-Za-z]", r"\g<0> ", t))) for t in a[:512]):  # first 512 args bound the scan; `-c'drop ...'` joins flag and text
+    if name in SQLCLI and not (name == "sqlite3" and ":memory:" in a and not re.search(r"attach|\.shell|\.system|\.read", " ".join(a), re.I)) and not _testsql(name, a) and any(SQLDROP.search(SQLCOMMENT.sub(' ', re.sub(r"^-[A-Za-z]", r"\g<0> ", t))) for t in a[:512]):  # first 512 args bound the scan; `-c'drop ...'` joins flag and text
         return "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
     if name in SHELLS + ("eval",) and any(re.search(r"\b(curl|wget)\b", t) for t in a):
         return "remote script run through a shell. Download, read it, then run it"
@@ -1127,6 +1194,13 @@ def check(cmd, _depth=0, _ph=None):
     cmd = cmd.replace("\\\n", "")
     if _depth > MAXDEPTH:
         return _fallback(cmd)
+    if not re.search(r"\bgit\s*\(|\bfunction\s+git\b|\balias\b|\bhash\b|\bPATH=|\bGIT_", cmd):  # a redefined git could print any root
+        cmd = TOPLEVEL.sub(r"./\1", cmd)  # `rm -rf "$(git rev-parse --show-toplevel)/out"` is the relative `./out`
+    for m in itertools.islice(MKTEMP.finditer(cmd), 8) if not re.search(r"\bmktemp\s*\(|\bfunction\s+mktemp\b|\balias\b|\bhash\b|\bPATH=", cmd) else ():  # `td=$(mktemp -d)`, set once and never reassigned (`${td:=x}`, read, for), is a fresh dir: `rm -rf "$td"` removes only it
+        if len(re.findall(r"(?<![\w$])" + m[1] + r"\b(?!\})", cmd)) == 1:
+            cmd = cmd[:m.end()] + re.sub(r"(\brm(?:[ \t]+-[\w-]+)*[ \t]+(?:--[ \t]+)?)(\"?)\$(?:" + m[1] + r"|\{" + m[1] + r"\})\2(?=[ \t]*(?:$|[;&|)\n]))", r"\1/tmp/mktemp-dir", cmd[m.end():])
+    if SYMLN.search(cmd) and re.search(r"\bmkfs[^;&|\n]*\.(?:img|raw)\b", cmd):
+        return "mkfs of an image after `ln -s` in the same command: the link may point at a device. Run the steps separately"
     if SYMLN.search(cmd) and RMREC.search(cmd) and re.search(r"(?:\$TMPDIR|\$\{TMPDIR\}|/tmp)/\w", cmd):
         return "rm -r in scratch space after `ln -s` in the same command: the link may point at the host. Run the steps separately and `rm` the link itself (no trailing slash)"
     wr = {}  # file -> texts written to it; a later `sh FILE` / `./FILE` runs them
@@ -1208,8 +1282,8 @@ def check(cmd, _depth=0, _ph=None):
                 skip = "hs" if t.endswith("<<<") else "t>" if t in (">", ">|", "&>") else "ta" if t in (">>", "&>>") else "t<" if t == "<" else "t"
                 hd[-1] = hd[-1] or "<<" in t
         elif skip:
-            if skip in ("t>", "ta") and _sysw(t, skip == "ta"):
-                return "redirect writes a system file. Edit a copy and ask the owner"
+            if skip in ("t>", "ta") and (_sysw(t, skip == "ta") or _blk(t)):
+                return "redirect writes a system file or raw disk. Edit a copy and ask the owner"
             if skip == "t>" and segs[-1] in EMPTYSRC and _trunc(t):
                 return "redirect truncates a key/credential or database file. Back it up and ask the owner"
             if skip in ("t>", "ta"):
@@ -1251,7 +1325,7 @@ def check(cmd, _depth=0, _ph=None):
             a = [t if t.startswith(("-", "/", "~", "$")) else cwd + "/" + t for t in a]
         if name == "rm" and ph and op == "|" and prev == "echo" and feed and feed[1:] and (not cwd or _scoped(cwd)) and all(LITPATH.fullmatch(x) for x in feed[1:]):
             a, ph = [y for t in a for y in (feed[1:] if t in ph else [t])], None  # `echo ./build | xargs -I{} rm -rf {}`: the targets are literal
-        r = _cmd(name, a + ([t for t in seg[:i] if re.match(r"\w+=", t)] if name in ("make", "gmake") else []), ph, _depth, cwd, genv)
+        r = _cmd(name, a + ([t for t in seg[:i] if re.match(r"\w+=", t)] if name in ("make", "gmake", "psql") else []), ph, _depth, cwd, genv)
         if not r and name == "rm" and ph and op == "|" and any((t.startswith(("/", "~", "$")) and not _scoped(t)) or ".." in t.split("/") for t in up):
             r = "rm of paths piped from a list outside scratch space. List them first, then `rm` exact paths"
         if not r and name == "eval":

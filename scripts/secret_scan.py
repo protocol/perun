@@ -87,7 +87,7 @@ LINE_MAX = 4096  # a secret starting past 4 KB of one line (minified bundles) is
 
 # Lines that mark a match as a non-secret: documentation words, filler runs, Stripe test-mode and publishable keys, browser-exposed
 # env vars (NEXT_PUBLIC_), Mapbox public tokens, CSRF nonces. Applied to the matched text only (never the rest of the line), only by the gate (precise=True), never to the rival bench.
-PLACEHOLDER = re.compile(r"(?<![A-Za-z])(?:[Ee]xample|EXAMPLE)(?![a-z]|\.[a-z])|[A-Z0-9]EXAMPLE(?:KEY)?(?![A-Za-z0-9])|(?i:dummy|fake|placeholder|redacted|revoked|replace[_-]?me|changeme|x{8,}|0{10,}|[sp]k_test_|pk_live_|next_public_|\bpk\.eyJ|[cx]srf|sitekey|\bcache[_-]?key\b|eyJyb2xlIjoiYW5vbiJ9)|(?<![A-Za-z])your[_-]|dXNlcm5hbWU6cGFzc3dvcmQ|dXNlcjpwYXNz|QWxhZGRpbjpvcGVuIHNlc2FtZQ")
+PLACEHOLDER = re.compile(r"(?<![A-Za-z])(?:[Ee]xample|EXAMPLE)(?![a-z]|\.[a-z])|[A-Z0-9]EXAMPLE(?:KEY)?(?![A-Za-z0-9])|(?i:dummy|fake|placeholder|redacted|revoked|replace[_-]?me|changeme|x{8,}|0{10,}|[sp]k_test_|pk_live_|next_public_|\bpk\.eyJ|[cx]srf|sitekey(?![_-]?(?:secret|private))|(?:captcha|turnstile)[_-]?site[_-]?key(?![_-]?(?:secret|private))|\bcache[_-]?key\b|eyJyb2xlIjoiYW5vbiJ9)|(?<![A-Za-z])your[_-]|dXNlcm5hbWU6cGFzc3dvcmQ|dXNlcjpwYXNz|QWxhZGRpbjpvcGVuIHNlc2FtZQ")
 
 
 # A Google API key whose own line says it is a referrer-restricted public (browser) key is public by design; an unsigned JWT (empty signature) is not a credential.
@@ -138,6 +138,15 @@ EXTRA = [(i, re.compile(r), g, e) for i, r, g, e in [
     ("netrc-password", r"""(?i)\bmachine\s+\S+\s+login\s+\S+\s+password\s+(?![$<{%*])([^\s'",;]{8,})""", 1, 3.0),
     ("pagerduty-key", r"""(?i)pagerduty\w*['"]?\s*[=:]\s*['"]?(u\+[\w-]{18})\b""", 1, 3.0),
     ("mysqli-password", r"""(?i)\bnew\s+mysqli\(\s*['"][^'"]*['"]\s*,\s*['"][^'"]*['"]\s*,\s*['"](?![$<{%*])([^'"\s]{8,})['"]""", 1, 3.0),
+    # held-out-9 additions; skipped on purpose: L029 (a service-account private_key_id is an identifier, not the key, and 38 hex is not the real 40), L038 (a sed replacement into a conf file) and L056 (a bare string argument to Session::new) have no shape of their own
+    ("resend-key", r"\bre_[A-Za-z0-9]{8}_[A-Za-z0-9]{24}\b", 0, 3.5),
+    ("okta-ssws-token", r"\bSSWS\s+(00[\w-]{38,})", 1, 3.5),
+    ("cli-password-attached", r"""(?i)\b(?:mysql(?:dump)?|psql|sshpass|redis-cli|mongo(?:sh)?)\b[^\n]*?\s-p(?![$<{%*'"-])(?=[^'"\s]*\d)([^'"\s]{8,})""", 1, 3.0),
+    ("pass-key-assign", r"""(?i)\b[\w-]{0,40}[-_]pass\b['"]?\s*[:=]\s*['"]?(?![$<{%*!])(?=[^\s'",;]*\d)(?=[^\s'",;]*[a-z])([^\s'",;]{8,})""", 1, 3.0),  # ansible_become_pass, ansible-vault-pass
+    ("url-query-token", r"""(?i)[?&](?:access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|private[_-]?token)=(?![$<{%*])(?=[\w.~-]*\d)([\w.~-]{20,})""", 1, 3.0),
+    ("xml-add-key-value", r"""(?i)<add\s+key="\w{0,40}(?:key|secret|passw(?:or)?d|token|pwd)\w{0,40}"\s+value="(?![$<{%*])(?=[^"\s]*\d)([^"\s]{20,})\"""", 1, 3.5),
+    ("xml-password-element", r"""(?i)<\w{0,20}(?:password|passwd|secret|token)>(?![$<{%*])(?=[^<\s]*\d)([^<\s]{8,})</""", 1, 3.0),
+    ("bracket-secret-assign", r"""(?i)\[\s*['"]\w{0,40}(?:secret|passw(?:or)?d|token|(?:api|signing|private|access|auth|encryption|master)_?key)\w{0,40}['"]\s*\]\s*=\s*['"](?![$<{%*/~]|\./|[^'"\s]*(?:://|arn:|\.[a-z]{2,4}['"]))(?=[^'"\s]*\d)([^'"\s]{16,})['"]""", 1, 3.5),  # PHP $config['jwt_secret'], os.environ["SIGNING_KEY"]
     ("vault-token", r"\bhv[sbr]\.([\w-]{24,})", 1, 3.5),
 ]]
 
