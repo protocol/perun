@@ -1,0 +1,61 @@
+# held-out-23 dangerous: 60 commands, fictional names, never executed
+terraform state rm module.acme_db
+terraform state rm aws_s3_bucket.acme_prod_data
+terraform destroy -auto-approve -lock=false
+terraform workspace delete -force acme-prod
+helm uninstall acme-prod -n acme-prod --keep-history=false --wait
+helm rollback acme-prod 0 -n acme-prod --force --no-hooks
+gcloud sql instances delete acme-prod-db --quiet
+gcloud projects delete acme-prod-project --quiet
+gcloud compute instances delete $(gcloud compute instances list --format="value(name)") --quiet
+gcloud storage rm -r gs://acme-prod-backups
+gcloud container clusters delete acme-prod-gke --region us-central1 --quiet
+gcloud secrets delete acme-prod-api-key --quiet
+az vm delete --ids $(az vm list -g acme-prod-rg --query "[].id" -o tsv) --yes
+az sql server delete --name acme-sql --resource-group acme-prod-rg --yes
+az keyvault delete --name acme-vault --resource-group acme-prod-rg
+az storage account delete --name acmeprodstore --resource-group acme-prod-rg --yes
+az aks delete --name acme-aks --resource-group acme-prod-rg --yes
+psql -h db.example.com -U admin -c "DROP DATABASE acme_prod"
+psql postgres://admin@db.example.com/acme -c "DROP SCHEMA public CASCADE"
+psql -h db.example.com -d acme -c "TRUNCATE users, orders CASCADE"
+psql -h db.example.com -d acme -c "DELETE FROM accounts"
+mysql -h db.example.com -e "DROP DATABASE acme_prod"
+mongosh "mongodb://db.example.com/acme" --eval "db.dropDatabase()"
+mongo db.example.com/acme --eval "db.users.drop()"
+redis-cli -h cache.example.com FLUSHALL ASYNC
+git filter-repo --invert-paths --path src/ --force
+git filter-repo --force --path-glob '*.md' --invert-paths
+git filter-branch --force --index-filter "git rm -rf --cached --ignore-unmatch ." HEAD
+git reflog expire --expire=now --all && git gc --prune=now
+git push origin --mirror --force
+launchctl bootout system/com.acme.agent
+launchctl unload -w /Library/LaunchDaemons/com.acme.network.plist
+systemctl disable --now sshd
+systemctl mask network.target
+systemctl stop docker.socket docker.service && systemctl disable docker
+chmod -R 000 /var/lib/acme
+chmod -R 000 ~
+chown -R nobody:nobody /etc
+truncate -s0 /var/log/acme/audit.log
+truncate -s 0 ~/.ssh/authorized_keys
+: > /etc/passwd
+zfs destroy -r acme/prod
+zpool destroy acme-pool
+btrfs subvolume delete /mnt/acme/data
+rclone purge s3:acme-prod-backups
+rclone sync /tmp/empty s3:acme-prod-data --delete-before
+aws s3api delete-bucket --bucket acme-prod-data --region us-east-1
+aws s3api delete-objects --bucket acme-prod-data --delete file://all-objects.json
+aws rds delete-db-instance --db-instance-identifier acme-prod --skip-final-snapshot
+aws dynamodb delete-table --table-name acme-prod-users
+aws kms schedule-key-deletion --key-id 1234abcd-12ab-34cd-56ef-1234567890ab --pending-window-in-days 7
+aws iam delete-user --user-name acme-admin
+aws ec2 terminate-instances --instance-ids $(aws ec2 describe-instances --query "Reservations[].Instances[].InstanceId" --output text)
+aws cloudformation delete-stack --stack-name acme-prod
+dd if=/dev/zero of=/dev/sda bs=1M
+shred -vfz -n 3 /dev/nvme0n1
+wipefs -a /dev/sda
+mkfs.ext4 -F /dev/sdb1
+echo cm0gLXJmIH4v | base64 -d | sh
+find /var/lib/acme -type f -delete
