@@ -18,7 +18,7 @@ Fails (exit 1, one line per problem) when a bench dir:
      must have its file hash appear as a value in a later ledger event, else it is
      uncovered and fails. The canonical event is "preregistered" and the canonical key
      "sha256"; event "prereg_frozen" and keys "sha256_frozen_txt", "sha", "preregistered_sha256",
-     "frozen_list_sha256" and "sha256_of_SHA256-frozen.txt" are accepted. Timestamps are
+     "frozen_list_sha256", "sha256_of_SHA256-frozen.txt" and "sha256_frozen" are accepted. Timestamps are
      "ts" or "iso" (epoch number or ISO-8601); an unparseable one fails, a missing one
      leaves line order as the only check;
   c. has a PREREGISTERED*.md naming a SHA256*.txt hash file that does not exist;
@@ -62,7 +62,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 N = 10
-KEYS = ("sha256", "sha256_frozen_txt", "sha", "preregistered_sha256", "frozen_list_sha256", "sha256_of_SHA256-frozen.txt")
+KEYS = ("sha256", "sha256_frozen_txt", "sha", "preregistered_sha256", "frozen_list_sha256", "sha256_of_SHA256-frozen.txt", "sha256_frozen")
 PREREG = ("preregistered", "prereg_frozen")
 REPO = Path(__file__).resolve().parent.parent
 

@@ -52,6 +52,11 @@ LIVE.update({"environ-default-secret": "x = os.environ.get('DB_PASS', '" + tok("
              "terraform-variable-default": 'variable "db_pass' 'word" {\n  default = "' + tok("tv2", 20) + '"\n}', "k8s-env-value": '- name: DB_PASS' 'WORD\n  value: "' + tok("ke", 20) + '"',
              "dockerfile-env-secret": "ENV SESSION_SECRET " + tok("de", 40), "netrc-password": "machine git.acme.example.com login ci pass" "word " + tok("np", 14),
              "pagerduty-key": "PAGERDUTY_KEY=u+" + tok("pk", 18), "mysqli-password": "$m = new mysqli('10.4.1.7', 'root', '" + tok("my", 16) + "', 'shop');"})
+# Rules added after held-out-9 (decoy twins, ReDoS bounds: test_secret_extra_rules_w6.py).
+LIVE.update({"resend-key": "re" "_" + tok("r1", 8) + "_" + tok("r2", 24), "okta-ssws-token": "Authorization: SS" "WS 00" + tok("o", 38), "cli-password-attached": "mysql -p" + tok("c1", 16) + " -e 'select 1'",
+             "pass-key-assign": "ansible_become_pass: " + tok("p1", 18), "url-query-token": "GET /v1/items?access_token=" + tok("u1", 32) + "&limit=10",
+             "xml-add-key-value": '<add key="StorageKey" value="' + tok("x1", 42) + '==" />', "xml-password-element": "<pass" "word>" + tok("x5", 14) + "</pass" "word>",
+             "bracket-secret-assign": "$config['jwt_sec" "ret'] = '" + tok("b1", 40) + "';"})
 LIVE["password-assign"] = "DB_PASS" "WORD=" + tok("pa", 11) + "!047"
 LIVE["password-env-netrc"] = "ENV ADMIN_PASS" "WORD " + tok("pe", 11) + "!047"
 LIVE["conn-string-password"] = "jdbc:sqlserver://h:1433;user=jane;pass" "word=" + tok("cp", 16)

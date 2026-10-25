@@ -23,7 +23,7 @@ def run(*a):
 
 
 perun = run(str(B / "security-gates-1024/score.py"))
-assert "destructive guard: blocked 59/60  FP 0/60" in perun, perun
+assert "destructive guard: blocked 60/60  FP 0/60" in perun, perun  # wave 14 (`kubectl delete -f -` blocked) lifted 59/60 -> 60/60
 riv = run(str(B / "security-gates-1024/rivals/score_rivals.py"))
 for want in ("hooks-mastery (ported): blocked 8/60  FP 4/60", "safety-net (ported subset): blocked 20/60 (2 unported)  FP 2/60"):
     assert want in riv, (want, riv)
