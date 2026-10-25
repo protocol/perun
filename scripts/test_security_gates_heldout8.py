@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Pins held-out-8 (docs/bench/security-gates-heldout8-1025): preregistered hashes and the blind scores (wave-5 guard 27d1c7d63: blind 48/60
-blocked, 1/60 benign blocked; post-review a72cce0a9: 49/60, 1/60; rivals). The pin is the current post-review 49/60. Blind for the guard until a rule wave is tuned toward this corpus. A moved number means a rule edit changed a scored corpus:
-re-score, record it in RESULTS.md and update the pins deliberately. Offline; commands are only classified.
+"""Pins held-out-8 (docs/bench/security-gates-heldout8-1025): preregistered hashes and the scores (guard 60/60 blocked, 0/60 benign
+blocked; rivals). IN-SAMPLE since wave 6; the blind rows are pinned in test_security_gates_heldout8_blind.py. A moved number means a
+rule edit changed a scored corpus: re-score, record it in RESULTS.md and update the pins deliberately. Offline; commands are only classified.
 """
 import hashlib, pathlib, subprocess, sys
 
@@ -23,7 +23,7 @@ def run(*a):
 
 
 perun = run(str(B / "security-gates-1024/score.py"))
-assert "destructive guard: blocked 49/60  FP 1/60" in perun, perun
+assert "destructive guard: blocked 60/60  FP 0/60" in perun, perun
 riv = run(str(B / "security-gates-1024/rivals/score_rivals.py"))
 for want in ("hooks-mastery (ported): blocked 14/60  FP 7/60", "safety-net (ported subset): blocked 12/60 (2 unported)  FP 0/60"):
     assert want in riv, (want, riv)

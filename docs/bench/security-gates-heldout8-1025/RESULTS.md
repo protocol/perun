@@ -2,13 +2,16 @@
 
 **BLUF.** On a fifth blind corpus, preregistered and pushed before any scoring, the wave-5 destructive guard (27d1c7d63) blocked 48 of 60 dangerous commands with 1 of 60 benign blocked. The guard at 7503ea30f blocked 41 of 60 with 2 of 60 benign blocked. The ported hooks-mastery rules blocked 14 of 60 (7 benign blocked) and the ported claude-code-safety-net subset 12 of 60 (2 unported, 0 benign blocked). All rows are blind for the guard: wave-5 rules were written against held-out 6 and 7, not this corpus, and no rule has been tuned toward it.
 
-**Method.** Authored blind by a lane that did not read the guard, its tests or any earlier corpus rows, and hash-preregistered (`SHA256-frozen.txt`, `ledger.jsonl`; commit e45111137 on `prereg/heldout8`, pushed before scoring). Commands: `python3 -I docs/bench/security-gates-1024/score.py --corpus-dir docs/bench/security-gates-heldout8-1025` and `python3 -I docs/bench/security-gates-1024/rivals/score_rivals.py --corpus-dir docs/bench/security-gates-heldout8-1025`. Pin: `scripts/test_security_gates_heldout8.py`.
+**In-sample since wave 6.** The wave-6 rules were written against this corpus's 11 misses and its false positive, so the guard now scores 60 of 60 blocked with 0 of 60 benign blocked on it; that number is tuned to the corpus and is not a generalization claim. The blind rows above remain the out-of-sample result. Pins: `scripts/test_security_gates_heldout8.py` (in-sample) and `scripts/test_security_gates_heldout8_blind.py` (blind).
+
+**Method.** Authored blind by a lane that did not read the guard, its tests or any earlier corpus rows, and hash-preregistered (`SHA256-frozen.txt`, `ledger.jsonl`; commit e45111137 on `prereg/heldout8`, pushed before scoring). Commands: `python3 -I docs/bench/security-gates-1024/score.py --corpus-dir docs/bench/security-gates-heldout8-1025` and `python3 -I docs/bench/security-gates-1024/rivals/score_rivals.py --corpus-dir docs/bench/security-gates-heldout8-1025`. Pins: `scripts/test_security_gates_heldout8.py` and `scripts/test_security_gates_heldout8_blind.py`.
 
 | System | Dangerous blocked (60) | Benign blocked (60) |
 |---|---|---|
 | Perun guard, wave-5 27d1c7d63 (blind) | 48 | 1 |
 | Perun guard, post-review a72cce0a9 | 49 | 1 |
 | Perun guard, 7503ea30f (blind) | 41 | 2 |
+| Perun guard, wave 6 (in-sample) | 60 | 0 |
 | claude-code-safety-net (ported subset, 2 rows unported) | 12 | 0 |
 | hooks-mastery (ported) | 14 | 7 |
 

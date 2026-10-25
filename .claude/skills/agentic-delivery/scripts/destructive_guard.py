@@ -51,11 +51,14 @@ Denies (exit 2, one-line reason with the safe alternative on stderr; the host bl
   `aws <svc> delete-*|terminate-*|purge-*`, `gcloud ... delete`, `gsutil rm -r`, `az ... delete|purge`, `kubectl delete --all|drain`,
   `docker|podman|nerdctl exec|run IMG CMD` and `kubectl exec -- CMD` (CMD is checked), `>>`/`tee` onto a system file, `gh <noun> delete`, `curl -X DELETE`,
   `helm uninstall`, `pulumi destroy`, `terraform state rm`, `parted mklabel`, `cqlsh` DROP, `git filter-branch`, `> /etc/...`, an
-  alias to a destructive command and one-step `x=rm; $x -rf` indirection. Allowed: `--help`/`-help`, `--dry-run`/`--dryrun`
+  alias to a destructive command and one-step `x=rm; $x -rf` indirection; wave 6: `tmutil delete`, `cdk|cdktf|sst destroy`, `doctl ... delete`,
+  `flyctl|heroku` destroy, `hg strip|purge`, `make clean VAR=/`, `gem uninstall` of everything, `diskutil apfs delete*`, `set -- rm ...; "$@"`,
+  `kubectl run` with hostPID/privileged/hostPath, `ln|rsync` onto a system path, vault revoke/policy delete, `git reflog delete`, `reg add|save HKLM`,
+  `wmic ... call create|uninstall`, and Windows `del` of a system file, a `..` path or a bare `*`/`*.*`. Allowed: `--help`/`-help`, `--dry-run`/`--dryrun`
   (not `=none`; aws/kubectl/helm only), and `rm`/`find -delete` inside a named child of `$TMPDIR` or `/tmp`. A `--help` after
   other arguments of rm/chmod/chown/dd/shred/mkfs/diskutil (only a lone one is usage) still gets the full check.
   Residuals: a `/tmp/<name>` symlink to elsewhere, or an unset `$TMPDIR` (`$TMPDIR/x` becomes `/x`), is trusted; `> file` over
-  a system path is caught but `cp`/`mv` onto one are out of scope; `pip uninstall` is blocked only for xargs or `-r`.
+  a system path is caught (so is `cp`/`mv`/`ln`/`rsync` onto one, except `cp` to `*.bak|*.orig|*.old`); `pip uninstall` is blocked only for xargs or `-r`.
 Everything else is allowed.
 
 No in-repo grant or allow list: anything an agent can write, an agent can forge. When the owner really wants a
@@ -68,6 +71,7 @@ Side effects: none. `--selftest` runs assertions.
 """
 import json
 import os
+import itertools
 import posixpath
 import re
 import shlex
@@ -88,11 +92,13 @@ EVALFLAG = re.compile(r"-[A-Za-z]*[ceErp][A-Za-z]*")
 SAFE_DEV = ("/dev/null", "/dev/zero", "/dev/stdout", "/dev/stderr")
 GIT_OPT_VAL = ("-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env")
 LIT = r"""['"][^'"/$@][^'"$@]*['"]"""  # a literal relative path
-DELAPI = re.compile(r"(rmtree|os\.(?:remove|unlink|rmdir|removedirs)|rmSync|rmdirSync|unlinkSync|\bfs\.rm|rm_rf"
+DELAPI = re.compile(r"(rmtree|remove_tree|os\.(?:remove|unlink|rmdir|removedirs)|rmSync|rmdirSync|unlinkSync|\bfs\.rm|rm_rf"
                     r"|File\.delete|\bunlink|\brmdir)(?:\(|\s)(?!\s*(?:" + LIT + r"\s*(?:[,);]|$)|(?:tempfile\.)?mkdtemp\(\s*\)\s*[,);]))")
 BODYRM = re.compile(r"\brm\s+-\w*[rR]\w*\s*(?:\S*[$/~*]|['\"]\s*\+|%s|\{)")  # variable/root path or string concatenation
 PRINTCALL = re.compile(r"""\b(?:print|puts|echo|console\.(?:log|error)|sys\.std(?:out|err)\.write)\s*\(((?:[^()'"]|'[^']*'|"[^"]*")*)\)""")
-SQLCLI = ("psql", "mysql", "mariadb", "sqlite3", "mongosh", "sqlcmd", "cqlsh")
+AWSVAL = ("--profile", "--region", "--endpoint-url", "--output", "--query", "--color", "--ca-bundle", "--cli-read-timeout", "--cli-connect-timeout", "--cli-binary-format")
+HGVAL = ("-R", "--repository", "--cwd", "--config", "--encoding", "--encodingmode", "--color", "--pager")
+SQLCLI = ("psql", "mysql", "mariadb", "sqlite3", "mongosh", "sqlcmd", "cqlsh", "clickhouse-client", "clickhouse")
 SQLCOMMENT = re.compile(r"/\*.*?\*/", re.S)
 SQLDROP = re.compile(r"\b(?:drop\s+(?:database|schema|keyspace|table)|truncate\s+\w|delete\s+from\s+\w+\s*(?:;|$))", re.I)
 DYNCMD = re.compile(r"(?:^|[;&|\n({]|\bthen\b|\bdo\b)\s*\"?(?:\$\([^()]{0,200}\)|`[^`]{0,200}`|\$\{?\w{1,64}\}?)\"?(?:\s+\S+){0,8}?\s+(?:-\w*(?:rf|fr)\w*|--hard)\b")
@@ -189,9 +195,13 @@ def _sqlite(texts, depth):
     of a system path (also parenthesised, concatenated or `file:`) is refused."""
     for t in texts:
         for m in SQLSH.finditer(t):
-            r = check(_unq((m[1] or m[2]).strip()), depth + 1)
+            c = _unq((m[1] or m[2]).strip())
+            r = check(c, depth + 1)
             if r:
                 return r
+            c = c.split()
+            if c and (os.path.basename(c[0]) in SHELLS or INTERP.match(os.path.basename(c[0]))) and all(x.startswith("-") for x in c[1:]):
+                return "sqlite3 dot-command pipes into a bare shell/interpreter. Run an exact literal command"
         cands = [m[1] for m in SQLOPEN.finditer(t)]
         for m in SQLATT.finditer(t[:20000]):
             e = re.sub(r"""['"][ \t]*\|\|[ \t]*['"]""", "", m[1])
@@ -210,6 +220,8 @@ def _wintarget(t):
     """A Windows recursive-delete target that is not a plain relative project path (drive, UNC, variable, glob, `.`, `..`, root)."""
     u = t.replace("\\", "/")
     n = posixpath.normpath(u or ".")
+    if re.fullmatch(r"\*\.[\w~-]+", t):
+        return False  # `*.log` in the cwd: scoped by its extension
     if re.fullmatch(r"(?:\$env:(?:TEMP|TMP)|%(?:TEMP|TMP)%)[\\/][\w.-]+(?:[\\/][^$%]*)?", t, re.I) and ".." not in n.split("/"):
         return False  # a named child of the temp dir
     glob = re.search(r"[*?]", u) and "/" in n and not re.search(r"[*?]", n.rsplit("/", 1)[0])  # glob only in the last part of a named relative dir
@@ -220,6 +232,30 @@ def _wildsys(t):
     """`del` target that wipes a system dir: drive/%SystemRoot%/bare `Windows` + `*` or `*.*` (shlex ate the backslashes); `*.ext` is scoped."""
     return bool(re.match(r"(?i)(?:[A-Za-z]:[\\/]*|[\\/]*)(?:windows|users|program|system32|boot|recovery)|(?:%|\$env:)(?:systemroot|windir|systemdrive|programfiles\w*)%?", t)
                 and re.search(r"[*?]+(?:\.[*?]+)?$", t))
+
+
+SYSWIN = re.compile(r"(?i)(?:[A-Za-z]:[\\/]*|[\\/]+|(?:%|\$env:)(?:systemroot|windir|systemdrive|programfiles\w*)%?[\\/]*)"
+                    r"(?:windows(?![\\/]*temp)|system32|syswow64|program|boot(?:mgr|\.ini)?(?![a-z])|ntldr|pagefile|hiberfil|recovery)")
+WINDEL = re.compile(r"(?i)(?:^|[;&|\n(]|/[ck][ \t]+[\"']?)[ \t]*(?:del|erase)\b([^;&|\n]*)")
+
+
+def _windel(raw):
+    """`del`/`erase` read from the RAW text (shlex eats the backslashes of `..\\x`): `..` paths, a bare `*`/`*.*` in the cwd or under a
+    drive/variable/`..` dir, and any file under a Windows system dir. `del /s /q *.log` and `del build\\*.*` stay allowed."""
+    for m in itertools.islice(WINDEL.finditer(raw), 200):  # bounded: each match scans the prefix for quote parity
+        pre = raw[:m.start()]
+        if (pre.count('"') % 2 or pre.count("'") % 2) and not m[0].lstrip(";&|\n( \t").startswith("/"):
+            continue  # inside a quoted mention
+        for t in re.findall(r"\"[^\"]*\"|'[^']*'|\S+", m[1]):
+            t = t.strip("\"'")
+            if re.fullmatch(r"/[A-Za-z?]", t):
+                continue
+            u = t.replace("\\", "/")
+            dirpart, _, last = u.rpartition("/")
+            if ".." in u.split("/") or SYSWIN.match(t) or (re.fullmatch(r"\*+(?:\.\*+\w*)?", last) and (
+                    not dirpart or WINABS.match(t) or u.startswith("/") or "$" in u)):
+                return "del of a system file, `..` path or whole directory contents. Delete exact in-project files"
+    return ""
 
 
 def _win(name, a, depth):
@@ -252,10 +288,12 @@ def _win(name, a, depth):
         return f"{name} wipes a volume or disk. Do it in a VM, never on the host"
     if n == "bcdedit" and any(t.lower() in ("/delete", "/deletevalue", "/set") for t in a):
         return "bcdedit changes boot configuration. Ask the owner"
-    if n == "reg" and a[:1] and a[0].lower() in ("delete", "import", "restore"):
-        return "reg delete/import/restore changes the registry. Ask the owner"
-    if n == "wmic" and ("delete" in map(str.lower, a) or {"call", "format"} <= set(map(str.lower, a))):
-        return "wmic delete removes system objects. Ask the owner"
+    if n == "reg" and a[:1] and (a[0].lower() in ("delete", "import", "restore") or (a[0].lower() in ("add", "copy", "save", "load", "unload") and any(
+            re.match(r"(?i)(?:\\\\[^\\]+\\)?(?:HKLM|HKEY_LOCAL_MACHINE|HKCR|HKEY_CLASSES_ROOT)", t) for t in a[1:]))):
+        return "reg delete/import/restore or a write to HKLM changes the registry. Ask the owner"
+    if n == "wmic" and (any(t in ("delete", "uninstall", "terminate") for t in map(str.lower, a)) or {"call", "format"} <= set(map(str.lower, a))
+                        or {"call", "create"} <= set(map(str.lower, a))):
+        return "wmic delete/call create/uninstall changes system objects or runs commands. Ask the owner"
     if (n == "format" and any(re.fullmatch(r"[A-Za-z]:", t) for t in a)) or n in ("format-volume", "clear-disk", "remove-partition", "initialize-disk"):
         return f"{name} wipes a volume or disk. Do it in a VM, never on the host"
     return ""
@@ -347,15 +385,17 @@ def _rm(args, ph):
         if _scoped(t) and not (ph and any(p in t for p in ph if p)):
             continue
         if re.search(r"[$`*?\[]|\{[^}]*(?:,|\.\.)", t) or (ph and any(p in t for p in ph if p)) or n == "." or _far(t) \
-                or n.startswith("..") or re.match(r"/(Users|home|usr|etc|var|opt|root|srv|mnt|media|Volumes|private/etc)/", n) or (
+                or n.startswith("..") or (n.startswith("/") and _sysw(n)) or re.match(r"/(Users|home|usr|etc|var|opt|root|srv|mnt|media|Volumes|private/etc)/", n) or (
                     re.match(r"/private/(?:etc|var|root|usr|opt|home|Users)/", n) and not re.match(r"/private/var/(?:folders|tmp)/", n)):
             return f"rm -r on `{t}` (variable, glob, placeholder, `.`, `..`, root, home or system path). Delete an exact, quoted in-project path, or use a container/VM"
     return ""
 
 
 def _git(a):
-    i = 0
+    i, gcv = 0, []  # gcv: `-c gc.reflogExpire[Unreachable]=V` values
     while i < len(a) and a[i].startswith("-"):
+        if a[i] == "-c" and i + 1 < len(a) and re.match(r"(?i)gc\.(?:\S+\.)?reflogexpire(?:unreachable)?=", a[i + 1]):
+            gcv.append(a[i + 1].split("=", 1)[1])
         m = re.match(r"alias\.[^=]+=(!?)(.*)", a[i + 1]) if a[i] == "-c" and i + 1 < len(a) else None
         if m:  # an alias definition carrying a destructive command
             r = check(m.group(2) if m.group(1) else "git " + m.group(2), 1)
@@ -396,8 +436,10 @@ def _git(a):
         return "whole-tree git checkout/restore discards uncommitted changes. Use `git stash` or name the exact file"
     if sub == "branch" and (any(_bundle(t, "D") for t in r) or (force and dele)):
         return "git branch -D deletes an unmerged branch. Use `git branch -d` (refuses if unmerged)"
-    if (sub == "reflog" and "expire" in r and any(re.fullmatch(r"--expire(?:-unreachable)?=(?:now|all|0|-?\d+\.?\w*)", t) for t in r)) \
-            or (sub == "gc" and any(t in ("--prune=now", "--prune=all") for t in r)) or (sub == "prune" and "now" in r):
+    ev = [t.split("=", 1)[1] for t in r if t.startswith("--expire") and "=" in t] + [y for x, y in zip(r, r[1:]) if x in ("--expire", "--expire-unreachable")] + gcv
+    pv = [t.split("=", 1)[1] for t in r if t.startswith("--prune=")] + [y for x, y in zip(r, r[1:]) if x == "--prune"]
+    if (sub == "reflog" and ("delete" in r or "expire" in r and any(re.fullmatch(r"now|all|0|-\d\S*|\d+(?:\.(?:second|minute|hour)s?(?:\.ago)?)?", v) for v in ev))) \
+            or (sub == "gc" and any(v in ("now", "all") for v in pv)) or (sub == "prune" and "now" in r):
         return "git reflog expire/gc --prune=now makes lost commits unrecoverable. Ask the owner"
     if sub == "stash" and any(t in ("clear", "drop") for t in r):
         return "git stash clear/drop loses stashed work. Use `git stash list`/`apply` and keep it"
@@ -445,7 +487,7 @@ def _cmd(name, a, ph, depth=0):
             k += 1
         sc = bool(st) and all(_scoped(x) for x in st)  # scratch space: deleting there is fine, other -exec bodies still run through check
         ext = a[k:][:1] in (["-name"], ["-iname"]) and len(a) - k == 3 and a[-1] == "-delete" \
-            and re.fullmatch(r"\*\.(?:pyc|o|tmp|log|orig|class)", a[k + 1])  # sole predicate: a known build-artifact glob
+            and re.fullmatch(r"\*\.(?:pyc|o|tmp|log|orig|class|map|bak|swp)", a[k + 1])  # sole predicate: a known build-artifact glob
         if "-delete" in a and not sc and not (ext and st and all(x in ("$TMPDIR", "${TMPDIR}", "/tmp") or not (_far(x) or ".." in x.split("/") or "$" in x or x.startswith("/")) for x in st)):
             return "find -delete. List with `find ... -print` first, then remove exact paths"
         for j, t in enumerate(a[:-1]):
@@ -487,24 +529,34 @@ def _cmd(name, a, ph, depth=0):
     if name in ("curl", "wget") and any(re.match(r"https?://\S*\?\S*\$\{?\w*(?:SECRET|TOKEN|PASSW|API_?KEY|PRIVATE)", t, re.I) for t in a):
         return "secret variable in a URL query string leaves the host. Send it in an Authorization header to a host you trust"
     w = [t for t in a if not t.startswith("-")]  # positional words; option values may leak in, which only widens a match
+    gv = AWSVAL if name == "aws" else HGVAL if name == "hg" else ()
+    if gv:  # global options with a value precede the verb
+        w = [t for k, t in enumerate(a) if not t.startswith("-") and not (k and a[k - 1] in gv)]
+    if name in ("npx", "bunx", "pnpx") or (name in ("pnpm", "npm", "yarn") and any(t in ("dlx", "exec", "x") for t in w[:1])) or name == "yarn":
+        for k in range(min(len(w), 4)):  # the tool may follow `-p pkg`: try the first few suffixes
+            r = check(" ".join(shlex.quote(x) for x in w[k:]), depth + 1)
+            if r:
+                return r
     pair = lambda *x: any(w[k:k + len(x)] == list(x) for k in range(len(w)))
     if name in ("gh", "glab") and (w[1:2] == ["delete"] or (w[:1] == ["api"] and any(
             re.fullmatch(r"(?:-X|--method)?=?DELETE", t, re.I) or (t.upper() == "DELETE" and k and a[k - 1] in ("-X", "--method"))
             for k, t in enumerate(a)))):
         return f"{name} delete is irreversible on the remote. Ask the owner"
     if name == "vault" and (w[:2] in (["kv", "destroy"], ["kv", "delete"], ["secrets", "disable"], ["auth", "disable"]) or w[:1] == ["delete"]
-                            or w[:3] == ["kv", "metadata", "delete"]):
-        return "vault kv destroy/metadata delete removes secret versions for good. Ask the owner"
+                            or w[:3] == ["kv", "metadata", "delete"] or w[:2] in (["lease", "revoke"], ["token", "revoke"], ["policy", "delete"], ["namespace", "delete"])):
+        return "vault kv destroy/metadata delete, lease/token revoke or policy delete is hard to undo. Ask the owner"
     if name in ("dropdb", "dropuser", "pg_dropcluster") or (name == "mysqladmin" and "drop" in w):
         return f"{name} drops a database or role. Ask the owner"
-    if name in ("mongo", "mongosh") and any(re.search(r"\.drop\s*\(|deleteMany\s*\(", t) for t in a):
+    if name in ("mongo", "mongosh") and any(re.search(r"\.drop\s*\(|delete(?:Many|One)\s*\(|findOneAndDelete\s*\(|\.remove\s*\(|\.dropIndex(?:es)?\s*\(", t) for t in a):
         return "mongo drop/deleteMany removes documents or collections. Ask the owner"
-    if name in ("cp", "mv", "install") and any(not t.startswith("-") and _sysw(t) for t in a[-1:] + [x for j, x in enumerate(a) if j and a[j - 1] in ("-t", "--target-directory")]):
+    if name in ("cp", "mv", "install", "ln", "rsync") and not (name == "rsync" and any(t == "--dry-run" or _bundle(t, "n") for t in a)) and any(
+            not t.startswith("-") and _sysw(t) and not (name == "cp" and re.search(r"\.(?:bak|orig|old)$", t))
+            for t in a[-1:] + [x for j, x in enumerate(a) if j and a[j - 1] in ("-t", "--target-directory")]):
         return f"{name} onto a system path. Edit a copy and ask the owner"
     if name == "chroot":
         k = 0
         while k < len(a) and a[k].startswith("-"):
-            k += 2 if a[k] in ("--userspec", "--groups") else 1
+            k += 2 if a[k] in ("--userspec", "--groups", "-u", "-g", "-G") else 1
         r = _inner(a[k + 1:], depth) if k + 1 < len(a) else ""
         if r:
             return r
@@ -541,7 +593,7 @@ def _cmd(name, a, ph, depth=0):
             w[:1] == ["apply"] and any(t in ("-destroy", "--destroy") for t in a)) or (name == "terragrunt" and "destroy" in w)):
         return f"{name} destroy/state rm removes real infrastructure or its record. Run `plan -destroy` and ask the owner"
     recur = any(t == "--recursive" or _bundle(t, "r") or _bundle(t, "R") for t in a)
-    if (name == "aws" and len(w) > 1 and re.match(r"(?:delete|terminate|purge)-", w[1])) \
+    if (name == "aws" and len(w) > 1 and re.match(r"(?:(?:delete|terminate|purge)-|schedule-key-deletion$)", w[1])) \
             or (name == "gcloud" and ("delete" in w or ("rm" in w and recur))) \
             or (name == "gsutil" and "rm" in w and recur) \
             or (name == "az" and any(t in ("delete", "purge") for t in w)) \
@@ -573,6 +625,28 @@ def _cmd(name, a, ph, depth=0):
         r = r[0].split("/")[0].lower() if r else ""
         if r in ("ns", "namespace", "namespaces") or (r == "all" and ("--all" in a or "-A" in a or "--all-namespaces" in a)):
             return "kubectl delete namespace/all removes a whole workload. Delete exact named objects and ask the owner"
+    if name == "tmutil" and any(t in ("delete", "deletelocalsnapshots") for t in w[:1]):
+        return "tmutil delete removes Time Machine backups. Ask the owner"
+    if name in ("cdk", "cdktf", "sst", "serverless", "sls") and w[:1] in (["destroy"], ["remove"]):
+        return f"{name} destroy removes a cloud stack. Run a diff/plan and ask the owner"
+    if (name == "doctl" and "delete" in w) or (name in ("flyctl", "fly") and any(t in ("destroy", "delete") for t in w)) \
+            or (name == "heroku" and any(re.search(r":(?:destroy|delete|reset)$", t) or t == "destroy" for t in w[:1])):
+        return f"{name} deletes a cloud resource. Name the exact resource and ask the owner"
+    if name == "hg" and w[:1] in (["strip"], ["purge"]):
+        return "hg strip/purge destroys history or untracked files. Ask the owner"
+    if name == "make" or name == "gmake":
+        if any(re.search(r"clean|purge|wipe", x) for x in w if "=" not in x) and any(
+                "=" in t and not t.startswith("-") and _far(t.split("=", 1)[1]) and t.split("=", 1)[1] for t in a):
+            return "make clean with a variable pointing at root or home. Name an in-project directory"
+    if name == "gem" and w[:1] == ["uninstall"] and (len(w) == 1 or (any(t == "--all" or _bundle(t, "a") for t in a) and any(
+            t == "--ignore-dependencies" or _bundle(t, "I") for t in a))):
+        return "gem uninstall of every gem or with --ignore-dependencies breaks the toolchain. Name the exact gem"
+    if name == "diskutil" and [x.lower() for x in w[:1]] in (["apfs"], ["ap"], ["corestorage"], ["cs"]) and w[1:2] and re.match(r"(?i)(?:delete|erase)", w[1]):
+        return "diskutil apfs/cs delete or erase destroys volumes. Do it in a VM, never on the host"
+    if name in ("kubectl", "oc") and ("run" in w or "debug" in w) and (any(
+            re.search(r"""["']?(?:hostPID|hostNetwork|hostIPC|privileged)["']?\s*:\s*true|["']?hostPath["']?\s*:""", t) or re.fullmatch(
+                r"--privileged(?:=true)?|--profile=(?:sysadmin|privileged)", t) for t in a) or ("debug" in w and any(t.startswith("node/") for t in w))):
+        return "kubectl run with host namespaces, privileged or hostPath escapes the pod. Ask the owner"
     if name == "redis-cli" and any(t.upper() in ("FLUSHALL", "FLUSHDB") for t in a):
         return "redis FLUSHALL/FLUSHDB wipes the keyspace. Ask the owner"
     if name in ("mongo", "mongosh") and any(re.search(r"dropDatabase\s*\(", t) for t in a):
@@ -778,6 +852,17 @@ def check(cmd, _depth=0, _ph=None):
         if r:
             return r
     cmd = HEREDOC.sub(lambda m: m.group(0).split("\n", 1)[0], cmd)
+    r = _windel(cmd)
+    if r:
+        return r
+    ifs = re.search(r"\bIFS=(['\"]?)([^\s$'\"\w])\1", cmd)  # `IFS=,; set -- rm,-rf,/; "$@"`: split on the custom separator, then judge `set --` words
+    sp = cmd.replace(ifs[2], " ") if ifs else cmd
+    lastpos = max((x.end() for x in re.finditer(r"\$@|\$\*|\$\{[@*]\}", sp)), default=-1)  # one scan; each `set --` is judged against it
+    for m in itertools.islice(re.finditer(r"\bset\s+--\s+([^;&|\n]+)", sp), 32):  # bounded: each match runs a nested check
+        if m.end() < lastpos:
+            r = check(m[1], _depth + 1)
+            if r:
+                return r
     cmd = re.sub(r"\$\{IFS\}|\$IFS\b", " ", cmd)  # rm${IFS}-rf is rm -rf
     if "()" in cmd and FORKBOMB.search(cmd):
         return "fork bomb. Never run it"
@@ -848,8 +933,8 @@ def check(cmd, _depth=0, _ph=None):
         if i >= len(seg):
             continue
         name, a = os.path.basename(seg[i]), seg[i + 1:]
-        r = _cmd(name, a, ph, _depth)
-        if not r and name == "rm" and ph and op == "|" and any(t.startswith(("/", "~", "$")) and not _scoped(t) for t in up):
+        r = _cmd(name, a + ([t for t in seg[:i] if re.match(r"\w+=", t)] if name in ("make", "gmake") else []), ph, _depth)
+        if not r and name == "rm" and ph and op == "|" and any((t.startswith(("/", "~", "$")) and not _scoped(t)) or ".." in t.split("/") for t in up):
             r = "rm of paths piped from a list outside scratch space. List them first, then `rm` exact paths"
         if not r and name == "eval":
             r = check(" ".join(a), _depth + 1, ph)
