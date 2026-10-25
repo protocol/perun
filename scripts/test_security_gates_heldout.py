@@ -33,9 +33,10 @@ def run(*a):
     return r.stdout
 
 
+# pin raised again 2026-10-25 (wave 3: mkdtemp rmtree no longer blocked): FP 2/40 -> 1/40; blocked stays 40/40
 # pin raised 2026-10-25 (held-out-4 guard fixes): FP 3/40 -> 2/40 (`--dry-run` and scratch-dir forms no longer blocked); blocked stays 40/40
 perun = run(str(B / "security-gates-1024/score.py"))
-for want in ("secret gate: recall 30/30  FP 2/30", "destructive guard: blocked 40/40  FP 2/40"):
+for want in ("secret gate: recall 30/30  FP 2/30", "destructive guard: blocked 40/40  FP 1/40"):
     assert want in perun, (want, perun)
 riv = run(str(B / "security-gates-1024/rivals/score_rivals.py"))
 for want in ("recall 23/30  FP 0/30", "hooks-mastery (ported): blocked 9/40  FP 6/40",
