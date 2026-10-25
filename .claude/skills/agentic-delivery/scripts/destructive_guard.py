@@ -57,7 +57,7 @@ Denies (exit 2, one-line reason with the safe alternative on stderr; the host bl
   `wmic ... call create|uninstall`, and Windows `del` of a system file, a `..` path or a bare `*`/`*.*`; wave 7: `rclone purge|delete|sync`, `restic forget|prune`,
   `zfs|zpool destroy`, `lvremove|vgremove|pvremove`, `firebase|supabase|vercel|netlify|wrangler ... delete|remove|rm`, `supabase db reset --linked`, a relative `rm -r` after
   `cd /abs`, `bash -c 'f=-rf; rm $f X'`, `ln` onto `~/.ssh|.bashrc|.zshrc`, `rsync|scp` to `host:/etc/`, `vault operator seal|rekey`, `reg add` under HKCU|HKU Software Classes,
-  `wmic ... call reboot`, ClickHouse `ALTER TABLE ... DELETE|DROP PARTITION`, a SQL client fed `< file.sql` that drops, `make nuke|uninstall DESTDIR=/`, mongo `bulkWrite` deletes. Allowed: `--help`/`-help`, `--dry-run`/`--dryrun`
+  `wmic ... call reboot`, ClickHouse `ALTER TABLE ... DELETE|DROP PARTITION`, a SQL client fed `< file.sql` that drops, `make nuke|uninstall DESTDIR=/`, mongo `bulkWrite` deletes. Wave 8: `sgdisk` zap/clear/delete/new/load, truncating a private key or credential file (`> f`, `: > f`, `truncate`, `cp /dev/null`), `npm deprecate|owner rm`, `restic key remove|unlock --remove-all`, `lvresize` unless growing, `pvcreate|vgcreate -f`, `zfs receive -F`, `zpool create -f`, and a padded 20 KB+ body using a variable (fail closed); `git clean -f` of named relative paths (no `.git`, no -C/GIT_DIR) and `git stash drop stash@{N}` are allowed. Allowed: `--help`/`-help`, `--dry-run`/`--dryrun`
   (not `=none`; aws/kubectl/helm only), `rm`/`find -delete|-exec rm`/`shred` inside a named child of `$TMPDIR` or `/tmp`, a single `find ./dir ... -delete|-exec rm {}` under a
   named relative dir (no `-L`, no second action, no earlier `cd` out), `echo ./a | xargs -I{} rm -rf {}` of literal relative paths (same cd rule). A `--help` after
   other arguments of rm/chmod/chown/dd/shred/mkfs/diskutil (only a lone one is usage) still gets the full check.
@@ -131,6 +131,8 @@ PAASDEL = re.compile(r"(?:^|[:_-])(?i:delete|remove|rm|del|destroy|drop|purge|un
 HOMEP = re.compile(r"(?:~|\$HOME|\$\{HOME\}|/(?:Users|home)/[^/]+|/root)/\.(?:ssh|bashrc|bash_profile|bash_login|bash_logout|profile|zshrc|zprofile|zshenv|zlogin|zlogout|inputrc|gitconfig|netrc|npmrc|aws|gnupg)(?:/|$)")
 ARTGLOB = re.compile(r"\*\.(?:pyc|o|tmp|log|orig|class|map|bak|swp)")
 LITPATH = re.compile(r"(?:\./)?\w[\w.-]*(?:/\w[\w.-]*)*/?")  # a plain relative path word
+SENS = re.compile(r"(?i)(?:id_(?:rsa|dsa|ecdsa|ed25519)|[^/]*\.(?:pem|key|p12|pfx|jks|kdbx|keystore)|\.env(?:\.(?!example|sample|template|dist)\w+)?|\.netrc|\.pgpass|\.htpasswd|\.envrc|\.git-credentials|service[-_]?account[^/]*\.json|[^/]*credentials[^/]*\.json|authorized_keys|credentials|shadow|master\.key)")  # private keys and credential files
+EMPTYSRC = ([], [":"], ["true"], ["false"], ["echo"], ["echo", "-n"], ["printf"], ["printf", ""], ["printf", "%s"], ["printf", "%b"], ["cat", "/dev/null"])  # commands whose `>` target is only truncated
 PROBE_PID = re.compile(r"\d+|\$\w+|\$\{\w+\}|\$\([^()]*\)")
 FALLBACK = [re.compile(p) for p in (
     r"\brm\s+(?:-\S+\s+)*-\w*[rR]\w*\s+(?:\S*[$`*~{]|/|\.\.?(?:\s|$))",
@@ -376,6 +378,11 @@ def _tree(t):
     return not t.startswith(":") and "$" not in t and bool(t) and posixpath.normpath(re.sub("/+", "/", t)) in (".", "..")
 
 
+def _sens(t):
+    """A private-key or credential file (by basename) or a dotfile under `~/.ssh|.aws|.gnupg|...`."""
+    return bool(HOMEP.search(t) or re.search(r"(?:^|/)\.(?:docker|kube)(?:/|$)|(?:^|/)\.config/(?:gcloud|gh)(?:/|$)", t) or SENS.fullmatch(posixpath.basename(t.rstrip("/"))))
+
+
 def _rel(x):
     """A relative path with no variable, glob or `..`: inside the working tree."""
     return not (x.startswith(("/", "~", "-")) or re.search(r"[$`*?\[{]", x) or ".." in x.split("/"))
@@ -435,8 +442,8 @@ def _rm(args, ph):
     return ""
 
 
-def _git(a):
-    i, gcv = 0, []  # gcv: `-c gc.reflogExpire[Unreachable]=V` values
+def _git(a, cwd="", genv=False):
+    i, gcv, away = 0, [], False  # away: -C/--git-dir/--work-tree retarget the repo  # gcv: `-c gc.reflogExpire[Unreachable]=V` values
     while i < len(a) and a[i].startswith("-"):
         if a[i] == "-c" and i + 1 < len(a) and re.match(r"(?i)gc\.(?:\S+\.)?reflogexpire(?:unreachable)?=", a[i + 1]):
             gcv.append(a[i + 1].split("=", 1)[1])
@@ -445,6 +452,7 @@ def _git(a):
             r = check(m.group(2) if m.group(1) else "git " + m.group(2), 1)
             if r:
                 return r
+        away = away or a[i] in ("-C", "--git-dir", "--work-tree") or a[i].startswith(("--git-dir=", "--work-tree="))
         i += 2 if a[i] in GIT_OPT_VAL else 1
     if i >= len(a):
         return ""
@@ -462,7 +470,14 @@ def _git(a):
         return ""
     if sub == "reset" and has("--hard"):
         return "git reset --hard discards work. Use `git stash` or `git reset --soft`/`--mixed`"
-    if sub == "clean" and (force or any(x.startswith("--f") for x in longs)) and not (has("--dry-run") or any("n" in t for t in flags)):
+    cp, k = [], 0  # `git clean -fdx ./build`: only named paths under the current dir are removed; -e/--exclude take a pattern, not a path
+    while k < len(r):
+        t = r[k]
+        k += 1 if not ((re.fullmatch(r"-[A-Za-z]*e", t) or (len(t) >= 4 and "--exclude".startswith(t))) and k < len(r)) else 2
+        if not t.startswith("-") and t != "--":
+            cp.append(t)
+    if sub == "clean" and (force or any(x.startswith("--f") for x in longs)) and not (has("--dry-run") or any("n" in t for t in flags)) \
+            and not (cp and not away and not genv and not cwd and all(_rel(x) and not x.startswith(":") and ".git" not in x.split("/") and posixpath.normpath(x) != "." for x in cp)):
         return "git clean -f deletes untracked files. Preview with `git clean -n`, delete exact paths"
     leased = [t.split("=", 1)[1].split(":")[0] for t in r if t.startswith("--force-with-lease=")]
     if sub == "push" and has("--force-with-lease") and any(re.search(r"(?:^|[:/])(?:main|master)$", t) for t in leased + [t for t in r if not t.startswith("-")]):
@@ -485,7 +500,7 @@ def _git(a):
     if (sub == "reflog" and ("delete" in r or "expire" in r and any(re.fullmatch(r"now|all|0|-\d\S*|\d+(?:\.(?:second|minute|hour)s?(?:\.ago)?)?", v) for v in ev))) \
             or (sub == "gc" and any(v in ("now", "all") for v in pv)) or (sub == "prune" and "now" in r):
         return "git reflog expire/gc --prune=now makes lost commits unrecoverable. Ask the owner"
-    if sub == "stash" and any(t in ("clear", "drop") for t in r):
+    if sub == "stash" and any(t in ("clear", "drop") for t in r) and not (r[:1] == ["drop"] and len(r) == 2 and re.fullmatch(r"stash@\{\d+\}", r[1])):
         return "git stash clear/drop loses stashed work. Use `git stash list`/`apply` and keep it"
     return ""
 
@@ -506,7 +521,7 @@ def _body(t):
     return ""
 
 
-def _cmd(name, a, ph, depth=0, cwd=""):
+def _cmd(name, a, ph, depth=0, cwd="", genv=False):
     strict = name in ("rm", "chmod", "chown", "dd", "shred", "diskutil") or name.startswith("mkfs")  # a lone --help only
     if (a in (["--help"], ["-help"]) or (not strict and any(t in ("--help", "-help") for t in a))) \
             and not (name in SHELLS + AWK + ("ssh", "eval", "su", "git") or INTERP.match(name)):
@@ -520,7 +535,7 @@ def _cmd(name, a, ph, depth=0, cwd=""):
     if name == "rm":
         return _rm(a, ph)
     if name == "git":
-        return _git(a)
+        return _git(a, cwd, genv)
     if name == "find":
         k = 0
         while k < len(a) and a[k] in ("-H", "-L", "-P"):
@@ -553,6 +568,10 @@ def _cmd(name, a, ph, depth=0, cwd=""):
                     return r
     if name == "tee" and any(not t.startswith("-") and _sysw(t, any(x == "--append" or _bundle(x, "a") for x in a)) for t in a):
         return "tee writes a system file. Edit a copy and ask the owner"
+    if name in ("cp", "mv", "install") and any(t in ("/dev/null", "/dev/zero") for t in a[:-1]) and _sens(a[-1] if a else ""):
+        return f"{name} of /dev/null onto a key/credential file empties it. Back it up and ask the owner"
+    if name == "dd" and any(t.startswith("of=") and _sens(t[3:]) for t in a):
+        return "dd onto a key/credential file overwrites it. Back it up and ask the owner"
     if name == "mv" and a[-1:] == ["/dev/null"]:
         return "mv to /dev/null destroys the source. Use `rm` on an exact path if you mean it"
     if name in ("curl", "wget") and any(re.fullmatch(r"-X\s*DELETE|--request[= ]DELETE|--method=DELETE", t, re.I) or (
@@ -655,6 +674,8 @@ def _cmd(name, a, ph, depth=0, cwd=""):
             or (name == "kubectl" and (w[:1] == ["drain"] or ("delete" in w and any(
                 t in ("--all", "--all-namespaces") or _bundle(t, "A") for t in a)))):
         return f"{name} deletes cloud/cluster resources. Name the exact resource and ask the owner"
+    if name in ("npm", "pnpm") and (("deprecate" in w and w[w.index("deprecate") + 2:][:1] != [""]) or ("owner" in w and any(x in ("rm", "remove") for x in w))):  # an empty message un-deprecates
+        return f"{name} deprecate/owner rm changes who can publish or use a package. Ask the owner"
     if (name in ("npm", "pnpm", "yarn") and "unpublish" in w) or (name in ("cargo", "gem") and "yank" in w and "--undo" not in a) \
             or (name in ("apt", "apt-get", "aptitude") and ("--allow-remove-essential" in a or (
                     ("purge" in w or "remove" in w) and any(re.search(r"[*?\[]", t) for t in w)))
@@ -662,6 +683,8 @@ def _cmd(name, a, ph, depth=0, cwd=""):
             or (name in ("pip", "pip3") and "uninstall" in w and (ph is not None or any(
                 t in ("-r", "--requirement") or t.startswith("--requirement=") for t in a))):
         return f"{name} unpublish/yank/purge/bulk uninstall is hard to undo. Name the exact package and ask the owner"
+    if name == "sgdisk" and any(t.split("=")[0] in ("--zap", "--zap-all", "--clear", "--delete", "--new", "--load-backup", "--mbrtogpt", "--gpttombr", "--replicate") or any(_bundle(t, c) for c in "zZodnlgmR") for t in a):
+        return "sgdisk zap/clear/delete/new/load rewrites the partition table. Do it in a VM, never on the host"
     if name == "parted" and any(t in ("mklabel", "mktable", "rm") for t in w):
         return "parted rewrites a partition table. Do it in a VM, never on the host"
     if name == "alias" and any(  # `alias ls='rm -rf'`: probe the value with a dangerous target appended
@@ -688,14 +711,19 @@ def _cmd(name, a, ph, depth=0, cwd=""):
     if name == "rclone" and not any(t in ("--dry-run", "-n") for t in a) and (any(
             x in ("purge", "delete", "deletefile", "rmdirs", "cleanup", "dedupe", "sync", "move", "moveto", "bisync") for x in w) or any(t.startswith("--delete") for t in a)):
         return "rclone purge/delete/sync removes remote files (sync mirrors a possibly empty source). Preview with `--dry-run` and ask the owner"
-    if name == "restic" and not any(t in ("--dry-run", "-n") for t in a) and any(x in ("forget", "prune") for x in w[:4]):
-        return "restic forget/prune deletes backup snapshots for good. Preview with `--dry-run` and ask the owner"
+    if name == "restic" and not any(t in ("--dry-run", "-n") for t in a) and (any(x in ("forget", "prune") for x in w[:4]) or (
+            "unlock" in w and "--remove-all" in a) or any(x == "key" and w[k + 1:k + 2] in (["remove"], ["rm"]) for k, x in enumerate(w))):
+        return "restic forget/prune/key remove/unlock --remove-all deletes backup snapshots for good. Preview with `--dry-run` and ask the owner"
     if name in ("zfs", "zpool") and not any(t == "--dry-run" or _bundle(t, "n") for t in a) and (
-            w[:1] in (["destroy"], ["labelclear"]) or (name == "zfs" and w[:1] == ["rollback"])):
-        return f"{name} destroy/rollback/labelclear erases datasets, snapshots or pools. Preview with `-n` and ask the owner"
-    if name in ("lvremove", "vgremove", "pvremove", "lvreduce", "lvm") and not any(t in ("--test", "-t", "-h") for t in a) and (
-            name != "lvm" or any(x in ("lvremove", "vgremove", "pvremove", "lvreduce") for x in w[:3])):
-        return f"{name} removes LVM volumes. Do it in a VM, never on the host"
+            w[:1] in (["destroy"], ["labelclear"]) or (name == "zfs" and w[:1] in (["rollback"], ["receive"], ["recv"]) and (w[0] == "rollback" or any(
+                _bundle(t, "F") for t in a))) or (name == "zpool" and w[:1] == ["create"] and any(_bundle(t, "f") or t == "--force" for t in a))):
+        return f"{name} destroy/rollback/receive -F/create -f/labelclear erases datasets, snapshots or pools. Preview with `-n` and ask the owner"
+    lv = w[0] if name == "lvm" and w else name  # `lvm lvresize ...`
+    sz = re.findall(r"(?:^|\s)(?:-[Ll]|--size|--extents)(?:=|\s*)(\S+)", " ".join(a))
+    nf = sum(t.count("f") for t in a if re.fullmatch(r"-[A-Za-z]+", t)) + a.count("--force")
+    if lv in ("lvremove", "vgremove", "pvremove", "lvreduce", "lvresize", "pvcreate", "vgcreate") and not any(t in ("--test", "-t", "-h") for t in a) and (
+            lv != "lvresize" or not (sz and all(x.startswith("+") for x in sz))) and (lv not in ("pvcreate", "vgcreate") or nf >= 1):
+        return f"{lv} removes, shrinks or force-overwrites LVM volumes. Do it in a VM, never on the host"
     if name in PAAS and (any(PAASDEL.search(x) for x in w) or (
             name == "supabase" and "reset" in w[:3] and any(t == "--linked" or t.startswith("--db-url") for t in a))):
         return f"{name} deletes or resets a hosted project or its data. Ask the owner"
@@ -761,7 +789,7 @@ def _cmd(name, a, ph, depth=0, cwd=""):
     if name in ("shutdown", "reboot", "halt", "poweroff") or (name == "systemctl" and any(t in ("poweroff", "reboot", "halt") for t in a)):
         return f"{name} takes the host down. Never run it from an agent"
     tg = [t for t in a if not t.startswith("-") and t != "0"]
-    if (name == "shred" and not _shred_ok(a)) or (name == "truncate" and re.search(r"(?:^|\s)(?:-s\s*0|--size[= ]0)(?:\s|$)", " ".join(a))
+    if (name == "shred" and not _shred_ok(a)) or (name == "truncate" and any(_sens(t) for t in tg)) or (name == "truncate" and re.search(r"(?:^|\s)(?:-s\s*0|--size[= ]0)(?:\s|$)", " ".join(a))
                            and not (tg and all(not t.startswith(("/", "~", "$")) and ".." not in t.split("/") and re.search(r"\.(?:log|out|err|tmp|txt)$", t) and not re.search(r"[*?\[`$]", t) for t in tg))):
         return f"{name} irrecoverably destroys file contents. Write to a new file or ask the owner"
     if name == "rsync" and any(t.startswith("--delete") for t in a) and not any(t == "--dry-run" or _bundle(t, "n") for t in a):
@@ -950,6 +978,8 @@ def check(cmd, _depth=0, _ph=None):
             r = check(ex, _depth + 1)
             if r:
                 return r
+    elif _depth == 1 and len(cmd) >= 20000 and "=" in cmd and re.search(r"\$\{?\w", cmd):  # padding must not switch expansion off: fail closed
+        return "padded command with variable use cannot be vetted. Shorten it and spell the command out"
     if DYNCMD.search(cmd):
         return "command word built from a variable or substitution with -rf/--hard. Spell the command out"
     cmd = cmd.replace("\\;", "\x01")  # find's `\;` terminator must not split the segment: tokens keep \x01, find treats it like `;`
@@ -984,6 +1014,8 @@ def check(cmd, _depth=0, _ph=None):
         elif skip:
             if skip in ("t>", "ta") and _sysw(t, skip == "ta"):
                 return "redirect writes a system file. Edit a copy and ask the owner"
+            if skip == "t>" and segs[-1] in EMPTYSRC and _sens(t):
+                return "redirect truncates a key/credential file. Back it up and ask the owner"
             if skip == "hs":
                 hs[-1] = t
             elif skip == "t<":
@@ -994,7 +1026,8 @@ def check(cmd, _depth=0, _ph=None):
         else:
             segs[-1].append(t)
     # fetch: curl/wget earlier in the pipeline; feed: echo/printf text; src: an earlier stage relays text
-    fetch, prev, feed, src, up, cwd = False, "", None, False, [], ""
+    fetch, prev, feed, src, up, cwd, pseg = False, "", None, False, [], "", []
+    genv = bool(re.search(r"\bGIT_(?:DIR|WORK_TREE|INDEX_FILE|COMMON_DIR)=", cmd))
     for n, (seg, op, here) in enumerate(zip(segs, ops, hs)):
         if not seg:
             continue
@@ -1018,7 +1051,7 @@ def check(cmd, _depth=0, _ph=None):
             a = [t if t.startswith(("-", "/", "~", "$")) else cwd + "/" + t for t in a]
         if name == "rm" and ph and op == "|" and prev == "echo" and feed and feed[1:] and (not cwd or _scoped(cwd)) and all(LITPATH.fullmatch(x) for x in feed[1:]):
             a, ph = [y for t in a for y in (feed[1:] if t in ph else [t])], None  # `echo ./build | xargs -I{} rm -rf {}`: the targets are literal
-        r = _cmd(name, a + ([t for t in seg[:i] if re.match(r"\w+=", t)] if name in ("make", "gmake") else []), ph, _depth, cwd)
+        r = _cmd(name, a + ([t for t in seg[:i] if re.match(r"\w+=", t)] if name in ("make", "gmake") else []), ph, _depth, cwd, genv)
         if not r and name == "rm" and ph and op == "|" and any((t.startswith(("/", "~", "$")) and not _scoped(t)) or ".." in t.split("/") for t in up):
             r = "rm of paths piped from a list outside scratch space. List them first, then `rm` exact paths"
         if not r and name == "eval":
@@ -1049,6 +1082,9 @@ def check(cmd, _depth=0, _ph=None):
             r = next((x for x in (_sqlfile(f) for f in ([ri[n]] if ri[n] else []) + (catf or [])) if x), "")
         if not r and op == "|" and feed:
             r = next((x for x in (_feed(name, f) for f in feed) if x), "")
+        if not r and name == "tee" and not any(x == "--append" or _bundle(x, "a") for x in a) and any(_sens(x) for x in a if not x.startswith("-")) \
+                and (ri[n] == "/dev/null" or (op == "|" and pseg in EMPTYSRC)):
+            r = "tee of empty input truncates a key/credential file. Back it up and ask the owner"
         if not r and op == "|" and fetch and (name in SHELLS or INTERP.match(name)):
             r = "curl/wget piped to a shell/interpreter. Download, read it, then run it"
         if r:
@@ -1060,7 +1096,7 @@ def check(cmd, _depth=0, _ph=None):
         fetch = fetch or name in ("curl", "wget")
         catf = [t for t in a if not t.startswith("-")] if name == "cat" else None
         feed = ([" ".join(a)] + a) if name in ("echo", "printf") else None  # joined, and each arg (printf FORMAT ARG)
-        prev = name
+        prev, pseg = name, seg[i:]
     return ""
 
 
