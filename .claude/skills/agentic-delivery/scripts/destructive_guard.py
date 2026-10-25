@@ -46,7 +46,7 @@ Denies (exit 2, one-line reason with the safe alternative on stderr; the host bl
   `git push --force-with-lease` to main/master, `git worktree remove --force`, a secret variable in a curl/wget
   URL query, `aws s3 rm --recursive|s3 rb --force|ec2 terminate-instances|rds delete-db-*`, `gcloud projects delete`,
   `az group delete`, `terraform|tofu destroy|apply -destroy`, `kubectl delete namespace|all --all`,
-  `redis-cli FLUSHALL|FLUSHDB`, mongo `dropDatabase`, `wipefs` (not `-n`), `diskutil eraseDisk|eraseVolume|...`,
+  `redis-cli FLUSHALL|FLUSHDB`, mongo `dropDatabase`, `wipefs -a|-o` (not `-n`; a bare listing is fine), `diskutil eraseDisk|eraseVolume|...`,
   and `eval`/`sh` of a `$(... base64 -d|xxd -r|printf hex-escape ...)` payload; also package `unpublish|yank|purge`, any
   `aws <svc> delete-*|terminate-*|purge-*`, `gcloud ... delete`, `gsutil rm -r`, `az ... delete|purge`, `kubectl delete --all|drain`,
   `docker|podman|nerdctl exec|run IMG CMD` and `kubectl exec -- CMD` (CMD is checked), `>>`/`tee` onto a system file, `gh <noun> delete`, `curl -X DELETE`,
@@ -54,11 +54,15 @@ Denies (exit 2, one-line reason with the safe alternative on stderr; the host bl
   alias to a destructive command and one-step `x=rm; $x -rf` indirection; wave 6: `tmutil delete`, `cdk|cdktf|sst destroy`, `doctl ... delete`,
   `flyctl|heroku` destroy, `hg strip|purge`, `make clean VAR=/`, `gem uninstall` of everything, `diskutil apfs delete*`, `set -- rm ...; "$@"`,
   `kubectl run` with hostPID/privileged/hostPath, `ln|rsync` onto a system path, vault revoke/policy delete, `git reflog delete`, `reg add|save HKLM`,
-  `wmic ... call create|uninstall`, and Windows `del` of a system file, a `..` path or a bare `*`/`*.*`. Allowed: `--help`/`-help`, `--dry-run`/`--dryrun`
-  (not `=none`; aws/kubectl/helm only), and `rm`/`find -delete` inside a named child of `$TMPDIR` or `/tmp`. A `--help` after
+  `wmic ... call create|uninstall`, and Windows `del` of a system file, a `..` path or a bare `*`/`*.*`; wave 7: `rclone purge|delete|sync`, `restic forget|prune`,
+  `zfs|zpool destroy`, `lvremove|vgremove|pvremove`, `firebase|supabase|vercel|netlify|wrangler ... delete|remove|rm`, `supabase db reset --linked`, a relative `rm -r` after
+  `cd /abs`, `bash -c 'f=-rf; rm $f X'`, `ln` onto `~/.ssh|.bashrc|.zshrc`, `rsync|scp` to `host:/etc/`, `vault operator seal|rekey`, `reg add` under HKCU|HKU Software Classes,
+  `wmic ... call reboot`, ClickHouse `ALTER TABLE ... DELETE|DROP PARTITION`, a SQL client fed `< file.sql` that drops, `make nuke|uninstall DESTDIR=/`, mongo `bulkWrite` deletes. Allowed: `--help`/`-help`, `--dry-run`/`--dryrun`
+  (not `=none`; aws/kubectl/helm only), `rm`/`find -delete|-exec rm`/`shred` inside a named child of `$TMPDIR` or `/tmp`, a single `find ./dir ... -delete|-exec rm {}` under a
+  named relative dir (no `-L`, no second action, no earlier `cd` out), `echo ./a | xargs -I{} rm -rf {}` of literal relative paths (same cd rule). A `--help` after
   other arguments of rm/chmod/chown/dd/shred/mkfs/diskutil (only a lone one is usage) still gets the full check.
   Residuals: a `/tmp/<name>` symlink to elsewhere, or an unset `$TMPDIR` (`$TMPDIR/x` becomes `/x`), is trusted; `> file` over
-  a system path is caught (so is `cp`/`mv`/`ln`/`rsync` onto one, except `cp` to `*.bak|*.orig|*.old`); `pip uninstall` is blocked only for xargs or `-r`.
+  a system path is caught (so is `cp`/`mv`/`ln`/`rsync`/`scp` onto one, `.bak` copies included); `pip uninstall` is blocked only for xargs or `-r`.
 Everything else is allowed.
 
 No in-repo grant or allow list: anything an agent can write, an agent can forge. When the owner really wants a
@@ -98,9 +102,9 @@ BODYRM = re.compile(r"\brm\s+-\w*[rR]\w*\s*(?:\S*[$/~*]|['\"]\s*\+|%s|\{)")  # v
 PRINTCALL = re.compile(r"""\b(?:print|puts|echo|console\.(?:log|error)|sys\.std(?:out|err)\.write)\s*\(((?:[^()'"]|'[^']*'|"[^"]*")*)\)""")
 AWSVAL = ("--profile", "--region", "--endpoint-url", "--output", "--query", "--color", "--ca-bundle", "--cli-read-timeout", "--cli-connect-timeout", "--cli-binary-format")
 HGVAL = ("-R", "--repository", "--cwd", "--config", "--encoding", "--encodingmode", "--color", "--pager")
-SQLCLI = ("psql", "mysql", "mariadb", "sqlite3", "mongosh", "sqlcmd", "cqlsh", "clickhouse-client", "clickhouse")
+SQLCLI = ("psql", "mysql", "mariadb", "sqlite3", "mongosh", "sqlcmd", "cqlsh", "clickhouse-client", "clickhouse-local", "clickhouse")
 SQLCOMMENT = re.compile(r"/\*.*?\*/", re.S)
-SQLDROP = re.compile(r"\b(?:drop\s+(?:database|schema|keyspace|table)|truncate\s+\w|delete\s+from\s+\w+\s*(?:;|$))", re.I)
+SQLDROP = re.compile(r"\b(?:drop\s+(?:database|schema|keyspace|table|partition|part)|alter\s+table\s+(?:if\s+exists\s+)?\S+\s+(?:on\s+cluster\s+\S+\s+)?(?:delete|drop|detach|truncate)\b|truncate\s+\w|delete\s+from\s+\w+\s*(?:;|$))", re.I)
 DYNCMD = re.compile(r"(?:^|[;&|\n({]|\bthen\b|\bdo\b)\s*\"?(?:\$\([^()]{0,200}\)|`[^`]{0,200}`|\$\{?\w{1,64}\}?)\"?(?:\s+\S+){0,8}?\s+(?:-\w*(?:rf|fr)\w*|--hard)\b")
 FORKBOMB = re.compile(r"(\S{1,32})\(\)\s*\{\s*\1\s*\|\s*\1\s*&")
 SSH_VAL = "bcDEeFIiJLlmOopQRSWw"
@@ -122,6 +126,11 @@ KUBE_LONG = ("--namespace", "--container", "--context", "--cluster", "--kubeconf
 DOCKER_VAL = ("-H", "--host", "--context", "-c", "--config", "-l", "--log-level", "--tlscacert", "--tlscert", "--tlskey")
 HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)([A-Za-z_]\w*)\1[^\n]*\n(.*?)\n[ \t]*\2[ \t]*(?=\n|$)", re.S)
 MAXDEPTH = 6
+PAAS = ("firebase", "supabase", "vercel", "netlify", "wrangler", "railway", "pscale", "neonctl", "turso", "convex", "appwrite")
+PAASDEL = re.compile(r"(?:^|[:_-])(?i:delete|remove|rm|del|destroy|drop|purge|unset)(?![a-z])")  # also deleteSite
+HOMEP = re.compile(r"(?:~|\$HOME|\$\{HOME\}|/(?:Users|home)/[^/]+|/root)/\.(?:ssh|bashrc|bash_profile|bash_login|bash_logout|profile|zshrc|zprofile|zshenv|zlogin|zlogout|inputrc|gitconfig|netrc|npmrc|aws|gnupg)(?:/|$)")
+ARTGLOB = re.compile(r"\*\.(?:pyc|o|tmp|log|orig|class|map|bak|swp)")
+LITPATH = re.compile(r"(?:\./)?\w[\w.-]*(?:/\w[\w.-]*)*/?")  # a plain relative path word
 PROBE_PID = re.compile(r"\d+|\$\w+|\$\{\w+\}|\$\([^()]*\)")
 FALLBACK = [re.compile(p) for p in (
     r"\brm\s+(?:-\S+\s+)*-\w*[rR]\w*\s+(?:\S*[$`*~{]|/|\.\.?(?:\s|$))",
@@ -200,6 +209,7 @@ def _sqlite(texts, depth):
             if r:
                 return r
             c = c.split()
+            c = c[_unwrap(c)[0]:]  # `.shell env sh`
             if c and (os.path.basename(c[0]) in SHELLS or INTERP.match(os.path.basename(c[0]))) and all(x.startswith("-") for x in c[1:]):
                 return "sqlite3 dot-command pipes into a bare shell/interpreter. Run an exact literal command"
         cands = [m[1] for m in SQLOPEN.finditer(t)]
@@ -289,10 +299,11 @@ def _win(name, a, depth):
     if n == "bcdedit" and any(t.lower() in ("/delete", "/deletevalue", "/set") for t in a):
         return "bcdedit changes boot configuration. Ask the owner"
     if n == "reg" and a[:1] and (a[0].lower() in ("delete", "import", "restore") or (a[0].lower() in ("add", "copy", "save", "load", "unload") and any(
-            re.match(r"(?i)(?:\\\\[^\\]+\\)?(?:HKLM|HKEY_LOCAL_MACHINE|HKCR|HKEY_CLASSES_ROOT)", t) for t in a[1:]))):
+            re.match(r"(?i)(?:\\\\[^\\]+\\)?(?:HKLM|HKEY_LOCAL_MACHINE|HKCR|HKEY_CLASSES_ROOT)|(?:HKCU|HKEY_CURRENT_USER)\\*Software\\*Classes"
+                     r"|(?:HKU|HKEY_USERS)\\*.{0,80}?Software\\*Classes", t) for t in a[1:]))):
         return "reg delete/import/restore or a write to HKLM changes the registry. Ask the owner"
     if n == "wmic" and (any(t in ("delete", "uninstall", "terminate") for t in map(str.lower, a)) or {"call", "format"} <= set(map(str.lower, a))
-                        or {"call", "create"} <= set(map(str.lower, a))):
+                        or {"call", "create"} <= set(map(str.lower, a)) or ("call" in map(str.lower, a) and {"reboot", "shutdown", "win32shutdown"} & set(map(str.lower, a)))):
         return "wmic delete/call create/uninstall changes system objects or runs commands. Ask the owner"
     if (n == "format" and any(re.fullmatch(r"[A-Za-z]:", t) for t in a)) or n in ("format-volume", "clear-disk", "remove-partition", "initialize-disk"):
         return f"{name} wipes a volume or disk. Do it in a VM, never on the host"
@@ -363,6 +374,39 @@ def _tree(t):
     if t in ("*", ":/", ":(top)", ":(top)*"):
         return True
     return not t.startswith(":") and "$" not in t and bool(t) and posixpath.normpath(re.sub("/+", "/", t)) in (".", "..")
+
+
+def _rel(x):
+    """A relative path with no variable, glob or `..`: inside the working tree."""
+    return not (x.startswith(("/", "~", "-")) or re.search(r"[$`*?\[{]", x) or ".." in x.split("/"))
+
+
+def _shred_ok(a):
+    """True when every file `shred` is given is inside a named child of $TMPDIR or /tmp (values of -n/-s are not files)."""
+    tg, i = [], 0
+    while i < len(a):
+        t = a[i]
+        i += 1
+        if t == "--":
+            tg += a[i:]
+            break
+        if t in ("--iterations", "--size", "--random-source") or (BUNDLE.fullmatch(t) and t[-1] in "nsS"):
+            i += 1
+        elif not t.startswith("-"):
+            tg.append(t)
+    return bool(tg) and all(_scoped(t) for t in tg)
+
+
+def _sqlfile(p):
+    """`psql < FILE`: scan FILE when it is a regular file (first 256 KB; read-only), else judge its name."""
+    why = "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
+    if not os.path.isfile(p):
+        return why if re.search(r"(?i)drop|truncate|destroy|purge|wipe|nuke", os.path.basename(p)) else ""
+    try:
+        with open(p, errors="replace") as f:
+            return why if SQLDROP.search(SQLCOMMENT.sub(" ", f.read(1 << 18))) else ""
+    except OSError:
+        return ""
 
 
 def _rm(args, ph):
@@ -462,7 +506,7 @@ def _body(t):
     return ""
 
 
-def _cmd(name, a, ph, depth=0):
+def _cmd(name, a, ph, depth=0, cwd=""):
     strict = name in ("rm", "chmod", "chown", "dd", "shred", "diskutil") or name.startswith("mkfs")  # a lone --help only
     if (a in (["--help"], ["-help"]) or (not strict and any(t in ("--help", "-help") for t in a))) \
             and not (name in SHELLS + AWK + ("ssh", "eval", "su", "git") or INTERP.match(name)):
@@ -486,16 +530,23 @@ def _cmd(name, a, ph, depth=0):
             st.append(a[k])
             k += 1
         sc = bool(st) and all(_scoped(x) for x in st)  # scratch space: deleting there is fine, other -exec bodies still run through check
-        ext = a[k:][:1] in (["-name"], ["-iname"]) and len(a) - k == 3 and a[-1] == "-delete" \
-            and re.fullmatch(r"\*\.(?:pyc|o|tmp|log|orig|class|map|bak|swp)", a[k + 1])  # sole predicate: a known build-artifact glob
-        if "-delete" in a and not sc and not (ext and st and all(x in ("$TMPDIR", "${TMPDIR}", "/tmp") or not (_far(x) or ".." in x.split("/") or "$" in x or x.startswith("/")) for x in st)):
+        ext = a[k:k + 1] in (["-name"], ["-iname"]) and bool(ARTGLOB.fullmatch(a[k + 1] if k + 1 < len(a) else "")) \
+            and a[k + 2:k + 3] in (["-delete"], ["-exec"], ["-execdir"])  # sole predicate: a build-artifact glob
+        # the cwd-tree exemption needs ONE action, no alternatives, no symlink following and no earlier cd out of the tree
+        one = len([t for t in a[k:] if t in ("-delete", "-exec", "-execdir", "-ok", "-okdir")]) == 1 \
+            and not any(x in ("-o", "-or", ",", "(", "\\(") for x in a[k:]) and not any(x in ("-L", "-H") for x in a[:k]) and "-follow" not in a \
+            and (not cwd or _scoped(cwd))
+        tree = one and all(_rel(x) or (ext and x in ("$TMPDIR", "${TMPDIR}", "/tmp")) for x in st or ["."]) and (
+            ext or all(posixpath.normpath(x) != "." for x in st or ["."]))  # inside a named child of the cwd, or `.` with an artifact glob
+        if "-delete" in a and not (sc or tree):
             return "find -delete. List with `find ... -print` first, then remove exact paths"
         for j, t in enumerate(a[:-1]):
-            if t in ("-exec", "-execdir", "-ok"):
-                k = next((m for m in range(j + 1, len(a)) if a[m] in (";", "+")), len(a))
+            if t in ("-exec", "-execdir", "-ok", "-okdir"):
+                k = next((m for m in range(j + 1, len(a)) if a[m] in (";", "+", "\x01")), len(a))
                 sub = a[j + 1:k]
                 u = _unwrap(sub)[0]  # sudo/env/nice rm
-                if u < len(sub) and os.path.basename(sub[u]) in ("rm", "shred") and not sc:
+                simple = sub[u:u + 1] == ["rm"] and sub[-1:] == ["{}"] and all(x.startswith("-") for x in sub[u + 1:-1])
+                if u < len(sub) and os.path.basename(sub[u]) in ("rm", "shred") and not (sc or (tree and simple)):
                     return "find -exec rm. List with `find ... -print` first, then remove exact paths"
                 r = check(" ".join(shlex.quote(x) for x in sub), depth + 1)
                 if r:
@@ -543,16 +594,18 @@ def _cmd(name, a, ph, depth=0):
             for k, t in enumerate(a)))):
         return f"{name} delete is irreversible on the remote. Ask the owner"
     if name == "vault" and (w[:2] in (["kv", "destroy"], ["kv", "delete"], ["secrets", "disable"], ["auth", "disable"]) or w[:1] == ["delete"]
-                            or w[:3] == ["kv", "metadata", "delete"] or w[:2] in (["lease", "revoke"], ["token", "revoke"], ["policy", "delete"], ["namespace", "delete"])):
+                            or w[:3] == ["kv", "metadata", "delete"] or w[:2] in (["operator", "seal"], ["operator", "rekey"], ["lease", "revoke"], ["token", "revoke"], ["policy", "delete"], ["namespace", "delete"])):
         return "vault kv destroy/metadata delete, lease/token revoke or policy delete is hard to undo. Ask the owner"
     if name in ("dropdb", "dropuser", "pg_dropcluster") or (name == "mysqladmin" and "drop" in w):
         return f"{name} drops a database or role. Ask the owner"
-    if name in ("mongo", "mongosh") and any(re.search(r"\.drop\s*\(|delete(?:Many|One)\s*\(|findOneAndDelete\s*\(|\.remove\s*\(|\.dropIndex(?:es)?\s*\(", t) for t in a):
+    if name in ("mongo", "mongosh") and any(re.search(r"\.drop\s*\(|delete(?:Many|One)\b|findOneAndDelete\s*\(|\.remove\s*\(|\.dropIndex(?:es)?\s*\(", t) for t in a):
         return "mongo drop/deleteMany removes documents or collections. Ask the owner"
-    if name in ("cp", "mv", "install", "ln", "rsync") and not (name == "rsync" and any(t == "--dry-run" or _bundle(t, "n") for t in a)) and any(
-            not t.startswith("-") and _sysw(t) and not (name == "cp" and re.search(r"\.(?:bak|orig|old)$", t))
-            for t in a[-1:] + [x for j, x in enumerate(a) if j and a[j - 1] in ("-t", "--target-directory")]):
+    dest = a[-1:] + [x for j, x in enumerate(a) if j and a[j - 1] in ("-t", "--target-directory")]
+    if name in ("cp", "mv", "install", "ln", "rsync", "scp") and not (name == "rsync" and any(t == "--dry-run" or _bundle(t, "n") for t in a)) and any(
+            not t.startswith("-") and _sysw(re.sub(r"^[^/:\s]{2,}:(?!//)", "", t) if name in ("rsync", "scp") else t) for t in dest):
         return f"{name} onto a system path. Edit a copy and ask the owner"
+    if name == "ln" and any(HOMEP.match(t) for t in dest):
+        return "ln onto a shell startup file or ~/.ssh|.aws|.gnupg replants a persistent hook. Ask the owner"
     if name == "chroot":
         k = 0
         while k < len(a) and a[k].startswith("-"):
@@ -632,10 +685,24 @@ def _cmd(name, a, ph, depth=0):
     if (name == "doctl" and "delete" in w) or (name in ("flyctl", "fly") and any(t in ("destroy", "delete") for t in w)) \
             or (name == "heroku" and any(re.search(r":(?:destroy|delete|reset)$", t) or t == "destroy" for t in w[:1])):
         return f"{name} deletes a cloud resource. Name the exact resource and ask the owner"
+    if name == "rclone" and not any(t in ("--dry-run", "-n") for t in a) and (any(
+            x in ("purge", "delete", "deletefile", "rmdirs", "cleanup", "dedupe", "sync", "move", "moveto", "bisync") for x in w) or any(t.startswith("--delete") for t in a)):
+        return "rclone purge/delete/sync removes remote files (sync mirrors a possibly empty source). Preview with `--dry-run` and ask the owner"
+    if name == "restic" and not any(t in ("--dry-run", "-n") for t in a) and any(x in ("forget", "prune") for x in w[:4]):
+        return "restic forget/prune deletes backup snapshots for good. Preview with `--dry-run` and ask the owner"
+    if name in ("zfs", "zpool") and not any(t == "--dry-run" or _bundle(t, "n") for t in a) and (
+            w[:1] in (["destroy"], ["labelclear"]) or (name == "zfs" and w[:1] == ["rollback"])):
+        return f"{name} destroy/rollback/labelclear erases datasets, snapshots or pools. Preview with `-n` and ask the owner"
+    if name in ("lvremove", "vgremove", "pvremove", "lvreduce", "lvm") and not any(t in ("--test", "-t", "-h") for t in a) and (
+            name != "lvm" or any(x in ("lvremove", "vgremove", "pvremove", "lvreduce") for x in w[:3])):
+        return f"{name} removes LVM volumes. Do it in a VM, never on the host"
+    if name in PAAS and (any(PAASDEL.search(x) for x in w) or (
+            name == "supabase" and "reset" in w[:3] and any(t == "--linked" or t.startswith("--db-url") for t in a))):
+        return f"{name} deletes or resets a hosted project or its data. Ask the owner"
     if name == "hg" and w[:1] in (["strip"], ["purge"]):
         return "hg strip/purge destroys history or untracked files. Ask the owner"
     if name == "make" or name == "gmake":
-        if any(re.search(r"clean|purge|wipe", x) for x in w if "=" not in x) and any(
+        if any(re.search(r"clean|purge|wipe|nuke|uninstall|destroy|reset", x) for x in w if "=" not in x) and any(
                 "=" in t and not t.startswith("-") and _far(t.split("=", 1)[1]) and t.split("=", 1)[1] for t in a):
             return "make clean with a variable pointing at root or home. Name an in-project directory"
     if name == "gem" and w[:1] == ["uninstall"] and (len(w) == 1 or (any(t == "--all" or _bundle(t, "a") for t in a) and any(
@@ -651,7 +718,8 @@ def _cmd(name, a, ph, depth=0):
         return "redis FLUSHALL/FLUSHDB wipes the keyspace. Ask the owner"
     if name in ("mongo", "mongosh") and any(re.search(r"dropDatabase\s*\(", t) for t in a):
         return "mongo dropDatabase. Ask the owner"
-    if name == "wipefs" and not any(t in ("-n", "--no-act") for t in a):
+    if name == "wipefs" and not any(t in ("-n", "--no-act") for t in a) and any(
+            t.startswith(("--all", "--offset")) or _bundle(t, "a") or _bundle(t, "o") for t in a):
         return "wipefs erases filesystem signatures on a device. Do it in a VM, never on the host"
     if name == "diskutil" and w[:1] and w[0].lower() in DISKUTIL:
         return "diskutil erase/partition wipes a disk. Do it in a VM, never on the host"
@@ -693,16 +761,22 @@ def _cmd(name, a, ph, depth=0):
     if name in ("shutdown", "reboot", "halt", "poweroff") or (name == "systemctl" and any(t in ("poweroff", "reboot", "halt") for t in a)):
         return f"{name} takes the host down. Never run it from an agent"
     tg = [t for t in a if not t.startswith("-") and t != "0"]
-    if name == "shred" or (name == "truncate" and re.search(r"(?:^|\s)(?:-s\s*0|--size[= ]0)(?:\s|$)", " ".join(a))
+    if (name == "shred" and not _shred_ok(a)) or (name == "truncate" and re.search(r"(?:^|\s)(?:-s\s*0|--size[= ]0)(?:\s|$)", " ".join(a))
                            and not (tg and all(not t.startswith(("/", "~", "$")) and ".." not in t.split("/") and re.search(r"\.(?:log|out|err|tmp|txt)$", t) and not re.search(r"[*?\[`$]", t) for t in tg))):
         return f"{name} irrecoverably destroys file contents. Write to a new file or ask the owner"
     if name == "rsync" and any(t.startswith("--delete") for t in a) and not any(t == "--dry-run" or _bundle(t, "n") for t in a):
         return "rsync --delete removes files at the destination. Preview with `--dry-run` and name an exact destination"
+    if name in SQLCLI:  # `psql -f FILE`, `--file=FILE`, `--queries-file FILE`
+        for j, t in enumerate(a):
+            f = t.split("=", 1)[1] if t.startswith(("--file=", "--queries-file=")) else a[j + 1] if t in ("-f", "--file", "--queries-file") and j + 1 < len(a) else ""
+            r = _sqlfile(f) if f else ""
+            if r:
+                return r
     if name == "sqlite3":
         r = _sqlite(a, depth)
         if r:
             return r
-    if name in SQLCLI and not (name == "sqlite3" and ":memory:" in a and not re.search(r"attach|\.shell|\.system|\.read", " ".join(a), re.I)) and any(SQLDROP.search(SQLCOMMENT.sub(' ', t)) for t in a):
+    if name in SQLCLI and not (name == "sqlite3" and ":memory:" in a and not re.search(r"attach|\.shell|\.system|\.read", " ".join(a), re.I)) and any(SQLDROP.search(SQLCOMMENT.sub(' ', re.sub(r"^-[A-Za-z]", r"\g<0> ", t))) for t in a[:512]):  # first 512 args bound the scan; `-c'drop ...'` joins flag and text
         return "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
     if name in SHELLS + ("eval",) and any(re.search(r"\b(curl|wget)\b", t) for t in a):
         return "remote script run through a shell. Download, read it, then run it"
@@ -868,16 +942,17 @@ def check(cmd, _depth=0, _ph=None):
         return "fork bomb. Never run it"
     if _decexec(cmd):
         return "eval/shell of a decoded base64/hex payload cannot be vetted. Decode to a file, read it, then run it"
-    if not _depth and "=" in cmd and "$" in cmd:  # `x=rm; $x -rf /`: expand simple assignments once and re-check
+    if (_depth < 1 or (_depth < 2 and len(cmd) < 20000)) and "=" in cmd and "$" in cmd:  # `x=rm; $x -rf /` (also inside `bash -c`): expand simple assignments and re-check; depth-capped so `a=$b; b=$a` ends
         env = {m[1]: m[2][1:-1] if re.fullmatch(r"'[^']*'|\"[^\"]*\"", m[2]) else m[2]
                for m in re.finditer(r"(?:^|[;&|\n]\s*)(\w{1,32})=('[^']{0,200}'|\"[^\"]{0,200}\"|[^\s;&|'\"]{0,200})", cmd)}
         ex = re.sub(r"\$(?:\{(\w+)\}|(\w+))", lambda m: env.get(m[1] or m[2], m[0]), cmd)
         if env and ex != cmd:
-            r = check(ex, 1)
+            r = check(ex, _depth + 1)
             if r:
                 return r
     if DYNCMD.search(cmd):
         return "command word built from a variable or substitution with -rf/--hard. Spell the command out"
+    cmd = cmd.replace("\\;", "\x01")  # find's `\;` terminator must not split the segment: tokens keep \x01, find treats it like `;`
     try:
         lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|()<>\n")
         lex.whitespace, lex.whitespace_split = " \t\r", True
@@ -889,7 +964,7 @@ def check(cmd, _depth=0, _ph=None):
         r = check(b, _depth + 1)
         if r:
             return r
-    segs, ops, hs, hd, skip = [[]], [""], [None], [False], None
+    segs, ops, hs, hd, ri, skip = [[]], [""], [None], [False], [None], None
     for t in toks:
         if PUNCT.fullmatch(t):
             if t == "(" and not segs[-1] and ops[-1] == "|":
@@ -898,30 +973,33 @@ def check(cmd, _depth=0, _ph=None):
                 segs.append([])
                 hs.append(None)
                 hd.append(False)
+                ri.append(None)
                 ops.append("|" if t in ("|", "|&") else "<(" if "<(" in t else "")
                 skip = None
             else:  # redirection: the next token is its target; the command continues
                 if segs[-1] and segs[-1][-1].isdigit():
                     segs[-1].pop()
-                skip = "hs" if t.endswith("<<<") else "t>" if t in (">", ">|", "&>") else "ta" if t in (">>", "&>>") else "t"
+                skip = "hs" if t.endswith("<<<") else "t>" if t in (">", ">|", "&>") else "ta" if t in (">>", "&>>") else "t<" if t == "<" else "t"
                 hd[-1] = hd[-1] or "<<" in t
         elif skip:
             if skip in ("t>", "ta") and _sysw(t, skip == "ta"):
                 return "redirect writes a system file. Edit a copy and ask the owner"
             if skip == "hs":
                 hs[-1] = t
+            elif skip == "t<":
+                ri[-1] = t
             skip = None
         elif not segs[-1] and re.fullmatch(r"\{[^{}\s,]*(?:,[^{}\s,]*)+\}", t):
             segs[-1].extend(t[1:-1].split(","))  # `{rm,-rf,$X}` brace-expands to a command
         else:
             segs[-1].append(t)
     # fetch: curl/wget earlier in the pipeline; feed: echo/printf text; src: an earlier stage relays text
-    fetch, prev, feed, src, up = False, "", None, False, []
+    fetch, prev, feed, src, up, cwd = False, "", None, False, [], ""
     for n, (seg, op, here) in enumerate(zip(segs, ops, hs)):
         if not seg:
             continue
         if op != "|":
-            fetch, feed, src, up = False, None, False, []
+            fetch, feed, src, up, catf = False, None, False, [], None
         i, ph, nested = _unwrap(seg)
         ph = ph or _ph
         if i and i == len(seg) - 1 and re.search(r"\s", seg[i]) and any(os.path.basename(t) == "watch" for t in seg[:i]):
@@ -933,7 +1011,14 @@ def check(cmd, _depth=0, _ph=None):
         if i >= len(seg):
             continue
         name, a = os.path.basename(seg[i]), seg[i + 1:]
-        r = _cmd(name, a + ([t for t in seg[:i] if re.match(r"\w+=", t)] if name in ("make", "gmake") else []), ph, _depth)
+        if name in ("cd", "pushd"):  # a cd out of the tree makes later relative `rm` targets absolute (`cd /srv && rm -rf acme`); `cd` alone is home
+            d = ([t for t in a if not t.startswith("-")] or ["~"])[0]
+            cwd = d.rstrip("/") or "/" if d.startswith(("/", "~", "$")) or ".." in d.split("/") or d == "-" else cwd + "/" + d if cwd else ""
+        elif name == "rm" and cwd:
+            a = [t if t.startswith(("-", "/", "~", "$")) else cwd + "/" + t for t in a]
+        if name == "rm" and ph and op == "|" and prev == "echo" and feed and feed[1:] and (not cwd or _scoped(cwd)) and all(LITPATH.fullmatch(x) for x in feed[1:]):
+            a, ph = [y for t in a for y in (feed[1:] if t in ph else [t])], None  # `echo ./build | xargs -I{} rm -rf {}`: the targets are literal
+        r = _cmd(name, a + ([t for t in seg[:i] if re.match(r"\w+=", t)] if name in ("make", "gmake") else []), ph, _depth, cwd)
         if not r and name == "rm" and ph and op == "|" and any((t.startswith(("/", "~", "$")) and not _scoped(t)) or ".." in t.split("/") for t in up):
             r = "rm of paths piped from a list outside scratch space. List them first, then `rm` exact paths"
         if not r and name == "eval":
@@ -960,6 +1045,8 @@ def check(cmd, _depth=0, _ph=None):
             r = "shell/source fed by process substitution cannot be vetted. Write it to a file, read it, then run it"
         if not r and here is not None:
             r = _feed(name, here)
+        if not r and name in SQLCLI:  # `psql < F` and `cat F | psql`
+            r = next((x for x in (_sqlfile(f) for f in ([ri[n]] if ri[n] else []) + (catf or [])) if x), "")
         if not r and op == "|" and feed:
             r = next((x for x in (_feed(name, f) for f in feed) if x), "")
         if not r and op == "|" and fetch and (name in SHELLS or INTERP.match(name)):
@@ -971,6 +1058,7 @@ def check(cmd, _depth=0, _ph=None):
             t in ("-d", "-base64", "-a") for t in a)) or (name == "xxd" and any(_bundle(t, "r") for t in a)) or (
             name == "base64" and any(B64D.fullmatch(t) for t in a))
         fetch = fetch or name in ("curl", "wget")
+        catf = [t for t in a if not t.startswith("-")] if name == "cat" else None
         feed = ([" ".join(a)] + a) if name in ("echo", "printf") else None  # joined, and each arg (printf FORMAT ARG)
         prev = name
     return ""

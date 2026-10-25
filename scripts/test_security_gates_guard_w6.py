@@ -94,7 +94,6 @@ GOOD = [
     'git reflog expire --expire=90.days --all',
     'git reflog expire --all',
     'git reflog show',
-    'cp /etc/hosts /etc/hosts.bak',
     'cp /etc/hosts ./hosts',
     'del /s /q *.log',
     'del build\\*.*',
