@@ -115,6 +115,8 @@ SUBST = re.compile(r"\$\(|`")
 DECODE = re.compile(r"\bbase64\b.{0,300}(?:\s-\w*[dD]|--decode)|\bxxd\b.{0,100}\s-\w*r|\bprintf\b.{0,300}\\(?:x[0-9a-fA-F]|[0-7]{3})|\bopenssl\s+enc\b.{0,100}\s-(?:d\b|base64\b|a\b)"
                     r"|\bpython[\d.]*\b.{0,200}(?:b64decode|b32decode|decodebytes|a2b_base64|unhexlify|fromhex)", re.S)
 DRY = ("--dry-run", "--dryrun", "--dry-run=client", "--dry-run=server")  # `--dry-run=none` really runs, so it is not listed
+SYMLN = re.compile(r"\bln\b[^;&|\n]*\s(?:-\w*s|--symbolic\b)")  # a symlink made in the same line can point a scratch path at the host
+RMREC = re.compile(r"\brm\b[^;&|\n]*\s(?:-\w*[rR]|--rec)")
 SCOPED = re.compile(r"(?:\$TMPDIR|\$\{TMPDIR\}|/tmp)/\w[^/$`{}]*(?:/[^$`{}]*)?")  # under the temp dir, inside a named child
 SYSFILE = re.compile(r"/(?:etc|boot|bin|sbin|lib|lib64|usr|System|Library|root|private/etc|(?:private/)?var(?=/(?!tmp(?:/|$)|folders(?:/|$)))|(?:private/)?var$)(?:/|$)", re.I)
 KUBE_VAL = ("-n", "--namespace", "-l", "--selector", "-f", "--filename", "--context", "--cluster", "--kubeconfig", "--user", "-o", "--output", "--field-selector")
@@ -425,6 +427,27 @@ def _rel(x):
     return not (x.startswith(("/", "~", "-")) or re.search(r"[$`*?\[{]", x) or ".." in x.split("/"))
 
 
+def _narrow(r):
+    """True if `r` is an action (-delete|-exec|-execdir), or literal `-not|!` `-path|-name|-iname` exclusions (each with a word character, no `$`)
+    followed by `-delete` only: the exclusions just narrow a `-delete`, they never open `-exec` or `-quit` combinations."""
+    if r[:1] in (["-delete"], ["-exec"], ["-execdir"]):
+        return True
+    while r[:1] in (["-not"], ["!"]) and r[1:2] in (["-path"], ["-name"], ["-iname"]) and len(r) > 2 and re.search(r"\w", r[2]) and not re.search(r"[$`]", r[2]):
+        r = r[3:]
+    return r[:1] == ["-delete"]
+
+
+SYSROOT = re.compile(r"/(?:private/)?(?:(?:etc|usr|bin|sbin|boot|lib|lib64|var|opt|srv|root|home|dev|proc|sys|System|Library|Users|Applications)?|\*)(?:/\*)?", re.I)
+
+
+def _mvsys(t):
+    """A mv operand that is a system root, `/*`, a subpath of /usr or /System, or an absolute path whose first component is a glob or a variable/quote concat."""
+    if t.startswith("-") or not t.startswith("/"):
+        return False
+    p = posixpath.normpath(re.sub("/+", "/", t))
+    return bool(SYSROOT.fullmatch(p) or re.match(r"/(?:usr|System)/", p, re.I) or re.search(r"[*?\[$`]", p.split("/")[1] if p.count("/") else ""))
+
+
 def _shred_ok(a):
     """True when every file `shred` is given is inside a named child of $TMPDIR or /tmp (values of -n/-s are not files)."""
     tg, i = [], 0
@@ -619,7 +642,7 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
             k += 1
         sc = bool(st) and all(_scoped(x) for x in st)  # scratch space: deleting there is fine, other -exec bodies still run through check
         ext = a[k:k + 1] in (["-name"], ["-iname"]) and bool(ARTGLOB.fullmatch(a[k + 1] if k + 1 < len(a) else "")) \
-            and a[k + 2:k + 3] in (["-delete"], ["-exec"], ["-execdir"])  # sole predicate: a build-artifact glob
+            and _narrow(a[k + 2:])  # build-artifact glob, optionally narrowed by -not/! -path|-name exclusions
         # the cwd-tree exemption needs ONE action, no alternatives, no symlink following and no earlier cd out of the tree
         one = len([t for t in a[k:] if t in ("-delete", "-exec", "-execdir", "-ok", "-okdir")]) == 1 \
             and not any(x in ("-o", "-or", ",", "(", "\\(") for x in a[k:]) and not any(x in ("-L", "-H") for x in a[:k]) and "-follow" not in a \
@@ -645,6 +668,8 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
         return f"{name} of /dev/null onto a key/credential file empties it. Back it up and ask the owner"
     if name == "dd" and any(t.startswith("of=") and _trunc(t[3:]) for t in a):
         return "dd onto a key/credential file overwrites it. Back it up and ask the owner"
+    if name == "mv" and any(_mvsys(t) for t in a):
+        return "mv of a system directory (or /) breaks the host. Ask the owner"
     if name == "mv" and a[-1:] == ["/dev/null"]:
         return "mv to /dev/null destroys the source. Use `rm` on an exact path if you mean it"
     if name in ("curl", "wget") and any(re.fullmatch(r"-X\s*DELETE|--request[= ]DELETE|--method=DELETE", t, re.I) or (
@@ -1102,6 +1127,8 @@ def check(cmd, _depth=0, _ph=None):
     cmd = cmd.replace("\\\n", "")
     if _depth > MAXDEPTH:
         return _fallback(cmd)
+    if SYMLN.search(cmd) and RMREC.search(cmd) and re.search(r"(?:\$TMPDIR|\$\{TMPDIR\}|/tmp)/\w", cmd):
+        return "rm -r in scratch space after `ln -s` in the same command: the link may point at the host. Run the steps separately and `rm` the link itself (no trailing slash)"
     wr = {}  # file -> texts written to it; a later `sh FILE` / `./FILE` runs them
     for m in HEREDOC.finditer(cmd):  # a heredoc into a shell/interpreter is code; any other body is data
         pre = cmd[cmd.rfind("\n", 0, m.start()) + 1:m.start()]
