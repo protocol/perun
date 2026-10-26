@@ -55,3 +55,5 @@ A missing `gh` or key prints a `NOT CHECKED` line and exits 0: absence of a chec
 tracking" block (at most 12 lines) into the target `AGENTS.md`, idempotently, and records the flag so
 `scripts/update-installed.sh` replays it. The install is owner-run, so the instruction-file change goes through the
 owner; an agent never edits `AGENTS.md` to add tracking on its own.
+
+- **A pipeline, CI, train or hook fix, or one merged behind a default-off flag, closes only on production evidence.** Label the issue `verify:prod`, write `Refs #N` (never `Fixes #N`), add an enforce-flip checklist for a flagged fix (shadow line seen in 2 runs, flip PR), and close after 2 production runs, each linked as a `production run: <log url>` line; `lane_guard.py shadow-fix --base <ref> --body-file <f>` refuses the closer otherwise.

@@ -29,10 +29,12 @@ while [ $# -gt 0 ]; do
 done
 case "$tmo" in ''|*[!0-9]*) echo "review_checks: --timeout must be an integer" >&2; exit 2 ;; esac
 git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "review_checks: unresolvable base '$base'" >&2; exit 2; }
+here=$(cd "$(dirname "$0")" && pwd)
 cd "$(git rev-parse --show-toplevel)"
 
 raw=$(mktemp "${TMPDIR:-/tmp}/review-raw.XXXXXX") out=$(mktemp "${TMPDIR:-/tmp}/review-out.XXXXXX") tsv=$(mktemp "${TMPDIR:-/tmp}/review-tsv.XXXXXX")
-trap 'rm -f "$raw" "$out" "$tsv"' EXIT
+sgh=$(mktemp -d "${TMPDIR:-/tmp}/review-sg.XXXXXX") # semgrep HOME: the macOS agent sandbox denies writes to ~/.semgrep
+trap 'rm -rf "$raw" "$out" "$tsv" "$sgh"' EXIT
 # Vendored, build and worktree dirs are never scanned (a changed file under them is dropped here, for every tool).
 XRE='(^|/)(node_modules|\.claude/worktrees|vendor|dist|build|\.git|\.venv|venv|target|__pycache__)/'
 all=$(git diff --name-only --diff-filter=ACMR "$base"...HEAD)
@@ -171,7 +173,7 @@ d = json.JSONDecoder().raw_decode(t[i:])[0]
 if kind == "gitleaks":
     if not isinstance(d, list):
         sys.exit("sjson: gitleaks report is not a list")
-elif kind == "trivy":
+elif kind.startswith("trivy"):
     if not isinstance(d, dict):
         sys.exit("sjson: trivy output is not an object")
 elif not isinstance(d, dict) or not isinstance(d.get("results"), list):
@@ -179,8 +181,9 @@ elif not isinstance(d, dict) or not isinstance(d.get("results"), list):
 rows = []
 if kind == "gitleaks":  # Secret/Match fields are deliberately never read
     rows = [(r.get("File"), r.get("StartLine"), r.get("RuleID"), r.get("Description") or "secret detected") for r in d]
-elif kind == "trivy":
-    for r in d.get("Results") or []:  # Secrets are skipped: gitleaks owns them and trivy's Match would leak the value
+elif kind.startswith("trivy"):
+    for r in d.get("Results") or []:  # Secrets only in the secret-only fallback, and never the Match (it would leak the value)
+        if kind == "trivy-secret": rows += [(r["Target"], s.get("StartLine", 0), s.get("RuleID"), s.get("Title", "secret detected")) for s in r.get("Secrets") or []]
         rows += [(r["Target"], 0, v.get("VulnerabilityID"), f"{v.get('PkgName')}@{v.get('InstalledVersion')}: {v.get('Title', '')}") for v in r.get("Vulnerabilities") or []]
         rows += [(r["Target"], (m.get("CauseMetadata") or {}).get("StartLine", 0), m.get("ID"), m.get("Title", "")) for m in r.get("Misconfigurations") or []]
 elif kind == "semgrep":
@@ -198,11 +201,16 @@ PY
 }
 
 if have gitleaks; then
+  glcfg=(); [ -f .gitleaks.toml ] || glcfg=(--config "$here/../templates/gitleaks.toml") # no repo config: use the allowlist template
+  if [ ${#glcfg[@]} -gt 0 ]; then # say what the template hides, so a skipped file is never silent
+    skipped=$(printf '%s\n' "$files" | grep -cE "$(sed -n "s/^  '''\(.*\)''',\$/\1/p" "$here/../templates/gitleaks.toml" | paste -sd'|' -)" || true)
+    [ "${skipped:-0}" -eq 0 ] || echo "review_checks: gitleaks template skipped $skipped changed file(s) under .history/, fixtures/, testdata/ or generated registry JSON" >&2
+  fi
   rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX"); trap 'rm -f "$raw" "$out" "$tsv" "$rep"' EXIT
   while IFS= read -r f; do
     [ -f "$f" ] || continue
     : >"$rep" # a stale report from the previous file must never be read for this one
-    run_one gitleaks gitleaks detect --no-git --no-banner --redact --exit-code 0 -f json -r "$rep" -s "./$f" || continue
+    run_one gitleaks gitleaks detect ${glcfg[@]+"${glcfg[@]}"} --no-git --no-banner --redact --exit-code 0 -f json -r "$rep" -s "./$f" || continue
     scan_ok gitleaks || continue
     [ -s "$rep" ] || echo '[]' >"$rep" # gitleaks may leave an empty report for a clean file
     sjson gitleaks "$rep" >"$tsv" || { skip gitleaks "unparseable report for $f"; continue; }
@@ -240,7 +248,7 @@ elif have semgrep; then
   while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
   # One call per 200 files: typically a single run, but bounded argv and a timeout that is not shared by everything.
   for ((i = 0; i < ${#sg[@]}; i += 200)); do
-    run_one semgrep semgrep --config "$sgc" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
+    run_one semgrep env HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep --config "$sgc" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
     scan_ok semgrep || continue
     e=0; sjson semgrep "$out" >"$tsv" || e=$?
     if [ "$e" = 0 ] || [ "$e" = 3 ]; then
@@ -251,9 +259,16 @@ elif have semgrep; then
 fi
 
 # trivy: offline against the cached DB (no download); no DB or any crash reads as not-run, never as clean.
+# If the vuln+misconfig scan fails (check bundle unreachable in the sandbox), retry secret-only and say so.
 if [ -n "$files" ] && have trivy; then
-  if run_one trivy trivy fs --quiet --format json --scanners vuln,misconfig --skip-db-update --offline-scan --skip-dirs node_modules,.claude/worktrees,vendor,dist,build,.git,.venv,venv,target . && scan_ok trivy; then
-    if sjson trivy "$out" >"$tsv"; then
+  tv=(trivy fs --quiet --format json --skip-version-check --skip-db-update --offline-scan --skip-dirs node_modules,.claude/worktrees,vendor,dist,build,.git,.venv,venv,target)
+  tk=trivy
+  if run_one trivy "${tv[@]}" --scanners vuln,misconfig . && { [ "$rc" = 0 ] || {
+    if grep -Eqi 'dial |no such host|connection (refused|reset)|unreachable|x509|TLS|failed to download|download.*(bundle|check)|(bundle|check).*download' "$out"; then
+      echo "review_checks: trivy: secret-only (misconfig bundle unreachable)" >&2; tk=trivy-secret; ran+=" trivy(secret-only)"
+      run_one trivy "${tv[@]}" --skip-check-update --scanners secret .
+    fi; }; } && scan_ok trivy; then
+    if sjson "$tk" "$out" >"$tsv"; then
       while IFS=$'\t' read -r f l r m; do printf '%s\n' "$files" | grep -qxF -- "$f" && add trivy "$f" "$l" "$r" "$m"; done <"$tsv"
     else skip trivy "unparseable output"; fi
   fi

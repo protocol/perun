@@ -304,6 +304,31 @@ instead of risk.
 default job invocation passes `--affected` (or equivalent) — the merge got credited; the wiring, which is what
 would have actually moved the number, did not happen.
 
+## Affected-only test selection by import graph misses tests that read repo files by path string
+
+A fast gate or train that runs only the tests "affected" by an import graph skips every test that reads a repo
+file by path string: doc pins, ledgers, fixtures, size budgets. Edit such a file and the importing code is
+unchanged, so the pinning test is never selected, goes unrun, and the base turns red on the next full run.
+
+1. The selector also picks any test whose source contains a changed file's repo path (a plain substring match on
+   the repo-relative path), in addition to the import-graph picks.
+2. Unsure → full suite: a changed file the selector cannot map, or a selector error, runs everything.
+3. A base-red fix rides a solo train, never inside a full train, so the red base is cleared by one change that
+   is itself fully tested rather than hidden among other members.
+
+**🚩** a green affected-only run on a diff that edits a doc, ledger or fixture, while the full suite on the
+same tree is red.
+
+## A heavy slot guards the contended stage, not the whole train
+
+A per-kind slot (or lease) held from the start of a train to its end serializes trains on an idle host: the setup, union
+build and lint stages do not contend for anything. Scope the slot to the stage that does (the browser or e2e run, one shared
+database, one port range) and take it per stage with a bounded wait; `stage_run.py` is per stage (`train-verify`,
+`train-browser`, each re-run), and `train_land.sh` drops its exclusive lease while it waits for a full slot. Check that a new
+gate takes its lease around the contended command, not around the whole script.
+
+**🚩** two trains queued on a host with idle cores because one holds a slot across stages that share nothing.
+
 ## CI-offload the heavy gate by default — lane weight, not lane count, drives memory cost
 
 A lane that runs a project's full local aggregate gate — a real build plus the complete browser/E2E suite plus

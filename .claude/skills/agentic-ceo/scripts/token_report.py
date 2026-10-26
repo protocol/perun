@@ -127,7 +127,9 @@ PROJECT ROLLUP (--rollup DIR|auto)
 current directory's project dir, an error when it has none) prices every `<session>.jsonl` in it
 and prints one status-update line (`spend: $X across N sessions, M lanes (main $A, lanes $B)`) plus the
 costliest sessions (`--top`, `--since`, `--json`). Merged per-model totals are priced once; a model without
-a rate is named UNPRICED, an all-unpriced project reads UNPRICED, never $0. Reads many large files: slow.
+a rate is named UNPRICED, an all-unpriced project reads UNPRICED, never $0. One streaming pass per file
+(`rollup_session`): only lines holding `"usage"` are parsed, and with `--since` a file not modified since an hour
+before it, or a line stamped before that, is skipped unread (so such files add nothing to the unreadable counts).
 `--group project|agent|model` ranks spend by project dir, lane type (`agentType`; main sessions are `main`) or model.
 `--by day|week|month` adds UTC buckets (week = Monday start, month = calendar month): per bucket the raw tokens, priced spend, each model's
 token share, and the change vs the previous bucket when it is the calendar-adjacent one (a gap shows no delta,
@@ -345,6 +347,35 @@ def read_jsonl(path: str):
                 continue
             if isinstance(obj, dict):
                 yield obj
+
+
+_TS_Z = re.compile(r'"timestamp":\s*"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.\d+)?Z"')
+
+
+def read_usage_entries(path: str, floor: str | None = None):
+    """Rollup reader: one streaming pass that json-parses only lines that can hold usage. Returns (entries, parsable).
+
+    A line without `"usage"` is never a turn (extract_turns needs it), so tool-result and prompt lines, the bulk of a
+    transcript, are skipped unparsed. `floor` (a `YYYY-MM-DDTHH:MM:SS` UTC string) also drops a `Z`-stamped line before
+    it; callers pass the window start minus an hour so a request's blocks cannot straddle it. `parsable` is whether any
+    line was valid JSON (a file of garbage is told apart from one with no usage), found cheaply when no usage line parsed.
+    """
+    out, parsable = [], False
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            hit = '"usage"' in line
+            if not hit and parsable:
+                continue
+            if hit and floor and (m := _TS_Z.search(line)) and m.group(1) < floor:
+                continue
+            try:
+                obj = json.loads(line)
+            except ValueError:
+                continue
+            parsable = parsable or isinstance(obj, dict)
+            if hit and isinstance(obj, dict):
+                out.append(obj)
+    return out, parsable
 
 
 def parse_timestamp(value, local=False):
@@ -1407,6 +1438,34 @@ def _gap_tier_lines(report: dict) -> list:
     return out
 
 
+HANDBACK_CAP_CHARS = 800  # the SubagentStop handback cap hook's limit
+
+
+def orchestration_actions(report: dict) -> list:
+    """Concrete actions for a flagged orchestration share, computed from the measured split (empty when not flagged).
+
+    Lane count: if main overhead scales with lane count (an assumption: main raw tokens / lanes is the per-lane cost) and
+    the same subagent work is merged into fewer lanes, the share stays at or under the threshold at
+    n * S / (M * (1/threshold - 1)) lanes, floored at 1. Handbacks: lanes whose last SubagentHandback exceeds the
+    cap hook's limit each re-enter the main context in full."""
+    if not report["orchestration_flag"] or not report["subagents_count"]:
+        return []
+    n, sub, main = report["subagents_count"], report["subagents_totals"]["raw_tokens"], report["main"]["raw_tokens"]
+    acts = []
+    if main:
+        target = max(1, int(n * sub / (main * (1 / ORCHESTRATION_FLAG_THRESHOLD - 1))))
+        if target < n:
+            acts.append(f"fewer, larger lanes: {n} lanes cost the main {main // n} raw tokens each; merging the same work into "
+                        f"about {target} lanes would bring the share to <={ORCHESTRATION_FLAG_THRESHOLD:.0%} "
+                        "(estimate: assumes main overhead scales with lane count)")
+    big = [s for s in report["all_subagents"] if (s.get("handback_chars") or 0) > HANDBACK_CAP_CHARS]
+    if big:
+        acts.append(f"field-only handbacks: {len(big)} of {n} lanes handed back more than {HANDBACK_CAP_CHARS} chars "
+                    f"(largest {max(s.get('handback_chars', 0) for s in big)}); write detail to a file and return sha, path and verdict only")
+    acts.append("batch independent reads and checks into one lane brief instead of one lane per check")
+    return acts
+
+
 def render_text(report: dict) -> str:
     lines = []
     lines.append(f"Token report — {os.path.basename(report['session'])}"
@@ -1459,6 +1518,7 @@ def render_text(report: dict) -> str:
         if m["raw_tokens"] and m["cache_read"] * 2 > m["raw_tokens"]:
             hint += "; main cache reads dominate, start a fresh session from a handoff note"
         lines.append(hint)
+        lines += ["  - " + a for a in orchestration_actions(report)]
     if report["top_subagents"]:
         lines.append("Top subagents by cost (input-eq + output):")
         for i, s in enumerate(report["top_subagents"], 1):
@@ -2095,6 +2155,50 @@ def rollup_dirs(path: str) -> list:
     return [path] if has(path) else [d for d in subs if has(d)] or [path]
 
 
+def rollup_session(path: str, since, seen: set, turns_out: list | None = None) -> dict:
+    """The fields `build_rollup` reads from `build_report`, without its per-session analytics, in one lean pass per file.
+
+    Same dedupe (`seen`), window and totals as `build_report` (the rollup tests pin the parity); each transcript is read
+    once through `read_usage_entries`. With `since`, a file not modified since an hour before it holds no in-window turn
+    and is skipped unread. A lane read error or a lane with no usable turn is `unusable`, as in `build_subagent_report`.
+    """
+    floor = None if since is None else (since.astimezone(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    cutoff = None if floor is None else (since - timedelta(hours=1)).timestamp()
+    skip = lambda p: cutoff is not None and os.path.getmtime(p) < cutoff  # noqa: E731
+    if skip(path):
+        entries, ok = [], True
+    else:
+        entries, ok = read_usage_entries(path, floor)
+    main_turns = filter_since([t for t in extract_turns(entries, main=True, seen=seen) if not t.get("dup")], since)
+    main_totals = sum_turns(main_turns)
+    subs, unusable, sub_turns = [], [], []
+    sdir = (path[: -len(".jsonl")] if path.endswith(".jsonl") else path) + "/subagents"
+    for name in sorted(os.listdir(sdir)) if os.path.isdir(sdir) else []:
+        p = os.path.join(sdir, name)
+        if not name.endswith(".jsonl") or skip(p):
+            continue
+        try:
+            lane = read_usage_entries(p, floor)[0]
+        except (OSError, UnicodeError):
+            unusable.append(name[:-6])
+            continue
+        all_turns = extract_turns(lane, seen=seen)
+        if not all_turns:
+            unusable.append(name[:-6])
+            continue
+        turns = filter_since([t for t in all_turns if not t.get("dup")], since)
+        if turns:
+            subs.append(turns)
+            if turns_out is not None:
+                sub_turns += [{**t, "agent": load_meta(p).get("agentType", "unknown")} for t in turns]
+    if turns_out is not None:
+        turns_out += [{**t, "agent": "main"} for t in main_turns] + sub_turns
+    return {"main": main_totals, "main_turns": sum(1 for t in main_turns if not t.get("iter")), "main_entries": int(ok),
+            "main_by_model": model_stats(main_turns)[2], "subagents_by_model": merge_by_model([model_stats(t)[2] for t in subs]),
+            "subagents_count": len(subs), "unusable_subagents": unusable,
+            "subagents_totals": {"raw_tokens": sum(sum_turns(t)["raw_tokens"] for t in subs)}}
+
+
 def build_rollup(directory: str, since, rates=DEFAULT_RATES, by: str | None = None, group: str | None = None) -> dict:
     """Spend across every `<session>.jsonl` directly in `directory` (main + lanes), or in each project dir under a parent (see `rollup_dirs`).
 
@@ -2113,7 +2217,7 @@ def build_rollup(directory: str, since, rates=DEFAULT_RATES, by: str | None = No
             continue
         path, proj, mine = os.path.join(d, name), os.path.basename(os.path.normpath(d)), [] if acc is not None else None
         try:  # a transcript is read whole before any of its requestIds enter `seen`, and lane read errors are caught
-            r = build_report(path, since, 0, rates, seen=seen, turns_out=mine)
+            r = rollup_session(path, since, seen, mine)
         except (OSError, UnicodeError, ValueError):  # a non-UTF-8 or unreadable file must not hide the rest
             bad_sessions += 1
             continue

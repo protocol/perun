@@ -21,6 +21,7 @@ claim and a pipeline PR with no KEEP verdict; env `PERUN_OUTCOME_GUARD` override
 globs, edit the file; default `[]` = the script's built-in workflow/hook/train/gate/CI globs) names the pipeline paths.
 `landing_watchdog` takes `off|warn` (default `warn`): whether landing_watchdog.py warns on a prompt when nothing merged to the default
 branch for `landing_stall_min` minutes (integer >= 1, default 60) while green PRs wait; env `PERUN_LANDING_WATCHDOG` overrides it.
+`stage_timeout_min` (integer >= 1, default 120): wall-clock limit stage_run.py puts on each train/pregate/hook stage before it kills the stage's process group.
 `wip_cap` takes an integer >= 0 (default 0 = off, opt-in): the same hook adds a "WIP: N open PRs > cap M" warn line when more non-draft PRs are open.
 `merges_per_hour_target` and `train_yield_floor` take an integer >= 0 (default 0 = off, opt-in): the same hook warns when merges per hour on the default branch fall below the target while green PRs wait, and when PRs per landed train (merges landed back-to-back) fall below the floor.
 `background_guard` takes `off|warn|block` (default `warn`): whether handback_cap.py (SubagentStop) warns or blocks when a lane hands back
@@ -56,6 +57,7 @@ Exit 0 ok, 2 usage / malformed policy / unknown dimension.
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -104,7 +106,7 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "wip_cap": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "background_guard": "warn", "lockfile_skip_review": "off"}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "stage_timeout_min": 120, "wip_cap": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "background_guard": "warn", "lockfile_skip_review": "off"}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
@@ -119,7 +121,7 @@ def validate(raw: dict) -> dict:
             ok = v in REVIEW
         elif k == "ci":
             ok = v in CI
-        elif k in ("release_every", "landing_stall_min"):  # integer >= 1; release_every: publish a GitHub release every Nth minor version (land-release.sh publish)
+        elif k in ("release_every", "landing_stall_min", "stage_timeout_min"):  # integer >= 1; release_every: publish a GitHub release every Nth minor version (land-release.sh publish)
             ok = isinstance(v, int) and not isinstance(v, bool) and v >= 1
         elif k == "wip_cap":  # opt-in: None or 0 = off, else warn above this many open non-draft PRs
             ok = v is None or (isinstance(v, int) and not isinstance(v, bool) and v >= 0)
@@ -273,9 +275,22 @@ LIGHT_CPU_PCT = 15.0  # an undeclared lane whose process tree burns less than th
 WARMUP = 60  # ...once its lease is this many seconds old: a heavy job's CPU takes a moment to ramp up
 
 
+HOST = socket.gethostname().replace(" ", "_") or "-"  # stage_run leases carry it: a pid from another host (shared dir) means nothing here
+
+
+def pstart(pid: int) -> str:
+    """Start time of `pid` as one token (`ps -o lstart=`, spaces to `_`), "" when unknown; tells a reused pid from the original."""
+    try:
+        return subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True, timeout=5).stdout.strip().replace(" ", "_")
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
 def _leases(d: Path, now: float, exclude: int | None = None) -> list:
     """`(pid, start, kind)` for every live lease. One file per heavy job named `<pid>`, content `<pid> <start epoch>`
-    plus an optional declared kind word (`light`, ...). A lease with a dead pid, a start older than LEASE_TTL (2h)
+    plus an optional declared kind word (`light`, ...). stage_run.py writes six words, `<pid> <start> <kind> <pid start
+    time> <child pgid> <child start time>`: when the recorded pid start time differs from the live one the pid was reused
+    and the lease is dead; an optional seventh word is the host, and a lease from another host is ignored. A lease with a dead pid, a start older than LEASE_TTL (2h)
     or unreadable/malformed content is ignored, never deleted."""
     out = []
     for f in d.glob("*") if d.is_dir() else []:
@@ -284,8 +299,9 @@ def _leases(d: Path, now: float, exclude: int | None = None) -> list:
             pid, start = int(t[0]), int(t[1])
         except (OSError, ValueError, IndexError):
             continue
-        if len(t) in (2, 3) and pid != exclude and now - start < LEASE_TTL and _alive(pid):
-            out.append((pid, start, t[2] if len(t) == 3 else None))
+        if len(t) in (2, 3, 6, 7) and (len(t) < 7 or t[6] == HOST) and pid != exclude and now - start < LEASE_TTL and _alive(pid) \
+                and (len(t) < 6 or t[3] == "-" or pstart(pid) in ("", t[3])):
+            out.append((pid, start, t[2] if len(t) >= 3 else None))
     return out
 
 

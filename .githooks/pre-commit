@@ -2,6 +2,14 @@
 # Repo hook: a staged changelog.d/*.md fragment must pass `ci-gates.sh fragments`, the check land-release.sh and CI
 # run, so a bad fragment fails this commit instead of the release. Reads the staged blobs, not the working copy.
 set -euo pipefail
+# Wall-clock cap (PERUN_COMMIT_HOOK_MIN, default 1 = 60s): re-run under stage_run --hook so a hung hook ends nonzero with COULD-NOT-CHECK instead of stalling the lane.
+sr="$(dirname "$0")/../.claude/skills/agentic-delivery/scripts/stage_run.py"
+if [ -z "${PERUN_HOOK_CAPPED:-}" ]; then
+  if [ -f "$sr" ] && command -v python3 >/dev/null; then
+    PERUN_HOOK_CAPPED=1 exec python3 "$sr" --hook --name pre-commit --timeout "${PERUN_COMMIT_HOOK_MIN:-1}" -- bash "$0" "$@"
+  fi
+  echo "pre-commit: WARN: wall-clock cap skipped (stage_run.py or python3 missing); the hook runs uncapped" >&2
+fi
 cd "$(git rev-parse --show-toplevel)"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/staged-fragments.XXXXXX"); trap 'rm -rf "$tmp"' EXIT
 while IFS= read -r -d '' f; do git show ":$f" >"$tmp/${f##*/}"; done \

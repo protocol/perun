@@ -215,6 +215,25 @@ def verdict(policy_cpu="efficient") -> tuple:
     return None, load1, cores, ram
 
 
+def wait_clear(first, load1, cores, ram, cpu):
+    """Wait inside the hook for a transient HOLD instead of failing the turn: re-read `verdict` with backoff (1s, 2s, 4s ...)
+    until it clears or $PERUN_HEAVY_HOOK_WAIT_SECS (default 60, hard cap 120, 0 = never wait) passes; returns the last verdict.
+    Not waited for: the exclusive train gate (minutes to hours), and a host whose readings are injected by $PERUN_GATE_*
+    (static, so waiting cannot change them) unless the wait env is set explicitly. The wait is clamped to the hook's own
+    timeout minus 2s ($PERUN_HEAVY_HOOK_TIMEOUT, default 5 = what an old install's settings give; the template sets 70), because
+    a host-killed hook runs `|| true` and fails open."""
+    w = _float_env("PERUN_HEAVY_HOOK_WAIT_SECS")
+    injected = any(os.environ.get(k) for k in ("PERUN_GATE_LOAD1", "PERUN_GATE_CORES", "PERUN_GATE_FREE_RAM_PCT"))
+    room = (_float_env("PERUN_HEAVY_HOOK_TIMEOUT") or 5.0) - 2.0  # the hook's own timeout (old installs: 5s) minus 2s; a killed hook fails open
+    w = max(0.0, min(120.0, room, 0.0 if w is None and injected else 60.0 if w is None else w))
+    t0, step, v = time.time(), 1.0, (first, load1, cores, ram)
+    while v[0] and "gate running" not in v[0] and time.time() - t0 < w:
+        time.sleep(min(step, w - (time.time() - t0)))
+        step = min(step * 2, 16.0)
+        v = verdict(cpu)
+    return v
+
+
 MAX_DENIES, WINDOW = 3, 30 * 60
 
 
@@ -256,6 +275,7 @@ def main() -> int:
         except ValueError:
             cpu = "efficient"
         reason, load1, cores, ram = verdict(cpu)
+        reason, load1, cores, ram = wait_clear(reason, load1, cores, ram, cpu)
         if not reason:
             return 0
         gate = "gate running" in reason  # the exclusive train lease is never bypassed

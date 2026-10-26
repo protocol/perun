@@ -417,8 +417,20 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     printf '%s\n' "${run_msg}"
     gate_cmd=(bash -c "set -o pipefail; ${DCR_PREPUSH_CMD}")
   fi
-  if ! "${gate_cmd[@]}" </dev/null; then
-    printf 'pre-push-verify: FAIL -- rejecting push of %s (DCR_PREPUSH_CMD exited non-zero)\n' "${local_ref}" >&2
+  # Heavy-slot cap + wall-clock timeout (agentic-delivery's stage_run.py) when installed; absent = run unwrapped.
+  wrapped=0
+  for sr in "$(dirname "$0")/../../agentic-delivery/scripts/stage_run.py" ".claude/skills/agentic-delivery/scripts/stage_run.py"; do
+    if [ -f "${sr}" ] && command -v python3 >/dev/null 2>&1; then gate_cmd=(python3 "${sr}" --name pre-push -- "${gate_cmd[@]}"); wrapped=1; break; fi
+  done
+  gate_rc=0
+  "${gate_cmd[@]}" </dev/null || gate_rc=$?
+  if [ "${gate_rc}" -ne 0 ]; then
+    # stage_run's 75 (no heavy slot) and 124 (timeout) say the gate never gave a verdict; the push is still rejected (fail closed).
+    case "${wrapped}:${gate_rc}" in
+      1:75) printf 'pre-push-verify: deferred: heavy slot busy -- rejecting push of %s (the tests did not run; retry)\n' "${local_ref}" >&2 ;;
+      1:124) printf 'pre-push-verify: timed out after the stage limit -- rejecting push of %s (the tests did not finish; see the stage-timeout line above)\n' "${local_ref}" >&2 ;;
+      *) printf 'pre-push-verify: FAIL -- rejecting push of %s (DCR_PREPUSH_CMD exited non-zero)\n' "${local_ref}" >&2 ;;
+    esac
     fail=1
   fi
 done

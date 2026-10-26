@@ -153,6 +153,7 @@ port outside 1-65535, or a non-positive --timeout/--settle. Read-only: it
 signals nothing and kills nothing.
 """
 import argparse
+import json
 import os
 import re
 import shutil
@@ -681,14 +682,89 @@ def _main_handback(argv):
     return code
 
 
+def hot_files(mine, open_prs, limit=5):
+    """Files in `mine` that more than `limit` OTHER open PRs also touch -> {file: count}.
+
+    `open_prs` maps PR id -> iterable of touched paths (stubbed offline; the caller lists open PRs).
+    A shared append-only file edited by every PR makes a train conflict after the first lands; use one
+    fragment file per entry instead (see changelog.d/). Pure function: no network, no VCS calls.
+    """
+    counts = {f: sum(f in set(files) for files in open_prs.values()) for f in set(mine)}
+    return {f: n for f, n in sorted(counts.items()) if n > limit}
+
+
+def _main_hotfiles(argv):
+    parser = argparse.ArgumentParser(prog="lane_guard.py hotfiles",
+                                     description="Warn when this PR touches a file >N other open PRs also touch.")
+    parser.add_argument("--prs", required=True, help="JSON file: {pr_id: [paths]} for the other open PRs")
+    parser.add_argument("--limit", type=int, default=5)
+    parser.add_argument("files", nargs="+", help="paths this PR touches")
+    args = parser.parse_args(argv)
+    with open(args.prs) as fh:
+        hot = hot_files(args.files, json.load(fh), args.limit)
+    for f, n in hot.items():
+        print(f"LANE_GUARD HOT: {f} also touched by {n} other open PRs; split into one fragment file per entry")
+    return 0
+
+
+_CLOSER_RE = re.compile(r"(?i)\b(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?)\s*:?\s+(?:[\w.-]+/[\w.-]+)?#\d+")
+_OFF_DEFAULT_RE = re.compile(
+    r"(?i):-(?:0|false|off|no)\}|(?:getenv|environ\.get|env\.get)\(\s*[\"']\w+[\"']\s*,\s*[\"']?(?:0|false|off|no)\b"
+    r"|\b\w*(?:SHADOW|ENFORCE|ENABLE\w*|FLAG)\w*\s*[:=]\s*[\"']?(?:0|false|off|no)\b[\"']?\s*[,;]?\s*(?:#.*)?$")
+
+
+_PIPELINE_RE = re.compile(r"^(?:\.github/|\.githooks/|\.claude/hooks/|.*(?:train|hook|ci-gates)[^/]*$)", re.I)
+_PROD_LOG_RE = re.compile(r"(?im)^.*\bprod(?:uction)?[- ]run\b.*https?://\S+")
+
+
+def check_shadow_fix(cwd, base, head, body, git="git"):
+    """Refuse a closing keyword (Fixes/Closes/Resolves #N) when the diff adds a flag or env default of 0/false/off,
+    or touches pipeline/CI/train/hook paths without 2 `production run: <url>` lines in the body."""
+    if not _CLOSER_RE.search(body):
+        return OK, "LANE_GUARD OK: shadow-fix: no closing keyword in the PR body"
+    rc, out = _git(["diff", "-U0", f"{base}...{head}"], cwd, git)
+    if rc:
+        return COULD_NOT_CHECK, "LANE_GUARD UNVERIFIED: shadow-fix: git diff failed"
+    rc, names = _git(["diff", "--name-only", f"{base}...{head}"], cwd, git)
+    if rc:
+        return COULD_NOT_CHECK, "LANE_GUARD UNVERIFIED: shadow-fix: git diff --name-only failed"
+    hits = [ln[1:].strip() for ln in out.splitlines()
+            if ln.startswith("+") and not ln.startswith("+++") and _OFF_DEFAULT_RE.search(ln)]
+    pipeline = any(_PIPELINE_RE.match(n) for n in names.splitlines())
+    urls = {re.search(r"https?://\S+", m).group(0) for m in _PROD_LOG_RE.findall(body)}
+    if (hits or pipeline) and len(urls) < 2:
+        why = ("adds a default-off flag (" + hits[0][:80] + ")") if hits else "touches pipeline/CI/train/hook paths"
+        return REFUSED, ("LANE_GUARD REFUSE: shadow-fix: the diff " + why + " and the body closes an issue without 2 distinct "
+                         "`production run: <log url>` lines; label the issue verify:prod, use `Refs #N` (with an enforce-flip checklist "
+                         "for a flag), close after 2 production runs")
+    return OK, "LANE_GUARD OK: shadow-fix: no default-off flag added or 2 production runs cited"
+
+
+def _main_shadow_fix(argv):
+    parser = argparse.ArgumentParser(prog="lane_guard.py shadow-fix",
+                                     description="Refuse Fixes/Closes/Resolves #N on a diff that adds a default-off flag.")
+    parser.add_argument("--base", required=True)
+    parser.add_argument("--head", default="HEAD")
+    parser.add_argument("--body-file", required=True, help="file holding the PR body")
+    args = parser.parse_args(argv)
+    with open(args.body_file, encoding="utf-8") as f:
+        code, line = check_shadow_fix(os.getcwd(), args.base, args.head, f.read())
+    print(line)
+    return code
+
+
 def main(argv=None):
     raw = list(sys.argv[1:] if argv is None else argv)
+    if raw[:1] == ["hotfiles"]:
+        return _main_hotfiles(raw[1:])
+    if raw[:1] == ["shadow-fix"]:
+        return _main_shadow_fix(raw[1:])
     if raw[:1] == ["handback"]:
         return _main_handback(raw[1:])
     if raw[:1] == ["wait"]:
         return _main_wait(raw[1:])
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0],
-                                     epilog="subcommands: {handback,wait} ... (see: lane_guard.py <subcommand> --help)")
+                                     epilog="subcommands: {handback,wait,hotfiles,shadow-fix} ... (see: lane_guard.py <subcommand> --help)")
     parser.add_argument("--expect-branch", help="required: refuse unless HEAD is on exactly this branch")
     parser.add_argument("--allow-any-branch", action="store_true",
                         help="waive --expect-branch (non-lane probes only; proves less)")

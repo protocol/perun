@@ -3013,6 +3013,64 @@
         "Reads the base red set at start after the lease wait, not at arm time, and fails closed (no base-red verdict) unless the red set is stamped with the gate's base sha and that sha is still the base tip",
         "Names scripts/test-train-liveness.sh"
       ]
+    },
+    {
+      "id": "stage-timeout-heavy-cap-file-finding",
+      "prompt": "A merge train held the heavy slot for 5 hours, load1 hit 124 on 44 cores from test runs started by train and hook subprocesses, and most pipeline-filed issues repeated a closed one. What closes each gap?",
+      "expected_output": "scripts/stage_run.py wraps each train, pregate and pre-push stage: it takes the same machine-wide heavy lease heavy_gate.py counts (bounded wait, then DEFER exit 75 with the stage not run) and kills the stage's whole process group past policy stage_timeout_min (default 120; exit 124, stage name logged, lease released). 75 and 124 are infrastructure results, not RED (the train ends exit 3 without a culprit hunt, train_flake returns 125); a SIGKILLed stage_run's orphan is reaped via pid and start time recorded in the lease; the heavy_gate hook waits in-hook clamped to its timeout minus 2s with the template timeout raised to 70 and replaced on upgrade. scripts/file_finding.py runs before any issue is filed: it searches open and closed issues and PRs merged in 14 days with gh, refuses with the match printed on a title/keyword match, and --force REASON overrides and logs. Tests: scripts/test-stage-run.sh, scripts/test-stage-rc.sh, scripts/test-commit-hook-cap.sh, scripts/test-heavy-gate-wait.sh, scripts/test-file-finding.sh.",
+      "expectations": [
+        "Kills the stage's process group (not only the child) on timeout, releases the lease and logs the stage name",
+        "Uses the same heavy lease as heavy_gate.py with a bounded wait, not an unbounded block",
+        "File-finding searches closed issues and recently merged PRs as well as open issues, refuses on a match and prints it, and --force requires a logged reason",
+        "Caps the commit hook at 60s via stage_run --hook: nonzero exit with COULD-NOT-CHECK naming the index.lock holder, never a pass, never killing another process",
+        "Treats a stage DEFER (75) or timeout (124) as infrastructure, never as a RED verdict",
+        "Fails closed when gh fails",
+        "An unsignalable process group (PermissionError) skips the kill with a warning and keeps the lease, never running the stage unleased; leases carry the host and another host's lease is ignored; a malformed PERUN_HEAVY_WAIT_SECS exits 2",
+        "file_finding ignores empty and under-3-character keywords, matches keywords as whole words, and uses normalized-title equality for a title with fewer than 2 qualifying words; the pre-commit hook warns on stderr when the cap cannot be applied (scripts/test-stage-run-hardening.sh)",
+        "Names scripts/test-stage-run.sh and scripts/test-file-finding.sh"
+      ]
+    },
+    {
+      "id": "affected-only-selection-path-pins",
+      "prompt": "A fast gate runs only the tests an import graph says are affected. A lane edits a size-budget ledger and a doc that a test pins by path string; the gate is green but the base goes red on the next full run, and the fix is queued in a full train with other members. What rule fixes the selector and the train?",
+      "expected_output": "The import graph misses tests that read repo files by path string (doc pins, ledgers, fixtures). The selector also picks any test whose source contains a changed file's repo path; when unsure (an unmappable changed file or a selector error) it runs the full suite; and a base-red fix rides a solo train, never inside a full train. See references/merge-queue-worktrees.md.",
+      "expectations": [
+        "Adds a path-substring pick: any test whose source contains a changed file's repo path is selected in addition to the import-graph picks",
+        "Falls back to the full suite when unsure instead of trusting the affected-only subset",
+        "Lands the base-red fix on a solo train, not inside a full train with other members"
+      ]
+    },
+    {
+      "id": "fanout-resize-slot-scope-issue-check",
+      "prompt": "A test stage sized its worker count once at start from a load-5 snapshot on a 36-CPU host and ran 2 workers for 30 minutes. The train also holds one heavy slot for the whole run, so a second train waits on an idle host. A lane brief tells you to apply a workaround for issue #N. What do you change?",
+      "expected_output": "Re-sizes between shards (or from a reserved CPU slice), scopes the slot to the contended stage, and checks #N before applying the workaround.",
+      "expectations": [
+        "Re-reads the load probe between shards or sizes from a reserved CPU slice instead of pinning the worker count from the stage-start load",
+        "Scopes the heavy slot to the contended stage (browser or shared database), not the whole train",
+        "Checks the state of issue #N first and drops the workaround when it is closed"
+      ]
+    },
+    {
+      "id": "shared-ledger-use-fragments",
+      "prompt": "Every fix lane in a merge train appends its entry to one shared ledger file, and after the first PR lands the other two in the train go conflicting. How do you record entries instead?",
+      "expected_output": "One fragment file per entry (changelog.d style) instead of appending to a shared file, and uses lane_guard.py hotfiles to flag a file many open PRs touch.",
+      "expectations": [
+        "Writes one new fragment file per entry, in a directory like changelog.d/, instead of editing one shared append-only file",
+        "Explains that a shared file edited by every PR conflicts for the rest of the train once the first lands",
+        "Runs lane_guard.py hotfiles with the open PRs' file sets to flag a file more than 5 other open PRs touch"
+      ]
+    },
+    {
+      "id": "shadow-fix-keeps-issue-open",
+      "prompt": "My PR adds a fix behind a new env flag that defaults to 0 (shadow mode). Production behavior is unchanged until the flag flips. Should the PR body say `Fixes #N`? Does the same hold for a CI or train fix?",
+      "expected_output": "No. Closing the issue on merge hides that production never changed. Use `Refs #N`, keep the issue open with an enforce-flip checklist (shadow line seen in 2 runs, flip PR, 2 production runs). lane_guard.py shadow-fix refuses a Fixes/Closes/Resolves keyword when the diff adds a default-off flag. Test: scripts/test_lane_guard_shadow_fix.py. The same holds for pipeline/CI/train/hook fixes: label verify:prod and close only with 2 production-run logs linked (a `production run: <url>` line each); the guard refuses a closer on such a diff without them.",
+      "expectations": [
+        "Says not to use Fixes/Closes/Resolves #N for a default-off (shadow) fix",
+        "Uses Refs #N and keeps the issue open",
+        "Lists the enforce-flip checklist: shadow line seen in 2 runs, flip PR, 2 production runs",
+        "Names lane_guard.py shadow-fix",
+        "Extends the rule to pipeline/CI/train/hook fixes: label verify:prod, close only after 2 linked production-run logs"
+      ]
     }
   ]
 }

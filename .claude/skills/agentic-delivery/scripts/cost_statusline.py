@@ -57,12 +57,15 @@ def _tail_turns(path, tr):
 def _window(data, now=None):
     """`(window parts, tail hit ratio)` from the transcript tail; each is empty/None when token_report or the transcript is unavailable or it fails."""
     try:
-        keep, sys.dont_write_bytecode = sys.dont_write_bytecode, True  # the import must not write __pycache__ into the skills tree
+        # bytecode goes to a user-owned cache (not shared /tmp: a planted .pyc would run), not __pycache__ in the skills tree:
+        # without any cache the 2800-line module recompiled on every refresh. Limit: PYTHONDONTWRITEBYTECODE=1 (or -B) turns
+        # the cache off, so that refresh recompiles each time
+        keep, sys.pycache_prefix = sys.pycache_prefix, sys.pycache_prefix or os.path.expanduser("~/.cache/perun-pyc")
         sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agentic-ceo" / "scripts"))
         try:
             import token_report as tr  # noqa: E402
         finally:
-            sys.dont_write_bytecode = keep
+            sys.pycache_prefix = keep
         turns, clipped = _tail_turns(data["transcript_path"], tr)
         now = now or datetime.now(timezone.utc)
         live = [t for t in turns if not t.get("iter") and t["timestamp"] and t.get("model") != "<synthetic>"]
