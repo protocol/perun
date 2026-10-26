@@ -284,6 +284,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     printf 'pre-push-verify: %s is a delete -- skipping\n' "${remote_ref}"
     continue
   fi
+  # An annotated tag push carries the tag object's sha; verify the commit it points to.
+  local_sha="$(git rev-parse -q --verify "${local_sha}^{commit}" 2>/dev/null || printf '%s' "${local_sha}")"
 
   if [ -z "${current_head}" ] || [ "${local_sha}" != "${current_head}" ]; then
     die "refusing ${local_ref} (${local_sha}) -- this hook can only verify the tree currently checked out (HEAD is ${current_head:-unknown}), and that does not match the commit being pushed. Check out ${local_sha} (or push from that commit) before pushing, or run DCR_PREPUSH_CMD yourself against the right tree."

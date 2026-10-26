@@ -8,7 +8,7 @@ description: >-
 license: MIT
 metadata:
   author: deep-code-review contributors
-  version: "1.604.0"
+  version: "1.605.0"
 ---
 
 # Agentic delivery
@@ -24,7 +24,7 @@ Gated-delivery **pattern**, not a runtime or standing swarm. Does not replace `d
 | Verify or relay a result; slow pipeline | `verification-handback.md`; `pipeline-optimizer.md` |
 | Long session, compaction, new session, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate, before a context-heavy step, before handback |
 | New machine or fleet | `operating-discipline.md` |
-| PR state; hand off; changelog | `scripts/pr_state.py <n>`; `scripts/premise_check.py <n>...`; `scripts/ci-gates.sh fragments` |
+| PR state; hand off; changelog | `scripts/pr_state.py <n>`; `scripts/land_ready.py` (open PRs ready to land, or why not); `scripts/review_status.py --sha S --red N` (post `perun/review`); `scripts/premise_check.py <n>...`; `scripts/ci-gates.sh fragments` |
 | Cost cut, lane cap; "enforced" claim, CI cost | `cost-quality-guardrails.md`; `host-enforcement.md` |
 | Fan-out size, host probe | `fanout-host-sizing.md`, `fast-agentic-delivery.md` |
 | Dev server, local stack | `dev-env-ownership.md` |

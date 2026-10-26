@@ -4,6 +4,7 @@ that launched an Agent or a background tool, the kill switch, a non-stall reply,
 garbage input; plus the operating-layer wiring. Fixtures are synthetic transcripts in a temp dir."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -102,7 +103,122 @@ class Guard(unittest.TestCase):
             self.assertEqual(run({"transcript_path": str(p)})[:2], (0, ""))
 
 
+WAIT = "CI is running; next check at 13:42, merge on green."
+
+
+class IdleWait(unittest.TestCase):
+    """Planted RED transcripts: a turn that only schedules a wake-up while waiting on CI."""
+
+    def reason(self, entries, **kw):
+        out = run(kw, entries)[1]
+        return json.loads(out)["reason"] if out else ""
+
+    def test_wakeup_only_turn_blocks(self):
+        for sleeper in (tool("ScheduleWakeup", delaySeconds=600), tool("CronCreate", cron="*/10 * * * *")):
+            r = self.reason([PROMPT, tool("Bash", command="gh pr checks"), RESULT, sleeper, RESULT, text(WAIT)])
+            self.assertEqual(r, "Waiting on CI is not a stop: launch the next priority lane now, then wake on the CI notification.")
+
+    def test_launch_passes(self):
+        for launch in (tool("Agent", prompt="x"), tool("Task", prompt="x"), tool("Workflow", script="x"),
+                       tool("Bash", command="make", run_in_background=True)):
+            self.assertEqual(self.reason([PROMPT, launch, RESULT, tool("ScheduleWakeup"), RESULT, text(WAIT)]), "")
+
+    def test_one_shot_kill_switch_and_unrelated_text_pass(self):
+        e = [PROMPT, tool("ScheduleWakeup"), RESULT, text(WAIT)]
+        self.assertEqual(self.reason(e, stop_hook_active=True), "")
+        self.assertEqual(run({}, e, env={"PERUN_STALL_GUARD": "off"})[1], "")
+        self.assertEqual(self.reason([PROMPT, tool("ScheduleWakeup"), RESULT, text("Reminder set for tomorrow.")]), "")
+        self.assertEqual(self.reason([PROMPT, text(WAIT)]), "")  # no wake-up scheduled: not this trigger
+        self.assertEqual(self.reason([PROMPT, tool("ScheduleWakeup"), RESULT, text("`merge on green`")]), "")
+
+
+NOTE = {"type": "user", "message": {"role": "user", "content": "<task-notification><status>completed</status></task-notification>"}}
+
+
+class OpenLanesAndNarrowing(unittest.TestCase):
+    def blocked(self, entries):
+        return bool(run({}, entries)[1])
+
+    def test_earlier_turn_background_lane_still_open_passes(self):
+        bg = tool("Agent", prompt="x", run_in_background=True)
+        bg["message"]["content"][0]["id"] = "toolu_1"
+        wake = [PROMPT, tool("ScheduleWakeup"), RESULT, text(WAIT)]
+        self.assertFalse(self.blocked([PROMPT, bg, RESULT, text("launched")] + wake))
+        self.assertTrue(self.blocked([PROMPT, bg, RESULT, text("launched"), done("t1", use="toolu_1")] + wake))  # lane finished: still a stall
+
+    def test_past_tense_ci_text_passes_forward_looking_blocks(self):
+        for t, want in (("PR merged, CI green, checks passed.", False), ("Merging now.", False), ("Waiting on CI.", True),
+                        ("Checks pending; next look at 13:42.", True), ("Holding until checks pass.", True)):
+            self.assertEqual(self.blocked([PROMPT, tool("ScheduleWakeup"), RESULT, text(t)]), want, t)
+
+
+def launched(aid):
+    t = f"Async agent launched successfully.\nagentId: {aid} (internal)\nThe agent is working in the background."
+    return {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "content": [{"type": "text", "text": t}]}]}}
+
+
+def resumed(aid):
+    t = json.dumps({"success": True, "message": "Resuming agent", "resumedAgentId": aid})
+    return {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "content": [{"type": "text", "text": t}]}]}}
+
+
+def done(tid, status="completed", use="toolu_x"):
+    return {"type": "user", "message": {"role": "user", "content": f"<task-notification>\n<task-id>{tid}</task-id>\n<tool-use-id>{use}</tool-use-id>\n<status>{status}</status>\n</task-notification>"}}
+
+
+class OpenBgPerId(unittest.TestCase):
+    """Real-format ids: one agent notifies again on each resume, so a raw count goes negative."""
+
+    def open(self, entries):
+        sys.path.insert(0, str(SC))
+        import stall_guard
+        return stall_guard._open_bg([json.dumps(e) for e in entries])
+
+    def test_repeat_notifications_do_not_hide_an_open_lane(self):
+        e = [launched("aaa"), launched("bbb"), done("aaa"), resumed("aaa"), done("aaa"), resumed("aaa"), done("aaa")]
+        self.assertTrue(self.open(e))  # bbb never finished
+        self.assertFalse(self.open(e + [done("bbb", "failed")]))
+
+    def test_resume_reopens_until_its_notification(self):
+        self.assertTrue(self.open([launched("aaa"), done("aaa"), resumed("aaa")]))
+        self.assertFalse(self.open([launched("aaa"), done("aaa"), resumed("aaa"), done("aaa", "killed")]))
+
+    def test_background_tool_use_closes_by_tool_use_id(self):
+        bgt = {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "toolu_1", "name": "Bash", "input": {"run_in_background": True}}]}}
+        self.assertTrue(self.open([bgt]))
+        self.assertFalse(self.open([bgt, done("b1", use="toolu_1")]))
+
+
 class Wiring(unittest.TestCase):
+    def test_plugin_hook_skips_when_install_already_registers_it(self):
+        cmd = json.loads((ROOT / "hooks/hooks.json").read_text())["hooks"]["Stop"][0]["hooks"][0]["command"]
+        with tempfile.TemporaryDirectory() as d:
+            t = Path(d) / "t.jsonl"
+            t.write_text("\n".join(json.dumps(e) for e in [PROMPT, text(STALL)]))
+            (Path(d) / ".claude").mkdir()
+            env = {**os.environ, "CLAUDE_PLUGIN_ROOT": str(ROOT), "CLAUDE_PROJECT_DIR": d}
+            go = lambda: subprocess.run(["sh", "-c", cmd], input=json.dumps({"transcript_path": str(t)}), capture_output=True, text=True, env=env).stdout
+            self.assertIn("block", go())
+            (Path(d) / ".claude/settings.local.json").write_text('{"hooks":{"Stop":[{"command":"stall_guard.py"}]}}')
+            self.assertEqual(go(), "")
+
+
+    def test_plugin_hooks_register_stall_guard_once_on_stop(self):
+        hj = json.loads((ROOT / "hooks/hooks.json").read_text())
+        stop = [h for e in hj["hooks"]["Stop"] for h in e["hooks"] if "stall_guard.py" in h["command"]]
+        self.assertEqual(len(stop), 1)
+        self.assertTrue(stop[0]["command"].endswith("|| true"))
+        self.assertTrue((ROOT / [w for w in stop[0]["command"].split('"') if "stall_guard.py" in w][-1].replace("${CLAUDE_PLUGIN_ROOT}", ".")).is_file())
+
+    def test_default_delivery_install_applies_template_idempotently(self):
+        if not shutil.which("jq"):
+            self.skipTest("jq missing")
+        with tempfile.TemporaryDirectory() as d:
+            for _ in range(2):
+                subprocess.run(["bash", str(ROOT / "install.sh"), "--with-delivery", d], capture_output=True, check=True)
+            stop = json.loads((Path(d) / ".claude/settings.local.json").read_text())["hooks"]["Stop"]
+            self.assertEqual(json.dumps(stop).count("stall_guard.py"), 1)
+
     def test_template_registers_stop_and_doctor_checks_it(self):
         stop = [e for e in json.loads(TEMPLATE.read_text())["hooks"]["Stop"] if "stall_guard.py" in json.dumps(e)]
         self.assertEqual(len(stop), 1)

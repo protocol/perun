@@ -43,7 +43,8 @@ def check(payload):
     if best[1] is None:
         return None
     return (f"Earlier lane agent {best[1]} (\"{best[2]}\") covers the same area: resume it with SendMessage instead "
-            "of spawning a new one, to skip the startup re-read. Spawn new only if it is finished and unrelated.")
+            "of spawning a new one, to skip the startup re-read. Its tool-call cap does not reset on resume, so a fresh lane is better "
+            "for a large remainder. Spawn new if it is finished and unrelated.")
 
 
 def main():
