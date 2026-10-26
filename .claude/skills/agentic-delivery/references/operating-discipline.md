@@ -47,7 +47,7 @@ newest release tag, skipping on a merge/train lock or an edited managed file; po
 (`compact|startup|clear`, `scripts/handoff_inject.py`) re-injects the newest `.claude/handoff*.md`, 2KB max. Agents write that handoff
 before any reset and never tell the owner to restart. Two advisory cost hooks ride along: `scripts/context_nudge.py` (UserPromptSubmit) prints at most two lines:
 past 250k tokens (`PERUN_CONTEXT_NUDGE_TOKENS`, again per 50k of growth) the handoff nudge plus the host's session commands (host from env or `PERUN_HOST`), and a model/effort hint on a work-kind change; `scripts/lane_resume_nudge.py` (PreToolUse `Agent|Task`)
-advises resuming an earlier same-domain lane with SendMessage instead of paying a new lane's startup re-read. Neither
+advises resuming an earlier same-domain lane with SendMessage instead of paying a new lane's startup re-read (the lane's tool-call cap does not reset on resume: a fresh lane is better for a large remainder). Neither
 blocks; both fail open. The layer also wires `scripts/lane_cap.py` (PostToolUse) with `LANE_TOOL_CAP=250`:
 a lane is told to checkpoint at 80% and stop at the cap; `LANE_TOOL_CAP_<TYPE>` overrides per lane type. `scripts/ceo_altitude_guard.py` (PreToolUse + UserPromptSubmit) is inert until policy `role` is `ceo` (warn) or `ceo-strict` (block): it flags the main session's hand edits of source and tests, never a lane's; the owner lifts it per turn with `ceo:off`; `operating_selfcheck.py` prints those edits per session, counted even while `role` is `off`.
 
