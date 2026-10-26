@@ -150,6 +150,15 @@ SUBCOMMANDS
           not identical) is SIMILAR-FIX, printed for human review and never
           grouped or RED. Read-only.
 
+COOPERATIVE CANCEL AND RECEIPT CARRY
+------------------------------------
+Every run prints `RUN <id>`. Between stages and inside every backoff wait it polls the state dir (the --state
+file's directory) for `<id>.cancel` (release refs, print CANCELLED, exit 0) and `<id>.drop-<pr>` (verify rebuilds
+the union without that member; merge HALTs, since the remaining union was never verified). Each file is consumed
+once. A PR whose head has pending or missing checks inherits the green of its prior head recorded in --state only
+when `git patch-id --stable` of merge-base..head is unchanged (a base-merge-only move; `CARRIED <old>-><new>`).
+The union train gate still always runs.
+
 FLAKY VS DETERMINISTIC
 ----------------------
 A failing --verify-cmd is re-run up to --retries times on the same tree with
@@ -183,7 +192,7 @@ OUTPUT AND EXIT CODES
 ---------------------
 One line per action (ELIGIBLE, SKIP, PLAN, FAIL, FLAKY, PARK, GREEN, RED,
 KEYSTONE, WOULD-MERGE, MERGED, KILL, WOULD-REVERT, REVERT, KEPT, PENDING, UNVERIFIED, WOULD-UPDATE, UPDATED, UPDATE-FAILED, DUP-FIX,
-SIMILAR-FIX, WARN, NOOP, HALT, ERROR, DROP-FAILED). Untrusted text (check
+SIMILAR-FIX, WARN, NOOP, HALT, ERROR, DROP-FAILED, RUN, CANCELLED, DROPPED, CARRIED). Untrusted text (check
 names, file names, forge errors) is stripped of control characters and
 truncated.
   0  plan listed; union green; dry-run printed; members merged; nothing to do;
@@ -264,6 +273,7 @@ GATE_CONTEXT = "perun/train-gate"
 GREEN_CONCLUSIONS = {"success", "neutral", "skipped"}
 PR_LIMIT = 200
 MAX_BACKOFF = 300
+PENDING = {"queued", "in_progress", "pending", "waiting", "requested"}  # a check run that has not completed
 MAX_GRANT_DAYS = 30  # a class keystone grant may run at most this long
 GRANTS_PATH = ".claude/KEYSTONE-GRANTS"  # the only file keystone grants are read from
 TRUST_GIT = ["--no-replace-objects", "-c", "blame.ignoreRevsFile="]  # grant reads: no rewritten history
@@ -278,6 +288,10 @@ class Halt(Exception):
 
 class ForgeError(Exception):
     """A forge or git call failed or returned something unusable; fail closed."""
+
+
+class Cancelled(Exception):
+    """A `<run-id>.cancel` file asked this run to stop; refs are released by run()'s cleanup."""
 
 
 class Conflict(Exception):
@@ -343,7 +357,9 @@ class Train:
     """One merge-train invocation: forge/git I/O goes through `runner`, waits through `sleep`."""
 
     def __init__(self, args, runner, out, sleep):
-        self.a, self.runner, self.out, self.sleep = args, runner, out, sleep
+        self.a, self.runner, self.out = args, runner, out
+        self.drops = set()  # PR numbers named by consumed `<run-id>.drop-<pr>` files
+        self.sleep = lambda secs: (sleep(secs), self.poll())  # every backoff wait is a cancel point
         self.repo_flag = ["--repo", args.repo] if args.repo else []
         self.base_sha = ""
         self.run_id = f"{os.getpid()}-{uuid.uuid4().hex[:12]}"  # never a per-process counter (#1139)
@@ -392,6 +408,34 @@ class Train:
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(self.state, fh, indent=1, sort_keys=True)
         os.replace(tmp, self.state_path)
+
+    def poll(self):
+        """Consume `<run-id>.cancel` (raise Cancelled) and `<run-id>.drop-<pr>` (add to self.drops) in the state dir."""
+        d = os.path.dirname(os.path.abspath(self.state_path))
+        try:
+            found = os.listdir(d)
+        except OSError:
+            return
+        for f in found:
+            m = re.fullmatch(re.escape(self.run_id) + r"\.(cancel|drop-(\d+))", f)
+            if not m:
+                continue
+            try:
+                os.remove(os.path.join(d, f))  # consumed once
+            except OSError:
+                continue
+            if m.group(2):
+                self.drops.add(int(m.group(2)))
+            else:
+                raise Cancelled
+
+    def undrop(self, members):
+        """Poll, then return `members` minus any dropped PR (one DROPPED line each)."""
+        self.poll()
+        for m in members:
+            if m["number"] in self.drops:
+                self.say(f"DROPPED #{m['number']} drop file")
+        return [m for m in members if m["number"] not in self.drops]
 
     def rev(self, ref):
         """Resolve a git ref to its SHA."""
@@ -533,9 +577,38 @@ class Train:
         if pr.get("mergeable") != "MERGEABLE":
             return f"mergeable={clean(pr.get('mergeable'))}"
         passed, bad = self._checks(pr["headRefOid"], waive)
+        if bad.rsplit("=", 1)[-1] in PENDING or not (passed or bad):
+            passed, bad = self._carry(pr, passed, bad)
+        elif not bad and passed >= self.a.min_checks:
+            self.state.setdefault("greens", {})[str(pr["number"])] = {"head": pr["headRefOid"], "passed": passed}
         if bad:
             return f"check {bad}"
         return f"checks {passed}<{self.a.min_checks}" if passed < self.a.min_checks else ""
+
+    def _carry(self, pr, passed, bad):
+        """(passed, bad) unchanged, or the prior green head's receipt when only the base moved (equal patch-id)."""
+        old = self.state.get("greens", {}).get(str(pr["number"]))
+        new = pr["headRefOid"]
+        if not old or old["head"] == new or not self._same_patch(pr["number"], old["head"], new):
+            return passed, bad
+        self.say(f"CARRIED {old['head'][:7]}->{new[:7]} #{pr['number']}")
+        return old["passed"], ""
+
+    def _same_patch(self, number, old, new):
+        """True only when `git patch-id --stable` of merge-base..head matches for both heads; any git failure is False."""
+        ns = f"refs/merge-train/{self.run_id}"
+        self.refs.update([f"{ns}/carry-base", f"{ns}/carry-{number}"])
+        script = 'd=$(git diff --binary "$1") || exit 1; printf "%s\\n" "$d" | git patch-id --stable'
+        ids = []
+        try:
+            self.run(["git", "fetch", "--quiet", "--no-tags", self.a.remote, f"+refs/heads/{self.a.base}:{ns}/carry-base",
+                      f"+refs/pull/{number:d}/head:{ns}/carry-{number}"])
+            for head in (old, new):
+                mb = self.run(["git", "merge-base", head, f"{ns}/carry-base"])[1].strip()
+                ids.append(self.run(["sh", "-c", script, "patch-id-diff", f"{mb}..{head}"])[1].split()[:1])
+        except ForgeError:
+            return False
+        return bool(ids[0]) and ids[0] == ids[1]
 
     def _checks(self, sha, waive=()):
         """(latest-per-name success count, first non-green 'name=state' or ''). Names in `waive` are not judged."""
@@ -679,7 +752,7 @@ class Train:
         self.base_sha, members = self.fetch(members)
         members = self.screen(members)  # a recorded, unlanded keystone parks its copies (#1142)
         parked_any = False
-        while members:
+        while (members := self.undrop(members)):
             try:
                 why = self.fails(members, f"union {names(members)}")
             except Conflict as c:
@@ -687,6 +760,10 @@ class Train:
                 members, parked_any = [m for m in members if m is not c.member], True
                 continue  # #1134: rebuild at once, never a sleep per conflict
             if not why:
+                kept = self.undrop(members)
+                if len(kept) != len(members):  # dropped while the gate ran: re-plan the smaller union
+                    members = kept
+                    continue
                 self.state.update(base=self.a.base, base_sha=self.base_sha, members=members)
                 self.save()
                 self.say(f"GREEN base={self.base_sha[:7]} members={names(members)}")
@@ -789,12 +866,19 @@ class Train:
                        + "; re-plan and re-verify")
         prev = self.fetch()[0]
         self.same_base(self.state["base_sha"], prev)
+        self.poll()
         if not self.a.apply:
             for m in members:
                 self.say(f"WOULD-MERGE #{m['number']} {m['head'][:7]} onto {self.a.base}@{prev[:7]}")
             self.say("DRY-RUN nothing merged; --apply --grant REF merges (integration owner or recorded standing grant)")
             return OK
         for i, m in enumerate(members):
+            self.poll()
+            if any(x["number"] in self.drops for x in members[i:]):
+                self.state["members"] = []
+                self.save()
+                raise Halt(f"drop requested for {names([x for x in members[i:] if x['number'] in self.drops])}; "
+                           "the remaining union was never verified: re-plan and re-verify")
             why = self.still_ready(m)
             posted = not why and self.post_status(m, "success")
             try:
@@ -1477,10 +1561,14 @@ def run(argv, runner=default_runner, out=sys.stdout, sleep=time.sleep) -> int:
     train = None
     try:
         train = Train(a, runner, out, sleep)
+        train.say(f"RUN {train.run_id}")
         return getattr(train, a.cmd.replace("-", "_"))()
     except Halt as exc:
         print(f"HALT {exc}", file=out)
         return HALT
+    except Cancelled:
+        print("CANCELLED run cancelled by request; refs released", file=out)
+        return OK
     except (ForgeError, ValueError, KeyError, TypeError) as exc:
         print(f"ERROR {clean(exc, 240)} (not verified)", file=out)
         return ERROR
@@ -1512,6 +1600,7 @@ class FakeForge:
         self.bodies = []  # merge commit bodies written by `gh pr merge --body`
         self.based, self.udiffs, self.update_fail = {}, {}, set()  # refresh / dupes scenarios
         self.statuses, self.status_fail = [], False  # gate-status POST paths; simulate a rejected post
+        self.dpid = {}  # head -> patch-id of merge-base..head (receipt carry)
 
     def base(self):
         return self.hist[-1]
@@ -1592,6 +1681,9 @@ class FakeForge:
         if a[:2] == ["sh", "-c"] and cwd is None and a[3] == "patch-id":
             head = a[-1].split("..")[1]
             return 0, "".join(f"{pid} {head}\n" for pid in self.pids.get(head, [])), ""
+        if a[:2] == ["sh", "-c"] and cwd is None and a[3] == "patch-id-diff":
+            head = a[-1].split("..")[1]
+            return 0, (f"{self.dpid[head]} {head}\n" if head in self.dpid else ""), ""
         if a[:2] == ["sh", "-c"] and cwd is None and a[3] == "keystone-contains":
             return (0 if a[4] in self.contains else 1), "", ""
         if a[:4] == ["git", "show", "-s", "--format=%cI"]:
@@ -2493,6 +2585,64 @@ def _selftest() -> int:
         groups, similars = duplicate_fixes(diffs, 0.9)
         return groups == [((1, 2), ["t.py"])], (groups, similars, diffs)
 
+    def listen(buf, suffix):
+        """Runner hook: on the first `git ls-remote`, drop `<run-id>.<suffix>` into the state dir (the run id is read from `RUN`)."""
+        def hook(args, cwd=None, timeout=None, _done=[]):  # noqa: B006 — one use per test
+            if args[:2] == ["git", "ls-remote"] and not _done:
+                _done.append(1)
+                open(os.path.join(tmp, re.search(r"RUN (\S+)", buf.getvalue()).group(1) + suffix), "w").close()
+        return hook
+
+    def cancel_mid_wait_releases_and_exits_zero():
+        f = FakeForge(1)
+        st = verified(f, "cx.json")
+        f.view_override = {1: {"mergeable": "UNKNOWN"}}  # still_ready backs off, which is a cancel point
+        buf = io.StringIO()
+
+        def sleeper(_):
+            open(os.path.join(tmp, re.search(r"RUN (\S+)", buf.getvalue()).group(1) + ".cancel"), "w").close()
+
+        rc = run(["merge", "--apply", "--grant", "g", "--base", "main", "--state", os.path.join(tmp, st), "--backoff", "5"],
+                 runner=f, out=buf, sleep=sleeper)
+        out = buf.getvalue()
+        return (rc == OK and "CANCELLED" in out and not any(c[:3] == ["gh", "pr", "merge"] for c in f.calls)
+                and any(c[:3] == ["git", "update-ref", "-d"] for c in f.calls)
+                and not [n for n in os.listdir(tmp) if n.endswith(".cancel")]), (rc, out)
+
+    def drop_file_removes_member_and_replans():
+        f, buf = FakeForge(3), io.StringIO()
+        hook = listen(buf, ".drop-2")
+        runner = lambda args, cwd=None, timeout=None: (hook(args), f(args, cwd=cwd, timeout=timeout))[1]  # noqa: E731
+        rc = run(["verify", "--verify-cmd", "t", "--base", "main", "--state", os.path.join(tmp, fresh("dr.json")),
+                  "--backoff", "5"], runner=runner, out=buf, sleep=f.sleeps.append)
+        out = buf.getvalue()
+        with open(os.path.join(tmp, "dr.json")) as fh:
+            kept = [m["number"] for m in json.load(fh)["members"]]
+        return (rc == OK and "DROPPED #2" in out and "GREEN base=B0 members=#1,#3" in out and kept == [1, 3]
+                and f.gates == [(1, 3)] and not [n for n in os.listdir(tmp) if ".drop-" in n]), (out, f.gates)
+
+    def carry_setup(runs):
+        f = FakeForge(1)
+        st = verified(f, "cr.json")  # records h1 as green
+        f.prs[1]["head"], f.prs[1]["runs"] = "h1b", runs
+        return f, st
+
+    def receipt_carries_only_on_equal_patch_id():
+        f, st = carry_setup([_run("ci", None, status="in_progress")])
+        f.dpid = {"h1": "pidA", "h1b": "pidA"}
+        rc, out = go(f, "plan", state=st)
+        return (rc == OK and "CARRIED h1->h1b #1" in out and "ELIGIBLE #1 h1b" in out), out
+
+    def changed_patch_id_or_red_check_does_not_carry():
+        f, st = carry_setup([_run("ci", None, status="in_progress")])
+        f.dpid = {"h1": "pidA", "h1b": "pidB"}  # a real change, not a base-merge-only move
+        rc, out = go(f, "plan", state=st)
+        g, st2 = carry_setup([_run("ci", "failure")])
+        g.dpid = {"h1": "pidA", "h1b": "pidA"}  # same patch but the head's own check is red: never carried
+        rc2, out2 = go(g, "plan", state=st2)
+        return ("CARRIED" not in out and "SKIP #1 check ci=in_progress" in out
+                and "CARRIED" not in out2 and "SKIP #1 check ci=failure" in out2), (out, out2)
+
     cases = [
         ("plan-filters-latest-check-per-name-and-K", plan_filters),
         ("culprit-among-four-isolated-and-stays-parked", culprit_among_four_is_isolated_and_stays_parked),
@@ -2561,6 +2711,10 @@ def _selftest() -> int:
         ("keystone-apply-refresh-failure-is-warn-not-error", keystone_apply_refresh_failure_is_warn_not_error),
         ("refresh-skips-draft-and-fork-prs", refresh_skips_draft_and_fork_prs),
         ("refresh-throttles-and-retries-rate-limit", refresh_throttles_and_retries_rate_limit),
+        ("cancel-mid-wait-releases-and-exits-zero", cancel_mid_wait_releases_and_exits_zero),
+        ("drop-file-removes-member-and-replans", drop_file_removes_member_and_replans),
+        ("receipt-carries-only-on-equal-patch-id", receipt_carries_only_on_equal_patch_id),
+        ("changed-patch-id-or-red-check-does-not-carry", changed_patch_id_or_red_check_does_not_carry),
     ]
     try:
         return bc.run_checks("merge_train", cases)
