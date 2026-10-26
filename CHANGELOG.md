@@ -3,6 +3,20 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.604.0] — 2026-10-26
+
+- Added deterministic answer keys, a stdlib scorer and a reproducible results script for the business-ops bench (`docs/bench/bizops-keys-1026/`): rule-derived checks for leading with a number, prompt-computable arithmetic, routing the jurisdiction-specific part to a professional and no invented benchmarks; no judge and no paid calls. Caveat: the lead-with-a-number check encodes the skill's own doctrine, so it is circular and drives most of the gap. On the 150 held-out scenarios the shipped skill passes 111 and the round-4 edit 112 against the rival's 84 (shipped vs rival 41 to 14 discordant, exact McNemar p = 0.0004; edit vs shipped 15 to 14, no difference). Exploratory and post-hoc (not preregistered), with the lead-number check ignored: rival 131, shipped 137, edit 137, and no pair differs (shipped vs rival 12 to 6, p = 0.2379; edit vs rival 9 to 3, p = 0.146; edit vs shipped 6 to 6, p = 1.0). The r4-001 pre-rules read is self-attested; the professional and benchmark regexes can still false-pass or false-fail.
+
+### Changed
+- `ceo-strict` now gives the main session zero free edits and blocks any Edit/Write tool call and any shell redirect, `tee`, `sed -i` or `perl -i` write under the project dir, whatever the file extension (docs, config, changelog fragments and handoffs included); files outside the project, such as memory and scratchpad files, stay allowed. `~` and `$VAR` in write targets are expanded, and the project root falls back to the git toplevel when `CLAUDE_PROJECT_DIR` is unset. Known gap: `cp`, `mv`, `rm`, `touch`, `dd` and interpreter writes such as `python -c` are not caught. Role `ceo` keeps one free source edit per turn, and `ceo:off` and `PERUN_ROLE=off` remain the escapes.
+
+- Added deterministic answer keys, a stdlib scorer and a reproducible results script for the contribution bench (`docs/bench/contribution-keys-1026/`): a regex safety check (leak, sanitise, hold) on saved outputs, not a measure of answer quality, where the judge preferred the rival; no judge and no paid calls. On the 150 held-out scenarios the pre-slim shipped skill passes 129 against the rival's 118 (16 to 5 discordant, exact McNemar p = 0.027); the round-4 edit leaks names into code blocks most often (11 of 150).
+
+- Added deterministic answer keys, a stdlib scorer and a reproducible results script for the idea-critic bench (`docs/bench/idea-critic-keys-1026/`): a regex structural check (numeric stop trigger, stated recommendation, what would change the answer) on saved `idea-critic-r9-1018` held outputs, not a measure of answer quality; no judge and no paid calls. On the 150 held-out scenarios the rival passes 132, the previous skill 131 and the shipped edit 133, with no pair significant (exact McNemar p >= 0.625).
+
+### Fixed
+- The installed skills `INDEX.md` no longer reads as if `scripts/skill_index.py` ships with the install: it now says the file is generated in the Perun source repo.
+
 ## [1.603.0] — 2026-10-26
 
 ### Changed
