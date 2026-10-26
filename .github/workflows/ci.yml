@@ -14,6 +14,7 @@ name: gates
 on:
   pull_request:
     branches: [main]
+  merge_group:
   workflow_dispatch:
 
 concurrency:
@@ -24,7 +25,14 @@ permissions:
   contents: read # least privilege (OWASP Scorecard: Token-Permissions)
 
 jobs:
-  gates:
+
+  # Heavy steps run as parallel jobs (wall time = slowest job, not the sum); the aggregate `gates` job below keeps the
+  # required check name. scripts/test-ci-gates.sh shards its cases by SHARD=i/N.
+  selftests:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -37,32 +45,31 @@ jobs:
       # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
       # moved) is skipped, so there the committed files are checked byte-for-byte.
       - name: Regenerate derived files (unlanded PR)
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         run: bash scripts/regen-unlanded.sh origin/main
-
-      # A slow per-PR test registers as scripts/ci-tests.d/<slug>.bg.sh: it starts here, runs alongside the gate
-      # steps below, and the "Per-PR tests" step waits for it and fails on its exit code (a hang is killed after 15 minutes), so it adds no serial time.
-      - name: Start background per-PR tests (scripts/ci-tests.d/*.bg.sh)
-        run: |
-          mkdir -p "$RUNNER_TEMP/bg"
-          date +%s >"$RUNNER_TEMP/bg/started"
-          for t in scripts/ci-tests.d/*.bg.sh; do
-            [ -e "$t" ] || continue
-            f="$RUNNER_TEMP/bg/$(basename "$t")"
-            : >"$f.log"
-            nohup bash -c 'timeout 900 bash -e "$1" >"$2.log" 2>&1; echo $? >"$2.rc.tmp"; mv "$2.rc.tmp" "$2.rc"' _ "$t" "$f" >/dev/null 2>&1 &
-          done
 
       # Prove the gate helper against its own fixtures (routing/version/privacy
       # + the real install path) before trusting it on this repo.
       - name: Gate helper self-tests
+        env:
+          SHARD: ${{ matrix.shard }}/3
         run: bash scripts/test-ci-gates.sh
 
-      - name: review_checks self-test
-        run: bash scripts/test-review-checks.sh
+  enforce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      # SHA-pinned, not a mutable tag (the skill's own K rule for CI actions).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # fix-class gate diffs base..head; a depth-1 clone cannot resolve the range
 
-      - name: mktemp TMPDIR regression
-        run: bash scripts/test-mktemp-tmpdir.sh
+      # Derived files (SHA256SUMS, size-budgets.tsv rows, INDEX.md, INDEX-scripts.md) are not committed by lane PRs, so two
+      # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
+      # moved) is skipped, so there the committed files are checked byte-for-byte.
+      - name: Regenerate derived files (unlanded PR)
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        run: bash scripts/regen-unlanded.sh origin/main
 
       # Enforce the documented gates on the real repo via the same helper the
       # self-tests pin — one authoritative implementation, no inline copies.
@@ -100,14 +107,152 @@ jobs:
           # fail. Baseline growth vs the PR base is the next step below.
           bash scripts/ci-gates.sh rules --baseline scripts/rule-enforcement-baseline.tsv .
 
+  perpr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      # SHA-pinned, not a mutable tag (the skill's own K rule for CI actions).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # fix-class gate diffs base..head; a depth-1 clone cannot resolve the range
+
+      # Derived files (SHA256SUMS, size-budgets.tsv rows, INDEX.md, INDEX-scripts.md) are not committed by lane PRs, so two
+      # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
+      # moved) is skipped, so there the committed files are checked byte-for-byte.
+      - name: Regenerate derived files (unlanded PR)
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        run: bash scripts/regen-unlanded.sh origin/main
+
+      # A slow per-PR test registers as scripts/ci-tests.d/<slug>.bg.sh: it starts here, runs alongside the gate
+      # steps below, and the "Per-PR tests" step waits for it and fails on its exit code (a hang is killed after 15 minutes), so it adds no serial time.
+      - name: Start background per-PR tests (scripts/ci-tests.d/*.bg.sh)
+        run: |
+          mkdir -p "$RUNNER_TEMP/bg"
+          date +%s >"$RUNNER_TEMP/bg/started"
+          for t in scripts/ci-tests.d/*.bg.sh; do
+            [ -e "$t" ] || continue
+            f="$RUNNER_TEMP/bg/$(basename "$t")"
+            : >"$f.log"
+            nohup bash -c 'timeout 900 bash -e "$1" >"$2.log" 2>&1; echo $? >"$2.rc.tmp"; mv "$2.rc.tmp" "$2.rc"' _ "$t" "$f" >/dev/null 2>&1 &
+          done
+
+      # Per-PR tests: a PR registers its test by adding scripts/ci-tests.d/<slug>.sh (one command line),
+      # not by appending a line to the step above, so PRs never conflict on this file.
+      - name: Per-PR tests (scripts/ci-tests.d)
+        run: |
+          set -euo pipefail
+          for t in scripts/ci-tests.d/*.sh; do
+            case "$t" in *.bg.sh) continue ;; esac
+            echo "== $t"
+            bash -e "$t"
+          done
+          for t in scripts/ci-tests.d/*.bg.sh; do
+            [ -e "$t" ] || continue
+            f="$RUNNER_TEMP/bg/$(basename "$t")"
+            echo "== $t (started in the background)"
+            [ -f "$f.log" ] || { echo "FAIL: $t was never started"; exit 1; }
+            end=$(($(cat "$RUNNER_TEMP/bg/started") + ${BG_WAIT_S:-960})) # counted from the background start, not from here
+            while [ ! -f "$f.rc" ] && [ "$(date +%s)" -lt "$end" ]; do sleep 1; done
+            cat "$f.log"
+            [ -f "$f.rc" ] || { echo "FAIL: $t did not finish in time"; exit 1; }
+            [ "$(cat "$f.rc")" = 0 ]
+          done
+
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      # SHA-pinned, not a mutable tag (the skill's own K rule for CI actions).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # fix-class gate diffs base..head; a depth-1 clone cannot resolve the range
+
+      # Derived files (SHA256SUMS, size-budgets.tsv rows, INDEX.md, INDEX-scripts.md) are not committed by lane PRs, so two
+      # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
+      # moved) is skipped, so there the committed files are checked byte-for-byte.
+      - name: Regenerate derived files (unlanded PR)
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        run: bash scripts/regen-unlanded.sh origin/main
+
+      # Live harness (stub HTTP server, no key, no spend) and the review-scoring
+      # instrument (canaries, FP budget, fixture integrity).
+      - name: Live eval harness and review scorer tests (offline)
+        run: |
+          python3 scripts/test_live_evals.py
+          python3 scripts/test_score_review.py
+          python3 scripts/test_issue1418.py
+          python3 scripts/test_install_commands.py
+          python3 scripts/test_spend_report.py
+          python3 scripts/test_field_learnings.py
+          python3 scripts/test_terse_scope_checks.py
+          python3 scripts/test_reply_budget_prevention.py
+          python3 scripts/test_handback_copypaste_exempt.py
+          python3 scripts/test_lane_guard_banlist_seed.py
+          python3 scripts/test_sandbox_preflight.py
+          python3 scripts/test_learning_to_pr.py
+          python3 scripts/test_wire_defaults.py
+          python3 scripts/test_weekly_receipt.py
+          python3 scripts/test_token_ratchet.py
+          python3 scripts/test_tokens_per_pr_parity.py
+          python3 scripts/test_bench_corpus.py
+          python3 scripts/test_bench_run_isolation.py
+          python3 scripts/test_resource_policy.py
+          python3 scripts/test_council.py
+          python3 scripts/test_veche.py
+          python3 scripts/test_roadmap_rank.py
+          python3 scripts/test_policy_ux.py
+          bash scripts/test-resource-policy-train.sh
+          python3 scripts/test_review_feedback.py
+          python3 scripts/test_learned_rules.py
+          python3 scripts/test_review_lean.py
+          bash scripts/test-post-review.sh
+          python3 scripts/test_eval_predicates_defended.py
+          python3 scripts/test_perun_doctor.py
+          python3 scripts/test_install_ux.py
+          python3 scripts/test_extra_hosts_install.py
+          python3 scripts/test_hosts_parity.py
+          python3 scripts/test_host_safety_rows.py
+          python3 scripts/test_auto_update.py
+          python3 scripts/test_auto_update_pr.py
+          python3 scripts/test_fleet_hooks.py
+          python3 scripts/test_field_mos_1009.py
+          bash scripts/test-land-release-tag.sh
+          bash scripts/test-host-manifests.sh
+          bash scripts/test-land-release-publish.sh
+          python3 scripts/test_scan_tracked_only.py
+          python3 scripts/test_review_gate.py
+          python3 scripts/test_max_pace_no_waste.py
+
+  cheap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      # SHA-pinned, not a mutable tag (the skill's own K rule for CI actions).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # fix-class gate diffs base..head; a depth-1 clone cannot resolve the range
+
+      # Derived files (SHA256SUMS, size-budgets.tsv rows, INDEX.md, INDEX-scripts.md) are not committed by lane PRs, so two
+      # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
+      # moved) is skipped, so there the committed files are checked byte-for-byte.
+      - name: Regenerate derived files (unlanded PR)
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        run: bash scripts/regen-unlanded.sh origin/main
+
+      - name: review_checks self-test
+        run: bash scripts/test-review-checks.sh
+
+      - name: mktemp TMPDIR regression
+        run: bash scripts/test-mktemp-tmpdir.sh
+
       # Shipped gate scripts prove they FIRE on planted violations before any
       # result of theirs is trusted (independent oracle per script).
       # Warn-only: a new script nothing calls was built but never wired (field learning, #1380).
       - name: New scripts are wired (warn-only)
         continue-on-error: true
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
         run: python3 .claude/skills/agentic-delivery/scripts/wired_check.py "$BASE_SHA" "$HEAD_SHA"
 
       - name: Shipped script self-tests
@@ -199,8 +344,8 @@ jobs:
       # only the fixed skill's.
       - name: Fix commits carry a pinned test
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
         run: |
           set -euo pipefail
           python3 .claude/skills/deep-code-review/scripts/fix_class_gate.py \
@@ -219,8 +364,8 @@ jobs:
       # independence. Release squash commits carry both trailers.
       - name: Review tiers (advisory)
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
         run: python3 .claude/skills/agentic-delivery/scripts/tier_gate.py --advisory "$BASE_SHA..$HEAD_SHA"
 
       # Lesson -> mechanism: a commit that edits skill prose (a SKILL.md or a
@@ -236,8 +381,8 @@ jobs:
       # mechanism pins the lesson (review judges that).
       - name: Prose lessons carry a mechanism
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
         run: |
           set -euo pipefail
           python3 .claude/skills/deep-code-review/scripts/fix_class_gate.py \
@@ -263,8 +408,8 @@ jobs:
       - name: Lesson mechanisms replay (advisory)
         timeout-minutes: 15
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
         run: |
           set -euo pipefail
           python3 scripts/lesson_replay.py --selftest
@@ -274,14 +419,14 @@ jobs:
       # (commit range or CHANGELOG) — budgets ratchet down by default.
       - name: Size budgets ratchet down
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: bash scripts/ci-gates.sh size-ratchet --base "$BASE_SHA" --config scripts/size-budgets.tsv .
 
       # The rule-enforcement baseline may only grow with a
       # `rule-baseline-raise: <reason>` commit-message line.
       - name: Rule baseline ratchets down
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: bash scripts/ci-gates.sh rules --baseline scripts/rule-enforcement-baseline.tsv --base "$BASE_SHA" .
 
       - name: SKILL.md name matches its directory
@@ -315,73 +460,11 @@ jobs:
       - name: Eval runner guards hold (offline, no model)
         run: python3 scripts/run-evals.py --selftest
 
-      # Live harness (stub HTTP server, no key, no spend) and the review-scoring
-      # instrument (canaries, FP budget, fixture integrity).
-      - name: Live eval harness and review scorer tests (offline)
-        run: |
-          python3 scripts/test_live_evals.py
-          python3 scripts/test_score_review.py
-          python3 scripts/test_issue1418.py
-          python3 scripts/test_install_commands.py
-          python3 scripts/test_spend_report.py
-          python3 scripts/test_field_learnings.py
-          python3 scripts/test_terse_scope_checks.py
-          python3 scripts/test_reply_budget_prevention.py
-          python3 scripts/test_handback_copypaste_exempt.py
-          python3 scripts/test_lane_guard_banlist_seed.py
-          python3 scripts/test_sandbox_preflight.py
-          python3 scripts/test_learning_to_pr.py
-          python3 scripts/test_wire_defaults.py
-          python3 scripts/test_weekly_receipt.py
-          python3 scripts/test_token_ratchet.py
-          python3 scripts/test_tokens_per_pr_parity.py
-          python3 scripts/test_bench_corpus.py
-          python3 scripts/test_bench_run_isolation.py
-          python3 scripts/test_resource_policy.py
-          python3 scripts/test_council.py
-          python3 scripts/test_veche.py
-          python3 scripts/test_roadmap_rank.py
-          python3 scripts/test_policy_ux.py
-          bash scripts/test-resource-policy-train.sh
-          python3 scripts/test_review_feedback.py
-          python3 scripts/test_learned_rules.py
-          python3 scripts/test_review_lean.py
-          bash scripts/test-post-review.sh
-          python3 scripts/test_eval_predicates_defended.py
-          python3 scripts/test_perun_doctor.py
-          python3 scripts/test_install_ux.py
-          python3 scripts/test_extra_hosts_install.py
-          python3 scripts/test_hosts_parity.py
-          python3 scripts/test_host_safety_rows.py
-          python3 scripts/test_auto_update.py
-          python3 scripts/test_auto_update_pr.py
-          python3 scripts/test_fleet_hooks.py
-          python3 scripts/test_field_mos_1009.py
-          bash scripts/test-land-release-tag.sh
-          bash scripts/test-host-manifests.sh
-          bash scripts/test-land-release-publish.sh
-          python3 scripts/test_scan_tracked_only.py
-          python3 scripts/test_review_gate.py
-          python3 scripts/test_max_pace_no_waste.py
-
-      # Per-PR tests: a PR registers its test by adding scripts/ci-tests.d/<slug>.sh (one command line),
-      # not by appending a line to the step above, so PRs never conflict on this file.
-      - name: Per-PR tests (scripts/ci-tests.d)
-        run: |
-          set -euo pipefail
-          for t in scripts/ci-tests.d/*.sh; do
-            case "$t" in *.bg.sh) continue ;; esac
-            echo "== $t"
-            bash -e "$t"
-          done
-          for t in scripts/ci-tests.d/*.bg.sh; do
-            [ -e "$t" ] || continue
-            f="$RUNNER_TEMP/bg/$(basename "$t")"
-            echo "== $t (started in the background)"
-            [ -f "$f.log" ] || { echo "FAIL: $t was never started"; exit 1; }
-            end=$(($(cat "$RUNNER_TEMP/bg/started") + ${BG_WAIT_S:-960})) # counted from the background start, not from here
-            while [ ! -f "$f.rc" ] && [ "$(date +%s)" -lt "$end" ]; do sleep 1; done
-            cat "$f.log"
-            [ -f "$f.rc" ] || { echo "FAIL: $t did not finish in time"; exit 1; }
-            [ "$(cat "$f.rc")" = 0 ]
-          done
+  # Branch protection requires a check named exactly `gates`: it passes only when every shard job succeeded.
+  gates:
+    needs: [selftests, enforce, perpr, evals, cheap]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = false ]
