@@ -1,2 +1,0 @@
-### Added
-- Destructive guard wave 13: `mv` of a system directory or `/` (`mv /etc /etc.bak`) is blocked; `find . -name '*.pyc' -not -path './.git/*' -delete` (artifact glob plus literal `-not -path|-name` exclusions) is allowed. Blind held-out-18 (`docs/bench/security-gates-heldout18-1025`) at wave 12: 59/60 blocked, 1/59 benign flagged; in-sample now 60/60 and 0/59. Pin and probes: `scripts/test_security_gates_heldout18_blind.py`.

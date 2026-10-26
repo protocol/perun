@@ -1,2 +1,0 @@
-### Added
-- Destructive guard wave 15: a command substitution used as the command word (`$(printf 'rm\x20-rf\x20/')`, a base64 or hex decoder, a variable set from one) is blocked, `$'\x72\x6d'` words are decoded before the check, and `crontab -r` (any flag form) and `crontab /dev/null` are blocked; `crontab -l`, `-e` and `crontab -l | crontab -` stay allowed. Blind held-out-20 (`docs/bench/security-gates-heldout20-1025`) at wave 14: 58/60 blocked, 0/59 benign flagged; in-sample now 60/60 and 0/59. Pin and probes: `scripts/test_security_gates_heldout20_blind.py`.
