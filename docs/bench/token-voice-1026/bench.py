@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Token-voice bench: does a voice/terse system prompt cut completion tokens on the hidden-test bug-fix tasks without losing passes?
+"""Token-voice bench: does a voice/terse system prompt cut completion tokens on the hidden-test bug-fix tasks without losing passes? (published run: Haiku 5.5 via run_claude.py, not the Qwen model hidden_test_bench.H.MODEL names)
 
   bench.py prompts   build prompts/<arm>.txt from the installed rival plugin copies and Perun's shipped text (freeze these)
-  bench.py run       [--samples K] [--jobs N] call PCSS (free) for the frozen prompts; resumes from runs.jsonl (needs PCSS_KEY or PCSS_ENV_FILE)
+  bench.py run       [--samples K] [--jobs N] call PCSS (free) for the frozen prompts; resumes from runs.jsonl (needs PCSS_KEY or PCSS_ENV_FILE). Not used for the published results: PCSS returned HTTP 429, so run_claude.py ran the same prompts via `claude -p` on Haiku 5.5
 
 Reuses scripts/hidden_test_bench.py (tickets, scorer, chat call). Task set: all 40 easy tickets plus the first 20 hard ones (file order) = 60.
 """
