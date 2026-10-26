@@ -46,6 +46,9 @@ SUBCOMMANDS
           A parked member stays excluded from every later plan/verify until its
           head changes. The surviving union is rebuilt immediately. When a
           union is green the base SHA and member heads are recorded in --state.
+  Red base: verify and merge refuse to start (REFUSED red-base, exit 3) when the base head has a completed red
+          check, unless the first lineup member is the PR named by --base-fix. `merge` also re-reads the open queue
+          when it fires and HALTs if any recorded member moved or closed since verify (the lineup binds at fire time).
   merge   Dry-run by default: prints what would merge. With --apply (and
           --grant) it merges the recorded members back-to-back with
           `gh pr merge --merge --match-head-commit`, preserving each member's
@@ -654,6 +657,22 @@ class Train:
                 latest[r["name"]] = (key, r)
         return {n: v[1] for n, v in latest.items()}
 
+    def red_base(self, sha, members):
+        """True (after printing REFUSED red-base) when base `sha` has a completed red check and the lineup head is not --base-fix."""
+        if not members:
+            return False
+        # ponytail: judges every check on the base, not only the branch-protection required set; add a name filter if noisy
+        red = sorted(n for n, r in self._latest(sha).items()
+                     if r.get("status") == "completed" and r.get("conclusion") not in GREEN_CONCLUSIONS)
+        if not red:
+            return False
+        if members[0]["number"] == self.a.base_fix:
+            self.say(f"BASE-FIX #{self.a.base_fix} leads the lineup on red base {self.a.base}@{sha[:7]}")
+            return False
+        self.say(f"REFUSED red-base {self.a.base}@{sha[:7]} red: {clean(','.join(red), 120)}; "
+                 "lineup head must be the base fix (--base-fix PR)")
+        return True
+
     # ---- verify ---------------------------------------------------------
     @contextmanager
     def tree(self, start, merges):
@@ -787,6 +806,8 @@ class Train:
         """The `verify` subcommand: find the largest green union, parking culprits; record it."""
         members = self.eligible()
         self.base_sha, members = self.fetch(members)
+        if self.red_base(self.base_sha, members):
+            return HALT
         members = self.screen(members)  # a recorded, unlanded keystone parks its copies (#1142)
         parked_any = False
         while (members := self.undrop(members)):
@@ -889,6 +910,15 @@ class Train:
                 return ""
         return f"merge failed {attempts}x: {clean(err.strip().splitlines()[-1] if err.strip() else 'no stderr')}"
 
+    def bind(self, members):
+        """Re-read the open queue at fire time: HALT, before anything lands, unless every recorded member is still open at its head."""
+        _, out, _ = self.run(["gh", "pr", "list", *self.repo_flag, "--base", self.a.base, "--state", "open",
+                              "--limit", str(PR_LIMIT), "--json", "number,headRefOid"])
+        heads = {p["number"]: p["headRefOid"] for p in json.loads(out or "[]")}
+        gone = [m for m in members if heads.get(m["number"]) != m["head"]]
+        if gone:
+            raise Halt(f"lineup changed since verify: {names(gone)} not open at the verified head; re-plan and re-verify")
+
     def merge(self):
         """The `merge` subcommand: dry-run by default; with --apply land members back-to-back."""
         members = self.state.get("members") or []
@@ -902,8 +932,11 @@ class Train:
             raise Halt(f"PARTIAL-PASS {names([m for m in members if m.get('partial')])} would be a second outstanding one"
                        + (f" (#{self.state['partial']['number']} undecided: run partial-kill)" if self.state.get("partial") else "")
                        + "; re-plan and re-verify")
+        self.bind(members)
         prev = self.fetch()[0]
         self.same_base(self.state["base_sha"], prev)
+        if self.red_base(prev, members):
+            return HALT
         self.poll()
         if not self.a.apply:
             for m in members:
@@ -1528,6 +1561,8 @@ def build_parser():
     common.add_argument("--min-checks", type=int, default=1, help="K: latest successful check runs required")
     common.add_argument("--no-status", action="store_true", help=f"do not post the {GATE_CONTEXT} commit status before each apply merge")
     common.add_argument("--allow-forks", action="store_true", help="admit fork PRs (their code runs locally)")
+    common.add_argument("--base-fix", type=int, default=None,
+                        help="PR that fixes a red base; verify/merge refuse (REFUSED red-base) on a red base unless it heads the lineup")
     common.add_argument("--retries", type=int, default=2, help="bounded re-runs for a flaky step")
     common.add_argument("--backoff", type=float, default=30.0, help="first retry delay in seconds (doubles, max 300)")
     common.add_argument("--gate-backoff", type=float, default=5.0,
@@ -1647,6 +1682,7 @@ class FakeForge:
         self.based, self.udiffs, self.update_fail = {}, {}, set()  # refresh / dupes scenarios
         self.statuses, self.status_fail = [], False  # gate-status POST paths; simulate a rejected post
         self.ls_stale = 0
+        self.base_runs = None  # check runs on the base head (None: no base checks, green)
         self.dpid = {}  # head -> patch-id of merge-base..head (receipt carry)
 
     def base(self):
@@ -1668,6 +1704,8 @@ class FakeForge:
             return (1, "", "HTTP 403: Resource not accessible") if self.status_fail else (0, "{}", "")
         if a[:2] == ["gh", "api"]:
             sha = a[2].split("/commits/")[1].split("/")[0]
+            if sha == self.base() or sha in self.hist:  # base head, or a landed merge commit
+                return 0, json.dumps({"total_count": len(self.base_runs or []), "check_runs": self.base_runs or []}), ""
             runs = next(p["runs"] for p in self.prs.values() if p["head"] == sha)
             return 0, json.dumps({"total_count": len(runs), "check_runs": runs}), ""
         if a[:3] == ["gh", "pr", "view"]:
@@ -2805,6 +2843,38 @@ def _selftest() -> int:
             t.drop_refs()
         return results == {"moved": True, "crlf": False, "bad": False}, results
 
+    def red_base_refuses_verify_and_merge():
+        f = FakeForge(2)
+        f.base_runs = [_run("ci", "failure")]
+        rc, out = go(f, "verify", "--verify-cmd", "t", state=fresh("rb.json"))
+        rc2, out2 = go(f, "verify", "--verify-cmd", "t", "--base-fix", "2", state=fresh("rb2.json"))
+        ok = rc == HALT and "REFUSED red-base" in out and rc2 == HALT and "REFUSED red-base" in out2 and not f.gates
+        f2 = FakeForge(2)
+        st = verified(f2, "rb3.json")
+        f2.base_runs = [_run("ci", "failure")]
+        rc3, out3 = go(f2, "merge", state=st)
+        return ok and rc3 == HALT and "REFUSED red-base" in out3, out + out2 + out3
+
+    def red_base_allows_base_fix_at_head():
+        f = FakeForge(2)
+        f.base_runs = [_run("ci", "failure")]
+        rc, out = go(f, "verify", "--verify-cmd", "t", "--base-fix", "1", state=fresh("rb4.json"))
+        return rc == OK and "BASE-FIX #1" in out and "GREEN" in out, out
+
+    def green_or_pending_base_ignores_red_base_gate():
+        f = FakeForge(2)
+        f.base_runs = [_run("ci", "success"), _run("slow", None, status="in_progress")]
+        rc, out = go(f, "verify", "--verify-cmd", "t", state=fresh("rb5.json"))
+        return rc == OK and "REFUSED" not in out and "GREEN" in out, out
+
+    def merge_binds_lineup_at_fire_time():
+        f = FakeForge(3)
+        st = verified(f, "bind.json")
+        f.prs[2]["head"] = "h2new"  # pushed after verify, before the merge fires
+        rc, out = go(f, "merge", "--apply", "--grant", "g", state=st)
+        merged = [c for c in f.calls if c[:3] == ["gh", "pr", "merge"]]
+        return rc == HALT and "lineup changed" in out and "#2" in out and not merged, out
+
     cases = [
         ("plan-filters-latest-check-per-name-and-K", plan_filters),
         ("culprit-among-four-isolated-and-stays-parked", culprit_among_four_is_isolated_and_stays_parked),
@@ -2881,6 +2951,10 @@ def _selftest() -> int:
         ("cancel-at-pre-merge-poll-calls-no-merge", cancel_at_pre_merge_poll_calls_no_merge),
         ("drop-during-failing-gate-no-attribute-or-bisect", drop_during_failing_gate_neither_attributes_nor_bisects),
         ("carry-hashes-raw-bytes-in-a-real-repo", carry_hashes_raw_bytes_in_a_real_repo),
+        ("red-base-refuses-verify-and-merge", red_base_refuses_verify_and_merge),
+        ("red-base-allows-base-fix-at-head", red_base_allows_base_fix_at_head),
+        ("green-or-pending-base-ignores-red-base-gate", green_or_pending_base_ignores_red_base_gate),
+        ("merge-binds-lineup-at-fire-time", merge_binds_lineup_at_fire_time),
     ]
     try:
         return bc.run_checks("merge_train", cases)
