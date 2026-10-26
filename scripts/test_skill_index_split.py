@@ -92,7 +92,7 @@ class RealRepo(unittest.TestCase):
         d = ROOT / ".claude/skills/agentic-delivery"
         core, lazy = (d / "INDEX.md").stat().st_size, (d / si.SCRIPTS_INDEX).stat().st_size
         self.assertLess(core, 16962)  # a reference lookup reads core only
-        self.assertLess(core + lazy, 16962 + 800)  # a script lookup reads both: about the old size, not far above
+        self.assertLess(core + lazy, 16962 + 930)  # a script lookup reads both: about the old size, not far above; +130 for the reply_cap and decision_gate rows
 
     def test_entry_index_points_at_the_lazy_file(self):
         self.assertIn(si.SCRIPTS_INDEX, (ROOT / ".claude/skills/INDEX.md").read_text(encoding="utf-8"))

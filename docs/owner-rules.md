@@ -1,0 +1,18 @@
+# Mandatory owner rules (reply cap, subagent narration, decision gate)
+
+BLUF: three rules ship as hooks, default-on in the operating layer, and `./install.sh --global-rules` puts them in `~/.claude/settings.json` for every repo. Each hook is a selftested script; none claims to prevent the behaviour, only to block, measure or require a record.
+
+| Rule | Hook | What it does | How to see it work |
+|---|---|---|---|
+| Reply cap: at most 3 non-empty lines and 500 characters in the main chat | `reply_cap.py` on UserPromptSubmit and Stop | UserPromptSubmit prints the cap every turn. Stop blocks an over-cap reply once per turn (exit 2, rewrite instruction) and appends `YYYY-MM-DD lines=N chars=M` to the counter log. A last user message with "detail", "details", "full" or "explain" is exempt. | `grep -c ^2026-10-26 ~/.cache/perun/reply-cap.log` counts that day's rewrites. `REPLY_CAP=off` disables; `REPLY_CAP_LINES`, `REPLY_CAP_CHARS`, `REPLY_CAP_LOG` tune it. |
+| Subagents: tool calls only, no narration | `handback_cap.py` on SubagentStop (the SubagentStart injection already carries the rule) | Measures assistant text between tool calls from the lane's own transcript, logs `narr_tok` and `narr_rate` (tokens per call) to the lane ledger, and sends a `systemMessage` when a lane wrote at least 100 estimated tokens of prose. Detect-and-measure after the lane ended: it does not prevent narration. | `handback_cap.py --report`. `HANDBACK_NARR_NUDGE=0` turns the nudge off. Token figures are characters / 4 estimates. |
+| Decisions: attack an idea before it reaches the owner | `decision_gate.py` on PreToolUse for `AskUserQuestion` and `ExitPlanMode` | Blocks (exit 2, also on unparseable input) unless a `*.md` file modified within 30 minutes in `$CLAUDE_PROJECT_DIR/.perun/decisions/` (project-local so the Write tool can create it under sandbox or plan mode; git-ignored) holds the lines `evil_twin: HOLD\|REVISE\|PASS_TO_USER <reason>` and `council: HOLD\|REVISE\|PASS_TO_USER <reason>` (the verdict values of the idea-critic skill). The block message names the exact path and the two-line format; the gate creates a self-ignoring `.perun/.gitignore`, and for `ExitPlanMode` the two lines may sit inside the plan text itself (plan mode can deny the Write). The same script also runs on Stop: the final sentence of a reply that asks the owner to decide in plain chat ("should I", "want me to", "which one", a trailing question mark; the same phrases earlier in the text do not count) is blocked once per turn with "Run evil twin + council; decide yourself unless hard-gated" unless a recent record exists (a phrase list, so a miss lets the reply through; unparseable Stop input fails open). Bash, Edit and merges are never gated. | `PERUN_DECISION_GATE=off` disables; `PERUN_DECISION_DIR` and `PERUN_DECISION_MAX_MIN` tune it. |
+
+The decision gate checks that a record exists and is recent. It does not judge the quality of the reasoning; a record is a claim the owner can audit.
+
+Install:
+
+- Per repo: the operating layer (`--with-delivery`, applied by default when `jq` is present) now includes all three.
+- Every repo: `./install.sh --global-rules` copies the four scripts to `~/.claude/perun-rules/` and merges their hooks into `~/.claude/settings.json`. It keeps existing keys and hooks, skips a hook whose script name already runs in that event, saves a `.bak.<timestamp>` before a change, and does nothing on a second run. Use either the global or the per-repo install for the reply cap, not both: both would count each block twice.
+
+Tests: `scripts/test-global-rules.sh` (reply_cap and decision_gate selftests, the narration cases in the `handback_cap.py` selftest, the operating-layer wiring, and the merge into a throwaway HOME).

@@ -22,6 +22,8 @@ import always_loaded_bytes as alb  # noqa: E402
 # Silent in a clean session (print only when their condition fires): run below. Network hooks: not run.
 SILENT_RUN = ("context_nudge.py", "ceo_altitude_guard.py", "outcome_claim_guard.py")
 SILENT_NETWORK = ("landing_watchdog.py", "perun_auto_update.py")
+# Owner rule (docs/owner-rules.md): prints one short cap line on every prompt, by design; bounded here.
+PROMPT_LINE = "reply_cap.py"
 
 
 def script_name(command):
@@ -107,7 +109,7 @@ class AlwaysLoadedSurface(unittest.TestCase):
         self.assertNotIn("landing_watchdog.py", hook_names("SessionStart"))
 
     def test_every_user_prompt_hook_is_proven_silent(self):
-        self.assertEqual(hook_names("UserPromptSubmit") - set(SILENT_RUN) - set(SILENT_NETWORK), set())
+        self.assertEqual(hook_names("UserPromptSubmit") - set(SILENT_RUN) - set(SILENT_NETWORK) - {PROMPT_LINE}, set())
         payload = json.dumps({"prompt": "list the files", "session_id": "s"})
         with tempfile.TemporaryDirectory(prefix="always-loaded-ups-") as tmp:
             env = {"PATH": os.environ.get("PATH", ""), "HOME": tmp, "CLAUDE_PROJECT_DIR": tmp, "XDG_CACHE_HOME": tmp}
@@ -115,6 +117,10 @@ class AlwaysLoadedSurface(unittest.TestCase):
                 r = subprocess.run([sys.executable, os.path.join(SCRIPTS, h)], cwd=tmp, env=env, input=payload,
                                    capture_output=True, text=True, timeout=30)
                 self.assertEqual((r.returncode, r.stdout.strip()), (0, ""), f"{h} injects text in a clean session")
+            r = subprocess.run([sys.executable, os.path.join(SCRIPTS, PROMPT_LINE)], cwd=tmp, env=env, capture_output=True,
+                               text=True, timeout=30, input=json.dumps({"hook_event_name": "UserPromptSubmit"}))
+            self.assertEqual((r.returncode, r.stdout.count("\n")), (0, 1))  # one line ...
+            self.assertLess(len(r.stdout.encode()), 250)  # ... of at most 250 bytes (about 60 tokens) per prompt
 
 
 if __name__ == "__main__":
