@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/admin.py",
+      "line": 5,
+      "severity": "HIGH",
+      "category": "authorization_bypass",
+      "description": "The admin endpoint /admin/users/<uid>/delete checks only that a 'user_id' key exists in the session, which confirms the requester is logged in. It does not check for an admin role or any other privilege. Any authenticated user, including a regular low-privilege account, can call this admin-only function and delete arbitrary users by ID. The endpoint also has no CSRF protection.",
+      "exploit_scenario": "An attacker registers or logs in as a normal user, then sends POST /admin/users/1/delete, and then does the same for other IDs. Each request passes the 'user_id in session' check and calls remove_user(uid), so the attacker can delete any account, including administrators. A cross-site request would also work against a logged-in victim if the session cookie has no SameSite protection.",
+      "recommendation": "Enforce an explicit admin role or permission check on the server, such as an is_admin flag loaded from the database for session['user_id'] or an @admin_required decorator, and return 403 when it fails. Add CSRF tokens (for example Flask-WTF CSRFProtect) and set SameSite on the session cookie.",
+      "confidence": 0.9
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

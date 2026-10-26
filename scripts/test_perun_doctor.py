@@ -365,7 +365,7 @@ class SandboxProbeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, {"DCR_NO_PROBE": ""}), \
                 mock.patch.object(self.sp, "checks", lambda repo: items):
             r = rows(d, d)
-        self.assertEqual(r["sandbox git"], ("OK", "works"))
+        self.assertNotIn("sandbox git", r)  # d is a non-git target and its own home: no repo to probe
         self.assertEqual(r["sandbox cache-write"][0], "WARN")
         self.assertIn('Fix: add "~/.cache" to sandbox.filesystem.allowWrite', r["sandbox cache-write"][1])
 

@@ -1,0 +1,21 @@
+diff --git a/acme/export.py b/acme/export.py
+new file mode 100644
+--- /dev/null
++++ b/acme/export.py
+@@ -0,0 +1,16 @@
++import csv
++import io
++import sqlite3
++
++
++def export_orders(conn: sqlite3.Connection, customer_id: int) -> str:
++    """Return a CSV of one customer's orders."""
++    rows = conn.execute(
++        "SELECT id, total_cents, created_at FROM orders WHERE customer_id = ?",
++        (customer_id,),
++    ).fetchall()
++    buf = io.StringIO()
++    w = csv.writer(buf)
++    w.writerow(["id", "total_cents", "created_at"])
++    w.writerows(rows)
++    return buf.getvalue()

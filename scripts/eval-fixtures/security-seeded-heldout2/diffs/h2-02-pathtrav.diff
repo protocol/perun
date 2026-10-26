@@ -1,0 +1,28 @@
+diff --git a/acme/files/download.go b/acme/files/download.go
+new file mode 100644
+--- /dev/null
++++ b/acme/files/download.go
+@@ -0,0 +1,23 @@
++package files
++
++import (
++	"net/http"
++	"os"
++	"path/filepath"
++)
++
++const baseDir = "/srv/acme/uploads"
++
++func Download(w http.ResponseWriter, r *http.Request) {
++	name := r.URL.Query().Get("name")
++	if name == "" {
++		http.Error(w, "missing name", http.StatusBadRequest)
++		return
++	}
++	data, err := os.ReadFile(filepath.Join(baseDir, name))
++	if err != nil {
++		http.Error(w, "not found", http.StatusNotFound)
++		return
++	}
++	w.Write(data)
++}

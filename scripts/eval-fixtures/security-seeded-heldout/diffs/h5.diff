@@ -1,0 +1,17 @@
+diff --git a/src/middleware/auth.ts b/src/middleware/auth.ts
+new file mode 100644
+--- /dev/null
++++ b/src/middleware/auth.ts
+@@ -0,0 +1,12 @@
++import { Request, Response, NextFunction } from "express";
++import jwt from "jsonwebtoken";
++
++export function requireUser(req: Request, res: Response, next: NextFunction) {
++  const token = (req.headers.authorization || "").replace(/^Bearer /, "");
++  const claims = jwt.decode(token) as { sub?: string } | null;
++  if (!claims || !claims.sub) {
++    return res.status(401).send("unauthorized");
++  }
++  (req as any).userId = claims.sub;
++  next();
++}

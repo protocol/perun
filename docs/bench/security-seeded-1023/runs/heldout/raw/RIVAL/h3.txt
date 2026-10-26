@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "internal/client/client.go",
+      "line": 12,
+      "severity": "HIGH",
+      "category": "certificate_validation_bypass",
+      "description": "The HTTP client used for calls to the payments provider sets tls.Config{InsecureSkipVerify: true}. This disables TLS certificate chain and hostname verification for all requests made with this client.",
+      "exploit_scenario": "An attacker in a network position between the service and the payments provider (for example through ARP/DNS spoofing, a rogue proxy, or a compromised network hop) can present a self-signed certificate and terminate TLS. The client accepts it, so the attacker can read or modify payment API requests and responses. This exposes API credentials, cardholder or payment data, and transaction details, and lets the attacker tamper with payment results.",
+      "recommendation": "Remove InsecureSkipVerify so the default system trust store and hostname verification apply. If the provider uses a private CA, load it into tls.Config.RootCAs. Set MinVersion to tls.VersionTLS12 or higher. Consider certificate pinning for the payments provider.",
+      "confidence": 0.97
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

@@ -188,6 +188,9 @@ def plan(repo):
     restored = set()
     for d, files in sorted(m.get("skills", {}).items()):
         dest, name = repo / d, d.rsplit("/", 1)[-1]
+        if dest.is_symlink() and os.readlink(dest) == f"../../.claude/skills/{name}":  # install's host link to the canonical copy
+            ops.append((f"{d}: remove symlink to the .claude copy", dest.unlink))
+            continue
         if dest.is_symlink() or (dest.exists() and not safe(repo, d)):
             notes.append(f"{d}: kept: symlink in path, not touched")
             continue

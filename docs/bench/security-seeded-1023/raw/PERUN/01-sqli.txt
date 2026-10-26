@@ -1,0 +1,12 @@
+I couldn't run `security_verify.py` on the candidate row. Every way I tried to feed it input needed approval: stdin pipe, process substitution, and writing a rows file. I checked the finding by hand against `appsec-verify.md` instead.
+
+The one candidate is SQL injection (CWE-89):
+- **Source:** `customer_name`, the parameter of `find_orders`, at `app/orders.py:3`.
+- **Hop:** the value is concatenated straight into the query string.
+- **Sink:** `cur.execute(...)` at `app/orders.py:5`.
+- **Guards:** I found none. There is no parameter binding, escaping or validation.
+- **Exclusion check:** the finding is High severity, and none of the default exclusion slugs covers SQL injection.
+
+The patch is only this new file, so I couldn't see who calls `find_orders` or whether the value is attacker-controlled. The path is still complete inside the file, so I'm reporting it as confirmed.
+
+[{"file": "app/orders.py", "line": 5, "cwe": "CWE-89"}]
