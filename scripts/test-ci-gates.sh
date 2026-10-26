@@ -3958,6 +3958,8 @@ fi
 
 fi
 if _shard_on 3; then
+# git identity exported mid-file (slice 2) that every later case inherits; repeated so slices 3 and 1b see it too
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 # test-train-scripts.sh SKIPs (never hangs) when pgrep/ps are unavailable: own per-feature file.
 if bash "$ROOT/scripts/test-no-hang-without-pgrep.sh" >"$WORK/nopgrep.log" 2>&1; then
   record 0 "train scripts: reap_own blocks SKIP and return when pgrep/ps are unavailable"
@@ -4065,6 +4067,8 @@ fi
 
 fi
 if _shard_on 1; then
+# git identity exported mid-file (slice 2) that every later case inherits; repeated so slices 3 and 1b see it too
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 # PR-native review workflow template: own per-feature file (scripts/test-pr-review-workflow.sh), one case here.
 if bash "$ROOT/scripts/test-pr-review-workflow.sh" >"$WORK/pr-review-wf.log" 2>&1; then
   record 0 "perun-review.yml: least-privilege permissions, pull_request only, opt-in"

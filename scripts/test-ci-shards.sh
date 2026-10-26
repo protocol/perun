@@ -16,7 +16,7 @@ for j in $jobs; do
   sed -n '/^  gates:$/,$p' "$Y" | grep -E '^    needs:' | grep -qw "$j" || bad "gates does not need $j"
 done
 sed -n '/^  gates:$/,$p' "$Y" | grep -qF "if: always()" || bad "gates lacks if: always()"
-grep -qE '^  merge_group:' "$Y" || bad "no merge_group trigger"
+sed -n '/^  gates:$/,$p' "$Y" | grep -qF "timeout-minutes: 5" || bad "gates lacks timeout-minutes: 5"
 n="$(grep -oE 'SHARD: \$\{\{ matrix.shard \}\}/[0-9]+' "$Y" | grep -oE '[0-9]+$')"
 for i in $(seq 1 "${n:-0}"); do grep -qE "^if _shard_on $i; then\$" "$ROOT/scripts/test-ci-gates.sh" || bad "shard $i has no cases"; done
 [ -n "$n" ] || bad "no SHARD matrix"

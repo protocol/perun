@@ -14,7 +14,6 @@ name: gates
 on:
   pull_request:
     branches: [main]
-  merge_group:
   workflow_dispatch:
 
 concurrency:
@@ -45,7 +44,7 @@ jobs:
       # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
       # moved) is skipped, so there the committed files are checked byte-for-byte.
       - name: Regenerate derived files (unlanded PR)
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event_name == 'pull_request'
         run: bash scripts/regen-unlanded.sh origin/main
 
       # Prove the gate helper against its own fixtures (routing/version/privacy
@@ -68,7 +67,7 @@ jobs:
       # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
       # moved) is skipped, so there the committed files are checked byte-for-byte.
       - name: Regenerate derived files (unlanded PR)
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event_name == 'pull_request'
         run: bash scripts/regen-unlanded.sh origin/main
 
       # Enforce the documented gates on the real repo via the same helper the
@@ -120,7 +119,7 @@ jobs:
       # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
       # moved) is skipped, so there the committed files are checked byte-for-byte.
       - name: Regenerate derived files (unlanded PR)
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event_name == 'pull_request'
         run: bash scripts/regen-unlanded.sh origin/main
 
       # A slow per-PR test registers as scripts/ci-tests.d/<slug>.bg.sh: it starts here, runs alongside the gate
@@ -171,7 +170,7 @@ jobs:
       # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
       # moved) is skipped, so there the committed files are checked byte-for-byte.
       - name: Regenerate derived files (unlanded PR)
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event_name == 'pull_request'
         run: bash scripts/regen-unlanded.sh origin/main
 
       # Live harness (stub HTTP server, no key, no spend) and the review-scoring
@@ -236,7 +235,7 @@ jobs:
       # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
       # moved) is skipped, so there the committed files are checked byte-for-byte.
       - name: Regenerate derived files (unlanded PR)
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event_name == 'pull_request'
         run: bash scripts/regen-unlanded.sh origin/main
 
       - name: review_checks self-test
@@ -251,8 +250,8 @@ jobs:
       - name: New scripts are wired (warn-only)
         continue-on-error: true
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 .claude/skills/agentic-delivery/scripts/wired_check.py "$BASE_SHA" "$HEAD_SHA"
 
       - name: Shipped script self-tests
@@ -344,8 +343,8 @@ jobs:
       # only the fixed skill's.
       - name: Fix commits carry a pinned test
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           python3 .claude/skills/deep-code-review/scripts/fix_class_gate.py \
@@ -364,8 +363,8 @@ jobs:
       # independence. Release squash commits carry both trailers.
       - name: Review tiers (advisory)
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 .claude/skills/agentic-delivery/scripts/tier_gate.py --advisory "$BASE_SHA..$HEAD_SHA"
 
       # Lesson -> mechanism: a commit that edits skill prose (a SKILL.md or a
@@ -381,8 +380,8 @@ jobs:
       # mechanism pins the lesson (review judges that).
       - name: Prose lessons carry a mechanism
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           python3 .claude/skills/deep-code-review/scripts/fix_class_gate.py \
@@ -408,8 +407,8 @@ jobs:
       - name: Lesson mechanisms replay (advisory)
         timeout-minutes: 15
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           python3 scripts/lesson_replay.py --selftest
@@ -419,14 +418,14 @@ jobs:
       # (commit range or CHANGELOG) — budgets ratchet down by default.
       - name: Size budgets ratchet down
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: bash scripts/ci-gates.sh size-ratchet --base "$BASE_SHA" --config scripts/size-budgets.tsv .
 
       # The rule-enforcement baseline may only grow with a
       # `rule-baseline-raise: <reason>` commit-message line.
       - name: Rule baseline ratchets down
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: bash scripts/ci-gates.sh rules --baseline scripts/rule-enforcement-baseline.tsv --base "$BASE_SHA" .
 
       - name: SKILL.md name matches its directory
@@ -465,6 +464,7 @@ jobs:
     needs: [selftests, enforce, perpr, evals, cheap]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - run: |
           [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = false ]
