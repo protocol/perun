@@ -363,6 +363,11 @@ GitHub token, so the gate logs "same-account review: run-id separation only"), a
 signature. Policy key `review_gate` in `.perun/policy.json`: `warn` (default; **warn-only for this release**, prints a
 WARN and merges anyway), `enforce` (skips the PR; `land_train.sh` prints `REFUSE #N no independent review`), `off`
 (opt out). Expect `enforce` to become the default in a later release.
+Policy key `lockfile_skip_review` (`on|off`, default `off`): with `on`, `review_gate.py check <pr> --head SHA --audit-clean` passes a PR with no
+receipt when every changed file (and every rename source) is a lockfile from a fixed list (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`,
+`poetry.lock`, `Cargo.lock`, `Gemfile.lock`, `go.sum`, `uv.lock`, `composer.lock`, matched by exact basename), the PR's current head equals `--head`,
+and the PR has fewer than 100 files; any other case fails closed to the normal receipt check. `--audit-clean` is the caller's assertion that
+the dependency audit diff for that head is clean; the gate does not run the audit.
 
 ## Releases publish right after each land, from the lander's box, not a CI runner
 

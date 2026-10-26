@@ -506,3 +506,26 @@ transcript-is-not-liveness rule below); and worktree-held branches escape the us
 - **Scratch is a probed resource** — free disk and worktree count are ceilings the spawn probe enforces (the
   swap-trend section above); this section keeps that term from going red, it does not re-specify how to read it.
   The per-lane disk arithmetic and the ENOSPC-is-a-sizing-bug reading live in that section, not here.
+
+---
+
+## Host-priority classes: train > pregate > lane — lanes yield cores while a train's test stage runs
+
+On one capacity-bound host three kinds of work compete for the same cores, and they are not equal. Rank them by how many
+other PRs a minute of their wall-clock holds up:
+
+1. **train** — the merge-train verify of one union (`merge_train.py verify`). One red or slow run blocks every member, so it
+   is the top class.
+2. **pregate** — a single PR's pre-push or pre-merge gate. It blocks one PR.
+3. **lane** — an agent lane's own builds and test runs. It blocks only itself, and it can be re-run.
+
+Rule: **while a train's test stage runs, lanes yield cores.** Do not start a new lane's heavy build or test run (pregate may
+continue, `nice`d), and `nice -n 19` the heavy children of lanes already running. A starved train test stage times out or
+flakes, and that red costs a bisect over the whole batch, which is far more than the seconds a lane waited. Lanes resume when
+the train's test stage ends. This is the CPU half of the cycle-time rule above; the RAM and swap gates above still apply to all
+three classes.
+
+A red train is first re-run **alone and at low load** (`merge_train.py verify --rerun-cmd`: only the failing checks or specs,
+`nice -n 19`, `PERUN_LOW_LOAD=1`). A pass there is a load flake: the batch lands and the flake is logged. Only a red that
+reproduces is bisected. Measure it with `landing_watchdog.py check`: a low yield (PRs per landed train) or merges per hour below
+target (policy `train_yield_floor`, `merges_per_hour_target`) says trains are being lost to reds or starved.

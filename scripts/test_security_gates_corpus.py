@@ -55,11 +55,16 @@ GOOD = [
 ]
 fail = []
 import time
-for name, blob in {"dyn": "$x " * 8000, "word": "a" * 25000, "colon": ":" * 25000}.items():
-    # best of 3 against 100 ms: a quadratic path takes seconds here, while one noisy CI sample hit 50 ms on linear code
-    dt = min(t1 - t0 for t0, _, t1 in [(time.perf_counter(), dg.check(blob), time.perf_counter()) for _ in range(3)])
-    if dt > 0.1:
-        fail.append(f"guard slow on 25KB {name}: {dt * 1000:.0f} ms")
+def best(blob):
+    return min(t1 - t0 for t0, _, t1 in [(time.perf_counter(), dg.check(blob), time.perf_counter()) for _ in range(3)])
+
+
+# Scaling check, not an absolute cap: 10x input should cost ~10x (linear) vs ~100x (quadratic); fail above 30x.
+# The 1 ms floor on the small run keeps timer noise from inflating the ratio; 1 s is a loose absolute ceiling.
+for name, unit, n in (("dyn", "$x ", 8000), ("word", "a", 25000), ("colon", ":", 25000)):
+    small, big = best(unit * (n // 10)), best(unit * n)
+    if big > 1 or big / max(small, 0.001) > 30:
+        fail.append(f"guard slow on 25KB {name}: {big * 1000:.0f} ms vs {small * 1000:.1f} ms at 2.5KB")
 for c in BAD:
     if not dg.check(c):
         fail.append(f"guard missed: {c}")
