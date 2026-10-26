@@ -45,13 +45,13 @@ Perun now = commit `1db5ddf06`, and its rules were written against these rows, s
 
 ## Pooled, blind at authoring (the evidence)
 
-Recall with exact 95% Clopper-Pearson intervals; the paired p is an exact two-sided sign test on rows where exactly one of Perun and the rival hit. Rows are treated as independent, which they are not (corpora share an author and style), so the intervals are optimistic.
+Recall with exact 95% Clopper-Pearson intervals; the paired p is an exact two-sided sign test on rows where exactly one of Perun and the rival hit (safety-net rows it left unported are excluded from the pairs). Rows are treated as independent, which they are not (corpora share an author and style), so the intervals are optimistic.
 
 | Kind | Rows | Perun recall at authoring | Rival recall | Perun-only / rival-only hits | Paired p | Perun FP | Rival FP |
 |---|---|---|---|---|---|---|---|
 | secrets | 850 leaks/dangerous, 850 decoys/benign | 664/850 = 78.1% [75.2, 80.9] | gitleaks 547/850 = 64.4% [61.0, 67.6] | 150 / 33 | <0.0001 | 40/850 = 4.7% [3.4, 6.4] | 34/850 = 4.0% [2.8, 5.5] |
-| guard | 1230 leaks/dangerous, 1225 decoys/benign | 992/1230 = 80.7% [78.3, 82.8] | safety-net (lower bound) 322/1230 = 26.2% [23.7, 28.7] | 681 / 11 | <0.0001 | 67/1225 = 5.5% [4.3, 6.9] | 48/1225 = 3.9% [2.9, 5.2] |
+| guard | 1230 leaks/dangerous, 1225 decoys/benign | 992/1230 = 80.7% [78.3, 82.8] | safety-net (lower bound) 322/1230 = 26.2% [23.7, 28.7] | 660 / 11 | <0.0001 | 67/1225 = 5.5% [4.3, 6.9] | 48/1225 = 3.9% [2.9, 5.2] |
 
 Guard rival hooks-mastery (ported exactly): 224/1230 = 18.2% [16.1, 20.5], FP 137/1225.
 
-Caveats: (1) Authoring base is the parent of the squashed commit that added the corpus, so corpora added in one commit share a base, and a corpus may have been authored a little earlier than its base. (2) Every README declares its corpus blind (authored without reading the scanner or guard); that is the author's own statement and was not re-verified. (3) Perun's rules changed between corpora, so the pool is a sequence of different rule sets, each blind to its own corpus but not to earlier ones; later corpora benefit from fixes made on earlier ones. Read per corpus: Perun trailed gitleaks on the first three secrets corpora and led on every later one. (4) Rival ports are not the rival binaries.
+Caveats: (1) Authoring base is the parent of the squashed commit that added the corpus, so corpora added in one commit share a base, and a corpus may have been authored a little earlier than its base. (2) Every README declares its corpus blind (authored without reading the scanner or guard); that is the author's own statement and was not re-verified. (3) Perun's rules changed between corpora, so the pool is a sequence of different rule sets, each blind to its own corpus but not to earlier ones; later corpora benefit from fixes made on earlier ones. Read per corpus: Perun trailed gitleaks on the first three secrets corpora and led on every later one. (4) Rival ports are not the rival binaries. (5) No corpus directory exists in this tree for secrets held-out 13, or guard held-out 16 and 23, so they are not scored here (CHANGELOG.md names a secrets held-out-13, but its files are not committed); no reason beyond that is claimed.
