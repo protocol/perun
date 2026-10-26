@@ -156,7 +156,8 @@ Every run prints `RUN <id>`. Between stages and inside every backoff wait it pol
 file's directory) for `<id>.cancel` (release refs, print CANCELLED, exit 0) and `<id>.drop-<pr>` (verify rebuilds
 the union without that member; merge HALTs, since the remaining union was never verified). Each file is consumed
 once. A PR whose head has pending or missing checks inherits the green of its prior head recorded in --state only
-when `git patch-id --stable` of merge-base..head is unchanged (a base-merge-only move; `CARRIED <old>-><new>`).
+when the raw `git diff --binary` of merge-base..head hashes the same and no completed check on the new head is red
+(a base-merge-only move; `CARRIED <old>-><new>`).
 The union train gate still always runs.
 
 FLAKY VS DETERMINISTIC
@@ -589,23 +590,27 @@ class Train:
         """(passed, bad) unchanged, or the prior green head's receipt when only the base moved (equal patch-id)."""
         old = self.state.get("greens", {}).get(str(pr["number"]))
         new = pr["headRefOid"]
-        if not old or old["head"] == new or not self._same_patch(pr["number"], old["head"], new):
+        if not old or old["head"] == new or any(r.get("status") == "completed" and r.get("conclusion") not in GREEN_CONCLUSIONS
+                                                for r in self._latest(new).values()):
+            return passed, bad  # a completed red check on the new head is never carried over
+        if not self._same_patch(pr["number"], old["head"], new):
             return passed, bad
         self.say(f"CARRIED {old['head'][:7]}->{new[:7]} #{pr['number']}")
         return old["passed"], ""
 
     def _same_patch(self, number, old, new):
-        """True only when `git patch-id --stable` of merge-base..head matches for both heads; any git failure is False."""
+        """True only when the raw `git diff --binary` text of merge-base..head hashes the same for both heads (a patch-id
+        would ignore whitespace and hunk position); an empty diff or any git failure is False."""
         ns = f"refs/merge-train/{self.run_id}"
         self.refs.update([f"{ns}/carry-base", f"{ns}/carry-{number}"])
-        script = 'd=$(git diff --binary "$1") || exit 1; printf "%s\\n" "$d" | git patch-id --stable'
         ids = []
         try:
             self.run(["git", "fetch", "--quiet", "--no-tags", self.a.remote, f"+refs/heads/{self.a.base}:{ns}/carry-base",
                       f"+refs/pull/{number:d}/head:{ns}/carry-{number}"])
             for head in (old, new):
                 mb = self.run(["git", "merge-base", head, f"{ns}/carry-base"])[1].strip()
-                ids.append(self.run(["sh", "-c", script, "patch-id-diff", f"{mb}..{head}"])[1].split()[:1])
+                diff = self.run(["git", "diff", "--binary", f"{mb}..{head}"])[1]
+                ids.append(hashlib.sha256(diff.encode("utf-8", "surrogateescape")).hexdigest() if diff else "")
         except ForgeError:
             return False
         return bool(ids[0]) and ids[0] == ids[1]
@@ -759,11 +764,11 @@ class Train:
                 self.park(c.member, "conflict " + ",".join(clean(f, 60) for f in c.files[:5]))
                 members, parked_any = [m for m in members if m is not c.member], True
                 continue  # #1134: rebuild at once, never a sleep per conflict
+            kept = self.undrop(members)
+            if len(kept) != len(members):  # dropped while the gate ran: re-plan the smaller union
+                members = kept
+                continue
             if not why:
-                kept = self.undrop(members)
-                if len(kept) != len(members):  # dropped while the gate ran: re-plan the smaller union
-                    members = kept
-                    continue
                 self.state.update(base=self.a.base, base_sha=self.base_sha, members=members)
                 self.save()
                 self.say(f"GREEN base={self.base_sha[:7]} members={names(members)}")
@@ -842,6 +847,7 @@ class Train:
         for i in range(attempts):
             if i:
                 self.sleep(self.delay(i))
+            self.poll()  # last cancel point before the irreversible call
             rc, _, err = self.run(["gh", "pr", "merge", str(m["number"]), *self.repo_flag, "--merge",
                                    "--match-head-commit", m["head"], *(["--body", body] if body else [])],
                                   ok=False)
@@ -903,6 +909,11 @@ class Train:
                 self.save()
                 raise Halt(f"#{m['number']} landed; base unverified ({exc}); "
                            f"{names(members[i + 1:]) or 'no members'} left unmerged: re-plan and re-verify") from exc
+            except Cancelled:  # cancelled after the PR landed: record it, keep the rest, then stop
+                self.say(f"MERGED #{m['number']} {m['head'][:7]} -> {self.a.base}@unverified grant={clean(self.a.grant)}")
+                self.state["members"] = members[i + 1:]
+                self.save()
+                raise
             parents = self.run(["git", "rev-list", "--parents", "-n", "1", new])[1].split()[1:]
             if parents != [prev, m["head"]]:
                 self.state["members"] = []
@@ -1681,9 +1692,8 @@ class FakeForge:
         if a[:2] == ["sh", "-c"] and cwd is None and a[3] == "patch-id":
             head = a[-1].split("..")[1]
             return 0, "".join(f"{pid} {head}\n" for pid in self.pids.get(head, [])), ""
-        if a[:2] == ["sh", "-c"] and cwd is None and a[3] == "patch-id-diff":
-            head = a[-1].split("..")[1]
-            return 0, (f"{self.dpid[head]} {head}\n" if head in self.dpid else ""), ""
+        if a[:3] == ["git", "diff", "--binary"]:  # receipt carry: raw diff text of merge-base..head
+            return 0, self.dpid.get(a[3].split("..")[1], ""), ""
         if a[:2] == ["sh", "-c"] and cwd is None and a[3] == "keystone-contains":
             return (0 if a[4] in self.contains else 1), "", ""
         if a[:4] == ["git", "show", "-s", "--format=%cI"]:
@@ -2634,14 +2644,23 @@ def _selftest() -> int:
         return (rc == OK and "CARRIED h1->h1b #1" in out and "ELIGIBLE #1 h1b" in out), out
 
     def changed_patch_id_or_red_check_does_not_carry():
-        f, st = carry_setup([_run("ci", None, status="in_progress")])
-        f.dpid = {"h1": "pidA", "h1b": "pidB"}  # a real change, not a base-merge-only move
-        rc, out = go(f, "plan", state=st)
-        g, st2 = carry_setup([_run("ci", "failure")])
-        g.dpid = {"h1": "pidA", "h1b": "pidA"}  # same patch but the head's own check is red: never carried
-        rc2, out2 = go(g, "plan", state=st2)
-        return ("CARRIED" not in out and "SKIP #1 check ci=in_progress" in out
-                and "CARRIED" not in out2 and "SKIP #1 check ci=failure" in out2), (out, out2)
+        pend = _run("ci", None, status="in_progress")
+
+        def plan_out(runs, old, new):
+            f, st = carry_setup(runs)
+            f.dpid = {"h1": old, "h1b": new}
+            return go(f, "plan", state=st)[1]
+
+        control = plan_out([pend], "+x = 1\n", "+x = 1\n")  # same setup as the negatives, equal diff: carries
+        changed = plan_out([pend], "+x = 1\n", "+x = 2\n")  # a real change, not a base-merge-only move
+        spaced = plan_out([pend], "+x = 1\n", "+x = 1 \n")  # whitespace-only change: a patch-id would match, raw diff does not
+        red = plan_out([_run("ci", "failure")], "+x = 1\n", "+x = 1\n")  # own red check: never carried
+        mixed = plan_out([pend, _run("lint", "failure")], "+x = 1\n", "+x = 1\n")  # pending sorts first, red still blocks
+        return ("CARRIED h1->h1b #1" in control and "ELIGIBLE #1 h1b" in control
+                and "CARRIED" not in changed and "SKIP #1 check ci=in_progress" in changed
+                and "CARRIED" not in spaced and "SKIP #1 check ci=in_progress" in spaced
+                and "CARRIED" not in red and "SKIP #1 check ci=failure" in red
+                and "CARRIED" not in mixed and "SKIP #1" in mixed), (control, changed, spaced, red, mixed)
 
     cases = [
         ("plan-filters-latest-check-per-name-and-K", plan_filters),
