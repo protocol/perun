@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pins the held-out-3 secret scores (union FP 7/60, was 8 before the unsigned-JWT pass on 2026-10-25, is in-sample, after the placeholder pass; banlist and gitleaks are raw rules, still out of sample) (docs/bench/security-gates-heldout3-1024): union gate, banlist only, gitleaks only.
+"""Pins the held-out-3 secret scores (union 59/60 recall and FP 6/60, was 58/60 before secrets wave 11; was FP 8 before the unsigned-JWT pass on 2026-10-25 and FP 7 before the csrf prefix pass of secrets wave 9, which also catches L004 via the service-account key-id rule; is in-sample, after the placeholder pass; banlist and gitleaks are raw rules, still out of sample) (docs/bench/security-gates-heldout3-1024): union gate, banlist only, gitleaks only.
 
 A moved number means a rule edit changed behavior on a corpus meant to stay out of sample: re-score, update RESULTS.md and the pins deliberately.
 Offline.
@@ -12,6 +12,6 @@ frozen = (H / "SHA256-frozen.txt").read_text().splitlines()
 assert hashlib.sha256("".join(l + "\n" for l in frozen[:2]).encode()).hexdigest() == "441e83437b2742171d6159454555b431bcc7e1fd8e1378d16e362023e8954ee6", "preregistered hash list drifted"
 r = subprocess.run([sys.executable, "-I", str(H / "score.py")], capture_output=True, text=True, cwd=ROOT)
 assert r.returncode == 0, r.stdout + r.stderr
-for want in ("union: recall 57/60  FP 7/60", "banlist: recall 41/60  FP 12/60", "gitleaks: recall 47/60  FP 8/60"):
+for want in ("union: recall 59/60  FP 6/60", "banlist: recall 41/60  FP 12/60", "gitleaks: recall 47/60  FP 8/60"):
     assert want in r.stdout, (want, r.stdout)
 print("held-out-3 security gates pins: ok")

@@ -68,6 +68,9 @@ Wave 16 (`scripts/test_security_gates_heldout21_blind.py`): `mdadm --zero-superb
 `docker swarm leave --force`, a delete verb fed by `xargs` (redis-cli, kubectl, docker, ...), `aws s3 sync --delete`, `gsutil rsync -d`, writes to `/proc/sysrq-trigger` or
 `/proc/self/mem`, `crontab` fed empty input, rsync `--del`/`--remove-source-files` (an option value such as `--exclude -n` is not a flag). Allowed: `${TMPDIR:?}/child`, removing the
 dir of a bare `mktemp -d`, a named child of `~/.cache`, `find . -type f -name '*.orig' -exec rm -f`, rsync into a named child of `/var/www`.
+Wave 17 (`scripts/test_security_gates_heldout22_blind.py`): `kubectl replace --force`, `kubectl scale --all --replicas=0`, `etcdctl del --from-key|--prefix`, `bq rm -r|-f`, an `ansible`
+ad-hoc `-m shell|command|raw -a CMD` (CMD is judged as a command; no `-m` means `command`) and `-m file -a "path=P state=absent"` (judged as `rm -rf P`; `--check` is a dry run). Allowed:
+`pulumi destroy --preview-only`, `aws dynamodb delete-item` with one literal `--key`, `npm unpublish` of one exact prerelease version, `cargo yank` of one exact prerelease version (`--undo` restores it; a stable version stays blocked).
 Everything else is allowed.
 
 No in-repo grant or allow list: anything an agent can write, an agent can forge. When the owner really wants a
@@ -79,6 +82,7 @@ errors closed would wedge every session; one that errors open on a hit would be 
 Side effects: none. `--selftest` runs assertions.
 """
 import codecs
+import fnmatch
 import json
 import os
 import itertools
@@ -133,6 +137,7 @@ MKTEMP = re.compile(r"(?:^|[;\n])[ \t]*(\w{1,32})=[\"]?(?:\$\(mktemp -d\)|`mktem
 IMGFILE = re.compile(r"(?:\./)?\w[\w.-]*\.(?:img|raw)")  # a relative disk-image file, not a device
 SYMLN = re.compile(r"\bln\b[^;&|\n]*\s(?:-\w*s|--symbolic\b)")  # a symlink made in the same line can point a scratch path at the host
 RMREC = re.compile(r"\brm\b[^;&|\n]*\s(?:-\w*[rR]|--rec)")
+FRBOOL = frozenset(("--force", "-f", "--analyze", "--dry-run", "--partial", "--invert-paths", "--use-base-name", "--debug", "--quiet", "--no-gc", "--no-fetch", "--proceed", "--no-data"))
 SCOPED = re.compile(r"(?:\$TMPDIR|\$\{TMPDIR\}|/tmp)/\w[^/$`{}]*(?:/[^$`{}]*)?")  # under the temp dir, inside a named child
 SYSFILE = re.compile(r"/(?:etc|boot|bin|sbin|lib|lib64|usr|System|Library|root|private/etc|(?:private/)?var(?=/(?!tmp(?:/|$)|folders(?:/|$)))|(?:private/)?var$)(?:/|$)", re.I)
 KUBE_VAL = ("-n", "--namespace", "-l", "--selector", "-f", "--filename", "--context", "--cluster", "--kubeconfig", "--user", "-o", "--output", "--field-selector")
@@ -178,6 +183,79 @@ FALLBACK = [re.compile(p) for p in (
 BUNDLE = re.compile(r"-[A-Za-z]+")
 PUNCT = re.compile(r"[;&|()<>\n]+")
 B64D = re.compile(r"-[A-Za-z]*[dD][A-Za-z]*|--decode")
+
+
+def _on(a, *names):
+    """True when a boolean flag in `a` is set: bare, or `=` anything but false/0/no."""
+    return any(t.split("=")[0] in names and t.partition("=")[2].lower() not in ("false", "0", "f", "no") for t in a if t.startswith("-"))
+
+
+def _pulprev(a):
+    """`pulumi destroy` that is only a preview: a standalone `--preview-only` (never an option value), none turned off, no `--skip-preview`/`--yes`."""
+    on, k = [], 0
+    while k < len(a):
+        t, k = a[k], k + 1
+        if t in ("-m", "--message", "-s", "--stack", "-C", "--cwd", "--config-file", "-t", "--target", "--exclude", "--secrets-provider", "--policy-pack", "--policy-pack-config", "--parallel", "-p", "--color", "--tracing", "--profiling", "--plan"):
+            k += 1  # the next token is this option's value
+        elif t.split("=")[0] == "--preview-only":
+            on.append(_on([t], "--preview-only"))
+        elif _on([t], "--skip-preview", "--yes", "-y") or _bundle(t, "y"):
+            return False
+    return bool(on) and all(on)
+
+
+def _zero(v):
+    """A `--replicas` value that is zero (`0`, `+0`, `-0`, `0x0`, `0o0`) or cannot be read as a number (a variable): both block."""
+    try:
+        return int(v, 0) == 0
+    except ValueError:
+        return True
+
+
+def _yank1(a):
+    """`cargo yank` of one literal prerelease version (`--vers V`, `--version=V` or `crate@V`); a variable or a missing version is not pinned."""
+    v = [a[k + 1] for k, t in enumerate(a[:-1]) if t in ("--vers", "--version")] + [t.partition("=")[2] for t in a if t.startswith(("--vers=", "--version="))] \
+        + [t.split("@", 1)[1] for t in a if "@" in t and not t.startswith("-")]
+    return len(v) == 1 and re.fullmatch(r"\d+\.\d+\.\d+-[0-9A-Za-z][0-9A-Za-z.+-]*", v[0]) is not None
+
+
+def _ansible(a, depth):
+    """Judge an ad-hoc `ansible` module call: shell/command/raw args as a command (no -m means command), file state=absent as `rm -rf PATH`. `--check` is a dry run."""
+    chk = _on(a, "--check", "-C")  # raw ignores check mode, so it is still judged
+    mod, args, k = "command", "", 0
+    while k < len(a):
+        t, k = a[k], k + 1
+        if t in ("-m", "--module-name", "-a", "--args") and k < len(a):
+            key, v, k = t, a[k], k + 1
+        elif t.startswith(("--module-name=", "--args=")):
+            key, _, v = t.partition("=")
+        elif t[:2] in ("-m", "-a") and len(t) > 2:
+            key, v = t[:2], t[2:]
+        else:
+            continue
+        if key in ("-m", "--module-name"):
+            mod = v
+        else:
+            args = v
+    mod = mod.rsplit(".", 1)[-1]
+    if chk and mod != "raw":
+        return ""
+    if mod in ("shell", "command", "raw", "win_shell", "win_command") and args:
+        try:  # `cmd='rm -rf /x'`, `_raw_params=...` or a JSON object carry the command
+            kv = json.loads(args) if args.lstrip().startswith("{") else dict(x.partition("=")[::2] for x in shlex.split(args))
+            args = next((kv[x] for x in ("cmd", "_raw_params") if isinstance(kv, dict) and isinstance(kv.get(x), str)), args)
+        except ValueError:
+            pass
+        return check(args, depth + 1) if depth < MAXDEPTH else "ansible command nested too deep to vet. Run one step at a time"
+    if mod == "file" and args:
+        try:
+            kv = json.loads(args) if args.lstrip().startswith("{") else dict(x.partition("=")[::2] for x in shlex.split(args))
+        except ValueError:
+            return "ansible file args cannot be parsed, so a removal cannot be vetted. Use `--check` first and ask the owner"
+        p = kv.get("path") or kv.get("dest") or kv.get("name") if isinstance(kv, dict) else None
+        if p and kv.get("state") == "absent" and isinstance(p, str):
+            return check("rm -rf " + shlex.quote(p), depth + 1)
+    return ""
 
 
 def _bundle(t, ch):
@@ -462,6 +540,88 @@ def _ctr(a, depth, sv, lv):
     return ""
 
 
+def _rec(t):
+    """`--recursive` or a unique prefix of it (`--rec`, `--recurs`), or a bundle holding R."""
+    return (t.startswith("--rec") and "--recursive".startswith(t)) or _bundle(t, "R")
+
+
+def _wipe(m):
+    """A chmod mode whose final state removes every permission from u, g and o: `0`-`0000`, `a=`, `u=,g=,o=`, `a-rwx`, `-rwx`, `u+r,a=`. Not `go-rwx`."""
+    if re.fullmatch(r"0{1,4}", m):
+        return True
+    st = dict.fromkeys("ugo", False)  # True = wiped so far
+    for c in m.split(","):
+        x = re.fullmatch(r"([ugoa]*)([-+=])([rwxXst]*)", c)
+        if not x:
+            return False
+        for k in ("ugo" if "a" in x[1] or not x[1] else x[1]):
+            if x[2] == "=":
+                st[k] = not x[3]
+            elif x[2] == "+":
+                st[k] = st[k] and not x[3]
+            elif all(ch in x[3] for ch in "rwx"):
+                st[k] = True
+    return all(st.values())
+
+
+CHMOD_TGT = frozenset(("$", ".", "*", ".*", "$PWD", "${PWD}", "$(pwd)", "`pwd`"))
+
+
+def _chmod000(a):
+    """`chmod -R <mode that wipes every permission>` aimed at an absolute, home, `.`, glob, `$PWD` or `..` path."""
+    pos, k = [], 0
+    while k < len(a):
+        t = a[k]
+        k += 1
+        if t == "--":
+            pos += a[k:]
+            break
+        if not t.startswith("--") and t.startswith("-") and _wipe(t) or not t.startswith("-"):
+            pos.append(t)  # a mode may start with `-`
+    modes = [t for t in pos if _wipe(t)]
+    return bool(modes) and any(_rec(t) for t in a) and any(
+        (t.startswith(("/", "~")) and not _scoped(t)) or posixpath.normpath(t) in CHMOD_TGT or t.rstrip("/") == "./*" or ".." in t.split("/")
+        for t in pos if t not in modes)
+
+
+def _launchctl(a, depth):
+    """Reason string for a launchctl call that stops or removes a system-domain service, else ''."""
+    b = []
+    for t in a:  # split a glued `-w/Library/...` or `-Dsystem`
+        m = re.fullmatch(r"(-[A-Za-z]*w)(/.*)", t) or re.fullmatch(r"(-D)(\w+)", t)
+        b += list(m.groups()) if m else [t]
+    w = [t for t in b if not t.startswith("-")]
+    dom = [x.casefold() for k, t in enumerate(b) for x in ([b[k + 1]] if t == "-D" and k + 1 < len(b) else [])]
+    if w[:1] == ["asuser"] and len(w) > 2:
+        rest = a[a.index(w[2]):]
+        return _inner(rest, depth)
+    if w[:1] == ["submit"] and "--" in a:
+        return _inner(a[a.index("--") + 1:], depth)
+    uid = r"(?:\d+|\$[^/]*)"  # a number or any expansion: `gui/$UID`, `gui/$(id -u)`
+    if w[:1] in (["bootout"], ["disable"]) and any(re.match(r"system(?:/|$)", t) for t in w[1:]) \
+            or w[:1] == ["bootout"] and any(re.fullmatch(r"(?:gui|user)/" + uid + "/?", t) for t in w[1:]) \
+            or w[:1] == ["remove"] \
+            or w[:1] == ["unload"] and any(_bundle(t, "w") for t in b) and any(
+                re.match(r"/(?:system/)?library/launchdaemons/", posixpath.normpath(re.sub("/+", "/", t)).casefold()) for t in w[1:]) \
+            or w[:1] in (["unload"], ["load"]) and any(d in ("system", "all") for d in dom):
+        return "launchctl bootout/unload -w/remove/disable of a system daemon stops it and can persist the change. Ask the owner"
+    return ""
+
+
+CRIT = ("ssh", "sshd", "network", "networking", "networkmanager", "network-manager", "network-online", "network-pre", "systemd-networkd", "systemd-resolved", "systemd-logind",
+        "systemd-journald", "systemd-udevd", "systemd-machined", "systemd-homed", "systemd-hostnamed", "docker", "containerd", "dbus", "dbus-broker", "dbus-daemon",
+        "firewalld", "ufw", "kubelet", "k3s", "k3s-agent", "libvirtd", "tailscaled", "nftables", "iptables", "wpa_supplicant", "wg-quick", "amazon-ssm-agent")
+SVAL = frozenset(("-t", "--type", "-H", "--host", "-M", "--machine", "-p", "--property", "-n", "--lines", "-s", "--signal", "--root", "-o", "--output", "-a"))  # value-taking systemctl options
+
+
+def _critunit(t):
+    """True when systemd unit `t` (path, instance, suffix and case ignored, globs matched) is one that keeps the host reachable."""
+    n = re.sub(r"(?:@[^.]*)?(?:\.(?:service|socket|target|mount|timer|path|slice|scope|device))?$", "", posixpath.basename(t).lower())
+    return any(fnmatch.fnmatchcase(c, n) for c in CRIT) if re.search(r"[*?\[]", n) else n in CRIT
+
+
+HELMV = frozenset(("history", "list", "ls", "get", "install", "upgrade", "status", "show", "template", "search", "repo", "plugin", "pull", "push", "package", "lint",
+                   "create", "dependency", "dep", "diff", "env", "test", "verify", "version", "uninstall", "registry", "help", "completion", "login", "logout", "fetch"))
 def _far(t):
     """Root, home, `..` escapes or an absolute path within 2 components of `/`, after normalizing."""
     if t.startswith(("~", "$HOME", "${HOME")):
@@ -652,6 +812,8 @@ def _git(a, cwd="", genv=False):
     flags = [t for t in r if re.fullmatch(r"-[A-Za-z]+", t)]
     force = has("--force") or any("f" in t for t in flags)
     dele = has("--delete") or any("d" in t for t in flags)
+    if sub == "filter-repo" and any(t in ("--analyze", "--dry-run") and not (k and r[k - 1].startswith("-") and "=" not in r[k - 1] and r[k - 1] not in FRBOOL) for k, t in enumerate(r)):
+        return ""  # analysis report or preview only
     if sub in ("filter-branch", "filter-repo"):
         return "git filter-branch/filter-repo rewrites the whole history. Work on a fresh clone and ask the owner"
     if sub == "push" and has("--dry-run"):
@@ -784,9 +946,11 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
     pos = [t for t in a if not t.startswith("-")]  # ponytail: a relative *.img/*.raw file is not a device; a symlink planted by an earlier command is out of sight
     if name.startswith("mkfs") and not _mkfs_dry(name, a) and not (pos and all(IMGFILE.fullmatch(t) and not os.path.realpath(t).startswith("/dev/") for t in pos)):
         return "mkfs formats a device. Do it in a VM, never on the host"
-    if name in ("chmod", "chown") and any(t == "--recursive" or _bundle(t, "R") for t in a) \
+    if name in ("chmod", "chown") and any(_rec(t) for t in a) \
             and any(_far(t) for t in a if not t.startswith("-")):
         return f"{name} -R on root/home. Target an exact in-project path"
+    if name == "chmod" and _chmod000(a):
+        return "chmod -R 000 on an absolute, home, `.`, glob or `..` path locks everyone out of the tree. Target an exact in-project path"
     if name in ("pkill", "killall"):
         return f"{name} kills by pattern. Use `kill` on the exact PID you started"
     sig0 = a[1:] if a[:1] == ["-0"] else a[2:] if a[:2] == ["-s", "0"] else None  # signal 0 probes, sends nothing
@@ -870,19 +1034,46 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
     if name in ("terraform", "tofu", "terragrunt") and (w[:1] == ["destroy"] or w[:2] == ["state", "rm"] or (
             w[:1] == ["apply"] and any(t in ("-destroy", "--destroy") for t in a)) or (name == "terragrunt" and "destroy" in w)):
         return f"{name} destroy/state rm removes real infrastructure or its record. Run `plan -destroy` and ask the owner"
+    pw = [t for t in a if not t.startswith("-")]  # positional words: flag values stay in, so look for adjacent verbs, never a fixed position
+    if name in ("terraform", "tofu", "terragrunt") and ("workspace", "delete") in zip(pw, pw[1:]) and _on(a, "-force", "--force"):
+        return f"{name} workspace delete -force removes a workspace with live state. Ask the owner"
+    if name == "helm" and "rollback" in pw and not HELMV & set(pw[:pw.index("rollback")]) and _on(a, "--force"):
+        return "helm rollback --force deletes and recreates resources. Ask the owner"
+    if name == "launchctl" and (r := _launchctl(a, depth)):
+        return r
+    sw = [t for k, t in enumerate(a) if not t.startswith("-") and not (k and a[k - 1] in SVAL)]
+    if name == "systemctl" and "--user" not in a and sw[:1] in (["disable"], ["mask"], ["stop"]) and any(_critunit(t) for t in sw[1:]):
+        return "systemctl stop/disable/mask of ssh, network, docker, dbus, firewall or systemd units can lock you out of the host. Ask the owner"
+    bw = [t for k, t in enumerate(a) if not t.startswith("-") and not (k and a[k - 1] == "--format")]  # skip `--format json`
+    if name == "btrfs" and len(bw) > 1 and "subvolume".startswith(bw[0]) and len(bw[0]) >= 2 and "delete".startswith(bw[1]):
+        return "btrfs subvolume delete removes a subvolume and its data. Ask the owner"
     recur = any(t == "--recursive" or _bundle(t, "r") or _bundle(t, "R") for t in a)
-    if (name == "aws" and len(w) > 1 and re.match(r"(?:(?:delete|terminate|purge)-|schedule-key-deletion$)", w[1])) \
+    ddb1 = w[:2] == ["dynamodb", "delete-item"] and ph is None and any(t == "--key" or t.startswith("--key=") for t in a) and not any(re.search(r"[$`]", t) for t in a)  # one literal item
+    pulprev = _pulprev(a)
+    if name == "etcdctl" and any(t in ("del", "delete") for t in w) and _on(a, "--from-key", "--prefix"):
+        return "etcdctl del --from-key/--prefix deletes a whole key range. Name exact keys and ask the owner"
+    if name == "kubectl" and "replace" in w and _on(a, "--force"):
+        return "kubectl replace --force deletes the object and recreates it, dropping its dependents. Use `kubectl apply` and ask the owner"
+    if name == "kubectl" and "scale" in w and _on(a, "--all") and any(_zero(t.partition("=")[2] or (a[k + 1] if k + 1 < len(a) else "")) for k, t in enumerate(a) if t.split("=")[0] == "--replicas"):
+        return "kubectl scale --all --replicas=0 stops every workload. Name the objects to scale and ask the owner"
+    if name == "bq" and "rm" in w and any(t.split("=")[0] in ("-r", "-f", "--recursive", "--force") and _on([t], t.split("=")[0]) or _bundle(t, "r") or _bundle(t, "f") for t in a):
+        return "bq rm -r/-f deletes a dataset or table without a prompt. Name the exact table, omit -f, and ask the owner"
+    if name == "ansible" and (r := _ansible(a, depth)):
+        return r
+    if (name == "aws" and len(w) > 1 and not ddb1 and re.match(r"(?:(?:delete|terminate|purge)-|schedule-key-deletion$)", w[1])) \
             or (name == "gcloud" and ("delete" in w or ("rm" in w and recur))) \
             or (name == "gsutil" and "rm" in w and recur) \
             or (name == "az" and any(t in ("delete", "purge") for t in w)) \
-            or (name == "pulumi" and (w[:1] == ["destroy"] or w[:2] == ["stack", "rm"])) \
+            or (name == "pulumi" and ((w[:1] == ["destroy"] and not pulprev) or w[:2] == ["stack", "rm"])) \
             or (name == "helm" and w[:1] in (["uninstall"], ["delete"], ["un"], ["del"])) \
             or (name == "kubectl" and (w[:1] == ["drain"] or ("delete" in w and any(
                 t in ("--all", "--all-namespaces") or _bundle(t, "A") for t in a)))):
         return f"{name} deletes cloud/cluster resources. Name the exact resource and ask the owner"
     if name in ("npm", "pnpm") and (("deprecate" in w and w[w.index("deprecate") + 2:][:1] != [""]) or ("owner" in w and any(x in ("rm", "remove") for x in w))):  # an empty message un-deprecates
         return f"{name} deprecate/owner rm changes who can publish or use a package. Ask the owner"
-    if (name in ("npm", "pnpm", "yarn") and "unpublish" in w) or (name in ("cargo", "gem") and "yank" in w and "--undo" not in a) \
+    pre1 = name in ("npm", "pnpm") and ph is None and len(w) == 2 and not any((t.startswith("--f") and len(t.split("=")[0]) >= 3 and "--force".startswith(t.split("=")[0])) or _bundle(t, "f") for t in a) \
+        and re.fullmatch(r"(?:@[\w.-]+/)?[\w.-]+@\d+\.\d+\.\d+-[0-9A-Za-z][0-9A-Za-z.-]*", w[1]) is not None  # one exact prerelease version
+    if (name in ("npm", "pnpm", "yarn") and "unpublish" in w and not pre1) or (name in ("cargo", "gem") and "yank" in w and "--undo" not in a and not (name == "cargo" and ph is None and _yank1(a))) \
             or (name in ("apt", "apt-get", "aptitude") and ("--allow-remove-essential" in a or (
                     ("purge" in w or "remove" in w) and any(re.search(r"[*?\[]", t) for t in w)))
                 and not any(t in ("-s", "--simulate", "--just-print", "--dry-run", "--no-act") for t in a)) \

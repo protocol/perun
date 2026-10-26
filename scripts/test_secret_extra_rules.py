@@ -65,6 +65,15 @@ LIVE.update({"slack-webhook-any-host": "https://hooks.example.com/serv" "ices/T"
              "aws-secret-access-key-assign": "aws configure set aws_secret_" "access_key " + tok("w8d", 12) + "aA1" + tok("w8e", 25), "typed-password-literal": 'password: str = "' + tok("w8f", 14) + '#7"',
              "datadog-key-assign": "DATADOG_API_" "KEY=" + hashlib.sha256(b"w8g").hexdigest()[:32], "plaid-secret-assign": "PLAID_SE" "CRET=" + hashlib.sha256(b"w8h").hexdigest()[:30],
              "ldap-dn-password": "ldap://cn=admin,dc=acme,dc=example,dc=com:" + tok("w8i", 18) + "9@ldap.example.com", "redis-cli-auth": "redis-cli -h cache.example.com -a " + tok("w8j", 24)})
+# Rules added after held-out-12 (decoy twins: test_secret_extra_rules_w9.py).
+LIVE.update({"gcp-sa-private-key-id": '{"type": "service_' 'account", "private_k' 'ey_id": "' + hashlib.sha256(b"w9a").hexdigest()[:40] + '"}', "mysql-pwd-assign": "MYSQL_" "PWD=" + tok("w9b", 18) + "9",
+             "google-refresh-token": "1/" "/0" + tok("w9c", 60)})
+# Rule added after held-out-13 (decoy twins: test_secret_extra_rules_w10.py).
+LIVE["flyio-token"] = "Fly" "V1 fm" "2_" + tok("w10a", 60) + "=="
+# Rules added after held-out-14 (decoy twins: test_secret_extra_rules_w11.py).
+LIVE.update({"nuget-cleartext-password": '<add key="ClearText' 'Password" value="' + "".join(c for c in tok("w11a", 60) if c.isalpha())[:25] + '" />', "sas-sig-first": "sig=" + tok("w11b", 43) + "%3D&se=2027-01-01&sp=rwdl",
+             "client-secret-assign": "AZURE_CLIENT_" "SECRET: " + tok("w11c", 40), "stripe-webhook-secret": "wh" "sec_" + tok("w11d", 32),
+             "doppler-token": "dp" ".st.dev." + tok("w11e", 40), "piped-login-password": 'echo "' + tok("w11f", 40) + '" | docker login ghcr.io -u jane --password-stdin'})
 LIVE["password-assign"] = "DB_PASS" "WORD=" + tok("pa", 11) + "!047"
 LIVE["password-env-netrc"] = "ENV ADMIN_PASS" "WORD " + tok("pe", 11) + "!047"
 LIVE["conn-string-password"] = "jdbc:sqlserver://h:1433;user=jane;pass" "word=" + tok("cp", 16)

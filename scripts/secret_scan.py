@@ -87,11 +87,20 @@ LINE_MAX = 4096  # a secret starting past 4 KB of one line (minified bundles) is
 
 # Lines that mark a match as a non-secret: documentation words, filler runs, Stripe test-mode and publishable keys, browser-exposed
 # env vars (NEXT_PUBLIC_), Mapbox public tokens, CSRF nonces. Applied to the matched text only (never the rest of the line), only by the gate (precise=True), never to the rival bench.
-PLACEHOLDER = re.compile(r"(?<![A-Za-z])(?:[Ee]xample|EXAMPLE)(?![a-z]|\.[a-z])|[A-Z0-9]EXAMPLE(?:KEY)?(?![A-Za-z0-9])|(?i:dummy|fake|placeholder|redacted|revoked|replace[_-]?me|changeme|x{8,}|0{10,}|[sp]k_test_|pk_live_|next_public_|\bpk\.eyJ|[cx]srf|sitekey(?![_-]?(?:secret|private))|(?:captcha|turnstile)[_-]?site[_-]?key(?![_-]?(?:secret|private))|\bcache[_-]?key\b|eyJyb2xlIjoiYW5vbiJ9)|(?<![A-Za-z])your[_-]|dXNlcm5hbWU6cGFzc3dvcmQ|dXNlcjpwYXNz|QWxhZGRpbjpvcGVuIHNlc2FtZQ")
+# client_secret_<type|id|version|...> names hold metadata about a secret, not the secret
+CLIENTSECMETA = re.compile(r"(?i)client[_-]?secret[_-]?(?:type|id|version|expir\w*|basic|ref|name|path)\b")
+PLACEHOLDER = re.compile(r"(?<![A-Za-z])(?:[Ee]xample|EXAMPLE)(?![a-z]|\.[a-z])|[A-Z0-9]EXAMPLE(?:KEY)?(?![A-Za-z0-9])|(?i:dummy|fake|placeholder|redacted|revoked|replace[_-]?me|changeme|x{8,}|0{10,}|(?<![A-Za-z0-9])[sp]k[_-]test[_-]|pk_live_|next_public_|\bpk\.eyJ|sitekey(?![_-]?(?:secret|private))|(?:captcha|turnstile)[_-]?site[_-]?key(?![_-]?(?:secret|private))|\bcache[_-]?key\b|eyJyb2xlIjoiYW5vbiJ9)|(?<![A-Za-z])your[_-]|dXNlcm5hbWU6cGFzc3dvcmQ|dXNlcjpwYXNz|QWxhZGRpbjpvcGVuIHNlc2FtZQ")
 
+# A CSRF/XSRF token is per-request form state, not a credential; only a name that ENDS in the token name counts (csrf_password and example_password stay judged on their value).
+CSRFNAME = re.compile(r"(?i)[\w-]*(?:[cx]srf[_-]?token|csrfmiddlewaretoken)")
+
+
+def csrf_named(before, text):
+    """True when the identifier holding the match start (up to 40 chars before it, plus the match's leading word) ends in a CSRF token name."""
+    return bool(CSRFNAME.fullmatch(re.search(r"[\w-]*$", before[-40:]).group() + re.match(r"[\w-]*", text).group()))
 
 # A Google API key whose own line says it is a referrer-restricted public (browser) key is public by design; an unsigned JWT (empty signature) is not a credential.
-PUBKEY = re.compile(r"(?i)(?:#|//|--)[^\n]*?(?:\bpublic\b[^\n]*\b(?:restricted|referr?er)\b|referr?er[- ]restricted)")
+PUBKEY = re.compile(r"(?i)(?:#|//|--)(?![^\n]*(?:\bnot[ -]|\bun-?|\bnon-?)restricted)[^\n]*?(?:\bpublic\b[^\n]*\b(?:restricted|referr?er)\b|referr?er[- ]restricted|restricted (?:by|to) (?:http )?referr?er)")
 
 
 def pubkey_ok(tail):
@@ -121,12 +130,12 @@ EXTRA = [(i, re.compile(r), g, e) for i, r, g, e in [
     ("telegram-bot-token", r"\b\d{8,10}:(?:AA[\w-]{30,}|[\w-]{35}\b)", 0, 3.0),
     ("sentry-dsn", r"\bhttps://\w{16,}:(\w{16,})@[\w.-]*ingest[\w.-]*/\d+", 1, 3.0),  # legacy key:secret form only; a key-only DSN is public by design
     ("cli-token-flag", r"""(?i)\s--(?:token|api[_-]?key|password|secret)(?:=|\s+)['"]?(?![$<{%*])(?![^\s'"]*/)(?![^\s'"]*\.(?:ya?ml|json|txt|pem|key|env|conf|cfg|ini|toml|crt|p12)(?:[\s'"]|$))([^\s'"]{16,})""", 1, 3.5),
-    ("password-assign", r"""(?i)\b(?!test_)\w*passw(?:or)?d(?!\w*(?:length|min|max|policy)\b)\w*['"]?\s*[=:]\s*['"]?(?=[a-z\d])(?!(?:\w*passw(?:or)?d|secret|admin|qwerty|letmein)[\d!]{0,6}(?![^\s'",;]))(?=\S*\d)(?=\S*[a-z])([^\s'",;]{8,})""", 1, 3.0),
+    ("password-assign", r"""(?i)\b(?!test_)\w*passw(?:or)?d(?!\w*(?:length|min|max|policy|_(?:url|uri|link)|(?-i:Url|Uri|URL|URI|Link))\b)\w*['"]?\s*[=:]\s*['"]?(?=[a-z\d])(?!(?:\w*passw(?:or)?d|secret|admin|qwerty|letmein)[\d!]{0,6}(?![^\s'",;]))(?=\S*\d)(?=\S*[a-z])([^\s'",;]{8,})""", 1, 3.0),
     # whitespace-separated forms only where the syntax is fixed: Dockerfile ENV/ARG and netrc `login X password Y`
     ("password-env-netrc", r"""(?i)(?:\b(?:env|arg)\s+\w*passw(?:or)?d\w*|\blogin\s+\S+\s+password)\s+(?=[a-z\d])(?!(?:\w*passw(?:or)?d|secret|admin|qwerty|letmein)[\d!]{0,6}(?![^\s'",;]))(?=\S*\d)(?=\S*[a-z])([^\s'",;]{8,})""", 1, 3.0),
     ("conn-string-password", r"""(?i)[;?&](?:password|pwd)=(?![$<{%*])([^;&\s'"]{8,})""", 1, 3.0),
     ("auth-basic", r"(?i)\bauthorization\W{1,3}basic\s+([A-Za-z0-9+/]{16,}={0,2})", 1, 3.5),
-    ("sentry-org-token", r"\bsntrys_eyJ[\w+/=-]{40,}", 0, 3.5),
+    ("sentry-org-token", r"\bsntry[su]_[\w+/=-]{40,}", 0, 3.5),
     ("fcm-server-key", r"\bAAAA[\w-]{7}:APA91b[\w-]{100,}", 0, 3.5),
     ("twitter-bearer", r"(?i)\b\w*bearer\w*\W{1,4}A{20,}([%\w-]{50,})", 1, 3.5),  # bearer context
     ("twitter-bearer-url", r"\bA{21,}(?!A)(?=[\w-]*%[0-9A-F]{2})([%\w-]{50,})", 1, 3.5),  # no context: 21+ A then a URL-encoded body; a bare base64 blob has no %XX
@@ -159,10 +168,26 @@ EXTRA = [(i, re.compile(r), g, e) for i, r, g, e in [
     ("slack-webhook-any-host", r"/services/T[A-Z0-9]{8,12}/B[A-Z0-9]{8,12}/([A-Za-z0-9]{24})\b", 1, 3.5),  # gitleaks slack-webhook-url wants hooks.slack.com; proxies and mirrors keep the path
     ("aws-secret-access-key-assign", r"""(?i:aws_secret_access_key)['"]?[\s=:]+['"]?(?=[A-Za-z0-9/+]*\d)(?=[A-Za-z0-9/+]*[a-z])(?=[A-Za-z0-9/+]*[A-Z])([A-Za-z0-9/+]{40})(?![A-Za-z0-9/+=])""", 1, 3.5),  # `aws configure set aws_secret_access_key <40>`, `= <40>`
     ("typed-password-literal", r"""(?i)\b\w*(?:password|passwd|_pass)\s*:\s*[\w.\[\]]+\s*=\s*['"](?![$<{%*])(?=[^'"\s]*\d)([^'"\s]{8,})['"]""", 1, 3.0),  # Python `password: str = "..."`, TypeScript `password: string = "..."`
-    ("datadog-key-assign", r"""(?i)\b(?:datadog|dd)_(?:api|app)_key['"]?\s*[=:]\s*['"]?([0-9a-f]{32}(?:[0-9a-f]{8})?)\b""", 1, 3.0),  # 32-hex API key, 40-hex application key
+    ("datadog-key-assign", r"""(?i)\b(?:datadog|dd)_(?:api|app)_key['"]?\s*[=:]\s*['"]?([0-9a-f]{32,40})\b""", 1, 3.0),  # 32-hex API key, 40-hex application key
     ("plaid-secret-assign", r"""(?i)\bplaid_(?:client_)?secret\w{0,10}['"]?\s*[=:]\s*['"]?([0-9a-f]{30})\b""", 1, 3.0),  # Plaid secrets are 30 hex characters
     ("ldap-dn-password", r"""\bldaps?://\w+=[^\s:/@]*:(?![^\s@/]*\*\*@)(?=[^\s@/]*\d)([^\s@/$<>{}%]{8,})@[\w.-]+""", 1, 3.0),  # ldap://cn=admin,dc=acme,dc=com:secret@host (the DN has no `/`; checked for placeholders on the password alone)
     ("redis-cli-auth", r"""(?i)\bredis-cli\b[^\n]*?\s-a\s+['"]?(?![$<{%*'"-])(?=[^'"\s]*\d)([^'"\s]{8,})""", 1, 3.0),  # redis-cli -a PASSWORD (cli-password only knows -p)
+    # held-out-12 additions
+    ("gcp-sa-private-key-id", r"""(?i)['"]type['"]\s*:\s*['"]service_account['"][^}]{0,600}?['"]private_key_id['"]\s*:\s*['"]([0-9a-f]{40})['"]""", 1, 3.0),  # key id of a service-account JSON (judged on the id alone: a project_id may say "example")
+    ("gcp-sa-private-key-id", r"""(?i)['"]private_key_id['"]\s*:\s*['"]([0-9a-f]{40})['"][^}]{0,600}?['"]type['"]\s*:\s*['"]service_account['"]""", 1, 3.0),  # the same with the key before the type
+    ("mysql-pwd-assign", r"""(?i)(?<![A-Za-z0-9])mysql_pwd\b['"]?\s*[=:]\s*['"]?(?![$<{%*'"])(?=[^'"\s]*\d)([^'"\s]{8,})""", 1, 3.0),  # MYSQL_PWD=..., the mysql client's password variable
+    ("google-refresh-token", r"(?<![\w/])1//0([A-Za-z0-9_-]{40,})(?![\w-])", 1, 3.5),  # Google OAuth refresh token (Firebase CLI, gcloud)
+    ("flyio-token", r"(?<![A-Za-z0-9])fm[12][ar]?_([A-Za-z0-9+/=_-]{40,})", 1, 3.5),  # Fly.io token (FlyV1 fm2_..., fm1_, fm1r_), under any name and without the gitleaks 100-char floor
+    # held-out-14 additions; excluded on purpose (logged in the corpus ledger): L017 (a service-account private_key_id is an identifier, not the key), L033 (a key-only Sentry DSN is public by design), L060 (a pass-named bare token with no assignment; false-positive risk judged too high, accepted miss)
+    ("nuget-cleartext-password", r"""(?i)\bClearTextPassword['"]?\s+value\s*=\s*['"](?![$<{%*])([^'"\s]{8,})['"]""", 1, 3.0),  # nuget.config <add key="ClearTextPassword" value="...">; letters-only values slip password-assign
+    ("nuget-cleartext-password", r"""(?i)\bvalue\s*=\s*['"](?![$<{%*])([^'"\s]{8,})['"]\s+key\s*=\s*['"]ClearTextPassword['"]""", 1, 3.0),  # attributes in the other order
+    ("sas-sig-last", r"""\bs[epv]=[\w%:.+-]+&(?:[\w%:.+/=-]+&){0,6}sig=([A-Za-z0-9%+/]{40,})""", 1, 3.5),  # sig as a late parameter without sv
+    ("sas-sig-first", r"""\bsig=([A-Za-z0-9%+/]{40,})(?=[^\s"']*&s[epv]=)""", 1, 3.5),  # Azure SAS with sig before se/sp/sv (azure-sas-sig needs sv first)
+    ("client-secret-assign", r"""(?i)\b\w*client[_-]?secret(?:[_-]?(?:value|key))?['"]?\s*[=:]\s*['"]?(?![$<{%*])(?![^'"\s]*://)(?=[\w~.+/=-]*\d)(?=[\w~.+/=-]*[a-z])(?=[\w~.+/=-]*[A-Z])([\w~.+/=-]{30,})""", 1, 3.5),  # AZURE_CLIENT_SECRET, OAuth client secrets; not client_secret_name/_path/_ref, Key Vault or SOPS refs
+    ("stripe-webhook-secret", r"\bwhsec_([A-Za-z0-9]{32,})", 1, 3.5),
+    ("doppler-token", r"\bdp\.(?:pt|st|sa|ct|scim|audit)(?:\.[\w-]{1,60}){0,2}?\.([A-Za-z0-9]{40,44})\b", 1, 3.5),  # dp.st.<config>.<40>; gitleaks knows only dp.pt.
+    ("piped-login-password", r"""(?i)(?:\b(?:echo|printf)\s+(?:-[ne]+\s+)?(?:['"]?%s\s*['"]?\s+)?|\bcat\s+<<<\s*)['"]?(?![$<{%*'"-])(?!(?:[a-z]{3,}-){3})(?=[^'"\s|]*\d)(?=[^'"\s|]*[a-z])([^'"\s|]{20,})['"]?\s*\|(?:[^\n|]*\|)*?\s*[^\n|]*?\blogin\b[^\n]*--(?:password-stdin|with-token)""", 1, 3.5),  # echo/printf/here-string piped into docker/gh login
+    ("piped-login-password", r"""(?i)\blogin\b[^\n]*--(?:password-stdin|with-token)\s*<<<\s*['"]?(?![$<{%*'"-])(?!(?:[a-z]{3,}-){3})(?=[^'"\s|]*\d)(?=[^'"\s|]*[a-z])([^'"\s|]{20,})""", 1, 3.5),
 ]]
 
 
@@ -178,14 +203,14 @@ def gitleaks_rule(text, path="input.txt", precise=False):
             line = frag[frag.rfind("\n", 0, m.start()) + 1:frag.find("\n", m.end())]
             gs = [g for g in m.groups() if g]
             sec = m.group(sg) or "" if sg else (gs[0] if gs else m.group(0))
-            if "gitleaks:allow" in line or (precise and (PLACEHOLDER.search(m.group(0)) or (rid == "gcp-api-key" and pubkey_ok(frag[m.end():frag.find("\n", m.end())])) or (rid == "jwt" and sec.endswith(".")) or WORDSEC.fullmatch(sec.rpartition(":")[2]))): continue
+            if "gitleaks:allow" in line or (precise and (PLACEHOLDER.search(m.group(0)) or csrf_named(frag[:m.start()], m.group(0)) or ((rid == "generic-api-key" and CLIENTSECMETA.search(m.group(0))) or (rid == "gcp-api-key" or (rid == "generic-api-key" and sec.startswith("AIz"))) and pubkey_ok(frag[m.end():frag.find("\n", m.end())])) or (rid == "jwt" and sec.endswith(".")) or WORDSEC.fullmatch(sec.rpartition(":")[2]))): continue
             if ent and entropy(sec) <= ent: continue
             if any(a.hit(sec, m.group(0), line, path) for a in glob + als): continue
             out.append(rid); break
     xf = frag.replace("\\n", "\n")  # a literal backslash-n (JSON, logs, one-line fixtures) is a line break for the extra rules
     for rid, rx, g, ent in EXTRA if precise else ():
         for m in rx.finditer(xf):
-            if not PLACEHOLDER.search(m.group(g) if rid == "ldap-dn-password" else m.group(0)) and entropy(m.group(g)) > ent and not (g and IDENT.fullmatch(m.group(g))) and "gitleaks:allow" not in xf[xf.rfind("\n", 0, m.start()) + 1:xf.find("\n", m.end())]:
+            if not csrf_named(xf[:m.start()], m.group(0)) and not PLACEHOLDER.search(m.group(g) if rid in ("ldap-dn-password", "gcp-sa-private-key-id") else m.group(0)) and entropy(m.group(g)) > ent and not (g and IDENT.fullmatch(m.group(g))) and "gitleaks:allow" not in xf[xf.rfind("\n", 0, m.start()) + 1:xf.find("\n", m.end())]:
                 out.append(rid); break
     return out
 
@@ -208,7 +233,7 @@ def refilter(pat, files):
     for f in files:
         try: lines = pathlib.Path(f).read_text("utf-8", "replace").split("\n")
         except OSError: lines = None
-        if rx is None or lines is None or not any(rx.search(l) for l in lines) or any(not PLACEHOLDER.search(m.group(0)) and not (m.group(0).startswith("AIza") and pubkey_ok(l[m.end():])) for l in lines for m in rx.finditer(l)): print(f)
+        if rx is None or lines is None or not any(rx.search(l) for l in lines) or any(not (PLACEHOLDER.search(m.group(0)) or csrf_named(l[:m.start()], m.group(0))) and not (m.group(0).startswith("AIza") and pubkey_ok(l[m.end():])) for l in lines for m in rx.finditer(l)): print(f)
 
 
 def main(argv):
