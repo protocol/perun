@@ -141,14 +141,52 @@ class OpenLanesAndNarrowing(unittest.TestCase):
 
     def test_earlier_turn_background_lane_still_open_passes(self):
         bg = tool("Agent", prompt="x", run_in_background=True)
+        bg["message"]["content"][0]["id"] = "toolu_1"
         wake = [PROMPT, tool("ScheduleWakeup"), RESULT, text(WAIT)]
         self.assertFalse(self.blocked([PROMPT, bg, RESULT, text("launched")] + wake))
-        self.assertTrue(self.blocked([PROMPT, bg, RESULT, text("launched"), NOTE] + wake))  # lane finished: still a stall
+        self.assertTrue(self.blocked([PROMPT, bg, RESULT, text("launched"), done("t1", use="toolu_1")] + wake))  # lane finished: still a stall
 
     def test_past_tense_ci_text_passes_forward_looking_blocks(self):
         for t, want in (("PR merged, CI green, checks passed.", False), ("Merging now.", False), ("Waiting on CI.", True),
                         ("Checks pending; next look at 13:42.", True), ("Holding until checks pass.", True)):
             self.assertEqual(self.blocked([PROMPT, tool("ScheduleWakeup"), RESULT, text(t)]), want, t)
+
+
+def launched(aid):
+    t = f"Async agent launched successfully.\nagentId: {aid} (internal)\nThe agent is working in the background."
+    return {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "content": [{"type": "text", "text": t}]}]}}
+
+
+def resumed(aid):
+    t = json.dumps({"success": True, "message": "Resuming agent", "resumedAgentId": aid})
+    return {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "content": [{"type": "text", "text": t}]}]}}
+
+
+def done(tid, status="completed", use="toolu_x"):
+    return {"type": "user", "message": {"role": "user", "content": f"<task-notification>\n<task-id>{tid}</task-id>\n<tool-use-id>{use}</tool-use-id>\n<status>{status}</status>\n</task-notification>"}}
+
+
+class OpenBgPerId(unittest.TestCase):
+    """Real-format ids: one agent notifies again on each resume, so a raw count goes negative."""
+
+    def open(self, entries):
+        sys.path.insert(0, str(SC))
+        import stall_guard
+        return stall_guard._open_bg([json.dumps(e) for e in entries])
+
+    def test_repeat_notifications_do_not_hide_an_open_lane(self):
+        e = [launched("aaa"), launched("bbb"), done("aaa"), resumed("aaa"), done("aaa"), resumed("aaa"), done("aaa")]
+        self.assertTrue(self.open(e))  # bbb never finished
+        self.assertFalse(self.open(e + [done("bbb", "failed")]))
+
+    def test_resume_reopens_until_its_notification(self):
+        self.assertTrue(self.open([launched("aaa"), done("aaa"), resumed("aaa")]))
+        self.assertFalse(self.open([launched("aaa"), done("aaa"), resumed("aaa"), done("aaa", "killed")]))
+
+    def test_background_tool_use_closes_by_tool_use_id(self):
+        bgt = {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "toolu_1", "name": "Bash", "input": {"run_in_background": True}}]}}
+        self.assertTrue(self.open([bgt]))
+        self.assertFalse(self.open([bgt, done("b1", use="toolu_1")]))
 
 
 class Wiring(unittest.TestCase):

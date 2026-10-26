@@ -46,9 +46,17 @@ def _blocks(entry):
     return [{"type": "text", "text": c}] if isinstance(c, str) else [b for b in c or [] if isinstance(b, dict)]
 
 
+NOTE_ID = re.compile(r"<(task-id|tool-use-id)>([^<]+)</\1>")
+DONE = re.compile(r"<status>(?:completed|failed|killed|stopped|error)</status>")
+LAUNCHED = re.compile(r'agentId: (\w+).{0,300}in the background|resumedAgentId\\?":\s*\\?"(\w+)', re.S)
+
+
 def _open_bg(lines):
-    """True when more run_in_background launches than `<task-notification>` completions appear in the whole tail."""
-    n = 0
+    """True when a background task is still open. State is per id, the latest event wins: a background tool_use (keyed by its
+    tool_use id), a launch result (`agentId: X ... in the background`) or a resume result (`resumedAgentId`) opens it; a
+    `<task-notification>` with a terminal `<status>` closes both its `<task-id>` and `<tool-use-id>`. One agent notifies again
+    on every resume, so ids are tracked, not counted."""
+    st = {}
     for ln in lines:
         try:
             e = json.loads(ln)
@@ -57,12 +65,18 @@ def _open_bg(lines):
         if not isinstance(e, dict) or e.get("isSidechain"):
             continue
         bl = _blocks(e)
-        if e.get("type") == "user":
-            n -= "<task-notification>" in json.dumps(bl)
-        else:
-            n += sum(b.get("type") == "tool_use" and isinstance(b.get("input"), dict)
-                     and b["input"].get("run_in_background") is True for b in bl)
-    return n > 0
+        if e.get("type") != "user":
+            for b in bl:
+                if b.get("type") == "tool_use" and isinstance(b.get("input"), dict) and b["input"].get("run_in_background") is True:
+                    st[b.get("id")] = True
+            continue
+        raw = json.dumps(bl)
+        for m in LAUNCHED.finditer(raw):
+            st[m.group(1) or m.group(2)] = True
+        if "<task-notification>" in raw and DONE.search(raw):
+            for m in NOTE_ID.finditer(raw):
+                st[m.group(2)] = False
+    return any(st.values())
 
 
 def last_turn(path):
