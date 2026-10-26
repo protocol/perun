@@ -4217,6 +4217,13 @@ else
   record 1 "security_bench_score: seeded fixtures, precision/recall/decoy FP, fails closed on a missing arm"; tail -5 "$WORK/security-bench.log"
 fi
 
+# Small-DIFF security route + held-out seeded fixtures: own per-feature file (scripts/test_security_diff_route.py), one case here.
+if python3 "$ROOT/scripts/test_security_diff_route.py" >"$WORK/security-diff-route.log" 2>&1; then
+  record 0 "security small-DIFF route: appsec-verify section 0, new-file lines, sink anchor; held-out fixtures shape"
+else
+  record 1 "security small-DIFF route: appsec-verify section 0, new-file lines, sink anchor; held-out fixtures shape"; tail -5 "$WORK/security-diff-route.log"
+fi
+
 # install.sh AGENTS.md blocks are compact (<= 6 lines each, markers included)
 # and a re-run replaces them in place (idempotent), so a target repo's own
 # AGENTS.md size gate is not broken by the default install (#1309).
@@ -4339,6 +4346,13 @@ if python3 "$ROOT/scripts/test_finding_gates.py" >"$WORK/finding-gates.log" 2>&1
   record 0 "finding gates: ground check + merge/dedupe/cap tests pass"
 else
   record 1 "finding gates: ground check + merge/dedupe/cap tests pass"; tail -5 "$WORK/finding-gates.log"
+fi
+
+# app_pentest.sh: target-refusal logic + scanner-output parsing, fake binaries on PATH (no network).
+if bash "$ROOT/scripts/test_app_pentest.sh" >"$WORK/app-pentest.log" 2>&1; then
+  record 0 "app_pentest: target allowlist refusal + lead parsing tests pass"
+else
+  record 1 "app_pentest: target allowlist refusal + lead parsing tests pass"; tail -5 "$WORK/app-pentest.log"
 fi
 
 # security_verify.py: verify-or-drop shape check and exclusion override behave (plain-assert suite).

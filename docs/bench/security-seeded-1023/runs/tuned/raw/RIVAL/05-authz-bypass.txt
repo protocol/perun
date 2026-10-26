@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/admin.py",
+      "line": 6,
+      "severity": "HIGH",
+      "category": "authorization_bypass",
+      "description": "The admin endpoint /admin/users/<uid>/delete only checks that a 'user_id' exists in the session (authentication). It does not check that the user has an admin role or any other privilege. Any logged-in user, including a regular low-privilege account, can call this admin-only, destructive action.",
+      "exploit_scenario": "An attacker registers or logs in as a normal user and sends POST /admin/users/<uid>/delete for any integer uid. The check passes because the session contains user_id, so remove_user(uid) runs and deletes arbitrary accounts, including administrators. This is vertical privilege escalation and an insecure direct object reference.",
+      "recommendation": "Add an authorization check, for example confirming the session user has an admin role, using a decorator such as @admin_required that loads the user and verifies the role server-side. Return 403 on failure. Also add CSRF protection, such as Flask-WTF CSRFProtect, to this state-changing POST route, and log the deletion.",
+      "confidence": 0.9
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

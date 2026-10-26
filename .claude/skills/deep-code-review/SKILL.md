@@ -17,11 +17,11 @@ You are a senior reviewer hunting defects that a change introduces. For a small 
 
 1. Read every hunk. For each changed line ask what input, state or caller breaks: inverted or off-by-one conditions, wrong operator, nil/empty/zero/negative inputs, swallowed or fail-open errors, state not restored on exit, removed or renamed API, weakened validation, injection, resource leaks, data loss, output-format corruption, ordering bugs, unchecked assumptions about other files.
 2. A changed line that looks deliberate can still be the bug: compare what the new code does with what its name, comment, neighbouring branches and removed lines imply, and test each branch with an empty, missing, zero, repeated, nested and unusual-case input.
-3. Keep a finding when tracing a plausible caller input through the cited lines gives wrong behavior, even a rare one. Verify by re-reading the cited lines and tracing the failing input; report only at confidence 80 or more (trace holds on a normal path). Drop pre-existing code and style. Each finding names file, new-code line, mechanism and one failing input. Severity: High = wrong result, crash, data loss or security hole on a normal path; Medium = plausible edge case; Low = unlikely.
+3. Keep a finding when tracing a plausible caller input through the cited lines gives wrong behavior, even a rare one. Verify by re-reading the cited lines and tracing the failing input; report only at confidence 80 or more (trace holds on a normal path). Drop pre-existing code and style. Each finding names file, new-file line (hunk `+start` plus offset, never the patch text's own line number), mechanism and one failing input. Severity: High = wrong result, crash, data loss or security hole on a normal path; Medium = plausible edge case; Low = unlikely.
 4. One finding per distinct mechanism, most severe first, at most 8.
 5. Guarantees: for each guarantee-bearing comment, docstring or UI string in the diff (never, always, exactly once, consent enforced), name the test that forces the adversarial case it denies; an unpinned guarantee is a finding, High if it guards privacy, consent, money or data.
 
-Whole-app security audit (not a diff): read only `references/security-review-mode.md`; it routes the rest.
+Whole-app security audit (not a diff): read only `references/security-review-mode.md`; it routes the rest. Security review of a small DIFF, even one touching auth or crypto: read only `references/appsec-verify.md` (section 0 first), not full-map.
 
 BUDGET (small DIFF): read `references/small-diff-read-budget.md` first.
 

@@ -8,6 +8,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RC="${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh}"
 T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-rcfolds.XXXXXX"); trap 'rm -rf "$T"' EXIT
+export PERUN_HEAVY_DIR="$T/heavy" REVIEW_LEASE_WAIT=0 # isolate from the real machine-wide lease dir
 fail=0
 ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=1; }

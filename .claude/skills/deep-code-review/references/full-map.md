@@ -186,6 +186,8 @@ applicable domains. Language footguns:
 | T | Multi-tenancy & isolation | `domain-t.md` (when one deployment serves multiple tenants) |
 | W | Workflows, jobs & scheduling | `domain-w.md` (when the target runs cron, queues, or multi-step workflows) |
 
+Also: `appsec-pentest.md` (scan a running local app), `supply-chain-check.md` (gate deploys on advisories).
+
 ---
 
 ## Severity rubric & gate

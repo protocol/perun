@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "src/Import/InvoiceImporter.php",
+      "line": 9,
+      "severity": "HIGH",
+      "category": "xxe_injection",
+      "description": "DOMDocument::loadXML() is called on a caller-supplied XML string with LIBXML_NOENT and LIBXML_DTDLOAD. LIBXML_NOENT substitutes external entities, so their contents are read into the document. LIBXML_DTDLOAD loads external DTDs. Together they enable XXE. The 'note' field returns textContent, and that field carries any resolved entity content back to the caller. This makes the XXE in-band, not blind.",
+      "exploit_scenario": "An attacker uploads an invoice such as `<!DOCTYPE x [<!ENTITY e SYSTEM \"file:///etc/passwd\">]><invoice><line sku=\"a\" qty=\"1\">&e;</line></invoice>`. The parser inlines the file's contents into the line element's text, and parse() returns them in 'note'. This allows arbitrary local file read, for example app config files and credentials. The same mechanism can be used for SSRF against internal services or cloud metadata endpoints through http:// entities. On older libxml or PHP versions, where external entity loading is not disabled by default, it can also expose other resources.",
+      "recommendation": "Remove LIBXML_NOENT and LIBXML_DTDLOAD. Reject documents that contain a DOCTYPE, for example by checking `$doc->doctype !== null` after loading with LIBXML_NONET, and throw an error in that case. On PHP < 8.0, also call libxml_disable_entity_loader(true) before parsing. Check the return value of loadXML() and handle parse errors.",
+      "confidence": 0.95
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

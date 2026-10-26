@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/export.py",
+      "line": 4,
+      "severity": "MEDIUM",
+      "category": "toctou_race_condition",
+      "description": "write_report() checks os.path.exists(path) and then calls open(path, 'w'). The check and the open are separate steps, so the file can change in between. open(..., 'w') follows symlinks and does not use O_EXCL. os.path.exists() also returns False for a dangling symlink. An attacker who can create files in the target directory, such as a shared export or temp directory, can plant a symlink at `path`. The symlink can be planted ahead of time as a dangling link, or created in the gap after the check. The privileged process then creates or truncates the symlink's target and writes report data into it.",
+      "exploit_scenario": "The export service runs with higher privileges than a local user, and the user can write to the export directory. The user creates a symlink at the expected report path pointing to a sensitive file, such as a config file, an authorized_keys file, or an application file that doesn't exist yet. The user does this before the call, as a dangling link, or in the window between exists() and open(). When write_report() runs, it writes or creates the symlink target. This lets the attacker overwrite or create arbitrary files with chosen or influenced content, which can lead to privilege escalation or integrity compromise.",
+      "recommendation": "Create the file atomically and refuse to follow symlinks. Use os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600) and wrap the descriptor with os.fdopen. Catch FileExistsError instead of pre-checking. Write into a directory only the service can access, and don't use a world-writable one.",
+      "confidence": 0.8
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 0,
+    "medium_severity": 1,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}
