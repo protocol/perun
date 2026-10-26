@@ -154,7 +154,7 @@ def _flow(branch, merged, k, minutes, limits, times):
     lines = []
     if merged and target and k and merged * 60 / minutes < target:
         lines.append(SLOW.format(r=merged * 60 / minutes, b=branch, t=target, k=k))
-    y = merged / trains(times()) if merged and floor else floor
+    y = merged / max(1, trains(times())) if merged and floor else floor
     if y < floor:
         lines.append(YIELD.format(y=y, f=floor))
     return "\n".join(lines) or None
@@ -186,7 +186,10 @@ def _all(cwd, probed, minutes, cap):
     def times():
         out = _run(["git", "log", "--first-parent", f"--since={minutes} minutes ago", "--format=%ct", "origin/" + b], cwd)
         return [int(x) for x in out.split()]
-    extra = _flow(b, merged, k, minutes, flow_limits(), times)
+    try:
+        extra = _flow(b, merged, k, minutes, flow_limits(), times)
+    except Exception:  # the flow alarms must never drop the stall and WIP lines
+        extra = None
     return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra) if x) or None
 
 

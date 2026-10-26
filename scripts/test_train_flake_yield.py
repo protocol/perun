@@ -35,14 +35,35 @@ class Rerun(unittest.TestCase):
         return t, t._gate(str(self.wt), "union"), out.getvalue()
 
     def test_rerun_pass_is_a_logged_flake(self):
-        t, why, out = self.gate("echo boom; exit 1", 'test "$PERUN_LOW_LOAD" = 1 && grep -q boom "$PERUN_VERIFY_OUT"')
+        t, why, out = self.gate("echo 'FAIL t1'; exit 1", 'test "$PERUN_LOW_LOAD" = 1 && grep -q "FAIL t1" "$PERUN_VERIFY_OUT" && echo "RERAN 1"')
         self.assertEqual(why, "")
         self.assertIn("FLAKE union", out)
         self.assertEqual(t.state["flakes"], ["union"])
 
+    def test_unparseable_failure_output_bisects(self):
+        counter = self.tmp / "n"
+        t, why, out = self.gate(f"echo x >> {counter}; echo boom; exit 1", "echo RERAN 1", retries=0)
+        self.assertEqual(why, "verify")
+        self.assertIn("rerun cannot prove", out)
+        self.assertNotIn("flakes", t.state)
+
+    def test_rerun_that_ran_zero_items_is_not_a_flake(self):
+        _, why, _ = self.gate("echo 'FAIL t1'; exit 1", "echo RERAN 0", retries=0)
+        self.assertEqual(why, "verify")
+        _, why, _ = self.gate("echo 'FAIL t1'; exit 1", "true", retries=0)  # exit 0, no RERAN line
+        self.assertEqual(why, "verify")
+
+    def test_third_flake_in_a_train_bisects(self):
+        a = SimpleNamespace(repo=None, state=str(self.tmp / "s2.json"), verify_cmd="echo 'FAIL t1'; exit 1", rerun_cmd="echo RERAN 1",
+                            count_cmd="", cap=None, retries=0, gate_backoff=0, backoff=0, timeout=60)
+        out = io.StringIO()
+        t = merge_train.Train(a, merge_train.default_runner, out, lambda s: None)
+        self.assertEqual([t._gate(str(self.wt), "u") for _ in range(3)], ["", "", "verify"])
+        self.assertIn("more than 2 flakes", out.getvalue())
+
     def test_rerun_fail_is_deterministic_and_skips_full_reruns(self):
         counter = self.tmp / "n"
-        t, why, out = self.gate(f"echo x >> {counter}; exit 1", "exit 1")
+        t, why, out = self.gate(f"echo x >> {counter}; echo 'FAIL t1'; exit 1", "exit 1")
         self.assertEqual(why, "verify")
         self.assertEqual(len(counter.read_text().split()), 1)  # no full re-runs after a reproduced red
         self.assertIn("deterministic (1/1", out)
@@ -73,6 +94,19 @@ class Flow(unittest.TestCase):
         out = lw._flow("main", 4, 0, 60, (0, 2), lambda: t)
         self.assertIn("1.3 PRs per landed train < floor 2", out)
         self.assertIsNone(lw._flow("main", 4, 0, 60, (0, 1), lambda: t))
+
+    def test_yield_with_no_trains_does_not_divide_by_zero(self):
+        self.assertIsNone(lw._flow("main", 2, 0, 60, (0, 2), lambda: []) and None)  # no raise
+        out = lw._flow("main", 1, 0, 60, (0, 2), lambda: [])
+        self.assertIn("1.0 PRs per landed train", out)
+
+    def test_flow_failure_keeps_stall_line(self):
+        def boom(*a):
+            raise ZeroDivisionError
+        orig = lw._flow
+        lw._flow = boom
+        self.addCleanup(setattr, lw, "_flow", orig)
+        self.assertIn("Landing stalled", lw._all(".", ("main", 0, 1, 1), 60, 0))
 
     def test_policy_keys(self):
         self.assertEqual(pp.validate({})["train_yield_floor"], 0)
