@@ -156,6 +156,14 @@ Read this when `testing-and-evals.md` routes here: a doc-comment promises a fall
   clock/seed, remove the shared state, await the real condition instead of `sleep`). A standing
   CI retry count `> 0` used to paper over flakes — rather than a bounded retry on a genuinely
   external flake with the rate tracked — is the finding.
+- **Reproduce a suspected flake under CPU throttling before calling it a flake.** "Flaky" is a conclusion, not an
+  observation: rerun the failing test under load it can lose to, e.g. an 8x CPU throttle through the browser
+  devtools protocol for a UI test, or a stress load (`stress-ng`, parallel busy loops) for any other. A failure that
+  reproduces on demand is a deterministic bug with a trigger, not noise; a failure that never reproduces under
+  throttling stays unexplained and is not closed. Typical root causes: a **readiness race** (the test acts before the
+  app or service is ready), **hydration before click** (the click lands on server-rendered markup before the handlers
+  attach), and **layout shift** (the target moves between locating it and acting on it). Fix by awaiting the real
+  condition, never by retrying.
 - **A fixed-duration `sleep(N)`-then-assert is a timing bet a busy CI lane loses — assert the
   observable readiness signal, not wall-clock duration.** The wait assumes N ms always suffices;
   under multi-lane CI (several jobs contending for the same host's CPU) the identical operation

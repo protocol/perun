@@ -14,6 +14,8 @@ whether perun_auto_update.py may re-apply a newer release tag in the background.
 up (never auto-merged); `auto_update_pr_base` (default empty = `origin/HEAD`) names the branch that PR targets and
 that the committed-version WARN compares against (a base missing on origin skips the PR). `review_gate` takes
 `warn|enforce|off` (default `warn`): whether review_gate.py blocks a merge with no independent review receipt.
+`lockfile_skip_review` takes `on|off` (default `off`): when `on`, review_gate.py `check --audit-clean` skips the separate review lane for a PR whose
+changed files are all lockfiles (the caller asserts the dependency audit diff is clean); any other file in the PR still needs a receipt.
 `outcome_guard` takes `off|warn|block` (default `warn`): whether outcome_claim_guard.py flags or blocks an unmeasured "fixed/faster"
 claim and a pipeline PR with no KEEP verdict; env `PERUN_OUTCOME_GUARD` overrides it. `outcome_guard_paths` (a JSON list of fnmatch
 globs, edit the file; default `[]` = the script's built-in workflow/hook/train/gate/CI globs) names the pipeline paths.
@@ -101,7 +103,7 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "wip_cap": 0, "background_guard": "warn"}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "wip_cap": 0, "background_guard": "warn", "lockfile_skip_review": "off"}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
@@ -124,7 +126,7 @@ def validate(raw: dict) -> dict:
             ok = v in ("off", "warn")
         elif k == "auto_update_pr_base":  # '' = origin/HEAD; else a plain branch name (no option-like or `..` names)
             ok = isinstance(v, str) and (v == "" or (re.fullmatch(r"[A-Za-z0-9._/-]+", v) is not None and v[0] not in "-/" and v[-1] != "/" and ".." not in v and "//" not in v and v != "HEAD"))
-        elif k in ("auto_update", "auto_update_pr", "auto_compact", "statusline", "spend_nudge"):
+        elif k in ("auto_update", "auto_update_pr", "auto_compact", "statusline", "spend_nudge", "lockfile_skip_review"):
             ok = v in ON_OFF
         elif k in DIMS:
             ok = v in MODES or (isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0)
