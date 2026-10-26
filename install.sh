@@ -236,8 +236,8 @@ if [[ "${GLOBAL_RULES}" -eq 1 ]]; then
   GR_SRC="${SCRIPT_DIR}/.claude/skills/agentic-delivery"
   GR_DIR="${HOME}/.claude/perun-rules"; GR_SET="${HOME}/.claude/settings.json"
   mkdir -p "${GR_DIR}"
-  for f in reply_cap decision_gate handback_cap subagent_start_inject; do cp "${GR_SRC}/scripts/${f}.py" "${GR_DIR}/${f}.py"; done
-  [[ -f "${GR_SET}" ]] || echo '{}' > "${GR_SET}"
+  for f in reply_cap decision_gate handback_cap subagent_start_inject lane_liveness; do cp "${GR_SRC}/scripts/${f}.py" "${GR_DIR}/${f}.py"; done
+  [[ -s "${GR_SET}" ]] || echo '{}' > "${GR_SET}"  # missing or 0-byte settings.json = {}
   GR_NEW="$(mktemp "${TMPDIR:-/tmp}/perun-gr.XXXXXX")"
   jq --argjson t "$(cat "${GR_SRC}/templates/global-rules.settings.json")" '
     def nm: .hooks[0].command | capture("(?<n>[a-z_]+\\.py)").n;
@@ -248,7 +248,7 @@ if [[ "${GLOBAL_RULES}" -eq 1 ]]; then
   if cmp -s "${GR_NEW}" "${GR_SET}" || [[ "$(jq -S . "${GR_NEW}")" == "$(jq -S . "${GR_SET}")" ]]; then
     rm -f "${GR_NEW}"; echo "global rules already installed in ${GR_SET}; scripts refreshed in ${GR_DIR}"
   else
-    cp "${GR_SET}" "${GR_SET}.bak.$(date +%Y%m%d%H%M%S)"; mv "${GR_NEW}" "${GR_SET}"
+    cp "${GR_SET}" "${GR_SET}.bak.$(date +%Y%m%d%H%M%S)"; cat "${GR_NEW}" > "${GR_SET}"; rm -f "${GR_NEW}"  # write through: keeps a symlinked settings.json
     echo "global rules merged into ${GR_SET} (backup saved); restart open sessions to load the hooks"
   fi
   exit 0

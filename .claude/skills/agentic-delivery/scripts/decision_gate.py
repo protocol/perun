@@ -5,15 +5,19 @@ Owner rule: before a question or plan reaches the owner, run an evil-twin attack
 This gate checks that a record EXISTS and is recent. It does not judge the reasoning; a record is a claim the owner can
 audit, not proof of quality. It never gates Bash, Edit or merges.
 
-A record is a `*.md` file in the decision dir (`PERUN_DECISION_DIR`, else `$XDG_CACHE_HOME|~/.cache`/perun/decisions),
+A record is a `*.md` file in the decision dir (`PERUN_DECISION_DIR`, else `$CLAUDE_PROJECT_DIR/.perun/decisions`, else
+`./.perun/decisions`: project-local so the Write tool can create it under sandbox or plan mode; keep `.perun/` git-ignored),
 modified within `PERUN_DECISION_MAX_MIN` minutes (30), holding two lines (idea-critic's verdict values):
     evil_twin: HOLD|REVISE|PASS_TO_USER <one-line reason>
     council: HOLD|REVISE|PASS_TO_USER <one-line reason>
-Missing, stale or malformed record: exit 2 with the block message below (fails closed, also on unparseable stdin).
-Stop event (same file, same record): a final reply that asks the owner to decide (a trailing question mark, "should I",
-"want me to", "which one", "please decide" and similar; fenced and quoted text ignored) is blocked once per turn unless
-a recent record exists. Message: run evil twin + council, decide yourself unless hard-gated (irreversible, spend,
-external, permission); a record may add a `hard_gated: <why>` line. A phrase list, not a classifier: a miss lets the reply through.
+PreToolUse (default event): missing, stale or malformed record: exit 2 with the block message below (fails closed, also
+on unparseable stdin).
+Stop event (same file, argument `stop`, same record): the FINAL sentence of the reply, if it asks the owner to decide
+(a trailing question mark, "should I", "want me to", "which one", "please decide" and similar; fenced and quoted text
+ignored; the same phrases earlier in the text are not matched), is blocked once per turn unless a recent record
+exists. Fails open on unparseable input and honors `stop_hook_active`. Message: run evil twin + council, decide
+yourself unless hard-gated (irreversible, spend, external, permission); a record may add a `hard_gated: <why>` line.
+A phrase list, not a classifier: a miss lets the reply through.
 Escape for the owner: `PERUN_DECISION_GATE=off` in the environment. Side effects: none. Tests: `--selftest`.
 """
 import json
@@ -29,7 +33,7 @@ ASK = re.compile(r"\b(?:should i|shall i|want me to|do you want|would you like|w
                  r"please (?:decide|choose|approve|confirm)|(?:need|needs|awaiting) (?:your|owner) (?:decision|approval)|your call)\b|\?\s*$", re.I)
 QUOTED = re.compile(r"(?s:```.*?(?:```|\Z))|`[^`\n]*`|^[ \t]*>[^\n]*", re.M)
 STOP_MSG = ("Run evil twin + council; decide yourself unless hard-gated (irreversible, spend, external, permission). "
-            "Your reply asks the owner to decide and no decision record from the last {m:g} minutes exists. Write a .md file in {d} with "
+            "Your reply asks the owner to decide and no decision record from the last {m:g} minutes exists. Use the Write tool to create {d}/decision.md with "
             "`evil_twin: HOLD|REVISE|PASS_TO_USER <reason>` and `council: HOLD|REVISE|PASS_TO_USER <reason>` (plus `hard_gated: <why>` if it is), "
             "then reply with the decision made, or the one hard-gated question. The gate checks the record exists, not its quality.")
 LINE = r"^[ \t]*{}:[ \t]*(HOLD|REVISE|PASS_TO_USER)\b"
@@ -37,7 +41,13 @@ LINE = r"^[ \t]*{}:[ \t]*(HOLD|REVISE|PASS_TO_USER)\b"
 
 def decision_dir():
     return os.environ.get("PERUN_DECISION_DIR") or os.path.join(
-        os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "perun", "decisions")
+        os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd(), ".perun", "decisions")
+
+
+def final_sentence(text):
+    """Last sentence of the last non-empty line: the part that is addressed to the owner."""
+    lines = [l for l in text.strip().splitlines() if l.strip()]
+    return re.split(r"(?<=[.!?])\s+", lines[-1].strip())[-1] if lines else ""
 
 
 def has_record(now=None):
@@ -61,7 +71,7 @@ def has_record(now=None):
 def block_message():
     return (f"Blocked: no decision record from the last {MAX_MIN:g} minutes. Before asking the owner or presenting a plan, "
             "run an evil-twin attack (skeptic, better-way, kill-criteria; see the idea-critic skill) and a council pass, "
-            f"then write a .md file in {decision_dir()} with two lines: "
+            f"then use the Write tool to create {os.path.join(decision_dir(), 'decision.md')} (any .md name; the Write tool makes the dir) with two lines: "
             "`evil_twin: HOLD|REVISE|PASS_TO_USER <reason>` and `council: HOLD|REVISE|PASS_TO_USER <reason>`. "
             "Then retry. Decide it yourself if neither verdict needs the owner. The gate checks the record exists, not its quality.")
 
@@ -77,7 +87,7 @@ def stop(data):
             sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
             from reply_cap import last_texts
             reply = last_texts(p)[0]
-        if not ASK.search(QUOTED.sub("", reply).strip()) or has_record():
+        if not ASK.search(final_sentence(QUOTED.sub("", reply))) or has_record():
             return 0
     except Exception:
         return 0
@@ -88,11 +98,15 @@ def stop(data):
 def main():
     if os.environ.get("PERUN_DECISION_GATE", "").lower() == "off":
         return 0
+    is_stop = "stop" in sys.argv[1:]
     try:
         data = json.load(sys.stdin)
+        data = data if isinstance(data, dict) else {}
     except Exception:
-        data = {}  # unparseable input: fail closed (treated as a gated tool call)
-    if data.get("hook_event_name") == "Stop":
+        if is_stop:
+            return 0  # a Stop hook must not trap a session on garbage input
+        data = {}  # PreToolUse: unparseable input fails closed (treated as a gated tool call)
+    if is_stop or data.get("hook_event_name") == "Stop":
         return stop(data)
     tool = data.get("tool_name", GATED[0])
     if tool not in GATED or has_record():
@@ -146,9 +160,24 @@ def _selftest():
     rec("b.md", good)
     res.append(("stop-ask-with-record-allowed", stop_run("Should I use the cache?")[0] == 0))
     res.append(("stop-off-switch", stop_run("Should I?", {**env, "PERUN_DECISION_GATE": "off", "PERUN_DECISION_DIR": tmp + "/none"})[0] == 0))
-    r = subprocess.run([sys.executable, __file__], input="not json", capture_output=True, text=True,
-                       env={**env, "PERUN_DECISION_DIR": tmp + "/none"})
-    res.append(("garbage-stdin-fails-closed", r.returncode == 2))
+    none = {**env, "PERUN_DECISION_DIR": tmp + "/none"}
+    r = subprocess.run([sys.executable, __file__], input="not json", capture_output=True, text=True, env=none)
+    res.append(("garbage-stdin-pretooluse-fails-closed", r.returncode == 2))
+    r = subprocess.run([sys.executable, __file__, "stop"], input="not json", capture_output=True, text=True, env=none)
+    res.append(("garbage-stdin-stop-fails-open", r.returncode == 0))
+    r = subprocess.run([sys.executable, __file__, "stop"], capture_output=True, text=True, env=none,
+                       input=json.dumps({"last_assistant_message": "Done. Should I start B?"}))
+    res.append(("argv-stop-without-event-name-blocks", r.returncode == 2))
+    res.append(("stop-which-one-midtext-allowed", stop_run("Which one did I pick? Picked A.\nMerged.", none)[0] == 0))
+    res.append(("stop-your-call-midtext-allowed", stop_run("Your call on naming was right. Merged PR 4.", none)[0] == 0))
+    res.append(("stop-final-which-one-blocks", stop_run("Two paths.\nWhich one do you prefer", none)[0] == 2))
+    pd = os.path.join(tmp, "proj")
+    os.makedirs(os.path.join(pd, ".perun", "decisions"))
+    open(os.path.join(pd, ".perun", "decisions", "x.md"), "w").write(good)
+    pe = {k: v for k, v in env.items() if k != "PERUN_DECISION_DIR"}
+    res.append(("project-local-record-allows", run("AskUserQuestion", {**pe, "CLAUDE_PROJECT_DIR": pd})[0] == 0))
+    c, m = run("AskUserQuestion", {**pe, "CLAUDE_PROJECT_DIR": tmp + "/empty"})
+    res.append(("block-names-exact-path", c == 2 and os.path.join(tmp, "empty", ".perun", "decisions", "decision.md") in m))
     for name, ok in res:
         print(f"{'PASS' if ok else 'FAIL'}  {name}")
     print(f"selftest: {sum(ok for _, ok in res)}/{len(res)} passed")

@@ -32,14 +32,32 @@ jq -e '[.hooks.UserPromptSubmit[].hooks[].command] | any(contains("reply_cap.py"
 jq -e '[.hooks.Stop[].hooks[].command] | any(contains("decision_gate.py"))' "$S" >/dev/null; ok $? "Stop decision_gate merged"
 jq -e '.hooks.PreToolUse[0].matcher == "AskUserQuestion|ExitPlanMode"' "$S" >/dev/null; ok $? "PreToolUse decision_gate merged"
 jq -e '(.hooks.SubagentStart | length) == 1 and (.hooks.SubagentStop | length) == 1' "$S" >/dev/null; ok $? "subagent hooks merged"
-for f in reply_cap decision_gate handback_cap subagent_start_inject; do [ -f "$H/.claude/perun-rules/$f.py" ] || { ok 1 "copied $f.py"; continue; }; done
-[ -f "$H/.claude/perun-rules/reply_cap.py" ] && [ -f "$H/.claude/perun-rules/decision_gate.py" ]; ok $? "scripts copied to ~/.claude/perun-rules"
+R="$H/.claude/perun-rules"; miss=0
+for f in reply_cap decision_gate handback_cap subagent_start_inject lane_liveness; do [ -f "$R/$f.py" ] || miss=1; done
+[ "$miss" -eq 0 ]; ok $? "all scripts (incl. lane_liveness) copied to ~/.claude/perun-rules"
+# RUN the installed copies from the temp HOME, as the hooks will (a missing sibling module would crash here)
+err="$(cd "$WORK" && HOME="$H" python3 "$R/handback_cap.py" </dev/null 2>&1 >/dev/null)"; rc=$?
+[ "$rc" -eq 0 ] && ! printf '%s' "$err" | grep -q 'ModuleNotFoundError\|Traceback'; ok $? "installed handback_cap.py runs: exit 0, no import crash"
+(cd "$R" && python3 -c 'import lane_liveness, handback_cap' 2>/dev/null); ok $? "installed handback_cap + lane_liveness import together"
+HOME="$H" python3 "$R/reply_cap.py" </dev/null >/dev/null 2>&1; ok $? "installed reply_cap.py runs on empty stdin"
+printf '{"hook_event_name":"SubagentStart"}' | HOME="$H" python3 "$R/subagent_start_inject.py" >/dev/null 2>&1; ok $? "installed subagent_start_inject.py runs"
+printf '%s' 'garbage' | HOME="$H" python3 "$R/decision_gate.py" stop >/dev/null 2>&1; ok $? "installed decision_gate.py stop: garbage stdin fails open"
+printf '{"tool_name":"AskUserQuestion"}' | (cd "$WORK" && HOME="$H" python3 "$R/decision_gate.py" 2>"$WORK/gate.err"); [ $? -eq 2 ] && grep -q "$WORK/.perun/decisions/decision.md" "$WORK/gate.err"; ok $? "installed decision_gate.py: blocks and names the exact project-local record path"
+mkdir -p "$WORK/.perun/decisions"; printf 'evil_twin: PASS_TO_USER x\ncouncil: PASS_TO_USER y\n' > "$WORK/.perun/decisions/decision.md"
+printf '{"tool_name":"AskUserQuestion"}' | (cd "$WORK" && HOME="$H" python3 "$R/decision_gate.py" >/dev/null 2>&1); ok $? "installed decision_gate.py: allows with a project-local record"
 before="$(jq -S . "$S")"; nbak="$(ls "$H/.claude" | grep -c 'settings.json.bak')"
 HOME="$H" bash "$ROOT/install.sh" --global-rules >/dev/null 2>&1
 [ "$(jq -S . "$S")" = "$before" ] && [ "$(ls "$H/.claude" | grep -c 'settings.json.bak')" = "$nbak" ]; ok $? "second run: settings unchanged, no extra backup"
 printf '%s\n' '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"python3 /x/reply_cap.py"}]}]}}' > "$S"
 HOME="$H" bash "$ROOT/install.sh" --global-rules >/dev/null 2>&1
 jq -e '[.hooks.Stop[].hooks[].command | select(contains("reply_cap.py"))] | length == 1' "$S" >/dev/null; ok $? "an existing reply_cap hook is not duplicated"
+# 0-byte settings.json is treated as {}; a symlinked settings.json is written through, link kept
+: > "$S"; HOME="$H" bash "$ROOT/install.sh" --global-rules >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] && jq -e '.hooks.Stop | length >= 2' "$S" >/dev/null; ok $? "0-byte settings.json is treated as {} and merged"
+mkdir -p "$WORK/real"; printf '{"model":"opus"}\n' > "$WORK/real/settings.json"; rm -f "$S"; ln -s "$WORK/real/settings.json" "$S"
+HOME="$H" bash "$ROOT/install.sh" --global-rules >/dev/null 2>&1
+[ -L "$S" ] && jq -e '.model == "opus" and (.hooks.Stop | length >= 2)' "$WORK/real/settings.json" >/dev/null; ok $? "symlinked settings.json: link kept, target merged"
+rm -f "$S"
 printf 'not json' > "$S"
 HOME="$H" bash "$ROOT/install.sh" --global-rules >/dev/null 2>&1; rc=$?
 [ "$rc" -ne 0 ] && [ "$(cat "$S")" = "not json" ]; ok $? "unparseable settings: fails, file untouched"
