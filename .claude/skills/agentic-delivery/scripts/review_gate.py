@@ -100,6 +100,25 @@ def has_evidence(pr: str, head: str = "", repo: str = "", review_dir: Path | Non
         return False
 
 
+LOCKFILES = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "Cargo.lock", "Gemfile.lock", "go.sum", "uv.lock", "composer.lock"}
+
+
+def lockfile_only(pr: str, head: str, repo: str = "") -> bool:
+    """True only when the PR's current head matches `head` and every file (and rename source) is a LOCKFILES name.
+    Fails closed: gh error, empty list, >=100 files (the gh list may be truncated) or a head mismatch is False."""
+    cmd = [os.environ.get("GH", "gh"), "pr", "view", pr, "--json", "files,headRefOid"] + (["--repo", repo] if repo else [])
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+        data = json.loads(out.stdout) if out.returncode == 0 else {}
+        files = data["files"]
+        if not _same_head(str(data["headRefOid"]), head) or not files or len(files) >= 100:
+            return False
+        paths = [p for f in files for p in (f["path"], f.get("previousFilename") or f["path"])]
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        return False
+    return all(os.path.basename(p) in LOCKFILES for p in paths)
+
+
 def _main(argv: list) -> int:
     ap = argparse.ArgumentParser(prog="review_gate.py")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -107,6 +126,7 @@ def _main(argv: list) -> int:
     c.add_argument("pr")
     c.add_argument("--head", required=True)
     c.add_argument("--repo", default="")
+    c.add_argument("--audit-clean", action="store_true")  # caller asserts the dependency audit diff is clean
     r = sub.add_parser("receipt")
     r.add_argument("pr")
     r.add_argument("--reviewer", required=True)
@@ -127,6 +147,13 @@ def _main(argv: list) -> int:
     except ValueError:
         mode = "warn"
     if mode == "off" or has_evidence(a.pr, a.head, a.repo):
+        return 0
+    try:
+        skip = perun_policy.load()["lockfile_skip_review"] == "on"
+    except ValueError:
+        skip = False
+    if skip and a.audit_clean and lockfile_only(a.pr, a.head, a.repo):
+        print(f"review_gate: #{a.pr} is lockfile-only with a clean audit diff; separate review lane skipped (lockfile_skip_review=on)", file=sys.stderr)
         return 0
     msg = (f"#{a.pr} has no independent deep-code-review DIFF pass + evil-twin receipt "
            f"(.perun/reviews/{a.pr}.json or a perun-review PR comment from a non-author reviewer)")

@@ -70,7 +70,7 @@ BANLIST_DIR="$WORK/pf" bash "$PF" "$WORK/pf/t" "$WORK/pf/b" >/dev/null 2>&1; ok 
 
 # --- pipe_mask_guard: test-runner pipes and |& are flagged ---
 pmg() { printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$1" | python3 "$SC/pipe_mask_guard.py" | grep -q additionalContext; }
-pmg 'pytest -q | tail' && pmg 'make ci |& tail' && pmg 'pnpm run lint | head' && pmg 'npm test 2>&1 | tee out.log' && ! pmg 'ls | grep foo' && ! pmg 'set -o pipefail; pytest | tail'
+pmg 'pytest -q | tail' && pmg 'make ci |& tail' && pmg 'pnpm run lint | head' && pmg 'npm test 2>&1 | tee out.log' && ! pmg 'ls | grep foo' && ! pmg 'set -o pipefail; pytest | tail'  # bash4-ok: quoted fixture text, not shell syntax
 ok $? "pipe_mask_guard: pytest/make/lint/tee pipes flagged; ls|grep and pipefail pass"
 
 

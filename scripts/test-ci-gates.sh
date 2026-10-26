@@ -92,6 +92,11 @@ if [ ! -f "$GATES" ]; then
   printf 'PRECONDITION FAIL: helper file not found: %s\n' "$GATES" >&2
   exit 1
 fi
+# Sharding (CI runs SHARD=i/3, one slice per job; unset runs everything): each slice is an `if _shard_on i; then` block
+# below, split at top-level case boundaries and balanced by measured wall time. Helper functions are cheap and
+# defined inside their own slice; a case that uses another slice's helper must live in the same slice.
+_shard_on() { [ -z "${SHARD:-}" ] || [ "${SHARD%/*}" = "$1" ]; }
+if _shard_on 1; then
 
 # ---------------------------------------------------------------------------
 # privacy — banlist hygiene and secret detection
@@ -2568,6 +2573,8 @@ if [ "$og_red_rc" -ne 0 ] && grep -q 'outside scope: web/app.css' "$WORK/og-focu
 else
   record 1 "dcr-gates opt-in: focus_gate fires outside an OPEN priority, rejects a non-owner record, passes once DONE (planted RED)"
 fi
+fi
+if _shard_on 2; then
 
 # ===========================================================================
 # Language-family load isolation (own lane; APPENDED AT THE END by
@@ -3227,6 +3234,8 @@ else
   record 1 "web isolation: FIRES when a parent index drops a sub-file's row (planted RED)"
 fi
 
+fi
+if _shard_on 1; then
 # ===========================================================================
 # dcr-gates opt-in reaper_lint (own lane; APPENDED AT THE END by convention),
 # on the optin-gates target above. Relative DCR_REAPER_LINT_PATHS entries
@@ -3263,6 +3272,8 @@ else
 fi
 rm -rf "$og/ops"
 
+fi
+if _shard_on 2; then
 # ===========================================================================
 # AppSec must-load isolation (own lane; APPENDED AT THE END by convention).
 # security-appsec.md is must-load for web, mobile, api / service, and
@@ -3437,6 +3448,8 @@ else
   record 1 "appsec pointer: A05 grep block names a path-traversal (CWE-22) sink line pointing to appsec-files.md"
 fi
 
+fi
+if _shard_on 1; then
 # dcr-gates opt-in source_scan_tests (own lane; APPENDED AT THE END by
 # convention), on the optin-gates target above. Relative
 # DCR_SOURCE_SCAN_LINT_PATHS entries resolve against the target's repo root
@@ -3479,6 +3492,8 @@ else
 fi
 rm -rf "$og/uitests"
 
+fi
+if _shard_on 2; then
 # ---------------------------------------------------------------------------
 # Doctrine pins: prose that must agree with the shipped mechanism it routes to
 # (task_ledger.py, surface_check.py) and with agentic-ceo's small-project
@@ -3953,6 +3968,10 @@ else
   record 1 "update-installed: infers flags and writes the marker when missing"
 fi
 
+fi
+if _shard_on 3; then
+# git identity exported mid-file (slice 2) that every later case inherits; repeated so slices 3 and 1b see it too
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 # test-train-scripts.sh SKIPs (never hangs) when pgrep/ps are unavailable: own per-feature file.
 if bash "$ROOT/scripts/test-no-hang-without-pgrep.sh" >"$WORK/nopgrep.log" 2>&1; then
   record 0 "train scripts: reap_own blocks SKIP and return when pgrep/ps are unavailable"
@@ -4058,6 +4077,10 @@ else
   record 1 "land-release: two fragment lanes land back-to-back with no rebump"; tail -8 "$WORK/land-release.log"
 fi
 
+fi
+if _shard_on 1; then
+# git identity exported mid-file (slice 2) that every later case inherits; repeated so slices 3 and 1b see it too
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 # PR-native review workflow template: own per-feature file (scripts/test-pr-review-workflow.sh), one case here.
 if bash "$ROOT/scripts/test-pr-review-workflow.sh" >"$WORK/pr-review-wf.log" 2>&1; then
   record 0 "perun-review.yml: least-privilege permissions, pull_request only, opt-in"
@@ -4464,6 +4487,7 @@ grep -qF 'Drive to the goal (first rule)' "$ROOT/$_lp" \
 grep -qF 'is such a grant for push and merge only' "$ROOT/commands/perun-run.md" || _dtg=0
 if [ "$_dtg" -eq 1 ]; then record 0 "drive-to-goal: rule, two spend modes and override present"; else record 1 "drive-to-goal: rule, two spend modes and override present"; fi
 
+fi
 # hermeticity sentinel (own lane, appended at the end by convention): nothing
 # above wrote outside $WORK. A regression here means some case dropped a
 # fixture into the real checkout instead of $WORK — exactly the kind of

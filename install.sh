@@ -8,6 +8,7 @@
 #   ./install.sh --with-gates [TARGET_DIR]
 #   ./install.sh --with-delivery --with-operating-layer [TARGET_DIR]
 #   ./install.sh --recommend [TARGET_DIR]
+#   ./install.sh --dry-run [other flags] [TARGET_DIR]   (writes nothing; lists what would be written)
 #
 # Default (agent-agnostic): copies the REVIEW skill into every common skill
 # root the major hosts discover, and writes/refreshes a root AGENTS.md pointer:
@@ -138,6 +139,9 @@ on re-install). Overlay skills are opt-in.
                        hooks into ~/.claude/settings.json (backup first; needs jq). Writes nothing
                        else and ignores TARGET. Already in a repo's operating layer? Use one or the other.
   --recommend          Inspect TARGET and print a recommended pack; no writes
+  --dry-run            Install into a throwaway empty directory and list the files it would write
+                       (vendored vs generated); TARGET is never touched. Existing files in TARGET would
+                       additionally be backed up or get a .new sibling.
   -h, --help           Show this help
 
 TARGET_DIR defaults to the current working directory.
@@ -174,6 +178,7 @@ NO_OPLAYER=0
 NO_AUTO_UPDATE=0
 GLOBAL_RULES=0
 RECOMMEND_ONLY=0
+DRY_RUN=0
 POSITIONAL=()
 TRACKER_PROJECT=""
 TRACKER="linear"
@@ -214,6 +219,7 @@ for arg in "$@"; do
     --global-rules) GLOBAL_RULES=1 ;;
     --full) WITH_DELIVERY=1; WITH_CRITIC=1; WITH_COMMS=1 ;;
     --recommend) RECOMMEND_ONLY=1 ;;
+    --dry-run) DRY_RUN=1 ;;
     --with-cursor) echo "note: --with-cursor is default now; ignoring." >&2 ;;
     -p|--portable) echo "note: --portable is default; ignoring (use --minimal / --claude-only to narrow)." >&2 ;;
     -h|--help) usage; exit 0 ;;
@@ -309,6 +315,24 @@ fi
 if [[ "${RECOMMEND_ONLY}" -eq 1 ]]; then
   exec python3 "${SCRIPT_DIR}/scripts/recommend-overlays.py" "${TARGET_DIR}"
 fi
+
+# Files this run writes are those newer than STAMP; the summary at the end lists them. --dry-run installs into a
+# throwaway empty dir (stdout muted, machine caches redirected into it) so the real TARGET is never touched.
+STAMP="$(mktemp "${TMPDIR:-/tmp}/perun-stamp.XXXXXX")"
+REAL_TARGET="${TARGET_DIR}"
+if [[ "${DRY_RUN}" -eq 1 ]]; then
+  SIM="$(mktemp -d "${TMPDIR:-/tmp}/perun-dry.XXXXXX")"
+  export XDG_CACHE_HOME="${SIM}.cache" DCR_NO_PROBE=1  # the sandbox probe writes under $HOME and calls the network
+  TARGET_DIR="${SIM}"
+  exec 3>&1 1>/dev/null
+fi
+cleanup_dry() {
+  rm -f "${STAMP}"
+  if [[ -n "${SIM:-}" && "${SIM}" == */perun-dry.* ]]; then
+    find "${SIM}" "${SIM}.cache" -depth -delete 2>/dev/null || true
+  fi
+}
+trap cleanup_dry EXIT
 
 SRC_REVIEW="${SCRIPT_DIR}/.claude/skills/${REVIEW_NAME}"
 if [[ ! -f "${SRC_REVIEW}/SKILL.md" ]]; then
@@ -759,16 +783,23 @@ LOCAL_FLAGS="${TARGET_DIR}/.claude/.dcr-install-flags.local"
 for a in "$@"; do
   case "${a}" in --with-operating-layer|--apply-operating-layer|--no-sandbox) printf '%s\n' "${a}" ;; esac
 done > "${LOCAL_FLAGS}"
-if [[ -s "${LOCAL_FLAGS}" ]]; then  # keep the local record out of git without touching a tracked .gitignore
+# Machine-local state never shows up as untracked in the target's git status: added to .git/info/exclude (idempotent),
+# never to a tracked .gitignore. Backups of settings.local.json, the uninstall record and .perun/ are per machine.
+git_exclude() {
+  local _ex _pre _pat
+  [[ "${DRY_RUN}" -eq 0 ]] || return 0  # the throwaway dir may sit inside some other repo: never touch its exclude file
   _ex="$(git -C "${TARGET_DIR}" rev-parse --git-path info/exclude 2>/dev/null || true)"
   [[ -z "${_ex}" || "${_ex}" == /* ]] || _ex="${TARGET_DIR}/${_ex}"
-  _pat="/$(git -C "${TARGET_DIR}" rev-parse --show-prefix 2>/dev/null || true).claude/.dcr-install-flags.local"
-  if [[ -n "${_ex}" ]] && ! grep -qxF "${_pat}" "${_ex}" 2>/dev/null; then
-    { mkdir -p "$(dirname "${_ex}")" && printf '%s\n' "${_pat}" >> "${_ex}"; } 2>/dev/null || true
-  fi
-else
-  rm -f "${LOCAL_FLAGS}"
-fi
+  _pre="/$(git -C "${TARGET_DIR}" rev-parse --show-prefix 2>/dev/null || true)"
+  for _pat in "$@"; do
+    _pat="${_pre}${_pat}"
+    if [[ -n "${_ex}" ]] && ! grep -qxF "${_pat}" "${_ex}" 2>/dev/null; then
+      { mkdir -p "$(dirname "${_ex}")" && printf '%s\n' "${_pat}" >> "${_ex}"; } 2>/dev/null || true
+    fi
+  done
+}
+git_exclude .claude/settings.local.json.bak.\* .claude/.perun-install.json .perun/
+if [[ -s "${LOCAL_FLAGS}" ]]; then git_exclude .claude/.dcr-install-flags.local; else rm -f "${LOCAL_FLAGS}"; fi
 # session_brief.py compares the installed version to this checkout's origin/main (machine-local, never committed).
 if [[ "${APPLY_OPLAYER}" -eq 1 ]]; then
   { mkdir -p "${XDG_CACHE_HOME:-${HOME}/.cache}/perun" && printf '%s\n' "${SCRIPT_DIR}" > "${XDG_CACHE_HOME:-${HOME}/.cache}/perun/source"; } 2>/dev/null || true
@@ -955,6 +986,32 @@ if [[ "${WITH_OPERATING_LAYER}" -eq 1 && "${APPLY_OPLAYER}" -eq 1 && -z "${PERUN
 fi
 if [[ -f "${PERUN_POLICY_FILE}" ]]; then POLICY_LINE="$(PERUN_POLICY="${PERUN_POLICY_FILE}" python3 "${POLICY_PY}" show)" || exit 2
 else POLICY_LINE="defaults (no .perun/policy.json)"; fi
+
+# Summary: every file this run wrote, split into vendored (copied verbatim from Perun) and generated (created for this repo).
+perun_summary() {
+  local roots=() r
+  for r in "${HOSTS[@]}" .perun .github .githooks scripts AGENTS.md; do [[ -e "${TARGET_DIR}/${r}" ]] && roots+=("${r}"); done
+  [[ ${#roots[@]} -gt 0 ]] || return 0
+  local list
+  list="$(cd "${TARGET_DIR}" && find "${roots[@]}" -type f -newer "${STAMP}" 2>/dev/null | LC_ALL=C sort | awk -F/ '
+    $2 == "skills" && NF >= 4 { c[$1 "/skills/" $3 "/"]++; next }
+    $2 == "skills" || /^(\.github\/workflows\/dcr-gates\.yml|scripts\/(dcr-gates|integrator-gate)\.sh|\.githooks\/pre-push)$/ { print "V  " $0; next }
+    { print "G  " $0 }
+    END { for (k in c) printf "V  %s (%d files)\n", k, c[k] }' | LC_ALL=C sort)"
+  echo
+  echo "Vendored (copied verbatim from Perun; commit them if you want the team to share them):"
+  printf '%s\n' "${list}" | grep '^V ' | cut -c4- | sed 's/^/  /' || true
+  echo "Generated (created for this repo; machine-local ones are in .git/info/exclude):"
+  printf '%s\n' "${list}" | grep '^G ' | cut -c4- | sed 's/^/  /' || true
+}
+
+if [[ "${DRY_RUN}" -eq 1 ]]; then
+  exec 1>&3
+  echo "DRY RUN: nothing was written to ${REAL_TARGET}. Simulated against an empty directory; files already in the target would be backed up or get a .new sibling."
+  perun_summary
+  exit 0
+fi
+perun_summary
 
 # Last three lines, plain English: what changed, the one next command, how to undo.
 echo "Policy: ${POLICY_LINE}"

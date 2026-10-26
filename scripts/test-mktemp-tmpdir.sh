@@ -6,7 +6,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Bare = mktemp, optional flags, then end of command (no template argument follows).
-BARE='mktemp( -[dqu]+)*[[:space:]]*($|[);|&}`])'
+BARE='mktemp( -[dqu]+)*[[:space:]]*($|[);|&}`])'  # bash4-ok: regex char class, not a pipe-ampersand redirect
 fail=0
 ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=1; }
