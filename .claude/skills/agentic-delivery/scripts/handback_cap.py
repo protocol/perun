@@ -144,6 +144,7 @@ STATUS_RE = re.compile(
 )
 # One handback line is a field, never prose: `key=value` (or `key: value`, optionally bulleted), a
 # `status | evidence | next` list, or one bare token. A sentence starts with a word that is none of these.
+LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")  # [text](url) counts as `text`
 FIELD_RE = re.compile(r"(?:[-*]\s+)?[A-Za-z][\w.-]*\s*[=:]\s*\S.*|[^|]+(?:\|[^|]+)+|\S+")
 
 
@@ -163,7 +164,7 @@ def _prose_lines(msg):
 def _shape(msg):
     """`(chars, lines, too_long)`: `too_long` is the BLOCKING cap (MAX_CHARS / MAX_LINES over the counted lines,
     see _counted; the whole message may not pass MAX_CHARS * COPY_FACTOR)."""
-    kept = _counted(msg) if msg else []
+    kept = [LINK_RE.sub(r"\1", ln) for ln in _counted(msg) if ln.strip()] if msg else []  # blank lines and link URLs are not prose
     chars, lines = len("\n".join(kept)), len(kept)
     return chars, lines, chars > MAX_CHARS or lines > MAX_LINES or len(msg) > MAX_CHARS * COPY_FACTOR
 

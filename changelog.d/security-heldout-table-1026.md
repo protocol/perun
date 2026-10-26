@@ -1,0 +1,2 @@
+### Added
+- `docs/security-heldout-table-1026/`: one table scoring every blind secrets and guard held-out corpus against the ported rival rules, with Perun rules as they stood at corpus authoring (the only evidence column) next to current main (in-sample), a pooled blind-at-authoring total with exact Clopper-Pearson intervals and an exact paired sign test, and `results.py` to regenerate it byte-identically (`scripts/test_security_heldout_table.py`).

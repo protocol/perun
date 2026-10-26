@@ -283,6 +283,35 @@ def train_gate_line(base: str, gh=_gh_json) -> str:
             "past the train; add it as a required check (references/merge-queue-worktrees.md)")
 
 
+MEM_MAX_LINES, MEM_MAX_BYTES = 150, 20 * 1024  # the harness truncates a longer MEMORY.md, silently losing the tail
+
+
+def memory_handoff_lines(project: str, memory: str | None = None, now: float | None = None) -> list:
+    """FAIL when the memory index (MEMORY.md) is over 150 lines or 20KB (the harness cuts it, lessons past the cut are lost);
+    WARN when `.perun/last-status-update` (mtime) is older than 24h; WARN when the newest `.claude/handoff*.md` (the one handoff_inject.py re-injects) is older than 24h. Absent files: no line."""
+    import time
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import handoff_inject
+    out = []
+    slug = str(Path(project).resolve()).replace(os.sep, "-")
+    mem = Path(memory or Path.home() / ".claude" / "projects" / slug / "memory" / "MEMORY.md")
+    if mem.is_file():
+        data = mem.read_bytes()
+        n = data.count(b"\n") + (not data.endswith(b"\n") and bool(data))
+        if n > MEM_MAX_LINES or len(data) > MEM_MAX_BYTES:
+            out.append(f"memory-index: FAIL: {mem} is {n} lines / {len(data)} bytes (max {MEM_MAX_LINES} / {MEM_MAX_BYTES}); "
+                       "the harness truncates it, so move detail into topic files and delete superseded entries")
+    h = handoff_inject.newest(project)
+    age = (now or time.time()) - h.stat().st_mtime if h else 0
+    if age > handoff_inject.MAX_AGE:
+        out.append(f"handoff: WARN: {h.name} is {int(age // 3600)}h old and is re-injected after every compaction; delete it or rewrite it from current state")
+    st = Path(project, ".perun", "last-status-update")  # touched by `date > .perun/last-status-update`; absent = not configured
+    if st.is_file() and (now or time.time()) - st.stat().st_mtime > handoff_inject.MAX_AGE:
+        out.append(f"status-update: WARN: last owner-facing status update was {int(((now or time.time()) - st.stat().st_mtime) // 3600)}h ago; "
+                   "post one at least daily and at every release, then run `date > .perun/last-status-update`")
+    return out
+
+
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(description="Per-item present/missing/could-not-check report "
                                                   "for the always-on operating layer.")
@@ -291,6 +320,7 @@ def main(argv: list | None = None) -> int:
     parser.add_argument("--skill-root", default=default_root)
     parser.add_argument("--selftest", action="store_true")
     parser.add_argument("--base", default="main", help="integration branch checked for the train-gate required status")
+    parser.add_argument("--memory", help="memory index file (default: the harness's per-project MEMORY.md)")
     parser.add_argument("--project", default=".", help="project root scanned for per-host sandbox status")
     args = parser.parse_args(argv)
     if args.selftest:
@@ -324,6 +354,11 @@ def main(argv: list | None = None) -> int:
     except Exception as e:  # advisory: never fail the self-check over a counter
         print(f"ceo-altitude: COULD_NOT_CHECK ({e})")
     print(train_gate_line(args.base))
+    try:
+        for line in memory_handoff_lines(args.project, args.memory):
+            print(line)
+    except Exception as e:  # advisory
+        print(f"memory-handoff: COULD_NOT_CHECK ({e})")
     warn = sandbox_gh_warn(args.settings)
     if warn:
         print(warn)
