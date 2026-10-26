@@ -10,6 +10,8 @@ A record is a `*.md` file in the decision dir (`PERUN_DECISION_DIR`, else `$CLAU
 modified within `PERUN_DECISION_MAX_MIN` minutes (30), holding two lines (idea-critic's verdict values):
     evil_twin: HOLD|REVISE|PASS_TO_USER <one-line reason>
     council: HOLD|REVISE|PASS_TO_USER <one-line reason>
+The default dir gets a self-ignoring `.perun/.gitignore` (`*`) when the gate runs. For ExitPlanMode the two lines may
+instead sit inside the plan text (`tool_input.plan`), since plan mode can deny the Write.
 PreToolUse (default event): missing, stale or malformed record: exit 2 with the block message below (fails closed, also
 on unparseable stdin).
 Stop event (same file, argument `stop`, same record): the FINAL sentence of the reply, if it asks the owner to decide
@@ -50,8 +52,27 @@ def final_sentence(text):
     return re.split(r"(?<=[.!?])\s+", lines[-1].strip())[-1] if lines else ""
 
 
+def has_lines(t):
+    return all(re.search(LINE.format(k), t, re.M | re.I) for k in ("evil_twin", "council"))
+
+
+def ensure_ignored(d):
+    """Make the default project-local dir self-ignoring (`.perun/.gitignore` = `*`): no repo edit, no untracked noise."""
+    if os.environ.get("PERUN_DECISION_DIR"):
+        return
+    try:
+        root = os.path.dirname(d)
+        os.makedirs(d, exist_ok=True)
+        g = os.path.join(root, ".gitignore")
+        if not os.path.exists(g):
+            open(g, "w").write("*\n")
+    except OSError:
+        pass
+
+
 def has_record(now=None):
     d, now = decision_dir(), now or time.time()
+    ensure_ignored(d)
     try:
         names = [os.path.join(d, f) for f in os.listdir(d) if f.endswith(".md")]
     except OSError:
@@ -63,7 +84,7 @@ def has_record(now=None):
             t = open(p, errors="ignore").read()
         except OSError:
             continue
-        if all(re.search(LINE.format(k), t, re.M | re.I) for k in ("evil_twin", "council")):
+        if has_lines(t):
             return True
     return False
 
@@ -73,7 +94,7 @@ def block_message():
             "run an evil-twin attack (skeptic, better-way, kill-criteria; see the idea-critic skill) and a council pass, "
             f"then use the Write tool to create {os.path.join(decision_dir(), 'decision.md')} (any .md name; the Write tool makes the dir) with two lines: "
             "`evil_twin: HOLD|REVISE|PASS_TO_USER <reason>` and `council: HOLD|REVISE|PASS_TO_USER <reason>`. "
-            "Then retry. Decide it yourself if neither verdict needs the owner. The gate checks the record exists, not its quality.")
+            "For ExitPlanMode you may instead put the same two lines inside the plan text itself (plan mode can deny the Write). Then retry. Decide it yourself if neither verdict needs the owner. The gate checks the record exists, not its quality.")
 
 
 def stop(data):
@@ -109,7 +130,8 @@ def main():
     if is_stop or data.get("hook_event_name") == "Stop":
         return stop(data)
     tool = data.get("tool_name", GATED[0])
-    if tool not in GATED or has_record():
+    plan = (data.get("tool_input") or {}).get("plan") if tool == "ExitPlanMode" else None
+    if tool not in GATED or (isinstance(plan, str) and has_lines(plan)) or has_record():
         return 0
     print(block_message(), file=sys.stderr)
     return 2
@@ -177,6 +199,16 @@ def _selftest():
     pe = {k: v for k, v in env.items() if k != "PERUN_DECISION_DIR"}
     res.append(("project-local-record-allows", run("AskUserQuestion", {**pe, "CLAUDE_PROJECT_DIR": pd})[0] == 0))
     c, m = run("AskUserQuestion", {**pe, "CLAUDE_PROJECT_DIR": tmp + "/empty"})
+    res.append(("block-self-ignores-dir", open(os.path.join(tmp, "empty", ".perun", ".gitignore")).read() == "*\n"))
+    plan_ok = "# Plan\nevil_twin: REVISE x\ncouncil: PASS_TO_USER y\n"
+    def plan_run(tool, plan):
+        r = subprocess.run([sys.executable, __file__], capture_output=True, text=True, env={**pe, "CLAUDE_PROJECT_DIR": tmp + "/empty"},
+                           input=json.dumps({"tool_name": tool, "tool_input": {"plan": plan}}))
+        return r.returncode, r.stderr
+    res.append(("plan-text-record-allows-exitplanmode", plan_run("ExitPlanMode", plan_ok)[0] == 0))
+    res.append(("plan-text-half-record-blocks", plan_run("ExitPlanMode", "evil_twin: HOLD x\n")[0] == 2))
+    res.append(("plan-text-not-accepted-for-askuserquestion", plan_run("AskUserQuestion", plan_ok)[0] == 2))
+    res.append(("block-says-plan-text-works", "inside the plan text" in plan_run("ExitPlanMode", "x")[1]))
     res.append(("block-names-exact-path", c == 2 and os.path.join(tmp, "empty", ".perun", "decisions", "decision.md") in m))
     for name, ok in res:
         print(f"{'PASS' if ok else 'FAIL'}  {name}")

@@ -36,7 +36,7 @@ R="$H/.claude/perun-rules"; miss=0
 for f in reply_cap decision_gate handback_cap subagent_start_inject lane_liveness; do [ -f "$R/$f.py" ] || miss=1; done
 [ "$miss" -eq 0 ]; ok $? "all scripts (incl. lane_liveness) copied to ~/.claude/perun-rules"
 # RUN the installed copies from the temp HOME, as the hooks will (a missing sibling module would crash here)
-err="$(cd "$WORK" && HOME="$H" python3 "$R/handback_cap.py" </dev/null 2>&1 >/dev/null)"; rc=$?
+err="$(cd "$WORK" && printf '{"hook_event_name":"SubagentStop","agent_id":"t1","agent_type":"general-purpose","cwd":"%s","last_assistant_message":"done | abc | next"}' "$WORK" | HOME="$H" python3 "$R/handback_cap.py" 2>&1 >/dev/null)"; rc=$?
 [ "$rc" -eq 0 ] && ! printf '%s' "$err" | grep -q 'ModuleNotFoundError\|Traceback'; ok $? "installed handback_cap.py runs: exit 0, no import crash"
 (cd "$R" && python3 -c 'import lane_liveness, handback_cap' 2>/dev/null); ok $? "installed handback_cap + lane_liveness import together"
 HOME="$H" python3 "$R/reply_cap.py" </dev/null >/dev/null 2>&1; ok $? "installed reply_cap.py runs on empty stdin"
