@@ -179,6 +179,9 @@ directories.
 - **Two sessions independently building overlapping tooling is itself the signal** the tool belongs in the repo:
   hand-synced copies drift from each other, and drift here is drift in the thing everyone trusted to say "safe to
   ship."
+- **A new or changed admission/throughput gate ships log-only for 2 runs before it enforces** (read what it would
+  have blocked, then flip it); security/correctness gates and owner-mandated rules enforce at once, and an existing
+  gate is never retro-relaxed to make a run pass.
 
 ## 6. Critical work only — spend tokens on the objective
 
