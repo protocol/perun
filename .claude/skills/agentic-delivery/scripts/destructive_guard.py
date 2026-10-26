@@ -93,6 +93,7 @@ import itertools
 import posixpath
 import re
 import shlex
+import signal
 import sys
 
 KW = ("{", "}", "if", "then", "else", "elif", "fi", "while", "until", "do", "done", "!", "coproc")
@@ -237,17 +238,54 @@ HOMESUB = r"(?:~|\$\{?HOME\}?)/."
 INFCMD = frozenset(("write", "query", "task", "auth", "user", "dashboard", "secret", "stack", "telegraf", "check", "rule", "endpoint", "label", "scraper", "notebook", "template", "config", "dbrp", "bucket", "org", "list", "create", "update", "find", "v1", "apply", "export"))
 TOPDIRS = frozenset(("/home", "/root", "/Users", "/bin", "/sbin", "/usr", "/etc", "/lib", "/lib64", "/boot", "/var", "/dev", "/sys", "/proc"))
 CYDEL = re.compile(r"\bdelete\b", re.I)
-CYMATCH = re.compile(r"\bmatch\s{0,20}(?:\w{1,64}\s{0,20}=\s{0,20})?\(\s{0,20}\w{0,64}\s{0,20}\)|,\s{0,20}\(\s{0,20}\w{0,64}\s{0,20}\)", re.I)
+CYNODE = r"\(\s{0,20}(?:\(\s{0,20}\w{0,64}\s{0,20}\)|\w{0,64})\s{0,20}\)"  # `(n)`, `()` or the redundantly parenthesised `((n))`
+CYMATCH = re.compile(r"\bmatch\s{0,20}(?:\w{1,64}\s{0,20}=\s{0,20})?" + CYNODE + "|,\\s{0,20}" + CYNODE, re.I)
 CYFILT = re.compile(r"[(\[]\s{0,20}\w{0,64}\s{0,20}(?::[\w`]|\{\s{0,5}\w{1,64}\s{0,5}:)")  # a label, type or property map inside a node or relationship pattern
-CYEND = re.compile(r"\b(?:with|return|set|remove|unwind|merge|create|foreach|order|limit|skip)\b", re.I)  # the pattern or predicate ends here
+CYEND = re.compile(r"\b(?:(?<!starts )(?<!ends )with|return|set|remove|unwind|merge|create|foreach|order|limit|skip)\b", re.I)  # the pattern or predicate ends here
+CYAND = re.compile(r"\band\b", re.I)
 CYOR = re.compile(r"\b(?:or|xor)\b", re.I)
-CYREF = re.compile(r"(?<![\w.])[A-Za-z_]\w*\.[A-Za-z_]\w*(?![\w(])|\w:\w|\)\s{0,5}<?-")  # a property, label or pattern predicate
 CYSKIP = re.compile(r"'(?:[^'\\]|\\.?)*(?:'|\Z)|\"(?:[^\"\\]|\\.?)*(?:\"|\Z)|//[^\n]*|/\*.*?(?:\*/|\Z)", re.S)  # strings and comments; an unterminated one runs to the end, so the scan stays linear
 CYSPLIT = re.compile(r"\b(match|where|delete|call)\b", re.I)
-CYWHEREBAD = re.compile(r"\b\d{1,20}\s{0,5}(?:=|<>|[<>]=?)\s{0,5}\d{1,20}\b|''\s{0,5}(?:=|<>)\s{0,5}''|(?<![\w.])(?:\d{1,20}|'')\s{1,5}in\b|\b(?:size|coalesce|length|exists)\s{0,5}\(|\bid\s{0,5}\(\s{0,5}\w{1,64}\s{0,5}\)\s{0,5}(?:>=\s{0,5}0|>\s{0,5}-)"
-                        r"|(?<![\w.])(\w{1,64}(?:\.\w{1,64}){0,3})\s{0,5}=\s{0,5}\1\b", re.I)  # a predicate every node passes
-CYNULL = re.compile(r"([\w.]{1,64})\s{1,5}is\s{1,5}null\b.{0,300}?\b\1\s{1,5}is\s{1,5}not\s{1,5}null|([\w.]{1,64})\s{1,5}is\s{1,5}not\s{1,5}null\b.{0,300}?\b\2\s{1,5}is\s{1,5}null", re.I | re.S)
 CYAPOC = re.compile(r"apoc\.(?:periodic|cypher)\.", re.I)
+
+
+SQLWHY = "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner, or for Cypher filter the delete with WHERE terms the guard can read: v.prop =|<>|<|>|STARTS WITH|IN literal or $param, v:Label, v.prop IS [NOT] NULL, id(v) or elementId(v) = or IN, a pattern predicate, joined by AND/OR (NOT only on those, no functions)"
+CYLIT = r"(?:-\s{0,3})?(?:\d{1,20}(?:\.\d{1,20})?(?:e[+-]?\d{1,3})?|(?:'')+|true|false|\$\w{1,64}(?:\.\w{1,64}){0,3})"  # a literal or a parameter (strings are already `''`; a doubled quote gives two)
+CYLIST = r"(?:\[\s{0,5}(?:" + CYLIT + r"(?:\s{0,5},\s{0,5}" + CYLIT + r"){0,200})?\s{0,5}\]|\$\w{1,64})"
+CYOPD = r"\w{1,64}(?:\.\w{1,64}){1,3}"  # `n.a`, `n.a.b`
+CYTERM = re.compile(r"(?:" + CYOPD + r"\s{0,5}(?:=|<>|<=|>=|<|>|=~)\s{0,5}" + CYLIT + "|" + CYOPD + r"\s{1,5}(?:starts\s{1,5}with|ends\s{1,5}with|contains)\s{1,5}" + CYLIT
+                    + "|" + CYOPD + r"\s{1,5}in\s{0,5}" + CYLIST + r"|\w{1,64}(?::\w{1,64}){1,5}|" + CYOPD + r"\s{1,5}is\s{1,5}(?:not\s{1,5})?null"
+                    + r"|(?:element)?id\s{0,5}\(\s{0,5}\w{1,64}\s{0,5}\)\s{0,5}=\s{0,5}" + CYLIT + r"|(?:element)?id\s{0,5}\(\s{0,5}\w{1,64}\s{0,5}\)\s{1,5}in\s{0,5}" + CYLIST + ")", re.I)
+CYPAT = re.compile(r"\(\s{0,5}\w{1,64}\s{0,5}(?::\w{1,64}\s{0,5}){0,5}\)\s{0,5}<?-[-\w\[\]:>{}$|()\s]{0,200}", re.I)  # a pattern predicate: `(n)--()`, `(n)-[:R]->(:L)`; no `*`: `(n)-[*0..]-()` matches n itself
+CYISN = re.compile(r"([\w.]{1,129})\s{1,5}is\s{1,5}(not\s{1,5})?null\b", re.I)
+
+
+CYKEY = re.compile(r"(?:element)?id\s{0,5}\(\s{0,5}\w{1,64}\s{0,5}\)|\w{1,64}(?:\.\w{1,64}){0,3}(?::\w{1,64}){0,5}", re.I)
+
+
+def _wfilter(seg):
+    """Allowlist: a WHERE filters only when it has no `NOT` (except `IS NOT NULL`) and no `XOR`, and every OR branch is an AND of simple terms (`v.p OP literal|$param`, `v:Label`, `v.p IS [NOT] NULL`,
+    `id(v)|elementId(v) =|IN literal|list|$param`, a pattern predicate without `*`) and no two OR branches touch the same operand (`n.a = 1 OR n.a <> 1`, `n.a IS NULL OR n.a = 1`, `n.id = 1 OR n.id = 2`
+    are refused; use `IN [..]`). Other functions, constant-vs-constant terms, `id()` ranges and property-vs-property comparisons are not filters."""
+    seg = re.sub(r"\s*\bdetach\s*$", "", seg, flags=re.I)
+    if re.search(r"\bnot\b(?!\s+null\b)|\bxor\b", seg, re.I):
+        return False
+    prev = set()
+    for b in CYOR.split(seg):
+        ops = set()
+        for t in CYAND.split(b):
+            t = t.strip()
+            if CYPAT.fullmatch(t) and not re.search(r"\b(?:not|xor|or|and|is|in|true|false)\b", t, re.I):
+                ops.add(re.sub(r"\s+", "", t.lower()))
+                continue
+            t = t.strip(" \t\r\n()")
+            if not CYTERM.fullmatch(t):
+                return False
+            ops.add(re.sub(r"\s+", "", CYKEY.match(t)[0].lower()))
+        if ops & prev:
+            return False
+        prev |= ops
+    return True
 
 
 def _cypher(t):
@@ -258,7 +296,7 @@ def _cypher(t):
     dl = [m.start() for m in CYDEL.finditer(t)]
     if dl and any(next((d for d in dl if d >= m.end()), 1 << 30) - m.end() <= 300 for m in CYAPOC.finditer(t)):
         return True
-    for st in CYSKIP.sub(lambda m: "''" if m[0][0] in "'\"" else " ", t).split(";"):
+    for st in re.sub(r"\s+", " ", CYSKIP.sub(lambda m: "''" if m[0][0] in "'\"" else " ", t)).split(";"):
         base = cur = False
         parts = CYSPLIT.split(st)
         for k in range(1, len(parts), 2):
@@ -267,8 +305,9 @@ def _cypher(t):
                 z = parts[k] + seg
                 last = max((x.end() for x in CYMATCH.finditer(z)), default=-1)  # unfiltered iff no `:Label` or `{k:` starts after the last bare pattern
                 base, cur = base or cur, last >= 0 and not any(f.start() >= last for f in CYFILT.finditer(z, last))
-            elif kw == "where" and not CYNULL.search(seg) and all(CYREF.search(b) and not CYWHEREBAD.search(b) for b in CYOR.split(seg)):
-                cur = False
+            elif kw == "where":
+                if parts[k - 1].count("(") <= parts[k - 1].count(")") and _wfilter(seg):  # a WHERE inside a call filters nothing
+                    cur = False
             elif kw == "delete" and (base or cur):
                 return True
     return False
@@ -298,13 +337,14 @@ def _findfar(x):
         or (any(p == d or p.startswith(d + "/") for d in SYSTREE) and not p.startswith("/usr/local/") and p != "/usr/local")
 
 
+ETCSYS = re.compile(r"/etc/(?:passwd|shadow|group|gshadow|sudoers|ssl|ld\.so|pam|fstab|host|resolv|nsswitch|login\.defs|security|systemd|init|rc|profile|environment|cron|ca-cert|alternatives|apt|dpkg|default|skel|localtime|selinux|udev|network|netplan|X11|modprobe|sysctl|mtab|issue|shells|machine-id)[^/]*(?:/|$)")  # system-owned /etc children; `/etc/myapp` is not
 SYSDIRS = ("/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc", "/var")
 
 
 def _frev(st, m):
     """`_revoke` for `find ... -exec chmod`: `go-rwx` of `/home` is routine hardening, so non-owner bits count only for `/` and the system directories and everything below them (`/etc/ssh`, `/etc/ssl/private` stay secret-file carve-outs)."""
     ps = [posixpath.normpath(re.sub("/+", "/", x)) for x in st]
-    return _revoke(m, not any(x.startswith("..") or p == "/" or (any(p == d or p.startswith(d + "/") for d in SYSDIRS) and not re.match(r"/etc/(?:ssh|ssl/private)(?:/|$)", p)) for x, p in zip(st, ps)))
+    return _revoke(m, not any(x.startswith("..") or p == "/" or (any(p == d or p.startswith(d + "/") for d in SYSDIRS) and not re.match(r"/etc/(?:ssh|ssl/private)(?:/|$)", p) and not (p.startswith("/etc/") and not ETCSYS.match(p))) for x, p in zip(st, ps)))
 
 
 def _corepkg(name, a, ph=None):
@@ -909,7 +949,7 @@ def _shred_ok(a):
 
 def _sqlfile(p):
     """`psql < FILE`: scan FILE when it is a regular file (first 256 KB; read-only), else judge its name."""
-    why = "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
+    why = SQLWHY
     if not os.path.isfile(p):
         return why if re.search(r"(?i)drop|truncate|destroy|purge|wipe|nuke", os.path.basename(p)) else ""
     try:
@@ -1450,7 +1490,7 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
         if r:
             return r
     if name in SQLCLI and not (name == "sqlite3" and ":memory:" in a and not re.search(r"attach|\.shell|\.system|\.read", " ".join(a), re.I)) and not _testsql(name, a) and any(_sqlhit(SQLCOMMENT.sub(' ', re.sub(r"^-[A-Za-z]", r"\g<0> ", t))) for t in a[:512]):  # first 512 args bound the scan; `-c'drop ...'` joins flag and text
-        return "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
+        return SQLWHY
     if name in SHELLS + ("eval",) and any(re.search(r"\b(curl|wget)\b", t) for t in a):
         return "remote script run through a shell. Download, read it, then run it"
     if INTERP.match(name):
@@ -1564,7 +1604,7 @@ def _feed(name, text):
     if name == "sqlite3" and _sqlite([text], 1):
         return _sqlite([text], 1)
     if name in SQLCLI and _sqlhit(SQLCOMMENT.sub(' ', text)):
-        return "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
+        return SQLWHY
     return ""
 
 
@@ -1654,15 +1694,86 @@ def _ansic(m):
     return shlex.quote(t) if t.isprintable() else m[0]
 
 
-MAXCMD, MAXLINES = 65536, 2000
+def _substs(body):
+    """Texts to vet for the unescaped `$(` and backtick substitutions of an unquoted heredoc body: from each start to the end of the body (no paren matching, so quotes, `case` and comments cannot hide the
+    rest). A backtick pair counts as one substitution."""
+    out, tick = [], False
+    for x in re.finditer(r"(\\*)(\$\(|`)", body):
+        if len(x[1]) % 2:
+            continue
+        if x[2] == "`":
+            tick = not tick
+            if not tick:
+                continue
+        out.append(body[x.end():])
+    return out
+
+
+DATAHD = re.compile(r"\s*(?:cat\s*(?:>>?\s*[\w./~-]+\s*)?|tee\s+(?:-a\s+)?[\w./~-]+\s*|git\s+commit\s+(?:-\S+\s+)*-F\s*-\s*)<<(-?)\s*(['\"]?)(\w+)\2\s*(?:>>?\s*[\w./~-]+\s*)?")
+
+
+def _nodata(cmd):
+    """`cmd` without the bodies of heredocs fed to a plain `cat`/`tee`/`git commit -F -`; a heredoc fed to anything else (`bash`, `python`) stays. An unterminated heredoc, or an unquoted one whose body expands `$(`/backticks, stays too."""
+    ls, out, i = cmd.split("\n"), [], 0
+    while i < len(ls):
+        out.append(ls[i])
+        m, i = DATAHD.fullmatch(ls[i]), i + 1
+        if m:
+            end = next((j for j in range(i, len(ls)) if (ls[j].lstrip("\t") if m[1] else ls[j]) == m[3]), None)
+            if end is not None and (m[2] or not re.search(r"\$(?:\\\n)?\(|`", "\n".join(ls[i:end]))):
+                i = end
+    return "\n".join(out)
+
+
+def _sshsplit(cmd):
+    """An edit of `sshd_config`, `sshd_config.d/*` or an `sshd_*` glob, by any command that has `sed|gsed|perl|awk|gawk|ex|vim|vi|ed` as a word and the file as another word (so no wrapper list is needed;
+    `ed` reads its script from the heredoc that follows), that sets a value `no`, where one edit names `PermitRootLogin` and another
+    `PasswordAuthentication|KbdInteractiveAuthentication|ChallengeResponseAuthentication`. Quote-aware: `;`, `|` inside a quoted script stay in their command."""
+    root = pw = False
+    ls = cmd.split("\n")
+    for n, line in enumerate(ls):
+        try:
+            lx = shlex.shlex(line, posix=True, punctuation_chars=True)
+            lx.whitespace_split = True
+            lx.commenters = ""
+            toks = list(lx)
+        except ValueError:
+            continue
+        cmds, cur = [], []
+        for t in toks:
+            if t and set(t) <= set(";&|()"):
+                cmds.append(cur)
+                cur = []
+            else:
+                cur.append(t)
+        for t in cmds + [cur]:
+            ws = [os.path.basename(y) for y in t]
+            if not any(w in ("sed", "gsed", "perl", "awk", "gawk", "ex", "vim", "vi", "ed") for w in ws) or not any(re.fullmatch(r"(?:.*/)?sshd_(?:config(?:\.d/\S*|\*)?|\*|\?+)", y) for y in t):
+                continue
+            sc = " ".join(y for y in t if not re.fullmatch(r"(?:.*/)?sshd_\S*", y))
+            if "ed" in ws and any("<<" in y for y in t):
+                sc += " " + "\n".join(ls[n + 1:])
+            if re.search(r"(?:(?<![\w-])|(?<=\\[ts]))no(?![\w-])", sc, re.I):
+                root |= re.search(r"PermitRootLogin|\bRootLogin", sc, re.I) is not None
+                pw |= re.search(r"PasswordAuthentication|KbdInteractiveAuthentication|ChallengeResponseAuthentication", sc, re.I) is not None
+    return root and pw
+
+
+MAXCMD, MAXLINES, MAXHARD = 65536, 2000, 10_000_000
 
 
 def check(cmd, _depth=0, _ph=None):
     """Return a one-line reason `cmd` is destructive, or '' (parse errors use the regex fallback).
 
     `_ph`: xargs placeholders inherited by a nested `sh -c` body."""
+    if _depth == 0 and len(cmd) > MAXHARD:
+        return f"command over {MAXHARD} characters cannot be vetted (fail closed). Split it or run it yourself"
     if _depth == 0 and (len(cmd) > MAXCMD or cmd.count("\n") > MAXLINES):
-        return f"command over {MAXCMD} characters or {MAXLINES} lines cannot be vetted (fail closed). Split it or run it yourself"
+        d = _nodata(cmd)  # a plain `cat >f`/`tee f`/`git commit -F -` heredoc body is data, not counted
+        if len(d) > MAXCMD or d.count("\n") > MAXLINES:
+            return f"command over {MAXCMD} characters or {MAXLINES} lines cannot be vetted (fail closed). Split it or run it yourself"
+    if _sshsplit(cmd):
+        return "sshd_config edits that turn off root login and password login can lock out every ssh user. Keep one login method on, or run the edits yourself with the `!` prefix"
     cmd = cmd.replace("\\\n", "")
     if _depth > MAXDEPTH:
         return _fallback(cmd)
@@ -1689,6 +1800,14 @@ def check(cmd, _depth=0, _ph=None):
         r = _feed(_head(pre), m.group(3)) or _remote(pre, m.group(3)) or (_feed("sh", m.group(3)) if re.search(r"\b(?:eval|(?:ba|z|da|k|a)?sh)\b[^\n]*(?:\$\(\s*cat\s*(?:\)|$)|`cat`)", pre) else "")  # eval "$(cat)" <<EOF
         if r:
             return r
+        if not m.group(1):  # an unquoted body expands `$(..)` and backticks: vet each substitution's text (to its quote-aware close, else to the end of the body)
+            subs = _substs(m.group(3))
+            if len(subs) > 64:
+                return "heredoc with over 64 command substitutions cannot be vetted (fail closed). Use a quoted tag (<<'EOF') or split it"
+            for x in subs:
+                r = check(x, _depth + 1)
+                if r:
+                    return r
         for w in WROTE.findall(pre + m.group(0).split("\n", 1)[0]):
             wr.setdefault(_np(w[0] or w[1]), []).append(m.group(3))
     cmd = _nocomment(_data(HEREDOC.sub(lambda m: m.group(0).split("\n", 1)[0], cmd)))
@@ -1887,10 +2006,21 @@ def selftest():
     print("destructive_guard selftest ok")
 
 
+TIMEOUT = 10  # seconds of wall clock before the hook gives up and blocks
+
+
+def _timeout(*_):
+    print(f"Blocked: destructive guard did not finish within {TIMEOUT}s, so the command was not vetted.", file=sys.stderr)
+    sys.exit(2)
+
+
 def main():
     if "--selftest" in sys.argv:
         return selftest() or 0
-    raw = sys.stdin.read()
+    if hasattr(signal, "SIGALRM"):  # fail closed if reading stdin or checking spins; no SIGALRM on Windows
+        signal.signal(signal.SIGALRM, _timeout)
+        signal.alarm(TIMEOUT)
+    raw = "" if sys.stdin.isatty() else sys.stdin.read()  # an interactive run must not hang
     try:
         data = json.loads(raw)
         cmd = (data.get("tool_input") or {}).get("command")
