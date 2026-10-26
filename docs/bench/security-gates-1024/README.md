@@ -6,8 +6,8 @@ Frozen synthetic corpora for the H5 (secret gate) and H8 (destructive-command gu
 |---|---|
 | secret-leaks.txt | 31 fake leaks in common provider formats, no PII |
 | secret-decoys.txt | 34 look-alikes that must not be flagged (includes the public AWS documentation example key) |
-| destructive-dangerous.txt | 46 dangerous command strings, including interpreter, IFS, brace, quote-split and wrapper tricks |
-| destructive-benign.txt | 45 benign command strings |
+| destructive-dangerous.txt | 91 dangerous command strings, including interpreter, IFS, brace, quote-split and wrapper tricks |
+| destructive-benign.txt | 63 benign command strings |
 
 Run: `python3 docs/bench/security-gates-1024/score.py` (offline, deterministic, nothing executed). It fails on hash drift against the SHA256 lines below. Rival rules are scored by `python3 -I docs/bench/security-gates-1024/rivals/score_rivals.py` (pins and gaps in `rivals/SOURCES.md`).
 
@@ -29,7 +29,7 @@ d718d24caf1112adcfccc4bce1ea94a5170bbe2b0512d3f42919bbb060382d16 destructive-ben
 |---|---|---|
 | Secret gate recall | 20/31 | 30/31 |
 | Secret gate false positives | 1/34 (AWS documentation example key) | 1/34 (same) |
-| Destructive guard blocked | 29/46 | 46/46 |
+| Destructive guard blocked | 29/46 | 46/46 (91/91 after wave 18 rows; 1/63 benign false positive: `shred -u ./acme/old.key.txt`, kept as a known FP) |
 | Destructive guard false positives | 0/45 | 0/45 |
 
 Rival rows (ported rules, same corpus, `rivals/score_rivals.py`):

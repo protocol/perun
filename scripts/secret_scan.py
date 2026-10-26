@@ -87,8 +87,15 @@ LINE_MAX = 4096  # a secret starting past 4 KB of one line (minified bundles) is
 
 # Lines that mark a match as a non-secret: documentation words, filler runs, Stripe test-mode and publishable keys, browser-exposed
 # env vars (NEXT_PUBLIC_), Mapbox public tokens, CSRF nonces. Applied to the matched text only (never the rest of the line), only by the gate (precise=True), never to the rival bench.
-PLACEHOLDER = re.compile(r"(?<![A-Za-z])(?:[Ee]xample|EXAMPLE)(?![a-z]|\.[a-z])|[A-Z0-9]EXAMPLE(?:KEY)?(?![A-Za-z0-9])|(?i:dummy|fake|placeholder|redacted|revoked|replace[_-]?me|changeme|x{8,}|0{10,}|[sp]k_test_|pk_live_|next_public_|\bpk\.eyJ|[cx]srf|sitekey(?![_-]?(?:secret|private))|(?:captcha|turnstile)[_-]?site[_-]?key(?![_-]?(?:secret|private))|\bcache[_-]?key\b|eyJyb2xlIjoiYW5vbiJ9)|(?<![A-Za-z])your[_-]|dXNlcm5hbWU6cGFzc3dvcmQ|dXNlcjpwYXNz|QWxhZGRpbjpvcGVuIHNlc2FtZQ")
+PLACEHOLDER = re.compile(r"(?<![A-Za-z])(?:[Ee]xample|EXAMPLE)(?![a-z]|\.[a-z])|[A-Z0-9]EXAMPLE(?:KEY)?(?![A-Za-z0-9])|(?i:dummy|fake|placeholder|redacted|revoked|replace[_-]?me|changeme|x{8,}|0{10,}|[sp]k_test_|pk_live_|next_public_|\bpk\.eyJ|sitekey(?![_-]?(?:secret|private))|(?:captcha|turnstile)[_-]?site[_-]?key(?![_-]?(?:secret|private))|\bcache[_-]?key\b|eyJyb2xlIjoiYW5vbiJ9)|(?<![A-Za-z])your[_-]|dXNlcm5hbWU6cGFzc3dvcmQ|dXNlcjpwYXNz|QWxhZGRpbjpvcGVuIHNlc2FtZQ")
 
+# A CSRF/XSRF token is per-request form state, not a credential; only a name that ENDS in the token name counts (csrf_password and example_password stay judged on their value).
+CSRFNAME = re.compile(r"(?i)[\w-]*(?:[cx]srf[_-]?token|csrfmiddlewaretoken)")
+
+
+def csrf_named(before, text):
+    """True when the identifier holding the match start (up to 40 chars before it, plus the match's leading word) ends in a CSRF token name."""
+    return bool(CSRFNAME.fullmatch(re.search(r"[\w-]*$", before[-40:]).group() + re.match(r"[\w-]*", text).group()))
 
 # A Google API key whose own line says it is a referrer-restricted public (browser) key is public by design; an unsigned JWT (empty signature) is not a credential.
 PUBKEY = re.compile(r"(?i)(?:#|//|--)[^\n]*?(?:\bpublic\b[^\n]*\b(?:restricted|referr?er)\b|referr?er[- ]restricted)")
@@ -163,6 +170,12 @@ EXTRA = [(i, re.compile(r), g, e) for i, r, g, e in [
     ("plaid-secret-assign", r"""(?i)\bplaid_(?:client_)?secret\w{0,10}['"]?\s*[=:]\s*['"]?([0-9a-f]{30})\b""", 1, 3.0),  # Plaid secrets are 30 hex characters
     ("ldap-dn-password", r"""\bldaps?://\w+=[^\s:/@]*:(?![^\s@/]*\*\*@)(?=[^\s@/]*\d)([^\s@/$<>{}%]{8,})@[\w.-]+""", 1, 3.0),  # ldap://cn=admin,dc=acme,dc=com:secret@host (the DN has no `/`; checked for placeholders on the password alone)
     ("redis-cli-auth", r"""(?i)\bredis-cli\b[^\n]*?\s-a\s+['"]?(?![$<{%*'"-])(?=[^'"\s]*\d)([^'"\s]{8,})""", 1, 3.0),  # redis-cli -a PASSWORD (cli-password only knows -p)
+    # held-out-12 additions
+    ("gcp-sa-private-key-id", r"""(?i)['"]type['"]\s*:\s*['"]service_account['"][^}]{0,600}?['"]private_key_id['"]\s*:\s*['"]([0-9a-f]{40})['"]""", 1, 3.0),  # key id of a service-account JSON (judged on the id alone: a project_id may say "example")
+    ("gcp-sa-private-key-id", r"""(?i)['"]private_key_id['"]\s*:\s*['"]([0-9a-f]{40})['"][^}]{0,600}?['"]type['"]\s*:\s*['"]service_account['"]""", 1, 3.0),  # the same with the key before the type
+    ("mysql-pwd-assign", r"""(?i)(?<![A-Za-z0-9])mysql_pwd\b['"]?\s*[=:]\s*['"]?(?![$<{%*'"])(?=[^'"\s]*\d)([^'"\s]{8,})""", 1, 3.0),  # MYSQL_PWD=..., the mysql client's password variable
+    ("google-refresh-token", r"(?<![\w/])1//0([A-Za-z0-9_-]{40,})(?![\w-])", 1, 3.5),  # Google OAuth refresh token (Firebase CLI, gcloud)
+    ("flyio-token", r"(?<![A-Za-z0-9])fm[12][ar]?_([A-Za-z0-9+/=_-]{40,})", 1, 3.5),  # Fly.io token (FlyV1 fm2_..., fm1_, fm1r_), under any name and without the gitleaks 100-char floor
 ]]
 
 
@@ -178,14 +191,14 @@ def gitleaks_rule(text, path="input.txt", precise=False):
             line = frag[frag.rfind("\n", 0, m.start()) + 1:frag.find("\n", m.end())]
             gs = [g for g in m.groups() if g]
             sec = m.group(sg) or "" if sg else (gs[0] if gs else m.group(0))
-            if "gitleaks:allow" in line or (precise and (PLACEHOLDER.search(m.group(0)) or (rid == "gcp-api-key" and pubkey_ok(frag[m.end():frag.find("\n", m.end())])) or (rid == "jwt" and sec.endswith(".")) or WORDSEC.fullmatch(sec.rpartition(":")[2]))): continue
+            if "gitleaks:allow" in line or (precise and (PLACEHOLDER.search(m.group(0)) or csrf_named(frag[:m.start()], m.group(0)) or (rid == "gcp-api-key" and pubkey_ok(frag[m.end():frag.find("\n", m.end())])) or (rid == "jwt" and sec.endswith(".")) or WORDSEC.fullmatch(sec.rpartition(":")[2]))): continue
             if ent and entropy(sec) <= ent: continue
             if any(a.hit(sec, m.group(0), line, path) for a in glob + als): continue
             out.append(rid); break
     xf = frag.replace("\\n", "\n")  # a literal backslash-n (JSON, logs, one-line fixtures) is a line break for the extra rules
     for rid, rx, g, ent in EXTRA if precise else ():
         for m in rx.finditer(xf):
-            if not PLACEHOLDER.search(m.group(g) if rid == "ldap-dn-password" else m.group(0)) and entropy(m.group(g)) > ent and not (g and IDENT.fullmatch(m.group(g))) and "gitleaks:allow" not in xf[xf.rfind("\n", 0, m.start()) + 1:xf.find("\n", m.end())]:
+            if not csrf_named(xf[:m.start()], m.group(0)) and not PLACEHOLDER.search(m.group(g) if rid in ("ldap-dn-password", "gcp-sa-private-key-id") else m.group(0)) and entropy(m.group(g)) > ent and not (g and IDENT.fullmatch(m.group(g))) and "gitleaks:allow" not in xf[xf.rfind("\n", 0, m.start()) + 1:xf.find("\n", m.end())]:
                 out.append(rid); break
     return out
 
@@ -208,7 +221,7 @@ def refilter(pat, files):
     for f in files:
         try: lines = pathlib.Path(f).read_text("utf-8", "replace").split("\n")
         except OSError: lines = None
-        if rx is None or lines is None or not any(rx.search(l) for l in lines) or any(not PLACEHOLDER.search(m.group(0)) and not (m.group(0).startswith("AIza") and pubkey_ok(l[m.end():])) for l in lines for m in rx.finditer(l)): print(f)
+        if rx is None or lines is None or not any(rx.search(l) for l in lines) or any(not (PLACEHOLDER.search(m.group(0)) or csrf_named(l[:m.start()], m.group(0))) and not (m.group(0).startswith("AIza") and pubkey_ok(l[m.end():])) for l in lines for m in rx.finditer(l)): print(f)
 
 
 def main(argv):

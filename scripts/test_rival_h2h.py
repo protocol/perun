@@ -21,8 +21,8 @@ for f, h in PINS.items():  # the gitleaks copy carries `@@` privacy markers; rem
 s = sr.scores()
 g, h, n = s["gitleaks"], s["hooks-mastery"], s["safety-net"]
 assert (g["rules"], len(g["missed"]), len(g["fp"])) == (221, 9, 0), g
-assert (len(h["missed"]), len(h["fp"])) == (33, 5), h
-assert (len(n["missed"]), len(n["unported"]), len(n["fp"]), len(n["fp_unported"])) == (15, 4, 0, 0), n
+assert (len(h["missed"]), len(h["fp"])) == (78, 5), h
+assert (len(n["missed"]), len(n["unported"]), len(n["fp"]), len(n["fp_unported"])) == (60, 4, 1, 0), n
 
 # hooks-mastery: every regex literal in the vendored file is in the port, and vice versa.
 src = (RIV / "hooks-mastery-pre_tool_use.py.txt").read_text()

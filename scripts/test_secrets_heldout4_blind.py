@@ -2,7 +2,7 @@
 """Pins the secrets held-out-4 scores (docs/bench/secrets-heldout4-1025).
 
 Blind rows (47/60 before this change) are pinned as the documented table in RESULTS.md; the gitleaks and banlist columns and the in-sample
-gate row (60/60, FP 1) are recomputed live by score.py. A moved number means a rule edit changed behavior: re-score and update RESULTS.md deliberately. Offline.
+gate row (60/60, FP 0 since secrets wave 9: the csrf_token decoy D034 is dropped by the identifier-prefix placeholder pass) are recomputed live by score.py. A moved number means a rule edit changed behavior: re-score and update RESULTS.md deliberately. Offline.
 """
 import hashlib, json, pathlib, subprocess, sys
 
@@ -17,7 +17,7 @@ for want in ("| Perun gate, before the precision review | f4e6b4bf3 | 47 | 0 |",
     assert want in res, want
 r = subprocess.run([sys.executable, "-I", str(H / "score.py")], capture_output=True, text=True, cwd=ROOT)
 assert r.returncode == 0, r.stdout + r.stderr
-for want in ("union: recall 60/60  FP 1/60", "banlist: recall 31/60  FP 3/60", "gitleaks: recall 43/60  FP 2/60"):
+for want in ("union: recall 60/60  FP 0/60", "banlist: recall 31/60  FP 3/60", "gitleaks: recall 43/60  FP 2/60"):
     assert want in r.stdout, (want, r.stdout)
-assert "false positives: ['D034']" in r.stdout
+assert "missed: []\n  false positives: []\nbanlist" in r.stdout  # union: no miss, no false positive (D034 was the last, closed in secrets wave 9)
 print("secrets held-out-4 pins: ok")
