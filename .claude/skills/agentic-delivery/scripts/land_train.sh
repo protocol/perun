@@ -13,6 +13,7 @@
 # BACKFILL_FILE as a backfill list, not skipped), BACKFILL_FILE (default ./changelog_backfill.txt),
 # PR_RE (sed -E regex with one group, default 'merge-train: #([0-9]+)'), GH (default gh),
 # LAND_CMD (default: gh pr merge N --merge --match-head-commit SHA; run via bash -c with $1=N $2=SHA),
+# A union that merge_train.py verify passed through its --rerun-cmd flake path is GREEN and lands here like any other (the flake is in its state file, not a blocker).
 # Policy: github_actions=off adds [skip ci] to the default merge (see perun_policy.py). review_gate=warn (default)
 # warns per PR without an independent review receipt, enforce skips it, off opts out (see review_gate.py).
 # WAIT_TRIES/WAIT_SECS (mergeable=UNKNOWN retry, default 10 x 8s).

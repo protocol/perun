@@ -152,6 +152,10 @@ SUBCOMMANDS
 
 FLAKY VS DETERMINISTIC
 ----------------------
+With --rerun-cmd a failing --verify-cmd is first re-run through that command alone (only the failing
+checks or specs, `nice -n 19`, env PERUN_LOW_LOAD=1 and PERUN_VERIFY_OUT=<the failed run's output>): exit 0
+is a flake (`FLAKE`, recorded in the state file's `flakes`, the union counts as green and the batch lands);
+a failure there means the red reproduces, skips the full re-runs below, and goes to bisection.
 A failing --verify-cmd is re-run up to --retries times on the same tree with
 exponential backoff (--gate-backoff seconds, default 5, doubling, capped at
 300 s: a test re-run needs no long cool-down). A re-run that passes is reported
@@ -619,14 +623,27 @@ class Train:
     def _gate(self, wt, label):
         """Run the gate (re-runs on failure) and the cap count once in `wt`: '' or 'verify' or 'cap C>N'."""
         attempts = self.a.retries + 1
-        for i in range(attempts):
-            if i:
-                self.sleep(self.delay(i, self.a.gate_backoff))
-            if self.run(["sh", "-c", self.a.verify_cmd], cwd=wt, ok=False, timeout=self.a.timeout)[0] == 0:
-                if i:
-                    self.say(f"FLAKY {label} passed on attempt {i + 1}/{attempts}")
+        rc, out, err = self.run(["sh", "-c", self.a.verify_cmd], cwd=wt, ok=False, timeout=self.a.timeout)
+        ok, rerun = rc == 0, getattr(self.a, "rerun_cmd", "")
+        if not ok and rerun:  # re-run only what failed, at low load, before any full re-run: a pass is a flake, not a bisect trigger
+            logf = os.path.join(os.path.dirname(wt), "verify.out")  # outside the worktree
+            with open(logf, "w") as f:
+                f.write(out + err)
+            low = ["env", "PERUN_LOW_LOAD=1", f"PERUN_VERIFY_OUT={logf}", "nice", "-n", "19", "sh", "-c", rerun]
+            if self.run(low, cwd=wt, ok=False, timeout=self.a.timeout)[0] == 0:
+                self.say(f"FLAKE {label} failed once, passed --rerun-cmd at low load; counted as a pass")
+                self.state.setdefault("flakes", []).append(label)
+                ok = True
+            else:
+                attempts = 1  # reproduced alone at low load: deterministic, skip the full re-runs
+        for i in range(1, attempts):
+            if ok:
                 break
-        else:
+            self.sleep(self.delay(i, self.a.gate_backoff))
+            ok = self.run(["sh", "-c", self.a.verify_cmd], cwd=wt, ok=False, timeout=self.a.timeout)[0] == 0
+            if ok:
+                self.say(f"FLAKY {label} passed on attempt {i + 1}/{attempts}")
+        if not ok:
             self.say(f"FAIL {label} deterministic ({attempts}/{attempts} attempts)")
             return "verify"
         if self.a.count_cmd:
@@ -1410,6 +1427,7 @@ def build_parser():
     sub.add_parser("plan", parents=[common])
     v = sub.add_parser("verify", parents=[common])
     v.add_argument("--verify-cmd", required=True, help="gate command run once in the union tree (sh -c)")
+    v.add_argument("--rerun-cmd", default="", help="re-runs only the failing checks (sh -c; env PERUN_LOW_LOAD=1, PERUN_VERIFY_OUT=<failed run output>), niced; exit 0 = flake, counted as a pass and logged, else the red is bisected")
     v.add_argument("--count-cmd", default="", help="prints one integer: a numeric ratchet count")
     v.add_argument("--cap", type=int, default=None, help="maximum allowed --count-cmd value")
     v.add_argument("--marker-key", default="size-budget-raise", help="trailer key recording a deliberate raise")

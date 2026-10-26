@@ -22,6 +22,12 @@ the count stops at 100. When that count exceeds policy `wip_cap` (integer >= 0; 
 "WIP: N open PRs > cap M. Drain (review, land) before spawning." It is independent of the stall line, warn-only, and
 shares the same throttle, cache and CLI (`check` exits 1 for either line).
 
+Flow alarms (opt-in, policy `merges_per_hour_target` and `train_yield_floor`, integer >= 0, default 0 = off): when something merged in
+the window, "Landing slow: R merged/h to <branch> < target T, K green PRs waiting." fires if merges per hour fall below the target while
+green PRs wait, and "Train yield low: Y PRs per landed train < floor F. Rerun the failing checks alone before bisecting." fires if the
+average PRs per landed train falls below the floor. A train is a run of first-parent commits less than TRAIN_GAP_S apart (a heuristic:
+land_train.sh merges back-to-back, a lone merge counts as a train of one). Both are warn-only and share the throttle, cache and CLI.
+
 Throttle: the remote is asked (one `git fetch` of the default branch, one `gh pr list`) at most once per 15 minutes
 per repo; the verdict is cached between probes, so a standing stall costs no network call; a prompt's line is emitted once per
 session and again when it changes or after 15 minutes; a spawn always gets it, and a payload without session_id is not deduped. The cache is one small JSON file per repo under $PERUN_LANDING_DIR, else <cache>/perun/landing-watchdog
@@ -48,9 +54,12 @@ THROTTLE_S = 15 * 60
 STAMP_TTL_S = 15 * 60  # re-show a standing line after this long: a compaction may have dropped it
 PRUNE_S = 7 * 24 * 3600
 DEFAULT_MIN = 60
+TRAIN_GAP_S = 300  # ponytail: a time gap stands in for a train marker; a recorded train id would be exact
 DEFAULT_MODE = "warn"
 MODES = ("off", "warn")
 WIP = "WIP: {n} open PRs > cap {c}. Drain (review, land) before spawning."
+SLOW = "Landing slow: {r:.1f} merged/h to {b} < target {t}, {k} green PRs waiting."
+YIELD = "Train yield low: {y:.1f} PRs per landed train < floor {f}. Rerun the failing checks alone before bisecting."
 LINE = "Landing stalled: 0 merged to {b} in {n} min, {k} green PRs waiting. Fix landing before starting new work."
 
 
@@ -122,6 +131,35 @@ def wip_cap():
         return 0
 
 
+def flow_limits():
+    """(merges_per_hour_target, train_yield_floor) from policy; 0 = off. An unreadable policy reads as off."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import perun_policy
+        pol = perun_policy.load()
+        return pol.get("merges_per_hour_target") or 0, pol.get("train_yield_floor") or 0
+    except Exception:  # fail open
+        return 0, 0
+
+
+def trains(times):
+    """Number of trains in a list of commit unix times: runs with gaps under TRAIN_GAP_S."""
+    t = sorted(times)
+    return len(t) and 1 + sum(b - a >= TRAIN_GAP_S for a, b in zip(t, t[1:]))
+
+
+def _flow(branch, merged, k, minutes, limits, times):
+    """Rate and yield lines, newline-joined, or None. `times` is a callable (git is asked only when a floor is set)."""
+    target, floor = limits
+    lines = []
+    if merged and target and k and merged * 60 / minutes < target:
+        lines.append(SLOW.format(r=merged * 60 / minutes, b=branch, t=target, k=k))
+    y = merged / trains(times()) if merged and floor else floor
+    if y < floor:
+        lines.append(YIELD.format(y=y, f=floor))
+    return "\n".join(lines) or None
+
+
 def cache_file(cwd):
     base = os.environ.get("PERUN_LANDING_DIR")
     if not base:
@@ -140,6 +178,16 @@ def _stall(branch, merged, k, n_open, minutes, cap):
     if cap and n_open > cap:
         lines.append(WIP.format(n=n_open, c=cap))
     return "\n".join(lines) or None
+
+
+def _all(cwd, probed, minutes, cap):
+    """Stall + WIP + flow lines for one probe result, newline-joined, or None."""
+    b, merged, k, n_open = probed
+    def times():
+        out = _run(["git", "log", "--first-parent", f"--since={minutes} minutes ago", "--format=%ct", "origin/" + b], cwd)
+        return [int(x) for x in out.split()]
+    extra = _flow(b, merged, k, minutes, flow_limits(), times)
+    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra) if x) or None
 
 
 def _event(data):
@@ -191,26 +239,26 @@ def _line(data, now=None):
     try:
         with open(path) as f:
             c = json.load(f)
-        if now - c["ts"] < THROTTLE_S and c.get("minutes") == minutes and c.get("cap") == cap:
+        if now - c["ts"] < THROTTLE_S and c.get("minutes") == minutes and c.get("cap") == cap and c.get("flow", [0, 0]) == list(flow_limits()):
             return c.get("line")
     except (OSError, ValueError, KeyError, TypeError):
         pass
     with open(path, "w") as f:  # stamp first: a failing or hanging remote is not retried on every prompt
-        json.dump({"ts": now, "minutes": minutes, "cap": cap, "line": None}, f)
-    line = _stall(*probe(cwd, minutes), minutes, cap)
+        json.dump({"ts": now, "minutes": minutes, "cap": cap, "flow": list(flow_limits()), "line": None}, f)
+    line = _all(cwd, probe(cwd, minutes), minutes, cap)
     with open(path, "w") as f:
-        json.dump({"ts": now, "minutes": minutes, "cap": cap, "line": line}, f)
+        json.dump({"ts": now, "minutes": minutes, "cap": cap, "flow": list(flow_limits()), "line": line}, f)
     return line
 
 
 def check(argv):
     minutes = int(argv[argv.index("--minutes") + 1]) if "--minutes" in argv else settings()[1]
     try:
-        b, merged, k, n_open = probe(os.getcwd(), minutes)
+        b, merged, k, n_open = probed = probe(os.getcwd(), minutes)
+        line = _all(os.getcwd(), probed, minutes, wip_cap())
     except Exception as e:
         print(f"landing unknown: {e}")
         return 2
-    line = _stall(b, merged, k, n_open, minutes, wip_cap())
     print(line or f"landing ok: {merged} merged to {b} in {minutes} min, {k} green PRs waiting")
     return 1 if line else 0
 
