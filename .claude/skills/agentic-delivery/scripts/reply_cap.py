@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""reply_cap.py — owner rule: a main-session chat reply is at most 3 non-empty lines and 500 characters.
+"""reply_cap.py — owner rule: chat replies max 3 lines, 500 chars.
 
 Two events, one file (the global install copies it alone):
 - UserPromptSubmit: prints the cap as one line, so the reply is short the first time.

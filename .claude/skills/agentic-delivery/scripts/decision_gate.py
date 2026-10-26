@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""decision_gate.py — PreToolUse gate on AskUserQuestion|ExitPlanMode: ask the owner only after a decision record.
+"""decision_gate.py — gate: ask the owner only after a decision record.
 
 Owner rule: before a question or plan reaches the owner, run an evil-twin attack and a council pass and record both.
 This gate checks that a record EXISTS and is recent. It does not judge the reasoning; a record is a claim the owner can
