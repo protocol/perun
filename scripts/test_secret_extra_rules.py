@@ -81,6 +81,15 @@ LIVE.update({"cli-flag-password-quoted": "sshpass -p '" + _pw + "' ssh h", "figm
              "passphrase-flag": "gpg --passphrase " + _pw + " -d f", "tf-variable-secret-default": 'variable "db_password" {\\n  default = "' + _pw + '"\\n}',
              "cfn-noecho-default": "P:\\n  NoEcho: true\\n  Default: " + _pw, "securestring-plaintext": 'ConvertTo-SecureString "' + _pw + '" -AsPlainText -Force',
              "named-token-literal": 'const apiToken = "tk_' + tok("w12e", 40) + '"'})
+# Rules added after held-out-16 (bypass variants and review fixes: test_secret_extra_rules_w14.py).
+_a, _b = tok("w14a", 30), tok("w14b", 18)
+_h = hashlib.md5(b"u").hexdigest(); _u = "-".join([_h[:8], _h[8:12], _h[12:16], _h[16:20], _h[20:]])
+LIVE.update({"redis-requirepass": "requirepass " + _a, "mosquitto-password-flag": "mosquitto_pub -h h -P " + _b, "sql-password-literal": "CREATE USER app WITH PASSWORD '" + _b + "';",
+             "pwd-literal": "db.createUser({pwd:'" + _b + "'})", "plist-secret-string": "<key>ACMEApiKey</key>\\n<string>" + _a + "</string>", "clojure-secret-def": '(def db-pass "' + _b + '")',
+             "erlang-secret-tuple": '{api_key, <<"' + _a + '">>}', "proxy-header-secret": "proxy_set_header X-Api-Key " + _a + ";", "setenv-secret": "SetEnv ACME_SECRET " + _a,
+             "az-login-password": "az login --service-principal -u a -p " + _a, "private-key-id-bare": "# private_key_id " + hashlib.sha1(b"w14").hexdigest(),
+             "cfn-param-default-secret": "  DbPassword:\\n    Type: String\\n    Default: " + _b, "netrc-bare-password": "password " + _b + "  # .netrc",
+             "tf-variable-secret-id-default": 'variable "secret_id" { default = "' + _u + '" }'})
 LIVE["password-assign"] = "DB_PASS" "WORD=" + tok("pa", 11) + "!047"
 LIVE["password-env-netrc"] = "ENV ADMIN_PASS" "WORD " + tok("pe", 11) + "!047"
 LIVE["conn-string-password"] = "jdbc:sqlserver://h:1433;user=jane;pass" "word=" + tok("cp", 16)

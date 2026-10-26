@@ -56,8 +56,9 @@ GOOD = [
 fail = []
 import time
 for name, blob in {"dyn": "$x " * 8000, "word": "a" * 25000, "colon": ":" * 25000}.items():
-    t0 = time.perf_counter(); dg.check(blob); dt = time.perf_counter() - t0
-    if dt > 0.05:
+    # best of 3 against 100 ms: a quadratic path takes seconds here, while one noisy CI sample hit 50 ms on linear code
+    dt = min(t1 - t0 for t0, _, t1 in [(time.perf_counter(), dg.check(blob), time.perf_counter()) for _ in range(3)])
+    if dt > 0.1:
         fail.append(f"guard slow on 25KB {name}: {dt * 1000:.0f} ms")
 for c in BAD:
     if not dg.check(c):
