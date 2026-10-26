@@ -274,6 +274,8 @@ GATE_CONTEXT = "perun/train-gate"
 GREEN_CONCLUSIONS = {"success", "neutral", "skipped"}
 PR_LIMIT = 200
 MAX_BACKOFF = 300
+EMPTY_BLOBS = {"", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",  # git's empty blob, sha1 and sha256 object formats
+               "473a0f4c3be8a93681a267e3b1e9a7dcda1185436fe141f7749120a303721813"}
 PENDING = {"queued", "in_progress", "pending", "waiting", "requested"}  # a check run that has not completed
 MAX_GRANT_DAYS = 30  # a class keystone grant may run at most this long
 GRANTS_PATH = ".claude/KEYSTONE-GRANTS"  # the only file keystone grants are read from
@@ -609,8 +611,9 @@ class Train:
                       f"+refs/pull/{number:d}/head:{ns}/carry-{number}"])
             for head in (old, new):
                 mb = self.run(["git", "merge-base", head, f"{ns}/carry-base"])[1].strip()
-                diff = self.run(["git", "diff", "--binary", f"{mb}..{head}"])[1]
-                ids.append(hashlib.sha256(diff.encode("utf-8", "surrogateescape")).hexdigest() if diff else "")
+                # hashed by git on raw bytes: the runner decodes text with universal newlines, which would fold CRLF edits
+                h = self.run(["sh", "-c", 'git diff --binary "$1" | git hash-object --stdin', "diff-hash", f"{mb}..{head}"])[1].strip()
+                ids.append("" if h in EMPTY_BLOBS else h)  # a failed or empty diff hashes the empty blob: never carries
         except ForgeError:
             return False
         return bool(ids[0]) and ids[0] == ids[1]
@@ -901,19 +904,19 @@ class Train:
                 self.save()
                 raise Halt(f"#{m['number']} not merged ({why}); {names(members[i + 1:]) or 'no members'} "
                            "left unmerged: re-plan and re-verify")
-            try:
-                new = self.fetch()[0]
-            except ForgeError as exc:  # the PR already landed: never leave it listed as unmerged
-                self.say(f"MERGED #{m['number']} {m['head'][:7]} -> {self.a.base}@unverified grant={clean(self.a.grant)}")
-                self.state["members"] = []
-                self.save()
-                raise Halt(f"#{m['number']} landed; base unverified ({exc}); "
-                           f"{names(members[i + 1:]) or 'no members'} left unmerged: re-plan and re-verify") from exc
-            except Cancelled:  # cancelled after the PR landed: record it, keep the rest, then stop
-                self.say(f"MERGED #{m['number']} {m['head'][:7]} -> {self.a.base}@unverified grant={clean(self.a.grant)}")
-                self.state["members"] = members[i + 1:]
-                self.save()
-                raise
+            cancelled = False
+            while True:
+                try:
+                    new = self.fetch()[0]
+                    break
+                except Cancelled:  # the PR already landed: finish its bookkeeping (cancel file consumed), stop after it
+                    cancelled = True
+                except ForgeError as exc:  # the PR already landed: never leave it listed as unmerged
+                    self.say(f"MERGED #{m['number']} {m['head'][:7]} -> {self.a.base}@unverified grant={clean(self.a.grant)}")
+                    self.state["members"] = []
+                    self.save()
+                    raise Halt(f"#{m['number']} landed; base unverified ({exc}); "
+                               f"{names(members[i + 1:]) or 'no members'} left unmerged: re-plan and re-verify") from exc
             parents = self.run(["git", "rev-list", "--parents", "-n", "1", new])[1].split()[1:]
             if parents != [prev, m["head"]]:
                 self.state["members"] = []
@@ -927,6 +930,8 @@ class Train:
             self.save()
             self.say(f"MERGED #{m['number']} {m['head'][:7]} -> {self.a.base}@{new[:7]} grant={clean(self.a.grant)}"
                      + (f" PARTIAL-PASS unchecked={clean(','.join(m['partial']), 120)} kill={pp.KILL}" if m.get("partial") else ""))
+            if cancelled:
+                raise Cancelled
             prev = new
         return OK
 
@@ -1611,6 +1616,7 @@ class FakeForge:
         self.bodies = []  # merge commit bodies written by `gh pr merge --body`
         self.based, self.udiffs, self.update_fail = {}, {}, set()  # refresh / dupes scenarios
         self.statuses, self.status_fail = [], False  # gate-status POST paths; simulate a rejected post
+        self.ls_stale = 0
         self.dpid = {}  # head -> patch-id of merge-base..head (receipt carry)
 
     def base(self):
@@ -1664,6 +1670,9 @@ class FakeForge:
             now = {"refs/heads/main": self.base(),
                    **{f"refs/pull/{n}/head": self.pushed.get(n, p["head"]) for n, p in self.prs.items()}}
             now.update(self.remote_override)
+            if self.ls_stale:  # report a stale base this many times, so a fetch retries (and backs off)
+                self.ls_stale -= 1
+                now["refs/heads/main"] = "STALE"
             return 0, "".join(f"{now[r]}\t{r}\n" for r in a[3:] if now.get(r)), ""
         if a[:3] == ["git", "rev-parse", "HEAD^{tree}"]:  # same start + same merged members = same tree
             t = self.trees[cwd]
@@ -1692,8 +1701,8 @@ class FakeForge:
         if a[:2] == ["sh", "-c"] and cwd is None and a[3] == "patch-id":
             head = a[-1].split("..")[1]
             return 0, "".join(f"{pid} {head}\n" for pid in self.pids.get(head, [])), ""
-        if a[:3] == ["git", "diff", "--binary"]:  # receipt carry: raw diff text of merge-base..head
-            return 0, self.dpid.get(a[3].split("..")[1], ""), ""
+        if a[:2] == ["sh", "-c"] and cwd is None and a[3] == "diff-hash":  # receipt carry: hash of merge-base..head raw diff
+            return 0, self.dpid.get(a[-1].split("..")[1], "") + "\n", ""
         if a[:2] == ["sh", "-c"] and cwd is None and a[3] == "keystone-contains":
             return (0 if a[4] in self.contains else 1), "", ""
         if a[:4] == ["git", "show", "-s", "--format=%cI"]:
@@ -2653,7 +2662,7 @@ def _selftest() -> int:
 
         control = plan_out([pend], "+x = 1\n", "+x = 1\n")  # same setup as the negatives, equal diff: carries
         changed = plan_out([pend], "+x = 1\n", "+x = 2\n")  # a real change, not a base-merge-only move
-        spaced = plan_out([pend], "+x = 1\n", "+x = 1 \n")  # whitespace-only change: a patch-id would match, raw diff does not
+        spaced = plan_out([pend], "+x = 1\n", "+x = 2\n")  # whitespace-only edits hash differently too (real git: carry_hashes_raw_bytes)
         red = plan_out([_run("ci", "failure")], "+x = 1\n", "+x = 1\n")  # own red check: never carried
         mixed = plan_out([pend, _run("lint", "failure")], "+x = 1\n", "+x = 1\n")  # pending sorts first, red still blocks
         return ("CARRIED h1->h1b #1" in control and "ELIGIBLE #1 h1b" in control
@@ -2661,6 +2670,110 @@ def _selftest() -> int:
                 and "CARRIED" not in spaced and "SKIP #1 check ci=in_progress" in spaced
                 and "CARRIED" not in red and "SKIP #1 check ci=failure" in red
                 and "CARRIED" not in mixed and "SKIP #1" in mixed), (control, changed, spaced, red, mixed)
+
+    def tripwire(f, buf, suffix, when, act=lambda: None):
+        """Runner wrapping `f`: the first call matching `when(args)` writes `<run-id><suffix>` into the state dir and runs `act`."""
+        done = []
+
+        def runner(args, cwd=None, timeout=None):
+            rc = f(args, cwd=cwd, timeout=timeout)
+            if not done and when(args):
+                done.append(1)
+                open(os.path.join(tmp, re.search(r"RUN (\S+)", buf.getvalue()).group(1) + suffix), "w").close()
+                act()
+            return rc
+        return runner
+
+    def merge_state(f, st, trip=None):
+        """Run `merge --apply` on a recorded 2-member union; with `trip` = (suffix, when, act) a file lands mid-run."""
+        buf = io.StringIO()
+        runner = tripwire(f, buf, *trip) if trip else f
+        rc = run(["merge", "--apply", "--grant", "g", "--base", "main", "--state", os.path.join(tmp, st), "--backoff", "5"],
+                 runner=runner, out=buf, sleep=f.sleeps.append)
+        with open(os.path.join(tmp, st)) as fh:
+            rec = json.load(fh)
+        return rc, buf.getvalue(), [m["number"] for m in rec["members"]], [c for c in f.calls if c[:3] == ["gh", "pr", "merge"]]
+
+    def cancel_after_merge_records_it_and_keeps_the_rest():
+        def stale(f):
+            return lambda: setattr(f, "ls_stale", 1)  # the post-merge fetch must retry, i.e. wait (a cancel point)
+        f = FakeForge(2)
+        st = verified(f, "cm.json")
+        rc, out, left, merges = merge_state(f, st, (".cancel", lambda a: a[:3] == ["gh", "pr", "merge"], stale(f)))
+        g = FakeForge(2)  # control: same flow with no cancel file lands both
+        st2 = verified(g, "cm2.json")
+        rc2, out2, left2, merges2 = merge_state(g, st2, (".nope", lambda a: a[:3] == ["gh", "pr", "merge"], stale(g)))
+        return (rc == OK and "MERGED #1" in out and "MERGED #2" not in out and "CANCELLED" in out and left == [2]
+                and len(merges) == 1 and rc2 == OK and "MERGED #2" in out2 and left2 == [] and len(merges2) == 2), (out, left, out2)
+
+    def cancel_at_pre_merge_poll_calls_no_merge():
+        f = FakeForge(2)
+        st = verified(f, "cp.json")
+        rc, out, left, merges = merge_state(f, st, (".cancel", lambda a: a[:4] == ["gh", "api", "-X", "POST"]))
+        g = FakeForge(2)  # control: no cancel, the same members merge
+        st2 = verified(g, "cp2.json")
+        rc2, out2, left2, merges2 = merge_state(g, st2, (".nope", lambda a: a[:4] == ["gh", "api", "-X", "POST"]))
+        return (rc == OK and "CANCELLED" in out and merges == [] and left == [1, 2] and f.statuses[-1][1]["state"] == "error"
+                and rc2 == OK and len(merges2) == 2), (out, left, f.statuses)
+
+    def drop_during_failing_gate_neither_attributes_nor_bisects():
+        def go_verify(drop):
+            f, buf = FakeForge(3), io.StringIO()
+            f.bad = {3}
+            runner = tripwire(f, buf, ".drop-3" if drop else ".nope", lambda a: a[:2] == ["sh", "-c"] and a[2] == "t")
+            rc = run(["verify", "--verify-cmd", "t", "--base", "main", "--state", os.path.join(tmp, fresh("dg.json")),
+                      "--backoff", "5"], runner=runner, out=buf, sleep=f.sleeps.append)
+            return rc, buf.getvalue(), f.gates
+        rc, out, gates = go_verify(True)
+        rc2, out2, gates2 = go_verify(False)  # control: without the drop the culprit is bisected and parked
+        return (rc == OK and "DROPPED #3" in out and "PARK" not in out and "GREEN base=B0 members=#1,#2" in out
+                and () not in gates and (1,) not in gates
+                and rc2 == OK and "PARK #3" in out2 and (1,) in gates2), (out, gates, out2, gates2)
+
+    def carry_hashes_raw_bytes_in_a_real_repo():
+        repo, remote = tempfile.mkdtemp(dir=tmp), tempfile.mkdtemp(dir=tmp)
+
+        def git(*args):
+            rc, out, err = default_runner(["git", "-c", "user.name=T", "-c", "user.email=t@example.com",
+                                           "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false", *args], cwd=repo)
+            assert rc == 0, err
+            return out.strip()
+
+        def commit(name, data, base="main"):
+            git("checkout", "--quiet", "-B", name, base)
+            with open(os.path.join(repo, "t.txt"), "wb") as fh:
+                fh.write(data)
+            git("commit", "--quiet", "-am", name)
+            return git("rev-parse", "HEAD")
+        git("init", "--quiet", "-b", "main")
+        with open(os.path.join(repo, "t.txt"), "wb") as fh:
+            fh.write(b"a\nb\n")
+        git("add", "-A")
+        git("commit", "--quiet", "-m", "base")
+        old = commit("old", b"a\nx\n")
+        crlf = commit("crlf", b"a\r\nx\r\n")  # CRLF-only: universal-newline text would hash equal
+        bad = commit("bad", b"a\nx\n\xff\xfe\n")  # not UTF-8: must not raise
+        git("checkout", "--quiet", "-B", "main", "main")
+        with open(os.path.join(repo, "other.txt"), "w") as fh:
+            fh.write("o\n")
+        git("add", "-A")
+        git("commit", "--quiet", "-m", "base moves")
+        git("checkout", "--quiet", "old")
+        git("merge", "--quiet", "--no-edit", "main")  # base-merge-only move: same own diff
+        moved = git("rev-parse", "HEAD")
+        git("init", "--quiet", "--bare", remote)
+        a = build_parser().parse_args(["plan", "--base", "main", "--remote", remote, "--state", os.path.join(tmp, "rg.json")])
+        t, here, results = Train(a, default_runner, io.StringIO(), lambda s: None), os.getcwd(), {}
+        os.chdir(repo)
+        try:
+            git("push", "--quiet", remote, "main:refs/heads/main")
+            for label, head in (("moved", moved), ("crlf", crlf), ("bad", bad)):
+                git("push", "--quiet", "--force", remote, f"{head}:refs/pull/1/head")
+                results[label] = t._same_patch(1, old, head)
+        finally:
+            os.chdir(here)
+            t.drop_refs()
+        return results == {"moved": True, "crlf": False, "bad": False}, results
 
     cases = [
         ("plan-filters-latest-check-per-name-and-K", plan_filters),
@@ -2734,6 +2847,10 @@ def _selftest() -> int:
         ("drop-file-removes-member-and-replans", drop_file_removes_member_and_replans),
         ("receipt-carries-only-on-equal-patch-id", receipt_carries_only_on_equal_patch_id),
         ("changed-patch-id-or-red-check-does-not-carry", changed_patch_id_or_red_check_does_not_carry),
+        ("cancel-after-merge-records-it-and-keeps-the-rest", cancel_after_merge_records_it_and_keeps_the_rest),
+        ("cancel-at-pre-merge-poll-calls-no-merge", cancel_at_pre_merge_poll_calls_no_merge),
+        ("drop-during-failing-gate-no-attribute-or-bisect", drop_during_failing_gate_neither_attributes_nor_bisects),
+        ("carry-hashes-raw-bytes-in-a-real-repo", carry_hashes_raw_bytes_in_a_real_repo),
     ]
     try:
         return bc.run_checks("merge_train", cases)
