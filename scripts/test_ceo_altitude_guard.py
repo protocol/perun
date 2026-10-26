@@ -93,13 +93,11 @@ class MainVsSubagent(Base):
         self.assertFalse(self.state.exists(), "a lane's calls must leave no counter file")
 
     def test_same_calls_from_the_main_session_are_blocked(self):
-        self.assertIsNone(self.hook(edit(f"{PROJ}/src/f0.py"), "ceo-strict"))
         self.assertEqual(self.hook(edit(f"{PROJ}/src/f1.py"), "ceo-strict")["permissionDecision"], "deny")
 
     def test_agent_type_alone_is_still_the_main_session(self):
         # a main session started with `--agent <name>` carries agent_type but no agent_id (hooks reference, 2026-10-16)
         main_as_agent = {"agent_type": "ceo-conductor"}
-        self.assertIsNone(self.hook(edit(f"{PROJ}/src/f0.py", **main_as_agent), "ceo-strict"))
         self.assertEqual(self.hook(edit(f"{PROJ}/src/f1.py", **main_as_agent), "ceo-strict")["permissionDecision"], "deny")
 
     def test_in_process_teammate_has_an_agent_id_and_is_a_lane(self):
@@ -124,8 +122,8 @@ class Modes(Base):
         c = self.counters()
         self.assertEqual((c["edits"], c["warned"], c["blocked"]), (3, 0, 0))
 
-    def test_first_direct_edit_in_a_turn_is_free_in_every_mode(self):
-        for role in ("off", "ceo", "ceo-strict"):
+    def test_first_direct_edit_in_a_turn_is_free_in_off_and_warn_only(self):
+        for role in ("off", "ceo"):
             self.session = f"free-{role}"
             self.assertIsNone(self.hook(edit(f"{PROJ}/src/a.py"), role), role)
 
@@ -141,17 +139,58 @@ class Modes(Base):
         c = self.counters()
         self.assertEqual((c["edits"], c["warned"], c["blocked"]), (2, 1, 0))
 
-    def test_strict_blocks_and_a_block_does_not_spend_the_allowance(self):
+    def test_strict_blocks_every_in_repo_edit_with_zero_free(self):
         self.policy.write_text('{"role": "ceo strict"}')  # the spaced spelling is the same role
-        self.hook(edit(f"{PROJ}/src/a.py"))
-        for name in ("b.py", "c.py"):
+        for name in ("a.py", "b.py"):
             out = self.hook(edit(f"{PROJ}/src/{name}"))
             self.assertEqual(out["permissionDecision"], "deny")
             self.assertTrue(out["permissionDecisionReason"].startswith("BLOCKED (role=ceo-strict): " + DELEGATE))
-            self.assertIn("direct source edit #2", out["permissionDecisionReason"])  # still #2: blocked calls did not happen
+            self.assertIn("direct source edit #1", out["permissionDecisionReason"])  # still #1: blocked calls did not happen
+            self.assertIn("free: 0", out["permissionDecisionReason"])
             self.assertIn("ceo:off", out["permissionDecisionReason"])
         c = self.counters()
-        self.assertEqual((c["edits"], c["warned"], c["blocked"]), (1, 0, 2))
+        self.assertEqual((c["edits"], c["warned"], c["blocked"]), (0, 0, 2))
+
+    def test_strict_counts_non_code_in_repo_files_but_not_outside_the_repo(self):
+        for name, payload in ALLOWED:
+            if name in ("changelog", "changelog fragment", "handoff", "roadmap", "task ledger", "policy json", "config", "workflow"):
+                self.assertEqual(self.hook(payload, "ceo-strict")["permissionDecision"], "deny", name)
+        for name in ("memory", "scratchpad script", "Read", "git"):
+            self.assertIsNone(self.hook(dict(ALLOWED)[name], "ceo-strict"), name)
+        self.assertEqual(self.hook(bash("echo hi > out.txt"), "ceo-strict")["permissionDecision"], "deny")
+        self.assertIsNone(self.hook(bash("echo hi > /dev/null"), "ceo-strict"))
+        self.assertIsNone(self.hook(edit(f"{PROJ}/x.md"), "off"), "PERUN_ROLE=off is the escape")
+
+    def test_strict_sed_script_arg_is_not_a_target(self):
+        self.assertIsNone(self.hook(bash("sed -i 's/a/b/' /tmp/zz.txt"), "ceo-strict"))
+        self.assertIsNone(self.hook(bash("sed -i -e 's/a/b/' /tmp/zz.txt"), "ceo-strict"))
+        self.assertIsNone(self.hook(bash("perl -pi -e 's/a/b/' /tmp/zz.txt"), "ceo-strict"))
+        self.assertEqual(self.hook(bash("sed -i 's/a/b/' README.md"), "ceo-strict")["permissionDecision"], "deny")
+        self.assertEqual(self.hook(bash("sed -i -e 's/a/b/' README.md"), "ceo-strict")["permissionDecision"], "deny")
+
+    def test_strict_expands_home_and_env_and_fails_open_on_unresolved(self):
+        env = {"TMPDIR": "/work/scratch", "HOME": "/home/jane"}
+        self.assertIsNone(self.hook(bash("echo x > $TMPDIR/a.txt"), "ceo-strict", env=env))
+        self.assertIsNone(self.hook(bash("echo x > ~/m.md"), "ceo-strict", env=env))
+        self.assertIsNone(self.hook(bash("echo x > $NOPE_UNSET/a.md"), "ceo-strict"))
+        self.assertEqual(self.hook(bash("echo x > $CLAUDE_PROJECT_DIR/a.md"), "ceo-strict")["permissionDecision"], "deny")
+
+    def test_strict_root_falls_back_to_git_toplevel_and_resolves_symlinks(self):
+        repo, out = self.tmp / "repo", self.tmp / "outside"
+        (repo / "sub").mkdir(parents=True)
+        out.mkdir()
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        (repo / "link").symlink_to(out)  # in-project link out of the project
+        (out / "back").symlink_to(repo)  # outside link into the project
+        os.environ.pop("CLAUDE_PROJECT_DIR")
+        sub = {"cwd": str(repo / "sub")}
+        self.assertEqual(self.hook(edit("../x.md", **sub), "ceo-strict")["permissionDecision"], "deny")
+        self.assertIsNone(self.hook(edit(str(repo / "link/x.md"), **sub), "ceo-strict"))
+        self.assertEqual(self.hook(edit(str(out / "back/x.md"), **sub), "ceo-strict")["permissionDecision"], "deny")
+
+    def test_warn_role_keeps_one_free_edit_and_ignores_non_code(self):
+        self.assertIsNone(self.hook(edit(f"{PROJ}/a.py"), "ceo"))
+        self.assertIsNone(self.hook(edit(f"{PROJ}/docs/x.md"), "ceo"))
 
     def test_env_role_beats_the_policy_file_both_ways(self):
         self.policy.write_text('{"role": "ceo-strict"}')
@@ -223,13 +262,13 @@ FLAGGED = [
 
 class AllowedVsFlagged(Base):
     def spend_free_edit(self):
-        self.assertIsNone(self.hook(edit(f"{PROJ}/src/free.py"), "ceo-strict"))
+        self.assertIsNone(self.hook(edit(f"{PROJ}/src/free.py"), "ceo"))  # strict has no free edit: spend it under warn
 
     def test_allowed_tools_are_never_flagged_even_after_the_free_edit(self):
         self.spend_free_edit()
         for name, payload in ALLOWED:
             for _ in range(5):
-                self.assertIsNone(self.hook(payload, "ceo-strict"), name)
+                self.assertIsNone(self.hook(payload, "ceo"), name)
         c = self.counters()
         self.assertEqual((c["edits"], c["heavy"], c["blocked"]), (1, 0, 0), "allowed calls must not count as direct work")
 
@@ -239,7 +278,7 @@ class AllowedVsFlagged(Base):
         repo = self.tmp / "repo"
         self.session = "tmp-project"
         env = {"CLAUDE_PROJECT_DIR": str(repo)}
-        self.assertIsNone(self.hook(edit(str(repo / "a.py"), cwd=str(repo)), "ceo-strict", env=env))
+        self.assertIsNone(self.hook(edit(str(repo / "a.py"), cwd=str(repo)), "ceo", env=env))
         self.assertEqual(self.hook(edit(str(repo / "b.py"), cwd=str(repo)), "ceo-strict", env=env)["permissionDecision"], "deny")
 
     def test_relative_paths_resolve_against_the_session_cwd(self):
@@ -257,7 +296,7 @@ class AllowedVsFlagged(Base):
     def test_a_flagged_write_counts_as_a_direct_edit_even_as_the_first_one(self):
         for i, (name, payload) in enumerate(FLAGGED):
             self.session = f"first{i}"
-            self.assertIsNone(self.hook(payload, "ceo-strict"), name)
+            self.assertIsNone(self.hook(payload, "ceo"), name)
             self.assertEqual(self.counters()["edits"], 1, name)
 
     def test_build_and_test_commands_flag_on_the_fourth_in_a_turn(self):
@@ -283,7 +322,7 @@ class AllowedVsFlagged(Base):
     def test_heavy_and_edit_allowances_are_separate(self):
         for _ in range(3):
             self.assertIsNone(self.hook(bash("pytest"), "ceo-strict"))
-        self.assertIsNone(self.hook(edit(f"{PROJ}/src/a.py"), "ceo-strict"))
+        self.assertIsNone(self.hook(edit(f"{PROJ}/src/a.py"), "ceo"))
 
     def test_custom_heavy_patterns_are_honoured(self):
         with mock.patch.dict(os.environ, {"PERUN_HEAVY_PATTERNS": "make check\\b"}):
@@ -295,24 +334,23 @@ class AllowedVsFlagged(Base):
 
 class TurnsAndOverride(Base):
     def test_a_new_prompt_id_is_a_new_turn(self):
-        self.hook(edit(f"{PROJ}/src/a.py"), "ceo-strict")
-        self.assertIsNotNone(self.hook(edit(f"{PROJ}/src/b.py"), "ceo-strict"))
+        self.assertIsNotNone(self.hook(edit(f"{PROJ}/src/a.py"), "ceo-strict"))
         self.prompt = "p2"
-        self.assertIsNone(self.hook(edit(f"{PROJ}/src/c.py"), "ceo-strict"))
-        self.assertIsNotNone(self.hook(edit(f"{PROJ}/src/d.py"), "ceo-strict"))
+        self.assertIsNotNone(self.hook(edit(f"{PROJ}/src/c.py"), "ceo-strict"))
+        self.assertIsNone(self.hook(edit(f"{PROJ}/src/d.py"), "ceo"), "a new turn restores warn's free edit")
 
     def test_user_prompt_submit_also_resets_the_turn(self):
-        self.hook(edit(f"{PROJ}/src/a.py"), "ceo-strict")
-        self.assertIsNotNone(self.hook(edit(f"{PROJ}/src/b.py"), "ceo-strict"))
-        self.prompt_submit("carry on", "ceo-strict")  # same prompt_id, no override token
-        self.assertIsNone(self.hook(edit(f"{PROJ}/src/c.py"), "ceo-strict"))
+        self.hook(edit(f"{PROJ}/src/a.py"), "ceo")
+        self.assertIsNotNone(self.hook(edit(f"{PROJ}/src/b.py"), "ceo"))
+        self.prompt_submit("carry on", "ceo")  # same prompt_id, no override token
+        self.assertIsNone(self.hook(edit(f"{PROJ}/src/c.py"), "ceo"))
 
     def test_without_a_prompt_id_only_user_prompt_submit_resets_the_turn(self):
         self.prompt = None
-        self.hook(edit(f"{PROJ}/src/a.py"), "ceo-strict")
-        self.assertIsNotNone(self.hook(edit(f"{PROJ}/src/b.py"), "ceo-strict"))
-        self.prompt_submit("next", "ceo-strict")
-        self.assertIsNone(self.hook(edit(f"{PROJ}/src/c.py"), "ceo-strict"))
+        self.hook(edit(f"{PROJ}/src/a.py"), "ceo")
+        self.assertIsNotNone(self.hook(edit(f"{PROJ}/src/b.py"), "ceo"))
+        self.prompt_submit("next", "ceo")
+        self.assertIsNone(self.hook(edit(f"{PROJ}/src/c.py"), "ceo"))
 
     def test_owner_override_lifts_the_flags_until_the_next_prompt(self):
         self.prompt_submit("ceo:off fix the typo in parser.py yourself", "ceo-strict")
@@ -354,7 +392,6 @@ class Contract(Base):
         self.assertEqual(hso["hookEventName"], "PreToolUse")
 
     def test_strict_prints_a_deny_decision_and_still_exits_0(self):
-        self.assertEqual(self.run_hook(edit(f"{PROJ}/src/a.py"), "ceo-strict"), (0, ""))
         rc, out = self.run_hook(edit(f"{PROJ}/src/b.py"), "ceo-strict")
         hso = json.loads(out)["hookSpecificOutput"]
         self.assertEqual(rc, 0, "a block is a JSON decision, never exit 2")
@@ -398,7 +435,7 @@ class Contract(Base):
     def test_torn_state_file_starts_over(self):
         self.state.mkdir()
         (self.state / "sess-1.json").write_text('{"edits": 4, "tur')
-        self.assertEqual(self.run_hook(edit(f"{PROJ}/src/a.py"), "ceo-strict"), (0, ""))
+        self.assertEqual(self.run_hook(edit(f"{PROJ}/src/a.py"), "ceo"), (0, ""))
         self.assertEqual(self.counters()["edits"], 1)
 
     def test_parallel_tool_calls_count_exactly(self):
@@ -432,7 +469,7 @@ class Helpers(Base):
         self.assertEqual(t('git commit -m "a > b.py"'), [])  # quoted text is one token
         self.assertEqual(t("a 2>&1 | tee out.log"), ["out.log"])
         self.assertEqual(t("sed -n 1p a.py"), [])
-        self.assertEqual(t("sed -i s/a/b/ a.py b.py"), ["s/a/b/", "a.py", "b.py"])
+        self.assertEqual(t("sed -i s/a/b/ a.py b.py"), ["a.py", "b.py"])  # the script is not a file
         self.assertEqual(t("echo 'unclosed > a.py"), [])  # unparsable: fail open
 
     def test_is_source(self):
@@ -610,7 +647,6 @@ class Wiring(Base):
             return p.stdout
 
         src = {"tool_name": "Write", "tool_input": {"file_path": str(target / "src/a.py")}}
-        self.assertEqual(wired("PreToolUse", src), "")
         denied = json.loads(wired("PreToolUse", src))["hookSpecificOutput"]
         self.assertEqual(denied["permissionDecision"], "deny")
         self.assertEqual(wired("UserPromptSubmit", {"prompt": "ceo:off"}), "")

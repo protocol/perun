@@ -17,13 +17,19 @@ ceo`); the policy default is `off`, but install.sh with the operating layer appl
 already has a role or PERUN_ROLE is set; an unreadable policy reads as `off` (fail open). Counting does not depend on the role, so
 `operating_selfcheck.py` can show drift before and after arming.
 
-WHAT IT FLAGS (main session, per turn = per `prompt_id`): the 2nd direct edit of a source file (EDIT_FREE) and the 4th
+WHAT IT FLAGS (main session, per turn = per `prompt_id`): under `ceo` the 2nd direct edit of a source file (EDIT_FREE) and the 4th
 build/test command (HEAVY_FREE). A direct edit is an Edit/Write/MultiEdit/NotebookEdit of a file with a code extension
 (CODE_EXT) or a Bash write to one (`> f.py`, `>> f.py`, `tee`, `sed -i`, `perl -i`). A build/test command is whatever
 heavy_gate.py treats as heavy. Never flagged: reads, planning, git/gh/merge/release commands, tracker and MCP calls,
 edits of docs, config, memory, handoff or changelog files (no code extension), and files under a temp or scratchpad dir.
 `ceo` adds a `delegate: spawn a lane with the brief ...` line to the model's context and lets the call run;
 `ceo-strict` denies it (JSON `permissionDecision`, exit 0, never exit 2).
+
+STRICT = ZERO REPO EDITS: under `ceo-strict` the free edit allowance is 0 (EDIT_FREE applies to `ceo` only) and an edit is
+ANY file under the project dir (CLAUDE_PROJECT_DIR, else the git toplevel of cwd, else cwd) whatever its extension: docs,
+config, changelog fragments and handoffs included. Seen writes are the Edit/Write tools and shell redirect, tee,
+`sed -i` and `perl -i`; KNOWN GAP: cp, mv, rm, touch, dd and an interpreter's own writes (`python -c`) are not caught. Files outside the project (memory, a temp or scratchpad dir) stay allowed. Build/test allowance
+(HEAVY_FREE) is unchanged. Escapes: `ceo:off` in a prompt, PERUN_ROLE=off, or role `ceo` for the warn-only mode.
 
 OWNER OVERRIDE: `ceo:off` in a user prompt lifts the flags until the next prompt. It is read at UserPromptSubmit, which
 sees prompts, not tool calls, so the agent cannot grant it inside a tool call. This is a drift guard, not a security
@@ -41,6 +47,7 @@ import importlib
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 
@@ -102,44 +109,72 @@ def _under(p: str, root: str) -> bool:
     return p == root or p.startswith(root.rstrip(os.sep) + os.sep)
 
 
-def is_source(path: str, data: dict) -> bool:
+def _project_root(cwd: str) -> str:
+    """CLAUDE_PROJECT_DIR, else the git toplevel of `cwd`, else `cwd`."""
+    if os.environ.get("CLAUDE_PROJECT_DIR"):
+        return os.path.realpath(os.environ["CLAUDE_PROJECT_DIR"])
+    try:
+        top = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+                             timeout=2).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        top = ""
+    return os.path.realpath(top or cwd)
+
+
+def is_source(path: str, data: dict, strict: bool = False) -> bool:
     """True for a project source or test file: a code extension and not under a temp or scratchpad dir.
-    The project dir wins when it sits inside a temp dir. Pure apart from path resolution; relative paths resolve against `cwd`."""
-    if os.path.splitext(path)[1].lower() not in CODE_EXT:
+    The project dir wins when it sits inside a temp dir. `strict`: any file under the project dir counts, whatever its
+    extension, and nothing outside it. `~` and `$VAR` are expanded; a path with an unresolved `$` is not a target
+    (fail open). Symlinks are resolved, so a link out of the project is outside. Relative paths resolve against `cwd`."""
+    path = os.path.expandvars(os.path.expanduser(path))
+    if "$" in path or (not strict and os.path.splitext(path)[1].lower() not in CODE_EXT):
         return False
     cwd = data.get("cwd") or "."
     p = os.path.realpath(os.path.join(cwd, path))
-    if _under(p, os.path.realpath(os.environ.get("CLAUDE_PROJECT_DIR") or cwd)):
+    if _under(p, _project_root(cwd)):
         return True
+    if strict:
+        return False
     scratch = (os.path.realpath(r) for r in (data.get("scratchpad_dir"), os.environ.get("TMPDIR"), "/tmp") if r)
     return not any(_under(p, r) for r in scratch)
 
 
 def write_targets(cmd: str) -> list:
-    """Paths a Bash command visibly writes: redirect targets, `tee` args, `sed -i` / `perl -i` args (every non-flag arg;
-    is_source() drops the ones without a code extension). Quoted text and heredoc bodies are not scanned; an
+    """Paths a Bash command visibly writes: redirect targets, `tee` args, and the file args of `sed -i` / `perl -i` (the
+    script, the first non-flag arg or the -e/-f value, is not a file; is_source() filters the rest). Quoted text and heredoc bodies are not scanned; an
     unparsable command writes nothing."""
     heavy_gate = _sibling("heavy_gate")
     try:
-        toks, segs = heavy_gate.tokens(cmd), heavy_gate.segments(cmd)
+        toks, segs = heavy_gate.tokens(cmd, "${}"), heavy_gate.segments(cmd, "${}")  # keep $VAR / ${VAR} in one word
     except ValueError:
         return []
     out = [b for a, b in zip(toks, toks[1:]) if a in REDIRECTS]
     for seg in map(heavy_gate.strip_wrappers, segs):
         if seg[:1] == ["tee"] or (seg[:1] in (["sed"], ["perl"]) and any(IN_PLACE.fullmatch(a) for a in seg[1:])):
-            out += [a for a in seg[1:] if not a.startswith("-")]
+            args, skip, script = [], False, seg[0] == "tee"  # tee has no script argument
+            for a in seg[1:]:
+                if skip:
+                    skip = False
+                elif a in ("-e", "-f", "--expression", "--file"):
+                    skip, script = True, True
+                elif a and not a.startswith("-"):
+                    if script:
+                        args.append(a)
+                    script = True  # the first non-flag arg was the script
+            out += args
     return out
 
 
-def classify(data: dict):
-    """`("edit", path)` for a direct source edit, `("heavy", "")` for a build/test command, else None."""
+def classify(data: dict, strict: bool = False):
+    """`("edit", path)` for a direct source edit (any in-project file when `strict`), `("heavy", "")` for a build/test
+    command, else None."""
     tool, ti = data.get("tool_name"), data.get("tool_input") or {}
     if tool in EDIT_TOOLS:
         path = str(ti.get("file_path") or ti.get("notebook_path") or "")
-        return ("edit", path) if is_source(path, data) else None
+        return ("edit", path) if is_source(path, data, strict) else None
     if tool == "Bash":
         cmd = str(ti.get("command") or "")
-        hit = next((t for t in write_targets(cmd) if is_source(t, data)), None)
+        hit = next((t for t in write_targets(cmd) if is_source(t, data, strict)), None)
         if hit:
             return "edit", hit
         heavy_gate = _sibling("heavy_gate")
@@ -185,7 +220,7 @@ def _tally(st: dict, data: dict, kind: str, path: str, mode: str):
     pid = str(data.get("prompt_id") or "")
     if pid != st["turn"]:  # a new user prompt = a new turn (UserPromptSubmit also resets this)
         st.update(turn=pid, t_edits=0, t_heavy=0)
-    key, free = ("t_edits", EDIT_FREE) if kind == "edit" else ("t_heavy", HEAVY_FREE)
+    key, free = ("t_edits", 0 if mode == "ceo-strict" else EDIT_FREE) if kind == "edit" else ("t_heavy", HEAVY_FREE)
     n = st[key] + 1
     flagged = mode in ARMED and not st["override"] and n > free
     what, gate, noun, why = WHAT[kind]
@@ -210,10 +245,11 @@ def handle(data: dict):
         _update(data, lambda st: st.update(override=bool(OVERRIDE.search(str(data.get("prompt") or ""))),
                                            turn=str(data.get("prompt_id") or ""), t_edits=0, t_heavy=0))
         return None
-    hit = classify(data)
+    mode = role()
+    hit = classify(data, mode == "ceo-strict")
     if hit is None:
         return None
-    out = _update(data, lambda st: _tally(st, data, *hit, role()))
+    out = _update(data, lambda st: _tally(st, data, *hit, mode))
     return out and {"hookEventName": "PreToolUse", **out}
 
 
