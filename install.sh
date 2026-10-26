@@ -108,7 +108,7 @@ on re-install). Overlay skills are opt-in.
                        heavy_gate.py PreToolUse and session_brief.py SessionStart hooks, the
                        ceo_altitude_guard.py hook (an applied install writes policy role=ceo, warn, unless the policy has a role or PERUN_ROLE is set; role=off silences it, ceo-strict blocks), the
                        outcome_claim_guard.py Stop + UserPromptSubmit + PreToolUse hook (unmeasured "fixed/faster" claims; policy outcome_guard), the
-                       stall_guard.py Stop hook (one nudge when a turn ends "stopped / waiting on you" with no lane launched; PERUN_STALL_GUARD=off), the
+                       stall_guard.py Stop hook (one nudge when a turn ends "stopped / waiting on you" with no lane launched; PERUN_STALL_GUARD=off; the plugin hooks/hooks.json entry skips itself when project settings already register it), the
                        landing_watchdog.py UserPromptSubmit + PreToolUse(Agent|Task) hook (nothing merged for an hour while green PRs wait; policy landing_watchdog), the
                        SubagentStart house-default injector, the
                        SubagentStop handback_cap, and the subagent model pin

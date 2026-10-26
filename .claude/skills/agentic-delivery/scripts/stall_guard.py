@@ -30,7 +30,7 @@ SLEEP = ("ScheduleWakeup", "CronCreate")
 REASON = ("A denial or blocker stops only that action. Launch the next lane, review or build now, "
           "end if the owner asked you to stop or pause, or end by naming the one owner-only blocker and what keeps running.")
 WAIT_REASON = "Waiting on CI is not a stop: launch the next priority lane now, then wake on the CI notification."
-WAITING = re.compile(r"\b(?:CI|checks?|merg(?:e|ed|ing)|waiting)\b", re.I)
+WAITING = re.compile(r"\b(?:waiting (?:on|for)|(?:CI|checks?) (?:is |are )?(?:running|pending|in progress)|until (?:CI|checks?))\b", re.I)
 # ponytail: phrase list, not a classifier; a miss just lets the stop through. Add phrases when the field shows one.
 STALL = re.compile(
     r"\b(?:i(?:'m| am) (?:stopp(?:ed|ing)|paus(?:ed|ing)|holding(?: here| off)?|standing by|on hold)"
@@ -46,8 +46,27 @@ def _blocks(entry):
     return [{"type": "text", "text": c}] if isinstance(c, str) else [b for b in c or [] if isinstance(b, dict)]
 
 
+def _open_bg(lines):
+    """True when more run_in_background launches than `<task-notification>` completions appear in the whole tail."""
+    n = 0
+    for ln in lines:
+        try:
+            e = json.loads(ln)
+        except ValueError:
+            continue
+        if not isinstance(e, dict) or e.get("isSidechain"):
+            continue
+        bl = _blocks(e)
+        if e.get("type") == "user":
+            n -= "<task-notification>" in json.dumps(bl)
+        else:
+            n += sum(b.get("type") == "tool_use" and isinstance(b.get("input"), dict)
+                     and b["input"].get("run_in_background") is True for b in bl)
+    return n > 0
+
+
 def last_turn(path):
-    """(last assistant text block, launched?, scheduled a wake-up?) for the turn after the last real user prompt in the transcript at `path`.
+    """(last assistant text block, launched?, scheduled a wake-up?, background tasks still open?) for the turn after the last real user prompt in the transcript at `path`.
     Sidechain (subagent) entries are skipped; a tool_use with run_in_background true counts as a launch."""
     with open(path, "rb") as fh:
         fh.seek(0, 2)
@@ -63,7 +82,7 @@ def last_turn(path):
             continue
         bl = _blocks(e)
         if e.get("type") == "user":
-            if any(b.get("type") != "tool_result" for b in bl):
+            if any(b.get("type") != "tool_result" for b in bl) :
                 break  # a real prompt: the turn starts here
             continue
         if e.get("type") != "assistant":
@@ -75,20 +94,20 @@ def last_turn(path):
                 launched = launched or b.get("name") in LAUNCH or inp.get("run_in_background") is True
             elif b.get("type") == "text" and not text:
                 text = str(b.get("text") or "")
-    return text, launched, slept
+    return text, launched, slept, _open_bg(lines)
 
 
 def decide(payload):
     """The block dict for this Stop payload, or None to allow."""
     if payload.get("stop_hook_active") or os.environ.get("PERUN_STALL_GUARD", "").lower() == "off":
         return None
-    text, launched, slept = last_turn(payload["transcript_path"])
+    text, launched, slept, open_bg = last_turn(payload["transcript_path"])
     text = QUOTED.sub("", text)
     if launched:
         return None
     if STALL.search(text):
         return {"decision": "block", "reason": REASON}
-    if slept and WAITING.search(text):
+    if slept and not open_bg and WAITING.search(text):
         return {"decision": "block", "reason": WAIT_REASON}
     return None
 

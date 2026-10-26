@@ -132,13 +132,45 @@ class IdleWait(unittest.TestCase):
         self.assertEqual(self.reason([PROMPT, tool("ScheduleWakeup"), RESULT, text("`merge on green`")]), "")
 
 
+NOTE = {"type": "user", "message": {"role": "user", "content": "<task-notification><status>completed</status></task-notification>"}}
+
+
+class OpenLanesAndNarrowing(unittest.TestCase):
+    def blocked(self, entries):
+        return bool(run({}, entries)[1])
+
+    def test_earlier_turn_background_lane_still_open_passes(self):
+        bg = tool("Agent", prompt="x", run_in_background=True)
+        wake = [PROMPT, tool("ScheduleWakeup"), RESULT, text(WAIT)]
+        self.assertFalse(self.blocked([PROMPT, bg, RESULT, text("launched")] + wake))
+        self.assertTrue(self.blocked([PROMPT, bg, RESULT, text("launched"), NOTE] + wake))  # lane finished: still a stall
+
+    def test_past_tense_ci_text_passes_forward_looking_blocks(self):
+        for t, want in (("PR merged, CI green, checks passed.", False), ("Merging now.", False), ("Waiting on CI.", True),
+                        ("Checks pending; next look at 13:42.", True), ("Holding until checks pass.", True)):
+            self.assertEqual(self.blocked([PROMPT, tool("ScheduleWakeup"), RESULT, text(t)]), want, t)
+
+
 class Wiring(unittest.TestCase):
+    def test_plugin_hook_skips_when_install_already_registers_it(self):
+        cmd = json.loads((ROOT / "hooks/hooks.json").read_text())["hooks"]["Stop"][0]["hooks"][0]["command"]
+        with tempfile.TemporaryDirectory() as d:
+            t = Path(d) / "t.jsonl"
+            t.write_text("\n".join(json.dumps(e) for e in [PROMPT, text(STALL)]))
+            (Path(d) / ".claude").mkdir()
+            env = {**os.environ, "CLAUDE_PLUGIN_ROOT": str(ROOT), "CLAUDE_PROJECT_DIR": d}
+            go = lambda: subprocess.run(["sh", "-c", cmd], input=json.dumps({"transcript_path": str(t)}), capture_output=True, text=True, env=env).stdout
+            self.assertIn("block", go())
+            (Path(d) / ".claude/settings.local.json").write_text('{"hooks":{"Stop":[{"command":"stall_guard.py"}]}}')
+            self.assertEqual(go(), "")
+
+
     def test_plugin_hooks_register_stall_guard_once_on_stop(self):
         hj = json.loads((ROOT / "hooks/hooks.json").read_text())
         stop = [h for e in hj["hooks"]["Stop"] for h in e["hooks"] if "stall_guard.py" in h["command"]]
         self.assertEqual(len(stop), 1)
         self.assertTrue(stop[0]["command"].endswith("|| true"))
-        self.assertTrue((ROOT / stop[0]["command"].split('"')[1].replace("${CLAUDE_PLUGIN_ROOT}", ".")).is_file())
+        self.assertTrue((ROOT / [w for w in stop[0]["command"].split('"') if "stall_guard.py" in w][-1].replace("${CLAUDE_PLUGIN_ROOT}", ".")).is_file())
 
     def test_default_delivery_install_applies_template_idempotently(self):
         if not shutil.which("jq"):
