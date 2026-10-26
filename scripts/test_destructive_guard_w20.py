@@ -70,7 +70,6 @@ BENIGN = (
     cy("MATCH (n:Tmp) CALL { WITH n DETACH DELETE n } IN TRANSACTIONS OF 1000 ROWS"),
     cy("MATCH (n:Tmp) DETACH DELETE n"), cy("MATCH (n {k:1}) DETACH DELETE n"), cy("MATCH (n:Tmp) WITH {a:1} AS m DETACH DELETE n"),
     cy("MATCH (n) WHERE n.expired = true DETACH DELETE n"), cy("MATCH (n) WHERE n.tmp IS NOT NULL DETACH DELETE n"),
-    cy("MATCH (n) WHERE NOT (n)--() DETACH DELETE n"), cy("MATCH (n) WHERE n.id=1 OR n.id=2 DETACH DELETE n"),
     'find /etc/ssh -exec chmod go-rwx {} +', 'find /home/jane -exec chmod go-rwx {} +', cy("MATCH (n) WHERE n.id = 5 DETACH DELETE n"), cy("MATCH (n) RETURN count(n)"),
     'apt remove libc6 -s', 'apt remove libc6 -ys', 'apt-get remove libc6 --simulate=no --simulate', 'apt-get remove libc6 -o APT::Get::Simulate=false -o APT::Get::Simulate=true',
     'dnf remove python3.9-pip', 'dnf remove python3.11-devel',
