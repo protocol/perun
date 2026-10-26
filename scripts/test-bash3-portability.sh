@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-bash3.XXXXXX")"
 trap 'find "$WORK" -depth -delete' EXIT
 
-PAT='(declare|typeset|local)[[:space:]]+-[a-zA-Z]*A|(^|[^A-Za-z_])(mapfile|readarray|coproc)([^A-Za-z_]|$)|\$\{[A-Za-z_0-9]+(,,|\^\^)|&>>|\|&'  # bash4-ok
+PAT='(declare|typeset|local)[[:space:]]+-[a-zA-Z]*[An]|(^|[^A-Za-z_])(mapfile|readarray|coproc)([^A-Za-z_]|$)|\$\{[A-Za-z_0-9]+([,^]|@[A-Za-z])|wait[[:space:]]+-n|&>>|\|&'  # bash4-ok
 # hits <file>...: print file:line:text for each bash-4-only construct outside comments and bash4-ok lines
 hits() { grep -nE -- "$PAT" /dev/null "$@" | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' | grep -vF 'bash4-ok'; }
 
@@ -26,9 +26,14 @@ F="$WORK/bad.sh"
   echo 'cmd |& tee log'
   echo 'coproc X { cat; }'
   echo 'local -A m'
+  echo 'declare -n r=x'
+  echo 'x="${v@U}"'
+  echo 'x="${v,}"'
+  echo 'x="${v^}"'
+  echo 'wait -n'
 } > "$F"  # bash4-ok: the echoed lines are the fixture; the scanner reads $F, not this file's source
 n="$(hits "$F" | wc -l | tr -d ' ')"
-[ "$n" -eq 9 ]; ok $? "planted-RED: scanner flags all 9 bash-4 constructs (got $n)"
+[ "$n" -eq 14 ]; ok $? "planted-RED: scanner flags all 14 bash-4 constructs (got $n)"
 
 # planted GREEN: comments, the opt-out marker and bash-3-safe syntax pass
 G="$WORK/good.sh"

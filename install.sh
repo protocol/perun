@@ -291,7 +291,7 @@ STAMP="$(mktemp "${TMPDIR:-/tmp}/perun-stamp.XXXXXX")"
 REAL_TARGET="${TARGET_DIR}"
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   SIM="$(mktemp -d "${TMPDIR:-/tmp}/perun-dry.XXXXXX")"
-  export XDG_CACHE_HOME="${SIM}.cache"
+  export XDG_CACHE_HOME="${SIM}.cache" DCR_NO_PROBE=1  # the sandbox probe writes under $HOME and calls the network
   TARGET_DIR="${SIM}"
   exec 3>&1 1>/dev/null
 fi
