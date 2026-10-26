@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "server/routes/invoices.js",
+      "line": 8,
+      "severity": "HIGH",
+      "category": "idor_broken_access_control",
+      "description": "GET /invoices/:id only checks that the caller is logged in (requireLogin). It then fetches the invoice by the client-supplied id and returns the whole record. It never checks that the invoice belongs to the requesting user or their organization, and it has no role check. Any authenticated user can read any other user's invoice.",
+      "exploit_scenario": "An attacker registers or logs in as a low-privilege user and requests GET /invoices/1, /invoices/2, and so on. If the ids are sequential or guessable, this enumerates every customer's invoices. The response exposes billing PII, amounts, addresses, and payment details. Even with UUIDs, any leaked or shared id gives the same access.",
+      "recommendation": "Scope the query to the authenticated principal, for example `findOne({ where: { id: req.params.id, userId: req.user.id } })`, or to the tenant/org. Alternatively, load the invoice and compare its owner to req.user before returning it, allowing admins through an explicit role check. Return 404 for invoices the caller does not own so existence isn't revealed. Return only the fields the client needs instead of the whole record.",
+      "confidence": 0.85
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

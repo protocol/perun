@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/invoices.py",
+      "line": 9,
+      "severity": "HIGH",
+      "category": "idor_authorization_bypass",
+      "description": "The /invoices/<invoice_id> endpoint checks only that a user is logged in. It never checks that the requested invoice belongs to the current user. Invoice IDs are sequential integers, and the endpoint returns the full invoice record via to_dict().",
+      "exploit_scenario": "Any authenticated user can request /invoices/1, /invoices/2, and so on. This lets them read every other customer's invoices, including billing details and PII. Enumeration is trivial because the IDs are sequential integers.",
+      "recommendation": "Scope the query to the current user, for example Invoice.query.filter_by(id=invoice_id, user_id=session['user_id']).first_or_404(). Alternatively, load the invoice and compare invoice.user_id to session['user_id'], returning 404 or 403 on mismatch. Do not use .get() with no ownership check.",
+      "confidence": 0.9
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

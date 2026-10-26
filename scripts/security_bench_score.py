@@ -11,8 +11,8 @@ Matching: file by normalized suffix (a leading ./, a/ or b/ and absolute prefixe
 the key's or to one of its `equiv` ids (parent/child pairs); line within --tol (default 1) of the key. A finding with no
 cwe is scored on file+line only and the arm result carries `cwe_missing` (its count). Findings on the same file with the
 same CWE within --tol of each other are collapsed before precision (`dup_findings` counts the collapsed ones). Per arm:
-precision (TP / findings, null with none), recall (matched keys / seeded keys) with the bootstrap 95% CI from
-rival_eval.boot, decoy_fp (decoy diffs with any finding / decoy diffs). Fails closed (exit 2): missing arm dir or
+precision (TP / findings, null with none), recall (matched keys / seeded keys) with the Wilson 95% score interval and n
+(n seeded keys), decoy_fp (decoy diffs with any finding / decoy diffs). Fails closed (exit 2): missing arm dir or
 per-diff file, malformed findings (a bool or non-int line included), invalid keys, negative --tol, duplicate arm names.
 """
 import argparse
@@ -20,9 +20,6 @@ import json
 import re
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from rival_eval import boot  # noqa: E402
 
 KEYS = Path(__file__).resolve().parent / "eval-fixtures/security-seeded/keys.json"
 
@@ -98,6 +95,17 @@ def dedup(fs, tol):
     return kept
 
 
+def wilson(k, n, z=1.96):
+    """Wilson 95% score interval for k successes in n trials, rounded to 3 places; [0, 1] when n is 0.
+
+    Unlike a percentile bootstrap it does not collapse to [1, 1] at k == n (12/12 gives a lower bound of about 0.76)."""
+    if not n:
+        return [0.0, 1.0]
+    p, d = k / n, 1 + z * z / n
+    c, h = (p + z * z / (2 * n)) / d, z * ((p * (1 - p) + z * z / (4 * n)) / n) ** 0.5 / d
+    return [round(max(0.0, c - h), 3), round(min(1.0, c + h), 3)]
+
+
 def score(keys, found, tol=1):
     check_keys(keys)
     tp = n = dups = decoys = decoy_fp = nocwe = 0
@@ -117,8 +125,8 @@ def score(keys, found, tol=1):
                   and abs(f["line"] - k["line"]) <= tol for f in fs)
         tp += hit
         hits.append(float(hit))
-    lo, hi = boot(hits)
-    r = {"precision": tp / n if n else None, "recall": tp / len(hits), "recall_ci95": [lo, hi], "findings": n,
+    r = {"precision": tp / n if n else None, "recall": tp / len(hits), "recall_ci95": wilson(tp, len(hits)),
+         "n": len(hits), "findings": n,
          "dup_findings": dups, "true_positives": tp, "decoy_fp": f"{decoy_fp}/{decoys}"}
     if nocwe:
         r["cwe_missing"] = nocwe

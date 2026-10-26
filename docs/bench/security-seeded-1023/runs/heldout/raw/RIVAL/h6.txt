@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/controllers/profiles_controller.rb",
+      "line": 5,
+      "severity": "HIGH",
+      "category": "mass_assignment_privilege_escalation",
+      "description": "The update action calls `params.require(:user).permit!`, which permits every attribute in the submitted user hash and bypasses Rails strong parameters. The result is passed straight to `current_user.update`. Any attribute on the User model can be set by the requester. That includes sensitive fields such as `admin`, `role`, `email`, `encrypted_password`, `confirmed_at`, and `reset_password_token`, depending on the schema.",
+      "exploit_scenario": "An authenticated low-privilege user sends a PATCH/PUT to the profile endpoint with `user[admin]=true` or `user[role]=admin`. The model update then grants them admin privileges. An attacker can also set `user[email]` to a different address or `user[confirmed_at]` to skip confirmation. Either one can lead to account takeover or authorization bypass.",
+      "recommendation": "Replace `permit!` with an explicit allowlist of attributes users may edit, for example `params.require(:user).permit(:name, :bio, :avatar)`. Keep privilege and identity fields out of the list. Handle password and email changes in separate actions that require re-authentication.",
+      "confidence": 0.9
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

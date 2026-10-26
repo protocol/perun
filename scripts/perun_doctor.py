@@ -13,7 +13,7 @@ Exit 0 = nothing to fix, 1 = at least one WARN/FAIL (INFO rows are optional add-
 re-runs the recorded install flags via scripts/update-installed.sh (skills are backed up
 by install.sh first), and re-checks. Stdlib only; read-only without --fix.
 """
-import argparse, hashlib, json, os, re, subprocess, sys
+import argparse, hashlib, json, os, re, shlex, subprocess, sys
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent
@@ -106,7 +106,8 @@ def check(repo, home):
         add("OK", "installed version", f"{mine} (matches checkout)")
     g = ver(home)
     if g and latest and g != latest:
-        add("WARN", "global copy", f"~/.claude has {g}, checkout has {latest} (stale; global is not touched by --fix)")
+        cmd = f"DCR_NO_PULL=1 bash {shlex.quote(str(SRC / 'scripts/update-installed.sh'))} {shlex.quote(str(home))}"
+        add("WARN", "global copy", f"~/.claude has {g}, checkout has {latest} (stale; auto-update and --fix skip it). Run this yourself (type it with the ! prefix if the permission classifier blocks agents): {cmd}")
     else:
         add("OK", "global copy", g or "none")
     if not flags.is_file():
@@ -162,6 +163,16 @@ def check(repo, home):
             continue
         if p.suffix in (".py", ".sh") and p.name in srcfiles and sha(p) not in srcfiles[p.name]:
             drift.append(str(p.relative_to(repo)) + " (forked copy)")
+    for host in SKILL_HOSTS[1:]:  # non-symlink host copies must equal the canonical .claude copy (install.sh links them when it can)
+        for d in sorted((repo / host / "skills").glob("*")) if (repo / host / "skills").is_dir() else ():
+            c = repo / ".claude/skills" / d.name
+            if d.is_symlink() and not d.exists():
+                drift.append(f"{d.relative_to(repo)} (dangling symlink)")
+            if d.is_symlink() or not d.is_dir() or not c.is_dir():
+                continue
+            h = lambda r: {str(p.relative_to(r)): sha(p) for p in walk(r)}
+            if h(d) != h(c):
+                drift.append(f"{d.relative_to(repo)} (differs from .claude copy)")
     add("WARN" if drift else "OK", "drifted copies", (f"{len(drift)} differ from checkout: " + ", ".join(sorted(drift)[:6]) + (" ..." if len(drift) > 6 else "")) if drift else "none")
     # janitor/scheduler
     names = [p for p in walk(repo, 4) if re.search(r"janitor|scheduler", p.name, re.I)]
@@ -173,7 +184,10 @@ def check(repo, home):
     if not os.environ.get("DCR_NO_PROBE"):
         sys.path.insert(0, str(SRC / ".claude/skills/agentic-delivery/scripts"))
         import sandbox_probe
-        for line in sandbox_probe.probe(sandbox_probe.checks(repo))[0][:-1]:
+        top = subprocess.run(["git", "-C", str(repo), "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+        isgit = bool(top) and os.path.realpath(top) == os.path.realpath(repo)  # a dir nested in a parent repo is not itself a repo
+        items = [c for c in sandbox_probe.checks(repo) if c[0] != "git" or (isgit and repo.resolve() != home.resolve())]  # a global (~) or non-git target has no repo to probe
+        for line in sandbox_probe.probe(items)[0][:-1]:
             st, _, rest = line.partition(" ")
             name, _, detail = rest.strip().partition(": ")
             add({"OK": "OK", "SKIP": "INFO"}.get(st, "WARN"), f"sandbox {name}", detail or "works")

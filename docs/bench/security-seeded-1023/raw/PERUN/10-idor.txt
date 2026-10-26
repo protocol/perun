@@ -1,0 +1,9 @@
+I haven't run the verifier, so I'm not reporting the finding as confirmed. Permission to write `rows.json` was denied, and I didn't work around that with a shell redirect. `security_verify.py` then failed because the file doesn't exist.
+
+I did find one candidate by reading `change.patch`. In `app/invoices.py`, the route `/invoices/<int:invoice_id>` only checks that `user_id` is in the session (line 7). It then returns `Invoice.query.get(invoice_id)` (line 9) with no check that the invoice belongs to that user. Any logged-in user can read any other user's invoice by changing the ID, which is an insecure direct object reference (CWE-639). I found no ownership guard on the path.
+
+If you grant write access to `rows.json`, or tell me to create it another way, I'll run the verifier. If it confirms the row, this is the final output:
+
+```json
+[{"file": "app/invoices.py", "line": 9, "cwe": "CWE-639"}]
+```

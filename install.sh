@@ -362,6 +362,14 @@ install_skill_copy() {
     exit 1
   fi
   mkdir -p "$(dirname "${dest}")"
+  # One canonical copy (.claude); every other host symlinks to it so copies cannot drift. DCR_COPY_HOSTS=1 (or a failed ln) falls back to a real copy that perun_doctor.py hash-checks.
+  local canon="${TARGET_DIR}/.claude/skills/${skill_name}" want_link=0 rel="../../.claude/skills/${skill_name}"
+  [[ "${dest}" != "${TARGET_DIR}/.claude/"* && -z "${DCR_COPY_HOSTS:-}" && -d "${canon}" ]] && want_link=1
+  if [[ "${want_link}" -eq 1 && -L "${dest}" && "$(readlink "${dest}")" == "${rel}" ]]; then
+    echo "linked: ${skill_name} (unchanged) -> ${dest}"; return
+  fi
+  # Our own host link is not user data: drop it instead of backing it up (copy mode would otherwise add a backup per re-run).
+  [[ -L "${dest}" && "$(readlink "${dest}")" == "${rel}" ]] && rm -f "${dest}"
   local backup=""
   if [[ -e "${dest}" || -L "${dest}" ]]; then
     # Fail closed: a symlinked backup dir would move the user's skill (or later delete files) outside the target.
@@ -383,11 +391,13 @@ install_skill_copy() {
     echo "note: existing skill found -> backing up to ${backup}"
     mv "${dest}" "${backup}"
   fi
-  cp -R "${src}" "${dest}"
+  local linked=0 cmp_dir="${dest}"
+  if [[ "${want_link}" -eq 1 ]] && ln -s "${rel}" "${dest}" 2>/dev/null; then linked=1; cmp_dir="${canon}"; fi
+  [[ "${linked}" -eq 1 ]] || cp -R "${src}" "${dest}"
   # Never ship local Python bytecode caches (created by running a script selftest).
-  find "${dest}" -name __pycache__ -type d -prune -exec rm -rf {} +
+  [[ "${linked}" -eq 1 ]] || find "${dest}" -name __pycache__ -type d -prune -exec rm -rf {} +
   # Support docs the review skill cites — must resolve after install.
-  if [[ "${skill_name}" == "${REVIEW_NAME}" ]]; then
+  if [[ "${linked}" -eq 0 && "${skill_name}" == "${REVIEW_NAME}" ]]; then
     mkdir -p "${dest}/references"
     if [[ -f "${SCRIPT_DIR}/docs/standards-index.md" ]]; then
       cp "${SCRIPT_DIR}/docs/standards-index.md" "${dest}/references/standards-index.md"
@@ -399,14 +409,14 @@ install_skill_copy() {
   if [[ -n "${backup}" ]]; then
     # A backup byte-identical to the fresh copy is just the shipped files again: drop it so unchanged re-runs add nothing.
     # Any other backup (an edited copy, an older release, your own copy) is never deleted by install.
-    python3 "${SCRIPT_DIR}/scripts/perun_marker.py" dedupe "${backup_root}" "${backup}" "${dest}"
+    python3 "${SCRIPT_DIR}/scripts/perun_marker.py" dedupe "${backup_root}" "${backup}" "${cmp_dir}"
     [[ ! -d "${backup}" ]] || BACKUP_DIRS+=("${backup#"${TARGET_DIR}"/}")
   fi
   local skill_ver="unknown"
   if [[ -f "${src}/VERSION" ]]; then
     skill_ver="$(tr -d '[:space:]' < "${src}/VERSION")"
   fi
-  echo "installed: ${skill_name} ${skill_ver} (@ ${INSTALL_SHA}) -> ${dest}"
+  echo "installed: ${skill_name} ${skill_ver} (@ ${INSTALL_SHA}) -> ${dest}$([[ "${linked}" -eq 1 ]] && echo " (symlink to .claude)")"
 }
 
 # Host roots that receive every selected skill.

@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/Http/Controllers/ProfileController.php",
+      "line": 11,
+      "severity": "HIGH",
+      "category": "mass_assignment_privilege_escalation",
+      "description": "The controller calls `$user->update($request->all())`, which passes every request parameter straight into Eloquent mass assignment with no validation or field whitelist. If the User model's `$fillable` includes sensitive attributes, or `$guarded` is empty, an authenticated user can change fields they shouldn't control. Examples are `is_admin`, `role`, `email_verified_at`, `password`, and `email`. I could not inspect the User model in this review, because only the diff was available. Laravel's default User model has `$fillable` limited to name, email, and password. Even under that default, `email` and `password` can be changed with no current-password check and no re-verification.",
+      "exploit_scenario": "An authenticated low-privilege user sends `PUT /profile` with JSON like `{\"is_admin\": true, \"role\": \"admin\"}`. They can also send `{\"email\": \"attacker@evil.com\", \"password\": \"newpass\"}`, or set `email_verified_at` to skip verification. The attributes are written to the database, which gives privilege escalation or account takeover.",
+      "recommendation": "Use a Form Request or `$request->validate([...])` that allows only the intended fields, for example name. Then call `$user->update($validated)`, or use `$request->only([...])`. Require the current password and re-verification for email or password changes. Keep privileged attributes out of `$fillable`. Return the user through an API Resource, or rely on `$hidden`, so the response exposes no sensitive attributes.",
+      "confidence": 0.85
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

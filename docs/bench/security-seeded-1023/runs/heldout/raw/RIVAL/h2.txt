@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "lib/settings.js",
+      "line": 8,
+      "severity": "HIGH",
+      "category": "prototype_pollution",
+      "description": "The recursive merge() function copies keys from the attacker-controlled req.body without filtering '__proto__', 'constructor' or 'prototype'. express.json() uses JSON.parse, which creates '__proto__' as an own enumerable property, so Object.keys(source) returns it. For that key, target['__proto__'] resolves to Object.prototype, which is truthy, so the code calls merge(Object.prototype, source['__proto__']). That writes attacker-chosen properties onto Object.prototype for the whole process. The same applies through 'constructor.prototype'.",
+      "exploit_scenario": "An attacker sends POST /settings with the body {\"__proto__\": {\"isAdmin\": true}}. Every object in the Node process then inherits isAdmin=true. Depending on the rest of the app, this can bypass authorization checks that read unset properties such as isAdmin, role or authenticated. It can also alter template or child_process options for RCE gadgets, or change application behavior globally. The pollution persists until the process restarts and affects all users.",
+      "recommendation": "Skip the keys '__proto__', 'constructor' and 'prototype' in merge(). Better, build targets with Object.create(null) or use Object.hasOwn checks. Alternatively, use a vetted library that guards against prototype pollution, or validate the body against a strict schema (e.g. zod or ajv) with an allow-list of settings keys. Also write only to own properties, for example with Object.defineProperty or a Map.",
+      "confidence": 0.93
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

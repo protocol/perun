@@ -1,0 +1,20 @@
+diff --git a/worker/jobs.py b/worker/jobs.py
+new file mode 100644
+--- /dev/null
++++ b/worker/jobs.py
+@@ -0,0 +1,15 @@
++import base64
++import pickle
++
++from acme.queue import consume
++
++
++def handle(message: dict) -> None:
++    """Run a job whose payload was enqueued by the web tier or API clients."""
++    raw = base64.b64decode(message["payload"])
++    job = pickle.loads(raw)
++    job.run()
++
++
++if __name__ == "__main__":
++    consume("jobs", handle)

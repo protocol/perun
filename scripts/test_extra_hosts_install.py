@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import perun_doctor  # noqa: E402
 
 os.environ["DCR_NO_PROBE"] = "1"
+os.environ["DCR_COPY_HOSTS"] = "1"  # this file tests the real-copy path; symlinked hosts are in test_install_canonical_global.py
 # Hosts whose skill root was confirmed from the vendor docs on 2026-10-16 (URLs in docs/standards-index.md).
 NEW_HOSTS = (".cline", ".roo", ".factory")
 DOCS_HOSTS = (".opencode", ".kiro", ".windsurf") + NEW_HOSTS  # plus Amp, which reads .agents and .claude (already default)

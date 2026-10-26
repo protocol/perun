@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/reset.py",
+      "line": 9,
+      "severity": "HIGH",
+      "category": "weak_cryptographic_randomness",
+      "description": "Password reset token is generated with Python's `random` module. This is a Mersenne Twister PRNG, not a cryptographically secure generator. Its output is predictable once an attacker has observed enough of it. Reset tokens are bearer credentials for account takeover, so they must come from a CSPRNG such as `secrets`.",
+      "exploit_scenario": "An attacker requests password resets for accounts they control and collects the tokens. Each token is 24 characters from a 62-character alphabet, which leaks roughly 143 bits of PRNG output. With enough samples the attacker can recover the Mersenne Twister state, as with the randcrack technique. They then trigger a reset for the victim's account, predict the token that was issued, and take over the account. This works best on a process that shares PRNG state across requests.",
+      "recommendation": "Use the `secrets` module, for example `secrets.token_urlsafe(32)` or `''.join(secrets.choice(alphabet) for _ in range(32))`. Store only a hash of the token, and give it an expiry and single-use semantics.",
+      "confidence": 0.85
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}
