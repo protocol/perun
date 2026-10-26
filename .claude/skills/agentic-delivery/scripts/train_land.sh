@@ -95,7 +95,7 @@ PQ=$(git rev-parse --git-common-dir)/train-push.lock PW=${PUSH_WAIT_SECS:-$((LT 
 split=0 landed= gates=0 ALL="$*"
 unl() { local n; for n in $ALL; do [[ " $landed " == *" $n "* ]] || printf '%s ' "$n"; done; }  # every PR land_train did not merge
 split_report() { [ "$split" -eq 1 ] || return 0; local u; u=$(unl); echo "SPLIT done: landed #${landed# }; CANT (not landed) #${u% }; gates=$gates"; }
-trap 'split_report; clean_union_dirs; lock_drop "$PQ"; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK"' EXIT
+trap 'split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
 # A landing train holds the push lock and is moving the base: wait it out before any gate work (a union composed mid-land is stale at its own land).
 lock_take "$PQ" "$PW" "$LT" || exit 1; lock_drop "$PQ"
 if [ -n "${CLEAN_ROOT:-}" ]; then  # start-of-train cleanup of your own finished work; never blocks the train
@@ -175,6 +175,23 @@ norm() { bash "$HERE/train_flake.sh" --norm; }  # the one id normalizer: emit an
 sed -nE 's/^FAIL +//p' "$LOG.browser" | norm >"$LOG.fails"
 if [ -r "${BASELINE_FAILS:-/dev/null}" ]; then norm <"${BASELINE_FAILS:-/dev/null}" >"$LOG.baseline"; else : >"$LOG.baseline"; fi
 pre=0
+# Base-red fail-fast (BASE_RED_FAILFAST=shadow|enforce|off, default shadow): every failing id is already in the base's measured red set
+# (BASELINE_FAILS, read now, after the lease wait, so a waiter judges the base it will land on). enforce ends the train as BASE RED at once
+# (exit 1, no solo re-runs, no bisect; the EXIT trap frees the heavy lease); shadow only logs the decision and runs on as before.
+# Fail closed: the red set must be stamped with the sha it was measured on ("$BASELINE_FAILS.base" holds that sha) and the stamp must equal
+# this gate's base $B, which must still be the tip of $REMOTE/$BASE_BRANCH now; a missing, stale or moved-base stamp gives no base-red verdict.
+ffs=$(head -1 "${BASELINE_FAILS:-/dev/null}.base" 2>/dev/null || true); fftip=$(git rev-parse "$REMOTE/$BASE_BRANCH" 2>/dev/null || true)
+if [ "${BASE_RED_FAILFAST:-shadow}" != off ] && grep -q . "$LOG.fails" && [ -z "$(grep -vxFf "$LOG.baseline" "$LOG.fails" || true)" ]; then
+  ffn=$(grep -c . "$LOG.fails" || true)
+  if [ -z "$ffs" ] || [ "$ffs" != "$B" ] || [ "$fftip" != "$B" ]; then
+    echo "base-red-failfast refused: red set stamp '${ffs:-none}' vs gate base ${B:0:7} vs $REMOTE/$BASE_BRANCH tip '${fftip:0:7}'; no base-red verdict, running on" >&2
+  elif [ "${BASE_RED_FAILFAST:-shadow}" = enforce ]; then
+    git checkout -q --detach "$REMOTE/$BASE_BRANCH"
+    echo "BASE RED: all $ffn failing ids are in the measured red set of base ${B:0:7}; no bisect, nothing landed" >&2; exit 1
+  else
+    echo "SHADOW base-red-failfast: would end BASE RED now ($ffn failing ids all in the measured red set of base ${B:0:7}); set BASE_RED_FAILFAST=enforce to act" >&2
+  fi
+fi
 if :; then  # base-red guard: an id (not already in BASELINE_FAILS) that also fails every one of FLAKE_RUNS solo re-runs on the base (train_flake.sh --base) is pre-existing
   renew; git checkout -q --detach "$B"; : >"$LOG.pre"
   while IFS= read -r id; do

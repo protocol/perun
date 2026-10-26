@@ -4021,6 +4021,13 @@ else
   record 1 "train resilience: flake re-run triage, exclusive gate lease, mkdir locks"; tail -8 "$WORK/train-resilience.log"
 fi
 
+# train claim liveness + base-red fail-fast (shadow-first): own per-feature file (scripts/test-train-liveness.sh), one case here.
+if bash "$ROOT/scripts/test-train-liveness.sh" >"$WORK/train-liveness.log" 2>&1; then
+  record 0 "train liveness: dead-PID claim reap and base-red fail-fast (shadow-first)"
+else
+  record 1 "train liveness: dead-PID claim reap and base-red fail-fast (shadow-first)"; tail -8 "$WORK/train-liveness.log"
+fi
+
 # train lease timing (#1777): own per-feature file (scripts/test-train-lease.sh), one case here.
 if bash "$ROOT/scripts/test-train-lease.sh" >"$WORK/train-lease.log" 2>&1; then
   record 0 "train lease: a busy gate waits or defers (exit 4) before any compose, never refuses after a green gate"

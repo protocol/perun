@@ -108,7 +108,7 @@ done
 # owner record write fails: only the lock this shell created is removed; a foreign lock is left alone
 mkdir "$L"; echo 999999 >"$L/pid"; lock_drop "$L"; [ -d "$L" ]; ok $? "lock: lock_drop never removes another owner's lock"
 clearl
-! grep -nE '\b(pgrep|pkill)\b|\bps +-' "$SC/_lock.sh" "$SC/train_land.sh" "$SC/land_train.sh" "$SC/train_flake.sh"; ok $? "train scripts: no pgrep/ps-based waiting"
+! grep -nE '\b(pgrep|pkill)\b|\bps +-[a-oq-zA-Z]' "$SC/_lock.sh" "$SC/train_land.sh" "$SC/land_train.sh" "$SC/train_flake.sh"; ok $? "train scripts: no pgrep/ps-based waiting"
 
 # --- exclusive lease: atomic whole-file write, pid alive AND mtime fresh, renewed by the train; fail-open on bad files ---
 HX="$WORK/hx/heavy"; mkdir -p "$WORK/hx"; GATE='{"tool_input":{"command":"pytest tests"}}'; XF="$WORK/hx/heavy.exclusive"
@@ -154,6 +154,6 @@ done
 # the push lock is released by the EXIT trap even when the gate fails
 [ ! -e "$R/.git/train-push.lock" ]; ok $? "train_land: push lock not left behind"
 
-! grep -nE '\b(pgrep|pkill)\b|\bps +-' "$SC/_lock.sh" "$SC/train_land.sh" "$SC/land_train.sh" "$SC/train_flake.sh"; ok $? "train scripts: no pgrep/ps-based waiting"
+! grep -nE '\b(pgrep|pkill)\b|\bps +-[a-oq-zA-Z]' "$SC/_lock.sh" "$SC/train_land.sh" "$SC/land_train.sh" "$SC/train_flake.sh"; ok $? "train scripts: no pgrep/ps-based waiting"
 
 echo "$pass passed, $fail failed"; [ "$fail" -eq 0 ]

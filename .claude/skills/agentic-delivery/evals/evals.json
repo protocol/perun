@@ -2989,6 +2989,30 @@
         "Has each later half redo the push-lock and lease waits and land only while the base is still the one it was gated on",
         "Names the SPLIT done line (landed = what land_train merged, gates count) as the place unlanded PRs are reported, and exits 0 only when every PR landed (else 3), never claiming the whole train landed"
       ]
+    },
+    {
+      "id": "train-dead-claim-reap-shadow",
+      "prompt": "A train run was killed and left its mkdir lock behind. The next run prints STALE-LOCK and stops. Can the next run reap a claim whose recorded PID is dead?",
+      "expected_output": "Only a dead PID recorded by the SAME host (the lock's host file equals this host) may be reaped, by any reader, and only under PERUN_CLAIM_REAP=enforce. The default is shadow: log 'SHADOW claim-reap: would reap' and keep the report-only STALE-LOCK path. A claim with no host record or another host's record, or a live PID, is never reaped. Test: scripts/test-train-liveness.sh.",
+      "expectations": [
+        "Requires the claim to record PID and host, and reaps only a dead PID on the same host",
+        "Never reaps a live PID (including a live pid owned by another user, which kill -0 reports as EPERM), another host's claim, or a claim with no host record",
+        "Serializes reapers with a mkdir guard, re-verifies the pid inside it, reaps with one atomic rename to a unique tomb, and never restores over a new holder's directory",
+        "States the default is shadow (log the decision, keep the old report-only behavior) and enforce is opt-in",
+        "Names scripts/test-train-liveness.sh, which plants a dead-PID claim"
+      ]
+    },
+    {
+      "id": "train-base-red-failfast-shadow",
+      "prompt": "A merge train goes red at the browser gate, but every failing test title is already in the base sha's measured red set. Should it bisect and hold the heavy slot?",
+      "expected_output": "No. With BASE_RED_FAILFAST=enforce the train ends as BASE RED at once (exit 1): no solo re-runs, no bisect, nothing landed, and the exit trap frees the heavy lease. The default is shadow: it logs 'SHADOW base-red-failfast: would end BASE RED now' and runs on as before. The base red set is read after the lease wait, so a waiter judges the base it will land on. A failing id outside the base red set never fail-fasts. Test: scripts/test-train-liveness.sh.",
+      "expectations": [
+        "Fail-fasts only when ALL failing ids are in the base's measured red set, never when one is new",
+        "Ends as base-red with no bisect and no landing, and frees the heavy lease",
+        "States the default is shadow (log the decision) and enforce is opt-in, per the throughput-gate rule",
+        "Reads the base red set at start after the lease wait, not at arm time, and fails closed (no base-red verdict) unless the red set is stamped with the gate's base sha and that sha is still the base tip",
+        "Names scripts/test-train-liveness.sh"
+      ]
     }
   ]
 }
