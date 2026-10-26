@@ -2867,6 +2867,21 @@ def _selftest() -> int:
         rc, out = go(f, "verify", "--verify-cmd", "t", state=fresh("rb5.json"))
         return rc == OK and "REFUSED" not in out and "GREEN" in out, out
 
+    def red_base_empty_base_data_is_not_red():
+        f = FakeForge(2)
+        f.base_runs = []
+        rc, out = go(f, "verify", "--verify-cmd", "t", state=fresh("rb6.json"))
+        return rc == OK and "REFUSED" not in out and "GREEN" in out, out
+
+    def red_base_merge_with_base_fix_leading_proceeds():
+        f = FakeForge(2)
+        f.base_runs = [_run("ci", "failure")]
+        st = fresh("rb7.json")
+        rc, out = go(f, "verify", "--verify-cmd", "t", "--base-fix", "1", state=st)
+        rc2, out2 = go(f, "merge", "--apply", "--grant", "g", "--base-fix", "1", state=st)
+        merged = [c[3] for c in f.calls if c[:3] == ["gh", "pr", "merge"]]
+        return rc == OK and rc2 == OK and "REFUSED" not in out2 and merged[:1] == ["1"], out + out2
+
     def merge_binds_lineup_at_fire_time():
         f = FakeForge(3)
         st = verified(f, "bind.json")
@@ -2954,6 +2969,8 @@ def _selftest() -> int:
         ("red-base-refuses-verify-and-merge", red_base_refuses_verify_and_merge),
         ("red-base-allows-base-fix-at-head", red_base_allows_base_fix_at_head),
         ("green-or-pending-base-ignores-red-base-gate", green_or_pending_base_ignores_red_base_gate),
+        ("red-base-empty-base-data-is-not-red", red_base_empty_base_data_is_not_red),
+        ("red-base-merge-with-base-fix-leading-proceeds", red_base_merge_with_base_fix_leading_proceeds),
         ("merge-binds-lineup-at-fire-time", merge_binds_lineup_at_fire_time),
     ]
     try:
