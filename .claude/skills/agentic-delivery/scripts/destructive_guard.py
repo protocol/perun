@@ -80,6 +80,10 @@ Never crashes. Unparseable stdin, a non-string command, a shlex failure or any i
 a regex scan of the raw text for the same destructive classes: block on a hit, otherwise allow (a guard that
 errors closed would wedge every session; one that errors open on a hit would be trivial to evade).
 Side effects: none. `--selftest` runs assertions.
+Wave 19 (`scripts/test_security_gates_heldout24_blind.py`): removal of a core package (libc, glibc, systemd, kernel, dpkg, sudo, ...) through `apt|dnf|yum|zypper|apk|rpm|dpkg|pacman`
+(`rpm -e --nodeps` of anything; `--simulate|--test|--dry-run` is a preview), `influx delete` without `--predicate` and `influx bucket|org delete`, a `cockroach sql` DROP, `cypher-shell`
+`MATCH (n) DETACH DELETE n`, `oc delete project`, `eksctl|skopeo|crane|regctl|oras delete`, `borg delete|prune` and `velero ... delete --all|-l` (no `--dry-run`), `setfacl|chgrp|chattr -R` on
+root or home, `chmod 000` of a critical binary, `passwd -l|-d` of root (or no user), `usermod -L root`, and `find /home -exec chown|chgrp|setfacl`.
 """
 import codecs
 import fnmatch
@@ -112,7 +116,7 @@ BODYRM = re.compile(r"\brm\s+-\w*[rR]\w*\s*(?:\S*[$/~*]|['\"]\s*\+|%s|\{)")  # v
 PRINTCALL = re.compile(r"""\b(?:print|puts|echo|console\.(?:log|error)|sys\.std(?:out|err)\.write)\s*\(((?:[^()'"]|'[^']*'|"[^"]*")*)\)""")
 AWSVAL = ("--profile", "--region", "--endpoint-url", "--output", "--query", "--color", "--ca-bundle", "--cli-read-timeout", "--cli-connect-timeout", "--cli-binary-format")
 HGVAL = ("-R", "--repository", "--cwd", "--config", "--encoding", "--encodingmode", "--color", "--pager")
-SQLCLI = ("psql", "mysql", "mariadb", "sqlite3", "mongosh", "sqlcmd", "cqlsh", "clickhouse-client", "clickhouse-local", "clickhouse")
+SQLCLI = ("psql", "mysql", "mariadb", "sqlite3", "mongosh", "sqlcmd", "cqlsh", "clickhouse-client", "clickhouse-local", "clickhouse", "cockroach", "cypher-shell")
 SQLCOMMENT = re.compile(r"/\*.*?\*/", re.S)
 SQLDROP = re.compile(r"\b(?:drop\s+(?:database|schema|keyspace|table|partition|part)|alter\s+table\s+(?:if\s+exists\s+)?\S+\s+(?:on\s+cluster\s+\S+\s+)?(?:delete|drop|detach|truncate)\b|truncate\s+\w|delete\s+from\s+\w+\s*(?:;|$))", re.I)
 DYNCMD = re.compile(r"(?:^|[;&|\n({]|\bthen\b|\bdo\b)\s*\"?(?:\$\([^()]{0,200}\)|`[^`]{0,200}`|\$\{?\w{1,64}\}?)\"?(?:\s+\S+){0,8}?\s+(?:-\w*(?:rf|fr)\w*|--hard)\b")
@@ -120,7 +124,7 @@ FORKBOMB = re.compile(r"(\S{1,32})\(\)\s*\{\s*\1\s*\|\s*\1\s*&")
 SSH_VAL = "bcDEeFIiJLlmOopQRSWw"
 # eval/shell fed a substitution that decodes base64, hex (`xxd -r`) or printf escapes; scanned in bounded windows after at most 64
 # shell words and 8 substitutions each (more than that alongside a decoder fails closed), so the cost is linear in the input, never quadratic
-DECSTART = re.compile(r"\b(?:eval|source|(?:ba|z|da|k|a)?sh)\b|(?:^|[;&|\n({]|\bthen\b|\bdo\b)\s*(?:\w+=\S*\s+)*(?:sudo\s+(?:-\S+\s+)*)?(?=\$\(|`)")  # a shell word, or a bare substitution as the command word (its output is the command)
+DECSTART = re.compile(r"\b(?:eval|source|(?:ba|z|da|k|a)?sh)\b|(?:^|[;&|\n({]|\bthen\b|\bdo\b)\s*(?:\w{1,64}=\S{0,200}\s+){0,8}(?:sudo\s+(?:-\S+\s+){0,8})?(?=\$\(|`)")  # a shell word, or a bare substitution as the command word (its output is the command)
 SUBST = re.compile(r"\$\(|`")
 DECODE = re.compile(r"\bbase64\b.{0,300}(?:\s-\w*[dD]|--decode)|\bxxd\b.{0,100}\s-\w*r|\bprintf\b.{0,300}\\(?:x[0-9a-fA-F]|[0-7]{3})|\bopenssl\s+enc\b.{0,100}\s-(?:d\b|base64\b|a\b)"
                     r"|\bpython[\d.]*\b.{0,200}(?:b64decode|b32decode|decodebytes|a2b_base64|unhexlify|fromhex)", re.S)
@@ -217,6 +221,182 @@ def _yank1(a):
     v = [a[k + 1] for k, t in enumerate(a[:-1]) if t in ("--vers", "--version")] + [t.partition("=")[2] for t in a if t.startswith(("--vers=", "--version="))] \
         + [t.split("@", 1)[1] for t in a if "@" in t and not t.startswith("-")]
     return len(v) == 1 and re.fullmatch(r"\d+\.\d+\.\d+-[0-9A-Za-z][0-9A-Za-z.+-]*", v[0]) is not None
+
+
+CORE = re.compile(r"(?:libc6(?:-dev)?|libc-bin|libc|glibc(?:-common|-minimal-langpack|-all-langpacks)?|musl|busybox|libsystemd\d*|systemd(?:-sysv|-libs)?|kernel(?:-core)?|linux|linux-generic"
+                  r"|linux-image-(?:generic|amd64|virtual|aws|azure|gcp|lowlatency|oem|cloud-amd64|arm64)|sudo|dpkg|apt|apk-tools|rpm|yum|dnf5?|pacman|filesystem|base|base-files|base-passwd|alpine-base|openrc"
+                  r"|bash|dash|coreutils|openssh-server|openssh-client|ssh|grub(?:-pc|-efi-amd64|-efi-arm64|-common|2-common)?|libpam(?:0g|-modules|-modules-bin|-runtime|-systemd)?|pam|shadow-utils|shadow"
+                  r"|util-linux|login|init|sysvinit-core|udev|e2fsprogs|passwd|mount|perl-base|tar|dbus|libssl\d\S*|openssl(?:-libs)?|libgcc-s1|libcrypt1|libaudit1|libacl1|libattr1|libblkid1|libmount1|libsmartcols1|libuuid1|zlib1g|ncurses-base|ncurses-libs|findutils|sed|gzip|netplan\.io"
+                  r"|libgcc|zlib|libselinux|libstdc\+\+\d*|libxcrypt|rpm-libs|libdnf|krb5-libs|python3-(?:libs|dnf|rpm|hawkey|libdnf)|network-?manager|initramfs-tools|dracut|selinux-policy|libselinux1|ubuntu-(?:minimal|standard|desktop))(?:[:.=]\S+|-\d\S*)?", re.I)  # exact names plus a version/arch suffix: `bash-completion`, `apt-utils`, `kernel-devel`, `linux-headers-*` stay allowed
+GLOBN = ("kernel", "kernel-core", "libc6", "glibc", "libsystemd0", "systemd", "linux-image-generic", "sudo", "bash", "dpkg", "openssl", "libssl3")
+PKGVERB = {"rpm": r"--erase|-[a-zA-Z]*e[a-zA-Z]*", "dpkg": r"--remove|--purge|-[a-zA-Z]*[rP][a-zA-Z]*", "pacman": r"--remove|-[a-zA-Z]*R[a-zA-Z]*"}
+PKGDRY = ("--simulate", "--just-print", "--dry-run", "--no-act", "--recon", "--test", "--assumeno", "--assume-no", "--print", "--downloadonly", "--download-only", "--print-uris")
+PKGSHORT = {"apt": "sd", "apt-get": "sd", "aptitude": "s", "zypper": "D", "pacman": "p", "apk": "s"}
+PKGROOT = {"pacman": "-r", "apk": "-p"}
+HOMESUB = r"(?:~|\$\{?HOME\}?)/."
+INFCMD = frozenset(("write", "query", "task", "auth", "user", "dashboard", "secret", "stack", "telegraf", "check", "rule", "endpoint", "label", "scraper", "notebook", "template", "config", "dbrp", "bucket", "org", "list", "create", "update", "find", "v1", "apply", "export"))
+TOPDIRS = frozenset(("/home", "/root", "/Users", "/bin", "/sbin", "/usr", "/etc", "/lib", "/lib64", "/boot", "/var", "/dev", "/sys", "/proc"))
+CYDEL = re.compile(r"\bdelete\b", re.I)
+CYMATCH = re.compile(r"\bmatch\s{0,20}(?:\w{1,64}\s{0,20}=\s{0,20})?\(\s{0,20}\w{0,64}\s{0,20}\)|,\s{0,20}\(\s{0,20}\w{0,64}\s{0,20}\)", re.I)
+CYFILT = re.compile(r"[(\[]\s{0,20}\w{0,64}\s{0,20}(?::[\w`]|\{\s{0,5}\w{1,64}\s{0,5}:)")  # a label, type or property map inside a node or relationship pattern
+CYEND = re.compile(r"\b(?:with|return|set|remove|unwind|merge|create|foreach|order|limit|skip)\b", re.I)  # the pattern or predicate ends here
+CYOR = re.compile(r"\b(?:or|xor)\b", re.I)
+CYREF = re.compile(r"(?<![\w.])[A-Za-z_]\w*\.[A-Za-z_]\w*(?![\w(])|\w:\w|\)\s{0,5}<?-")  # a property, label or pattern predicate
+CYSKIP = re.compile(r"'(?:[^'\\]|\\.?)*(?:'|\Z)|\"(?:[^\"\\]|\\.?)*(?:\"|\Z)|//[^\n]*|/\*.*?(?:\*/|\Z)", re.S)  # strings and comments; an unterminated one runs to the end, so the scan stays linear
+CYSPLIT = re.compile(r"\b(match|where|delete|call)\b", re.I)
+CYWHEREBAD = re.compile(r"\b\d{1,20}\s{0,5}(?:=|<>|[<>]=?)\s{0,5}\d{1,20}\b|''\s{0,5}(?:=|<>)\s{0,5}''|(?<![\w.])(?:\d{1,20}|'')\s{1,5}in\b|\b(?:size|coalesce|length|exists)\s{0,5}\(|\bid\s{0,5}\(\s{0,5}\w{1,64}\s{0,5}\)\s{0,5}(?:>=\s{0,5}0|>\s{0,5}-)"
+                        r"|(?<![\w.])(\w{1,64}(?:\.\w{1,64}){0,3})\s{0,5}=\s{0,5}\1\b", re.I)  # a predicate every node passes
+CYNULL = re.compile(r"([\w.]{1,64})\s{1,5}is\s{1,5}null\b.{0,300}?\b\1\s{1,5}is\s{1,5}not\s{1,5}null|([\w.]{1,64})\s{1,5}is\s{1,5}not\s{1,5}null\b.{0,300}?\b\2\s{1,5}is\s{1,5}null", re.I | re.S)
+CYAPOC = re.compile(r"apoc\.(?:periodic|cypher)\.", re.I)
+
+
+def _cypher(t):
+    """Cypher that deletes every node/path: a DELETE reached after an unlabeled, unfiltered `MATCH (n)` (also `, (n)`, `p=()`, `-[r]->`), including inside `CALL {} IN TRANSACTIONS`, or an `apoc.periodic|cypher`
+    call within 300 characters of a `delete`. A WHERE filters only when every `or|xor` branch names a property, label or pattern and none is a constant comparison, self-comparison, `size(`/`coalesce(` or `id(n) >= 0`
+    (`WHERE n.x IS NULL OR n.x IS NOT NULL` too). Strings and `//`, `/* */` comments are removed and each `;` statement
+    is read as a stream of MATCH/WHERE/DELETE keywords, so padding and a `;` in a string cannot hide the MATCH. Linear: every pattern is bounded."""
+    dl = [m.start() for m in CYDEL.finditer(t)]
+    if dl and any(next((d for d in dl if d >= m.end()), 1 << 30) - m.end() <= 300 for m in CYAPOC.finditer(t)):
+        return True
+    for st in CYSKIP.sub(lambda m: "''" if m[0][0] in "'\"" else " ", t).split(";"):
+        base = cur = False
+        parts = CYSPLIT.split(st)
+        for k in range(1, len(parts), 2):
+            kw, seg = parts[k].lower(), CYEND.split(parts[k + 1], 1)[0]
+            if kw == "match":
+                z = parts[k] + seg
+                last = max((x.end() for x in CYMATCH.finditer(z)), default=-1)  # unfiltered iff no `:Label` or `{k:` starts after the last bare pattern
+                base, cur = base or cur, last >= 0 and not any(f.start() >= last for f in CYFILT.finditer(z, last))
+            elif kw == "where" and not CYNULL.search(seg) and all(CYREF.search(b) and not CYWHEREBAD.search(b) for b in CYOR.split(seg)):
+                cur = False
+            elif kw == "delete" and (base or cur):
+                return True
+    return False
+
+
+SHCOMMENT = re.compile(r"""'[^']*'|"(?:[^"\\]|\\.)*"|\\.|(?<![^\s;&|()<>])#[^\n]*""", re.S)
+
+
+def _nocomment(c):
+    """Remove unquoted shell comments (`#` at the start of a word to end of line): `rm -rf ./build # not /` is judged without the comment. Quotes, `\\#`, `$#` and `a#b` are kept."""
+    return SHCOMMENT.sub(lambda m: "" if m[0][0] == "#" else m[0], c) if "#" in c else c
+
+
+def _sqlhit(t):
+    """SQL DROP/TRUNCATE/DELETE-all or a Cypher delete-everything in `t`."""
+    return bool(SQLDROP.search(t) or _cypher(t))
+
+
+SYSTREE = ("/etc", "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32", "/boot", "/dev", "/sys", "/proc", "/root", "/System", "/Library", "/private/etc")
+
+
+def _findfar(x):
+    """A `find` start that is the whole host or a user area: `/`, `..`, `~`, `$HOME`, `/home`, `/home/<user>`, `/var`, or anything inside `/etc`, `/usr` (not `/usr/local`), `/bin`, `/lib*`, `/boot`, `/root`, `/System`,
+    `/Library`, ... (not `/var/www`, `/srv/x`, `/opt/x`, `/home/<user>/<project>`)."""
+    p = posixpath.normpath(re.sub("/+", "/", x)) if x else "."
+    return p in ("/", "..", "/var", "/private") or p.startswith("../..") or p in TOPDIRS or x in ("~", "$HOME", "${HOME}") or re.fullmatch(r"/(?:home|Users)/[^/]+", p) is not None \
+        or (any(p == d or p.startswith(d + "/") for d in SYSTREE) and not p.startswith("/usr/local/") and p != "/usr/local")
+
+
+SYSDIRS = ("/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc", "/var")
+
+
+def _frev(st, m):
+    """`_revoke` for `find ... -exec chmod`: `go-rwx` of `/home` is routine hardening, so non-owner bits count only for `/` and the system directories and everything below them (`/etc/ssh`, `/etc/ssl/private` stay secret-file carve-outs)."""
+    ps = [posixpath.normpath(re.sub("/+", "/", x)) for x in st]
+    return _revoke(m, not any(x.startswith("..") or p == "/" or (any(p == d or p.startswith(d + "/") for d in SYSDIRS) and not re.match(r"/etc/(?:ssh|ssl/private)(?:/|$)", p)) for x, p in zip(st, ps)))
+
+
+def _corepkg(name, a, ph=None):
+    """Removal of a core OS package (libc, systemd, kernel, dpkg, sudo, ...), a `*`/`@group` removal or a list built at run time, or `rpm -e --nodeps` of anything, via apt/dnf/yum/zypper/apk/rpm/dpkg/pacman.
+    A preview (`--simulate`, `-s`, `-D`, `-p`, `--test`, `APT::Get::Simulate=true`; only true/yes/1/on/with/enable or no value counts, `=false|no|off|0` does not) or an `--installroot`/`--root` outside `/` allows it."""
+    pv = rt = False  # the LAST preview switch and the LAST root option win, as in the tools
+    for k, t in enumerate(a):
+        b, _, v = t.partition("=")
+        o = re.fullmatch(r"apt::get::(?:simulate|just-print|dry-run|no-act)(?:=(.*))?", t[2:] if t.startswith("-o") else t, re.I)
+        if b in PKGDRY:
+            pv = v.lower() in ("", "true", "yes", "1", "on", "with", "enable")
+        elif b.startswith("--no-") and "--" + b[5:] in PKGDRY and b != "--no-act":
+            pv = False
+        elif b == "--setopt" and v.startswith("tsflags=") or t.startswith("--setopt=tsflags="):
+            pv = "test" in t.partition("tsflags=")[2]
+        elif o:
+            pv = o[1] is None or o[1].lower() in ("true", "yes", "1", "on", "with", "enable")
+        elif re.fullmatch(r"-[A-Za-z]+", t) and not t.startswith("-o") and any(c in t[1:] for c in PKGSHORT.get(name, "\0")) \
+                and (not name.startswith("apt") or re.fullmatch(r"-[yqsdfmuVv]+", t)):  # an apt bundle with a value flag (`-tstable`, `-ca`) is no preview
+            pv = True
+        m = re.fullmatch(r"(?:-o)?(?:dir::)?rootdir=(.*)", t, re.I)
+        rv = m[1] if m else v or (a[k + 1] if k + 1 < len(a) else "") if b in ("--installroot", "--root", "--instdir", "--sysroot", "--rootdir", PKGROOT.get(name, "\0")) else ""
+        if rv and "$" not in rv:
+            rt = posixpath.normpath(re.sub("/+", "/", rv)) != "/"
+    if pv or rt:
+        return False
+    w = [t for t in a if not t.startswith("-")]
+    removal = True
+    if name in PKGVERB:
+        if not any(re.fullmatch(PKGVERB[name], t) for t in a):
+            return False
+        if name == "rpm" and "--nodeps" in a:
+            return True
+        pk = w
+    else:
+        k = next((i for i, t in enumerate(w) if t in ("remove", "purge", "erase", "del", "rm", "autoremove", "autopurge", "uninstall", "groupremove", "grouperase", "swap", "install", "in", "add")), None)
+        if k is None or w[k - 1:k] == ["mark"]:
+            return False
+        if w[k].startswith("group") or w[k - 1:k] == ["group"]:
+            return True  # a whole package group
+        v, pk = w[k], w[k + 1:]
+        if v == "swap":
+            pk = pk[:1]
+        elif v in ("install", "in", "add"):  # `apt-get install libc6-` removes it; `--remove` flips install into removal; `zypper in -glibc`
+            pk = [t[:-1] for t in pk if t.endswith("-")] + [t[1:] for t in a if name == "zypper" and re.fullmatch(r"-[A-Za-z]\w+", t)] + (pk if "--remove" in a else [])
+            removal = False
+    return (removal and (ph is not None or any(re.search(r"[$`]", t) for t in pk))) or any(
+        re.fullmatch(r"\\?\*", t) or t.startswith("@") or (re.search(r"[*?\[]", t) and any(fnmatch.fnmatchcase(n, t.lower()) for n in GLOBN)) or CORE.fullmatch(t)
+        or (name in ("dnf", "yum", "microdnf", "tdnf") and re.fullmatch(r"python3(?:\.\d+)?(?:[:=]\S+|-\d\S*)?", t)) for t in pk)
+
+
+CRITBIN = re.compile(r"/(?:usr/)?(?:local/)?s?bin/(?:sudo|su|doas|bash|sh|dash|zsh|login|sshd|ssh|systemctl|init|mount|chmod|chown|rm|cp|mv|ls|cat|env|ln|tar|apt|apt-get|dpkg|rpm|yum|dnf|passwd|visudo|reboot|shutdown|halt|poweroff|getty|agetty)"
+                     r"|/(?:usr/)?lib(?:64|32|x32)?/(?:[\w-]+-linux-gnu/)?(?:libc\.so\.6|libc-[\d.]+\.so|libm\.so\.6|libpthread\S*|ld-linux\S*|ld-\d\S*)|/(?:usr/)?lib/systemd/systemd"
+                     r"|/etc/(?:passwd|shadow|group|gshadow|sudoers|fstab|hosts|resolv\.conf|nsswitch\.conf|login\.defs|ld\.so\.\S+|ssh/sshd_config|pam\.d/\S+|sudoers\.d/\S+)|/boot/(?:vmlinuz|initrd|initramfs)\S*"
+                     r"|/(?:bin|sbin|lib|lib64|usr|usr/bin|usr/sbin|usr/lib|etc|boot|home|root|var|opt|srv)?")
+CRITDATA = re.compile(r"/etc/(?:shadow|gshadow|sudoers(?:\.d(?:/.*)?)?|ssh/.*|ssl/private(?:/.*)?)|/root(?:/.*)?|/(?:home|Users)/[^/]+(?:/.*)?|/(?:opt|srv)(?:/.*)?|/var/.+")  # secret and user data: only losing the owner's access locks the host out, not `go-rwx` hardening; `/etc`, `/var`, `/home` and world-read system files must stay readable
+
+
+def _core_bin(t):
+    """A path to a binary or file whose loss locks the host out (sudo, su, shells, login, ssh, libc, systemd, pam, `/etc/passwd|shadow|sudoers`, kernel) or a top-level system directory, after normalizing."""
+    return t.startswith("/") and bool(CRITBIN.fullmatch(posixpath.normpath(re.sub("/+", "/", t))))
+
+
+def _revoke(m, owner=False):
+    """A chmod mode that wipes everything or removes read/execute from anyone (`000`, `a-x`, `-x`, `go-rwx`); `owner` counts only a clause that touches the owner (`u-`, `a-`, bare `-`)."""
+    return _wipe(m) or any(re.fullmatch(r"(?:a|[ugoa]*u[ugoa]*|)-[rwxXst]*[rxX][rwxXst]*" if owner else r"[ugoa]*-[rwxXst]*[rxX][rwxXst]*", c) is not None for c in m.split(","))
+
+
+def _permissive(m):
+    """A chmod mode that opens everything (`777`, `666`, `a+rwx`, `o+w`) or wipes it."""
+    return _wipe(m) or re.fullmatch(r"0?(?:777|666)|(?:a|[ug]*o[ug]*)[+=][rwxXst]*w[rwxXst]*", m) is not None
+
+
+def _rootlock(name, a):
+    """`passwd -l|-d|-x 0`, `usermod -L|-e|-s nologin|-p '!'`, `chsh -s nologin`, `chage -E` of root (no user = root under sudo), or `sed -i` on `/etc/passwd|shadow|group|sudoers`."""
+    if name in ("usermod", "chsh", "chage"):  # attached short values: `-pxx`, `-s/sbin/nologin`, `-E0`
+        a = [y for t in a for y in ((t[:2], t[2:]) if re.fullmatch(r"-[pesE][^-=].*", t) else (t,))]
+    w = [t for t in a if not t.startswith("-")]
+    val = lambda *f: [t.partition("=")[2] if "=" in t else a[k + 1] if k + 1 < len(a) else "" for k, t in enumerate(a) if t.split("=")[0] in f]
+    nologin = any(os.path.basename(v) in ("nologin", "false", "true") for v in val("-s", "--shell"))
+    if name in ("sed", "perl"):
+        ed = any(re.fullmatch(r"-[a-zA-Z]*i\S*|--in-place\S*", t) for t in a)
+        if ed and re.search(r"PermitRootLogin", " ".join(a), re.I) and re.search(r"PasswordAuthentication", " ".join(a), re.I) and any(re.search(r"(?:^|/)sshd_config(?:\.d/[^/]+)?$", t) for t in w):
+            return True  # one edit that turns off root login and password login can lock out every ssh user
+        return ed and any(
+            re.fullmatch(r"/etc/(?:passwd|shadow|group|gshadow|sudoers(?:\.d/.*)?|pam\.d/.*|fstab|ld\.so\.conf)", posixpath.normpath(re.sub("/+", "/", t))) for t in w if t.startswith("/"))
+    if name == "passwd":
+        lock = any(t in ("--lock", "--delete") or (not t.startswith("--") and (_bundle(t, "l") or _bundle(t, "d"))) for t in a)
+        return (lock and (not w or "root" in w or "0" in w or any(re.search(r"[$`]", t) for t in w))) or ("root" in w and "0" in val("-x", "--maxdays"))
+    return "root" in w and ((name == "usermod" and (any(t == "--lock" or _bundle(t, "L") for t in a) or any(v not in ("", "-1") for v in val("-e", "--expiredate")) or nologin
+                                                    or any(not v.startswith("$") for v in val("-p", "--password"))))
+                            or (name == "chsh" and nologin) or (name == "chage" and any(v not in ("", "-1", "never") for v in val("-E", "--expiredate"))))
 
 
 def _ansible(a, depth):
@@ -576,8 +756,11 @@ def _chmod000(a):
         if t == "--":
             pos += a[k:]
             break
-        if not t.startswith("--") and t.startswith("-") and _wipe(t) or not t.startswith("-"):
+        if not t.startswith("--") and t.startswith("-") and _revoke(t) or not t.startswith("-"):
             pos.append(t)  # a mode may start with `-`
+    rv = lambda m, p: _revoke(m, bool(CRITDATA.fullmatch(p))) and not (p in ("/home", "/Users") and all(re.fullmatch(r"o-[rwxXst]*", c) for c in m.split(",")))  # `o-rwx /home` is hardening
+    if any(_core_bin(t) and any(rv(m, posixpath.normpath(re.sub("/+", "/", t))) for m in pos if m is not t) for t in pos if not _revoke(t)):
+        return True  # one critical binary or system directory needs no -R; a data path (`/etc/*`, `/root`, `/home`) only when the owner loses access
     modes = [t for t in pos if _wipe(t)]
     return bool(modes) and any(_rec(t) for t in a) and any(
         (t.startswith(("/", "~")) and not _scoped(t)) or posixpath.normpath(t) in CHMOD_TGT or t.rstrip("/") == "./*" or ".." in t.split("/")
@@ -731,7 +914,7 @@ def _sqlfile(p):
         return why if re.search(r"(?i)drop|truncate|destroy|purge|wipe|nuke", os.path.basename(p)) else ""
     try:
         with open(p, errors="replace") as f:
-            return why if SQLDROP.search(SQLCOMMENT.sub(" ", f.read(1 << 18))) else ""
+            return why if _sqlhit(SQLCOMMENT.sub(" ", f.read(1 << 18))) else ""
     except OSError:
         return ""
 
@@ -896,8 +1079,8 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
         return _git(a, cwd, genv)
     if name == "find":
         k = 0
-        while k < len(a) and a[k] in ("-H", "-L", "-P"):
-            k += 1
+        while k < len(a) and (a[k] in ("-H", "-L", "-P", "-D") or re.fullmatch(r"-O\d", a[k])):
+            k += 2 if a[k] == "-D" else 1
         st = []
         while k < len(a) and not a[k].startswith(("-", "(", "!")):
             st.append(a[k])
@@ -924,6 +1107,10 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
                 simple = sub[u:u + 1] == ["rm"] and sub[-1:] == ["{}"] and all(x.startswith("-") for x in sub[u + 1:-1])
                 if u < len(sub) and os.path.basename(sub[u]) in ("rm", "shred") and not (sc or (tree and simple)):
                     return "find -exec rm. List with `find ... -print` first, then remove exact paths"
+                bn = os.path.basename(sub[u]) if u < len(sub) else ""
+                if any(_findfar(x) for x in st) and (bn in ("chown", "chgrp", "setfacl", "chattr") or (bn == "chmod" and any(_permissive(x) or _frev(st, x) for x in sub[u + 1:]))
+                                                                                              or (bn in SHELLS and any(re.search(r"\b(?:chown|chgrp|setfacl|chattr)\b", x) for x in sub[u + 1:]))):
+                    return "find -exec chown/chgrp/setfacl/chattr (or a permissive chmod) over root or /home rewrites the host. Target an exact in-project path"
                 r = check(" ".join(shlex.quote(x) for x in sub), depth + 1)
                 if r:
                     return r
@@ -946,7 +1133,7 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
     pos = [t for t in a if not t.startswith("-")]  # ponytail: a relative *.img/*.raw file is not a device; a symlink planted by an earlier command is out of sight
     if name.startswith("mkfs") and not _mkfs_dry(name, a) and not (pos and all(IMGFILE.fullmatch(t) and not os.path.realpath(t).startswith("/dev/") for t in pos)):
         return "mkfs formats a device. Do it in a VM, never on the host"
-    if name in ("chmod", "chown") and any(_rec(t) for t in a) \
+    if name in ("chmod", "chown", "chgrp", "setfacl", "chattr") and any(_rec(t) for t in a) \
             and any(_far(t) for t in a if not t.startswith("-")):
         return f"{name} -R on root/home. Target an exact in-project path"
     if name == "chmod" and _chmod000(a):
@@ -1058,6 +1245,30 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
         return "kubectl scale --all --replicas=0 stops every workload. Name the objects to scale and ask the owner"
     if name == "bq" and "rm" in w and any(t.split("=")[0] in ("-r", "-f", "--recursive", "--force") and _on([t], t.split("=")[0]) or _bundle(t, "r") or _bundle(t, "f") for t in a):
         return "bq rm -r/-f deletes a dataset or table without a prompt. Name the exact table, omit -f, and ask the owner"
+    if name in ("apt", "apt-get", "aptitude", "dnf", "yum", "microdnf", "tdnf", "zypper", "apk", "rpm", "dpkg", "pacman") and _corepkg(name, a, ph):
+        return f"{name} removal of a core system package (libc, systemd, kernel, dpkg, sudo, ...) breaks or bricks the host. Preview with `--simulate` and ask the owner"
+    if name == "influx" and "delete" in w:
+        k = w.index("delete")
+        pred = [t.partition("=")[2] if "=" in t else a[x + 1] if x + 1 < len(a) else "" for x, t in enumerate(a) if t.split("=")[0] == "-p" or (t.startswith("--pred") and "--predicate".startswith(t.split("=")[0]))]
+        if w[k - 1:k] in (["bucket"], ["org"]) or (not set(w[:k]) & INFCMD and not any(p.strip() for p in pred)):
+            return "influx delete without a non-empty --predicate (or bucket/org delete) wipes a whole time range or bucket. Add a --predicate and ask the owner"
+    if name == "influx" and any(x in ("bucket", "org") and w[i + 1:i + 2] in (["remove"], ["rm"]) for i, x in enumerate(w)):
+        return "influx bucket/org remove deletes a whole bucket or org. Ask the owner"
+    if (name == "eksctl" and "delete" in w and w[w.index("delete") + 1:][:1] == ["cluster"] and not _on(a, "--dry-run")) or (name in ("skopeo", "crane", "regctl", "oras") and "delete" in w):
+        return f"{name} delete removes a cluster or a registry image for good. Ask the owner"
+    if name == "borg" and any(x in ("delete", "prune", "rdelete", "repo-delete") for x in w) and not any(t == "--dry-run" or _bundle(t, "n") for t in a):
+        return "borg delete/prune/rdelete destroys backup archives for good. Preview with `--dry-run` and ask the owner"
+    if name == "velero" and ("uninstall" in w or ("delete" in w and (_on(a, "--all", "--from-schedule") or any(t.split("=")[0] in ("-l", "--selector") for t in a) or w[-1:] == ["delete"]))):
+        return "velero delete --all/--selector/--from-schedule (or uninstall) removes backups for good. Name one backup and ask the owner"
+    if name in ("vipw", "vigr"):
+        return f"{name} edits the account database by hand. Ask the owner"
+    if name in ("userdel", "deluser") and any(t in ("--remove", "--remove-home", "--remove-all-files", "--force") or (not t.startswith("--") and (_bundle(t, "r") or _bundle(t, "f"))) for t in a):
+        return f"{name} with -r/-f deletes the account's home directory and files for good. Back them up and ask the owner"
+    if name in ("iptables", "ip6tables", "iptables-legacy", "ip6tables-legacy", "iptables-nft", "ip6tables-nft") and any(
+            t in ("-P", "--policy") and a[k + 1:k + 2][0:1] and a[k + 1].upper() in ("INPUT", "OUTPUT") and a[k + 2:k + 3][0:1] and a[k + 2].upper() in ("DROP", "REJECT") for k, t in enumerate(a)):
+        return "iptables default policy DROP/REJECT on INPUT/OUTPUT (with -F) cuts every connection, ssh included. Add the allow rules first and ask the owner"
+    if name in ("passwd", "usermod", "chsh", "chage", "sed", "perl") and _rootlock(name, a):
+        return f"{name} locks out root or edits the account database. Ask the owner"
     if name == "ansible" and (r := _ansible(a, depth)):
         return r
     if (name == "aws" and len(w) > 1 and not ddb1 and re.match(r"(?:(?:delete|terminate|purge)-|schedule-key-deletion$)", w[1])) \
@@ -1101,9 +1312,10 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
             k += 1
         r = r[0].split("/")[0].lower() if r else ""
         kinds = set(r.split(",")) | {t.split("/")[0].lower() for t in a[a.index("delete"):] if "/" in t and not t.startswith("-") and not t.endswith((".yaml", ".yml", ".json"))}  # `pods,nodes`, `pod/a node/b`
+        kinds = {re.sub(r"\.(?:v1|project\.openshift\.io)$", "", x) for x in kinds}  # `namespaces.v1`; a CRD such as `namespace.foo.io` is not a namespace
         if kinds & {"node", "nodes", "no"}:
             return "kubectl delete node removes the node from the cluster and strands its pods. Use `kubectl cordon` and ask the owner"
-        if r in ("ns", "namespace", "namespaces") or (r == "all" and ("--all" in a or "-A" in a or "--all-namespaces" in a)):
+        if kinds & {"ns", "namespace", "namespaces", "project", "projects", "projectrequest", "projectrequests"} or (r == "all" and ("--all" in a or "-A" in a or "--all-namespaces" in a)):
             return "kubectl delete namespace/all removes a whole workload. Delete exact named objects and ask the owner"
     if name == "kubectl" and "delete" in w and any(_kstdin(a, j) for j in range(len(a))):
         return "kubectl delete -f - deletes whatever manifest is piped in, which cannot be vetted. Write it to a file, read it, then delete by exact name"
@@ -1237,7 +1449,7 @@ def _cmd(name, a, ph, depth=0, cwd="", genv=False):
         r = _sqlite(a, depth)
         if r:
             return r
-    if name in SQLCLI and not (name == "sqlite3" and ":memory:" in a and not re.search(r"attach|\.shell|\.system|\.read", " ".join(a), re.I)) and not _testsql(name, a) and any(SQLDROP.search(SQLCOMMENT.sub(' ', re.sub(r"^-[A-Za-z]", r"\g<0> ", t))) for t in a[:512]):  # first 512 args bound the scan; `-c'drop ...'` joins flag and text
+    if name in SQLCLI and not (name == "sqlite3" and ":memory:" in a and not re.search(r"attach|\.shell|\.system|\.read", " ".join(a), re.I)) and not _testsql(name, a) and any(_sqlhit(SQLCOMMENT.sub(' ', re.sub(r"^-[A-Za-z]", r"\g<0> ", t))) for t in a[:512]):  # first 512 args bound the scan; `-c'drop ...'` joins flag and text
         return "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
     if name in SHELLS + ("eval",) and any(re.search(r"\b(curl|wget)\b", t) for t in a):
         return "remote script run through a shell. Download, read it, then run it"
@@ -1345,11 +1557,13 @@ def _feed(name, text):
     """Reason when `text` is fed to shell/interpreter `name` and is destructive."""
     if name in SHELLS + ("eval",):
         return check(text, 1)
+    if name == "chpasswd" and re.search(r"(?m)^\s{0,20}(?:root|0):", text):
+        return "chpasswd of root can lock root out (a `!`/`x` hash, a typo). Ask the owner"
     if INTERP.match(name) or name in AWK:
         return _body(text)
     if name == "sqlite3" and _sqlite([text], 1):
         return _sqlite([text], 1)
-    if name in SQLCLI and SQLDROP.search(SQLCOMMENT.sub(' ', text)):
+    if name in SQLCLI and _sqlhit(SQLCOMMENT.sub(' ', text)):
         return "SQL DROP/TRUNCATE/DELETE-all through a database client. Ask the owner"
     return ""
 
@@ -1440,10 +1654,15 @@ def _ansic(m):
     return shlex.quote(t) if t.isprintable() else m[0]
 
 
+MAXCMD, MAXLINES = 65536, 2000
+
+
 def check(cmd, _depth=0, _ph=None):
     """Return a one-line reason `cmd` is destructive, or '' (parse errors use the regex fallback).
 
     `_ph`: xargs placeholders inherited by a nested `sh -c` body."""
+    if _depth == 0 and (len(cmd) > MAXCMD or cmd.count("\n") > MAXLINES):
+        return f"command over {MAXCMD} characters or {MAXLINES} lines cannot be vetted (fail closed). Split it or run it yourself"
     cmd = cmd.replace("\\\n", "")
     if _depth > MAXDEPTH:
         return _fallback(cmd)
@@ -1472,7 +1691,7 @@ def check(cmd, _depth=0, _ph=None):
             return r
         for w in WROTE.findall(pre + m.group(0).split("\n", 1)[0]):
             wr.setdefault(_np(w[0] or w[1]), []).append(m.group(3))
-    cmd = _data(HEREDOC.sub(lambda m: m.group(0).split("\n", 1)[0], cmd))
+    cmd = _nocomment(_data(HEREDOC.sub(lambda m: m.group(0).split("\n", 1)[0], cmd)))
     if re.search(r">\(\s*(?:\S*/)?(?:bash|sh|zsh|dash|ash|ksh)\s*(?:-\w+\s*)*\)", cmd):
         return "text relayed into a shell by >(sh) cannot be vetted. Write it to a file, read it, then run it"
     r = _windel(cmd)
@@ -1591,6 +1810,9 @@ def check(cmd, _depth=0, _ph=None):
         if name == "rm" and ph and op == "|" and prev == "echo" and feed and feed[1:] and (not cwd or _scoped(cwd)) and all(LITPATH.fullmatch(x) for x in feed[1:]):
             a, ph = [y for t in a for y in (feed[1:] if t in ph else [t])], None  # `echo ./build | xargs -I{} rm -rf {}`: the targets are literal
         r = _cmd(name, a + ([t for t in seg[:i] if re.match(r"\w+=", t)] if name in ("make", "gmake", "psql") else []), ph, _depth, cwd, genv)
+        if not r and ph and op == "|" and "find" in up and any(_findfar(t) for t in up if not t.startswith("-")) and (name in ("chown", "chgrp", "setfacl", "chattr") or (
+                name == "chmod" and any(_permissive(t) or _frev([x for x in up if not x.startswith("-")], t) for t in a)) or (name in SHELLS and any(re.search(r"\b(?:chown|chgrp|setfacl|chattr|chmod)\b", t) for t in a))):
+            r = "chown/chgrp/setfacl/chattr fed by `find` over root or /home rewrites the host. Target an exact in-project path"
         if not r and name == "rm" and ph and op == "|" and any((t.startswith(("/", "~", "$")) and not _scoped(t)) or ".." in t.split("/") for t in up):
             r = "rm of paths piped from a list outside scratch space. List them first, then `rm` exact paths"
         if not r and name == "eval":

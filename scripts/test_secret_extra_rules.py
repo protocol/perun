@@ -74,6 +74,13 @@ LIVE["flyio-token"] = "Fly" "V1 fm" "2_" + tok("w10a", 60) + "=="
 LIVE.update({"nuget-cleartext-password": '<add key="ClearText' 'Password" value="' + "".join(c for c in tok("w11a", 60) if c.isalpha())[:25] + '" />', "sas-sig-first": "sig=" + tok("w11b", 43) + "%3D&se=2027-01-01&sp=rwdl",
              "client-secret-assign": "AZURE_CLIENT_" "SECRET: " + tok("w11c", 40), "stripe-webhook-secret": "wh" "sec_" + tok("w11d", 32),
              "doppler-token": "dp" ".st.dev." + tok("w11e", 40), "piped-login-password": 'echo "' + tok("w11f", 40) + '" | docker login ghcr.io -u jane --password-stdin'})
+# Rules added after held-out-15 (decoy twins and bypass variants: test_secret_extra_rules_w12.py).
+_pw = tok("w12", 12) + "#9"
+LIVE.update({"cli-flag-password-quoted": "sshpass -p '" + _pw + "' ssh h", "figma-pat": "fig" "d_" + tok("w12a", 40), "launchdarkly-key": "sdk-" + hashlib.sha256(b"w12b").hexdigest()[:36],
+             "authorization-apikey": "Authorization: ApiKey " + tok("w12c", 48), "laravel-app-key": "APP_KEY=base64:" + tok("w12d", 43) + "=", "openssl-pass-arg": "openssl enc -pass pass:" + _pw,
+             "passphrase-flag": "gpg --passphrase " + _pw + " -d f", "tf-variable-secret-default": 'variable "db_password" {\\n  default = "' + _pw + '"\\n}',
+             "cfn-noecho-default": "P:\\n  NoEcho: true\\n  Default: " + _pw, "securestring-plaintext": 'ConvertTo-SecureString "' + _pw + '" -AsPlainText -Force',
+             "named-token-literal": 'const apiToken = "tk_' + tok("w12e", 40) + '"'})
 LIVE["password-assign"] = "DB_PASS" "WORD=" + tok("pa", 11) + "!047"
 LIVE["password-env-netrc"] = "ENV ADMIN_PASS" "WORD " + tok("pe", 11) + "!047"
 LIVE["conn-string-password"] = "jdbc:sqlserver://h:1433;user=jane;pass" "word=" + tok("cp", 16)
