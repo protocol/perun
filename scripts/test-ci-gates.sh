@@ -2769,6 +2769,18 @@ else
   record 1 "pre-push-verify: a failing DCR_PREPUSH_CMD blocks the push (planted RED)"
 fi
 
+# Case: an annotated tag on HEAD is verified against the commit it points to,
+# not refused because the tag object's sha differs from HEAD.
+git -C "$ppvroot/local" tag -a v0.0.1 -m v0.0.1 >/dev/null 2>&1
+ppv_tag_sha="$(git -C "$ppvroot/local" rev-parse v0.0.1)"
+ppv_run "$WORK/ppv-tag.log" "refs/tags/v0.0.1 $ppv_tag_sha refs/tags/v0.0.1 $ppv_zero" \
+  DCR_PREPUSH_CMD=true
+if [ "$PPV_RC" -eq 0 ] && [ "$ppv_tag_sha" != "$ppv_local_sha" ]; then
+  record 0 "pre-push-verify: an annotated tag on HEAD is allowed"
+else
+  record 1 "pre-push-verify: an annotated tag on HEAD is allowed"
+fi
+
 # Case: DCR_PREPUSH_CMD unset fails closed by default (no env=val args below,
 # so neither var is set in the hook's environment).
 ppv_run "$WORK/ppv-unset.log" "refs/heads/main $ppv_local_sha refs/heads/main $ppv_local_sha"

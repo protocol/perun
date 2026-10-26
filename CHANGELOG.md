@@ -3,6 +3,11 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.605.0] — 2026-10-26
+
+### Fixed
+- The shipped `pre-push-verify.sh` hook no longer refuses an annotated tag push: it verifies the commit the tag points to instead of comparing the tag object's sha with HEAD.
+
 ## [1.604.0] — 2026-10-26
 
 - Added deterministic answer keys, a stdlib scorer and a reproducible results script for the business-ops bench (`docs/bench/bizops-keys-1026/`): rule-derived checks for leading with a number, prompt-computable arithmetic, routing the jurisdiction-specific part to a professional and no invented benchmarks; no judge and no paid calls. Caveat: the lead-with-a-number check encodes the skill's own doctrine, so it is circular and drives most of the gap. On the 150 held-out scenarios the shipped skill passes 111 and the round-4 edit 112 against the rival's 84 (shipped vs rival 41 to 14 discordant, exact McNemar p = 0.0004; edit vs shipped 15 to 14, no difference). Exploratory and post-hoc (not preregistered), with the lead-number check ignored: rival 131, shipped 137, edit 137, and no pair differs (shipped vs rival 12 to 6, p = 0.2379; edit vs rival 9 to 3, p = 0.146; edit vs shipped 6 to 6, p = 1.0). The r4-001 pre-rules read is self-attested; the professional and benchmark regexes can still false-pass or false-fail.
