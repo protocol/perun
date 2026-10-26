@@ -14,12 +14,15 @@ whether perun_auto_update.py may re-apply a newer release tag in the background.
 up (never auto-merged); `auto_update_pr_base` (default empty = `origin/HEAD`) names the branch that PR targets and
 that the committed-version WARN compares against (a base missing on origin skips the PR). `review_gate` takes
 `warn|enforce|off` (default `warn`): whether review_gate.py blocks a merge with no independent review receipt.
+`lockfile_skip_review` takes `on|off` (default `off`): when `on`, review_gate.py `check --audit-clean` skips the separate review lane for a PR whose
+changed files are all lockfiles (the caller asserts the dependency audit diff is clean); any other file in the PR still needs a receipt.
 `outcome_guard` takes `off|warn|block` (default `warn`): whether outcome_claim_guard.py flags or blocks an unmeasured "fixed/faster"
 claim and a pipeline PR with no KEEP verdict; env `PERUN_OUTCOME_GUARD` overrides it. `outcome_guard_paths` (a JSON list of fnmatch
 globs, edit the file; default `[]` = the script's built-in workflow/hook/train/gate/CI globs) names the pipeline paths.
 `landing_watchdog` takes `off|warn` (default `warn`): whether landing_watchdog.py warns on a prompt when nothing merged to the default
 branch for `landing_stall_min` minutes (integer >= 1, default 60) while green PRs wait; env `PERUN_LANDING_WATCHDOG` overrides it.
 `wip_cap` takes an integer >= 0 (default 0 = off, opt-in): the same hook adds a "WIP: N open PRs > cap M" warn line when more non-draft PRs are open.
+`merges_per_hour_target` and `train_yield_floor` take an integer >= 0 (default 0 = off, opt-in): the same hook warns when merges per hour on the default branch fall below the target while green PRs wait, and when PRs per landed train (merges landed back-to-back) fall below the floor.
 `background_guard` takes `off|warn|block` (default `warn`): whether handback_cap.py (SubagentStop) warns or blocks when a lane hands back
 while a test or build started from its worktree is still running; env `PERUN_BACKGROUND_GUARD` overrides it.
 `auto_compact` takes `on|off` (default `on`): whether `install.sh --apply-operating-layer` may set `autoCompactWindow: 200000`
@@ -101,7 +104,7 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "wip_cap": 0, "background_guard": "warn"}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "wip_cap": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "background_guard": "warn", "lockfile_skip_review": "off"}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
@@ -120,11 +123,13 @@ def validate(raw: dict) -> dict:
             ok = isinstance(v, int) and not isinstance(v, bool) and v >= 1
         elif k == "wip_cap":  # opt-in: None or 0 = off, else warn above this many open non-draft PRs
             ok = v is None or (isinstance(v, int) and not isinstance(v, bool) and v >= 0)
+        elif k in ("merges_per_hour_target", "train_yield_floor"):  # opt-in flow alarms: integer >= 0, 0 = off
+            ok = isinstance(v, int) and not isinstance(v, bool) and v >= 0
         elif k == "landing_watchdog":
             ok = v in ("off", "warn")
         elif k == "auto_update_pr_base":  # '' = origin/HEAD; else a plain branch name (no option-like or `..` names)
             ok = isinstance(v, str) and (v == "" or (re.fullmatch(r"[A-Za-z0-9._/-]+", v) is not None and v[0] not in "-/" and v[-1] != "/" and ".." not in v and "//" not in v and v != "HEAD"))
-        elif k in ("auto_update", "auto_update_pr", "auto_compact", "statusline", "spend_nudge"):
+        elif k in ("auto_update", "auto_update_pr", "auto_compact", "statusline", "spend_nudge", "lockfile_skip_review"):
             ok = v in ON_OFF
         elif k in DIMS:
             ok = v in MODES or (isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0)
