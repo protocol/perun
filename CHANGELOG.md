@@ -3,6 +3,73 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.606.0] — 2026-10-26
+
+### Changed
+- CI now runs the `gates` workflow as parallel jobs (gate helper self-tests in three shards, documented gates, per-PR tests, live eval and scorer tests, and one job for the cheap steps) behind an aggregate job still named `gates`, cutting wall time from the sum of the steps to the slowest job. Every original step is kept with unchanged commands, and `scripts/test-ci-shards.sh` fails if an original step name is dropped; it checks step names only, not per-job membership or step bodies.
+
+### Fixed
+- `handback_cap.py` no longer counts blank lines or markdown link URLs toward the cap and keeps the three-block release valve. Test: `scripts/test_hook_friction.py`.
+- `lane_resume_nudge.py` and `operating-discipline.md` now say a resumed lane's tool-call cap does not reset and a fresh lane is better for a large remainder.
+- `tier_gate.py` fail-closed on a missing tiers file is pinned by test (clear message, exit 2, no FAIL line).
+
+### Added
+- Policy `lockfile_skip_review` (default `off`): with `on`, `review_gate.py check --audit-clean` skips the review lane for a lockfile-only PR.
+- `testing-situational.md`: reproduce a flake under CPU throttling before calling it a flake.
+size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 37292→37954 documents the lockfile_skip_review policy key and the --audit-clean caller contract
+size-budget-raise: .claude/skills/agentic-delivery/references/operating-discipline.md 10585→10683 states that a resumed lane's tool-call cap does not reset
+size-budget-raise: .claude/skills/deep-code-review/references/testing-situational.md 40607→41440 adds the reproduce-a-flake-under-CPU-throttling method
+
+### Added
+- `install.sh --dry-run` installs into a throwaway empty directory and lists the files it would write, without touching the target. Every install now ends with a summary of the files written, split into vendored (skills, gate templates) and generated (AGENTS.md, commands, settings, the uninstall record).
+- A bash 3.2 portability gate (`scripts/test-bash3-portability.sh`, with a planted-RED fixture) fails on bash-4-only constructs (`declare -A`, `mapfile`, `readarray`, `${var,,}`, `${var^^}`, `&>>`, `|&`, `coproc`) in shipped shell scripts. Lines may opt out with a `bash4-ok` comment. The scan found no real hits; two quoted-text false positives carry the marker.
+
+### Changed
+- install.sh adds the settings backups (`.claude/settings.local.json.bak.*`), the uninstall record (`.claude/.perun-install.json`) and `.perun/` to the target's `.git/info/exclude` (idempotent, never a tracked `.gitignore`), so they no longer show up as untracked files.
+
+### Added
+- Three owner rules are now default-on hooks in the operating layer. `reply_cap.py` (Stop and UserPromptSubmit) tells the agent every turn to reply in at most 3 lines and 500 characters, blocks an over-cap reply once per turn and appends a dated line to a counter log (`~/.cache/perun/reply-cap.log`). `decision_gate.py` (PreToolUse on `AskUserQuestion|ExitPlanMode`) fails closed unless a decision record with `evil_twin:` and `council:` verdict lines (HOLD, REVISE or PASS_TO_USER) is under 30 minutes old in `$CLAUDE_PROJECT_DIR/.perun/decisions/` (project-local and git-ignored so the Write tool can create it under sandbox or plan mode; the block message names the exact path; the gate writes a self-ignoring `.perun/.gitignore`; for `ExitPlanMode` the two lines may sit in the plan text itself); on Stop (argument `stop`, fails open on unparseable input) it also blocks a final sentence that asks the owner to decide in plain chat, once per turn, until a record exists; it checks the record exists, not its quality, and never gates Bash, Edit or merges. `handback_cap.py` now logs `narr_rate` per lane and sends a `systemMessage` when a lane wrote at least 100 estimated tokens of prose between tool calls (detect and measure, not prevention).
+- `./install.sh --global-rules` copies those scripts to `~/.claude/perun-rules/` and idempotently merges their hooks into `~/.claude/settings.json` (backup first, existing hooks kept, needs `jq`; a 0-byte file counts as `{}`, a symlinked file is written through; `lane_liveness.py` is copied too so `handback_cap.py` runs from the global copy). See `docs/owner-rules.md`.
+
+### Added
+- `operating_selfcheck.py` now FAILs when the memory index (`MEMORY.md`) is over 150 lines or 20KB (the harness truncates it and the lessons at the tail are lost) and WARNs when the newest owner-facing status stamp (`.perun/last-status-update`, skipped if absent) or the handoff `handoff_inject.py` re-injects is older than 24h. `handoff_inject.py` prefixes a `STALE:` line to a handoff older than 24h. `operating-discipline.md` gains short memory and handoff hygiene doctrine (delete superseded handoffs, rotate long sessions daily, put regression guards at merge or train time).
+
+size-budget-raise: .claude/skills/agentic-delivery/references/operating-discipline.md 10585→11608 memory, handoff and status-update hygiene doctrine plus the resumed-lane tool-call cap note
+
+### Added
+- `review_status.py` posts a review verdict as commit status `perun/review` on the exact PR head SHA (success for 0 red, failure otherwise; `--dry-run` supported), and `land_ready.py` is a read-only sweep that prints one line per open PR: ready, or the reasons it is not (draft, conflict, behind, checks, missing or failed `perun/review` on the current head). The train can now read review verdicts without a human relay.
+size-budget-raise: .claude/skills/agentic-delivery/SKILL.md 7006→7134 route the new land_ready.py and review_status.py scripts from the existing task row
+
+### Changed
+- The guard timing check in `scripts/test_security_gates_corpus.py` is now a scaling check (25KB vs 2.5KB, best of 3, fail above 30x) with a loose 1 s ceiling, so CI noise no longer trips an absolute 100 ms cap while quadratic code still fails.
+
+### Added
+- `docs/security-heldout-table-1026/`: one table scoring every blind secrets and guard held-out corpus against the ported rival rules, with Perun rules as they stood at corpus authoring (the only evidence column) next to current main (in-sample), a pooled blind-at-authoring total with exact Clopper-Pearson intervals and an exact paired sign test, and `results.py` to regenerate it byte-identically (`scripts/test_security_heldout_table.py`).
+
+### Fixed
+- `stall_guard.py` now also blocks, once, a turn that only schedules a wake-up (`ScheduleWakeup` or `CronCreate`) while its last text mentions CI, checks, merge or waiting and nothing was launched (no `Agent`, `Task`, `Workflow` or background tool): "Waiting on CI is not a stop: launch the next priority lane now, then wake on the CI notification." `PERUN_STALL_GUARD=off`, the one-shot rule and fail-open are unchanged. `install.sh --with-delivery` wires it through the operating layer (the plugin adds no hooks).
+- The idle-wait block now passes while background lanes from earlier turns are still open (more `run_in_background` launches than `<task-notification>` completions in the transcript tail), and only fires on forward-looking text (waiting on or for, CI or checks running, pending or in progress, until checks), so "PR merged, CI green" never matches.
+- Open background lanes are now tracked per id (launch `agentId`, `resumedAgentId`, background tool_use id; closed by a terminal `<task-notification>` status), not by counting notifications, because one agent notifies again on every resume.
+
+- Added the first measured answer to whether Perun beats caveman and ponytail on tokens (`docs/bench/token-voice-1026/`): 60 hidden-test bug-fix tasks x 2 samples x 4 arms on Haiku 5.5 via `claude -p`, $0.39 total. The Perun arm (the opt-in `--with-terse-replies` text; default Perun is not measured) cut median output tokens 33% vs no voice prompt (995 to 667; paired median diff -356, 95% CI -493 to -292) and 32% vs caveman ultra (976 to 667; -292, -355 to -245); vs ponytail it is -59% (-919, -1088 to -852) but 117 of 120 ponytail replies add unrequested test code, so that is not a voice win with pass rates 0.958 to 0.983 in every arm (non-inferior at a -0.05 margin, no multiplicity correction). Caveats: one model, one task family, Perun's arm is a hard reply cap, pass rates sit near the ceiling, and the run deviates from the free-PCSS preregistration (disclosed in the ledger).
+
+- `merge_train.py` runs now print `RUN <id>` and poll the state dir between stages and inside every backoff wait: `<id>.cancel` releases the run's refs, prints `CANCELLED` and exits 0, and `<id>.drop-<pr>` removes that member (verify rebuilds the smaller union; merge HALTs because the remaining union was never verified). Each file is consumed once. A PR whose head has pending or missing checks now inherits the green of its prior head only when the raw `git diff --binary` of merge-base..head hashes the same and no completed check on the new head is red (a base-merge-only move, logged `CARRIED <old>-><new>`); the union train gate still always runs.
+
+### Added
+- `_lock.sh`: a lock's `ts` file now also records the host (`<epoch> <host>`). Liveness is `kill -0` or `ps -p` (a live other-user pid is never read as dead). `PERUN_CLAIM_REAP=enforce` reaps a dead-PID claim recorded by the same host (never another host's, never one without a host record) under a `mkdir` reaper guard (re-read pid, re-check liveness, one atomic rename to a unique tomb; a guard is never broken: if the guard dir exists the reap is skipped and the claim stays, with a "reap skipped: guard held" log line that names the hand-clear command), never restoring over a new holder; `lock_drop` of a claim this shell does not own now fails loudly. The default `shadow` only logs `SHADOW claim-reap: would reap ...` and keeps the report-only `STALE-LOCK` path.
+- `train_land.sh`: `BASE_RED_FAILFAST=enforce` ends the train as BASE RED at once (exit 1, no solo re-runs, no bisect, heavy lease freed) when every failing id is already in the base's measured red set (`BASELINE_FAILS`, read after the lease wait; fails closed unless `$BASELINE_FAILS.base` holds the gate's base sha and that sha is still the remote base tip). The default `shadow` logs `SHADOW base-red-failfast: would end BASE RED now ...` and runs on unchanged.
+- Test: `scripts/test-train-liveness.sh` (plants a dead-PID claim); evals `train-dead-claim-reap-shadow` and `train-base-red-failfast-shadow`.
+
+A red merge train is now re-run first for only its failing checks, at low load (`merge_train.py verify --rerun-cmd`); a pass there is logged as a flake and the batch lands, and only a red that reproduces is bisected. `landing_watchdog.py` gains opt-in alarms for merges per hour below a target and for PRs per landed train below a floor (policy `merges_per_hour_target`, `train_yield_floor`). `fanout-host-sizing.md` ranks host work train > pregate > lane and says lanes yield cores while a train's test stage runs.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/fanout-host-sizing.md 46161→47776 the new host-priority section (train > pregate > lane) is the rule this change adds
+
+### Added
+- `merge_train.py` verify and merge refuse a red base (`REFUSED red-base`) unless the lineup head is the `--base-fix` PR, and merge re-reads the open queue when it fires. Test: `merge_train.py --selftest`.
+- `cost-quality-guardrails.md`: a new or changed admission/throughput gate ships log-only for 2 runs before enforcing.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/cost-quality-guardrails.md 15839→16119 one-rule gate-rollout line
+
 ## [1.605.0] — 2026-10-26
 
 ### Fixed
