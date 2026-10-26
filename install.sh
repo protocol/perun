@@ -133,6 +133,10 @@ on re-install). Overlay skills are opt-in.
                        operating layer's SessionStart/UserPromptSubmit hook checks the newest
                        vX.Y.Z tag at most every 6h in the background and re-applies this
                        install from it (scripts/update-installed.sh; your settings win).
+  --global-rules       Owner rules for EVERY repo: copy reply_cap, decision_gate, handback_cap and
+                       subagent_start_inject to ~/.claude/perun-rules/ and idempotently merge their
+                       hooks into ~/.claude/settings.json (backup first; needs jq). Writes nothing
+                       else and ignores TARGET. Already in a repo's operating layer? Use one or the other.
   --recommend          Inspect TARGET and print a recommended pack; no writes
   -h, --help           Show this help
 
@@ -168,6 +172,7 @@ WITH_OPERATING_LAYER=0
 APPLY_OPLAYER=0
 NO_OPLAYER=0
 NO_AUTO_UPDATE=0
+GLOBAL_RULES=0
 RECOMMEND_ONLY=0
 POSITIONAL=()
 TRACKER_PROJECT=""
@@ -206,6 +211,7 @@ for arg in "$@"; do
     --no-sandbox) NO_SANDBOX=1 ;;
     --no-operating-layer) NO_OPLAYER=1 ;;
     --no-auto-update) NO_AUTO_UPDATE=1 ;;
+    --global-rules) GLOBAL_RULES=1 ;;
     --full) WITH_DELIVERY=1; WITH_CRITIC=1; WITH_COMMS=1 ;;
     --recommend) RECOMMEND_ONLY=1 ;;
     --with-cursor) echo "note: --with-cursor is default now; ignoring." >&2 ;;
@@ -222,6 +228,31 @@ if [[ -n "${TRACKER_PROJECT}" && ! "${TRACKER_PROJECT}" =~ ^[A-Za-z0-9._-]+$ ]];
   echo "error: --tracker-project must match [A-Za-z0-9._-]+" >&2; exit 2
 fi
 case "${TRACKER}" in linear|github|jira) ;; *) echo "error: --tracker must be linear, github or jira" >&2; exit 2 ;; esac
+
+# Global owner rules (reply cap, decision gate, subagent narration): scripts to ~/.claude/perun-rules, hooks merged into
+# ~/.claude/settings.json. A template hook is added only when no existing hook of that event already runs a script of the same name.
+if [[ "${GLOBAL_RULES}" -eq 1 ]]; then
+  command -v jq >/dev/null 2>&1 || { echo "error: --global-rules needs jq (fail closed)" >&2; exit 1; }
+  GR_SRC="${SCRIPT_DIR}/.claude/skills/agentic-delivery"
+  GR_DIR="${HOME}/.claude/perun-rules"; GR_SET="${HOME}/.claude/settings.json"
+  mkdir -p "${GR_DIR}"
+  for f in reply_cap decision_gate handback_cap subagent_start_inject; do cp "${GR_SRC}/scripts/${f}.py" "${GR_DIR}/${f}.py"; done
+  [[ -f "${GR_SET}" ]] || echo '{}' > "${GR_SET}"
+  GR_NEW="$(mktemp "${TMPDIR:-/tmp}/perun-gr.XXXXXX")"
+  jq --argjson t "$(cat "${GR_SRC}/templates/global-rules.settings.json")" '
+    def nm: .hooks[0].command | capture("(?<n>[a-z_]+\\.py)").n;
+    reduce ($t.hooks | to_entries[]) as $e (.;
+      .hooks[$e.key] = ((.hooks[$e.key] // []) as $a
+        | $a + [$e.value[] | select(nm as $n | [$a[]?.hooks[]?.command // empty | contains($n)] | any | not)]))' \
+    "${GR_SET}" > "${GR_NEW}" || { rm -f "${GR_NEW}"; echo "error: could not merge ${GR_SET} (left unchanged)" >&2; exit 1; }
+  if cmp -s "${GR_NEW}" "${GR_SET}" || [[ "$(jq -S . "${GR_NEW}")" == "$(jq -S . "${GR_SET}")" ]]; then
+    rm -f "${GR_NEW}"; echo "global rules already installed in ${GR_SET}; scripts refreshed in ${GR_DIR}"
+  else
+    cp "${GR_SET}" "${GR_SET}.bak.$(date +%Y%m%d%H%M%S)"; mv "${GR_NEW}" "${GR_SET}"
+    echo "global rules merged into ${GR_SET} (backup saved); restart open sessions to load the hooks"
+  fi
+  exit 0
+fi
 
 if [[ "${WITH_OPERATING_LAYER}" -eq 1 && "${WITH_DELIVERY}" -eq 0 ]]; then
   echo "error: --with-operating-layer requires --with-delivery (writes an agentic-delivery snippet)" >&2

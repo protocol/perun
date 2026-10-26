@@ -81,6 +81,10 @@ sandbox (pgrep denied), so it is no usable primitive there.
 When the scan finds nothing but the handback text itself says the lane is "waiting on" its background tests (WAIT_RE),
 a `systemMessage` flags it in every mode but `off`; never a block (the text is a claim, not evidence).
 
+NARRATION NUDGE: when a non-exempt lane wrote at least HANDBACK_NARR_NUDGE (default 100, 0 = off) estimated tokens of
+prose between tool calls, a `systemMessage` names the amount and the per-call `narr_rate`. Detect-and-measure after the
+lane ended; it does not prevent narration.
+
 LANE AUDIT (default on). Whenever the stop is allowed (also for exempt types,
 flagged `exempt`), one JSON line per lane is appended to a local ledger so
 prose waste is measurable: the lane's assistant TEXT tokens (`narr_tok`
@@ -438,6 +442,7 @@ def check(data):
     if not bg and mode != "off" and _waiting_claim(msg):  # scan saw nothing (or was blind) but the lane says it is waiting
         notes.append("background_guard: this lane's handback says it is waiting on background work; it must wait in its own turn (lane_guard.py wait) and hand back the result.")
     if notes:  # one JSON line however many findings
+        _SENT.append(1)
         print(json.dumps({"systemMessage": " ".join(notes)}))
     chars, lines, too_long = _shape(msg)  # fields-only and the 400/8 target never block: audit() logs them
     no_status = _require_status() and not STATUS_RE.search(msg)
@@ -463,6 +468,9 @@ def check(data):
         "blockers=<none|text>. Put any long content in a file and give report=<path>.\n"
     )
     return 2
+
+
+_SENT = []  # filled once check() has printed its systemMessage; the narration nudge then stays silent (one JSON line)
 
 
 def _tok(chars):
@@ -556,6 +564,7 @@ def audit(data):
             sys.stderr.write("COULD_NOT_CHECK: lane audit skipped (no readable lane transcript with assistant entries).\n")
             return
         stats, fin = got
+        stats["narr_rate"] = round(stats["narr_tok"] / max(stats["calls"], 1), 1)  # narration tokens per tool call
         os.makedirs(STATE_DIR, exist_ok=True)
         try:
             os.close(os.open(_state_path(agent_id) + ".audited", os.O_CREAT | os.O_EXCL | os.O_WRONLY))
@@ -572,6 +581,7 @@ def audit(data):
             os.write(fd, (json.dumps(row, separators=(",", ":")) + "\n").encode())
         finally:
             os.close(fd)
+        return row
     except Exception as exc:  # a failing audit must never wedge a stop
         sys.stderr.write(f"COULD_NOT_CHECK: lane audit skipped ({type(exc).__name__}).\n")
 
@@ -660,7 +670,12 @@ def main():
         return 0  # unparseable input: never wedge a subagent
     rc = check(data)
     if rc == 0:
-        audit(data)
+        row = audit(data)
+        limit = int(os.environ.get("HANDBACK_NARR_NUDGE", "100"))  # estimated tokens of between-call prose; 0 turns the nudge off
+        if row and limit and not row["exempt"] and row["narr_tok"] >= limit and not _SENT:
+            print(json.dumps({"systemMessage": f"narration: lane {row['agent_id']} wrote ~{row['narr_tok']} tokens of prose "
+                              f"between {row['calls']} tool calls ({row['narr_rate']}/call). Rule: tool calls only, no narration. "
+                              "Measured after the fact, not prevented."}))
     return rc
 
 
@@ -895,6 +910,33 @@ def _selftest():
         case("audit-summary-is-aggregates", "narr_tok" in summary(rows), True)
     finally:
         os.environ.pop("HANDBACK_AUDIT_LEDGER", None)
+
+    # narration nudge: 3 calls with 60 tok prose each -> rate 60.0 and a systemMessage; a quiet lane stays silent
+    import io
+    from contextlib import redirect_stdout
+    big = tr(*[b for _ in range(3) for b in (asst({"type": "text", "text": "n" * 240}), asst({"type": "tool_use", "name": "Bash", "input": {"command": "ls"}}))],
+             asst({"type": "text", "text": "status=VERIFIED"}))
+    os.environ["HANDBACK_AUDIT_LEDGER"] = os.path.join(tmp, "nl.jsonl")
+
+    def run_main(path, aid):
+        real, buf = sys.stdin, io.StringIO()
+        sys.stdin = io.StringIO(json.dumps({"agent_id": aid, "agent_type": "builder", "agent_transcript_path": path, "last_assistant_message": "status=VERIFIED"}))
+        try:
+            with redirect_stdout(buf):
+                main()
+        finally:
+            sys.stdin = real
+        return buf.getvalue()
+    try:
+        out = run_main(big, "N1")
+        case("narration-nudge-fires-over-limit", ("narration:" in out and "~180 tokens" in out and "60.0/call" in out), True)
+        case("narration-rate-logged", json.loads(open(os.environ["HANDBACK_AUDIT_LEDGER"]).readline())["narr_rate"], 60.0)
+        case("narration-quiet-lane-silent", run_main(t, "N2"), "")
+        os.environ["HANDBACK_NARR_NUDGE"] = "0"
+        case("narration-nudge-off-switch", run_main(big, "N3"), "")
+    finally:
+        os.environ.pop("HANDBACK_AUDIT_LEDGER", None)
+        os.environ.pop("HANDBACK_NARR_NUDGE", None)
 
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"\nselftest: {passed}/{passed + failed} passed")

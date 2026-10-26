@@ -4130,6 +4130,13 @@ else
   record 1 "host-command-hints: context_nudge names each host's documented commands and a model/effort tier, two lines at most"; tail -8 "$WORK/host-command-hints.log"
 fi
 
+# global-rules: own per-feature file (scripts/test-global-rules.sh), one case here.
+if bash "$ROOT/scripts/test-global-rules.sh" >"$WORK/global-rules.log" 2>&1; then
+  record 0 "global-rules: reply cap, decision gate, narration nudge, and install --global-rules merge idempotently"
+else
+  record 1 "global-rules: reply cap, decision gate, narration nudge, and install --global-rules merge idempotently"; tail -8 "$WORK/global-rules.log"
+fi
+
 # first-run prompt: installer output and AGENTS.md block give a portable plain-words prompt (no remote/slash needed).
 FR="$WORK/firstrun"; mkdir -p "$FR"
 if bash "$ROOT/install.sh" "$FR" >"$FR.out" 2>&1 && grep -q "run a deep code review FILE" "$FR.out" && grep -q "run a deep code review FILE" "$FR/AGENTS.md" && sed -n '/^3\. \*\*Ask your agent/,/^>/p' "$ROOT/README.md" | head -2 | grep -q 'review FILE'; then

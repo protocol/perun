@@ -14,7 +14,8 @@ Sources (UTF-8 bytes, deterministic, no network):
                         handoff_inject.py (empty without a .claude/handoff*.md). The UserPromptSubmit hooks
                         (context_nudge, ceo_altitude_guard, outcome_claim_guard, landing_watchdog) print only
                         when their condition fires and perun_auto_update prints nothing, so they add 0 to a
-                        clean session and are not run here (landing_watchdog and perun_auto_update touch the
+                        clean session and are not run here (reply_cap prints one cap line of under 250 bytes on every prompt, by
+                        owner rule, and is not counted; landing_watchdog and perun_auto_update touch the
                         network).
 
 Usage: always_loaded_bytes.py [ROOT]   prints one line per source, per-item detail, then `total`.
