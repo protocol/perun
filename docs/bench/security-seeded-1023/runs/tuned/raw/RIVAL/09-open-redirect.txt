@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/login.py",
+      "line": 5,
+      "severity": "MEDIUM",
+      "category": "open_redirect",
+      "description": "The `next` query parameter is passed directly to `redirect()` with no validation. Any absolute URL, including an external domain or a scheme-relative `//evil.com` URL, is accepted. The new post-login endpoint therefore sends users to attacker-controlled destinations.",
+      "exploit_scenario": "An attacker sends a victim a link such as https://app.example/login?next=https://evil.example/login. After the victim authenticates, the app redirects them to the attacker's look-alike page. That page can show a fake 'session expired, re-enter your password' prompt to harvest credentials or tokens. The redirect starts from the trusted domain, so the link is more convincing and can slip past phishing filters.",
+      "recommendation": "Validate `next` before redirecting. Accept only relative paths: parse with urllib.parse.urlparse, require empty scheme and netloc, require the path to start with a single '/' (reject '//' and '/\\'), or check against an allowlist of internal endpoints. Otherwise fall back to '/'. Using url_for with known endpoints is also safe.",
+      "confidence": 0.85
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 0,
+    "medium_severity": 1,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

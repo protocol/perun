@@ -5,6 +5,7 @@ Fixture repo and HOME live under $TMPDIR. Hosts that read `.agents/skills` (Devi
 no new directory, so the test checks that the default install writes it."""
 import os, re, shutil, subprocess, sys, tempfile, unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -49,7 +50,8 @@ class HostsParity(unittest.TestCase):
             self.assertRegex(md, r"(?m)^name: deep-code-review$", h)
 
     def test_doctor_sees_drift(self):
-        install(self.repo, "--with-extra-hosts")
+        with mock.patch.dict(os.environ, {"DCR_COPY_HOSTS": "1"}):  # real copies: symlinked hosts cannot drift
+            install(self.repo, "--with-extra-hosts")
         self.assertEqual(perun_doctor.main([str(self.repo), "--home", str(self.home)]), 0)
         for h, _ in NEW:
             f = self.repo / h / "skills/deep-code-review/SKILL.md"

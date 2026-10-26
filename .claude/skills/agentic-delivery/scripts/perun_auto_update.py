@@ -307,6 +307,9 @@ def update_pr(target: Path) -> str:
         return "pr skip: no readable marker or VERSION"
     if not version(ver):
         return "pr skip: unparseable installed version"
+    top = git("-C", str(target), "rev-parse", "--show-toplevel").stdout.strip()
+    if not top or os.path.realpath(top) != os.path.realpath(target):  # not a repo root (a dir nested in a parent repo counts as non-git)
+        return "pr skip: target is not a git repo (global install)"
     if git("-C", str(target), "fetch", "-q", "origin", timeout=300).returncode != 0:
         return "pr skip: fetch origin failed"
     ref = default_ref(target)

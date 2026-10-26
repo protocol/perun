@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/invoices.py",
+      "line": 9,
+      "severity": "HIGH",
+      "category": "idor",
+      "description": "The /invoices/<invoice_id> endpoint checks only that a user is logged in. It never checks that the requested invoice belongs to the session user. Invoice.query.get(invoice_id) fetches any invoice by its sequential integer ID and returns it in full. This is an insecure direct object reference (broken object-level authorization).",
+      "exploit_scenario": "Any authenticated user can request /invoices/1, /invoices/2, and so on. This lets them read every other customer's invoices, which likely hold PII, billing details and amounts. Sequential integer IDs make the enumeration trivial.",
+      "recommendation": "Scope the query to the current user, for example Invoice.query.filter_by(id=invoice_id, user_id=session['user_id']).first(). Return 404 (or 403) if no row matches. Alternatively, run an explicit ownership or role check before returning the data. Use unguessable identifiers as defense in depth.",
+      "confidence": 0.93
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

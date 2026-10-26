@@ -1,0 +1,31 @@
+{
+  "findings": [
+    {
+      "file": "api/webhook.go",
+      "line": 17,
+      "severity": "MEDIUM",
+      "category": "crypto_timing_side_channel",
+      "description": "The HMAC signature is checked with a plain string comparison (`!=`) between the hex-encoded expected MAC and the attacker-controlled X-Acme-Signature header. Go's string comparison returns at the first differing byte, so response time leaks how many leading characters of the signature are correct. The code should use hmac.Equal, which compares in constant time, on the decoded bytes.",
+      "exploit_scenario": "An attacker who can send many requests to the webhook endpoint measures response times while guessing the signature one hex character at a time. Over enough requests they recover a valid signature for a chosen body. They can then forge webhook events that the application treats as authentic.",
+      "recommendation": "Decode the header with hex.DecodeString and compare the result to mac.Sum(nil) with hmac.Equal. Reject the request if decoding fails.",
+      "confidence": 0.75
+    },
+    {
+      "file": "api/webhook.go",
+      "line": 14,
+      "severity": "MEDIUM",
+      "category": "authentication_bypass",
+      "description": "The HMAC key comes from os.Getenv(\"ACME_WEBHOOK_SECRET\") with no check that it is set. If the variable is missing or empty, for example in a misconfigured deployment, the key is an empty byte slice. Anyone can then compute a valid HMAC-SHA256 for any body, so signature verification gives no protection. The handler also ignores the io.ReadAll error and does not limit the body size.",
+      "exploit_scenario": "The service is deployed without ACME_WEBHOOK_SECRET. An attacker computes HMAC-SHA256 with an empty key over a forged payload and sends it with a matching X-Acme-Signature header. The handler returns 204 and accepts the forged event as authentic.",
+      "recommendation": "Read the secret once at startup and fail closed, returning 500 or refusing to start, if it is empty. Handle the io.ReadAll error and cap the body with http.MaxBytesReader.",
+      "confidence": 0.7
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 0,
+    "medium_severity": 2,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

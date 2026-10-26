@@ -1,0 +1,31 @@
+{
+  "findings": [
+    {
+      "file": "server/routes/login.js",
+      "line": 11,
+      "severity": "MEDIUM",
+      "category": "open_redirect",
+      "description": "After a successful login, the user is redirected to the value of the `next` query parameter (`req.query.next`). The value is not validated, so an attacker can supply an absolute or protocol-relative URL such as `https://evil.example` or `//evil.example`.",
+      "exploit_scenario": "An attacker sends a victim a link such as https://app.example/login?next=https://evil.example/login. The victim sees the real login page and enters valid credentials. The server then redirects them to the attacker's lookalike site. That site can show a fake 'session expired, please log in again' prompt and capture the credentials a second time, or it can run other phishing or token-theft flows that gain trust from the legitimate login.",
+      "recommendation": "Only allow relative, same-origin paths. Require `next` to be a string that starts with a single '/' and does not start with '//' or '/\\'. Reject values containing backslashes or control characters. Alternatively, parse it with `new URL(next, base)` and check that the origin matches, or map allowed destinations to fixed keys. Fall back to '/dashboard' if validation fails.",
+      "confidence": 0.85
+    },
+    {
+      "file": "server/routes/login.js",
+      "line": 10,
+      "severity": "MEDIUM",
+      "category": "session_fixation",
+      "description": "The session is not regenerated after authentication. `req.session.userId` is set on the existing session, so the pre-login session ID stays valid after the user becomes authenticated.",
+      "exploit_scenario": "An attacker obtains a valid pre-authentication session ID, for example by planting a cookie through a subdomain or by using a session ID that was issued earlier. They get the victim to log in using that session. The attacker's copy of the session ID is now authenticated as the victim, so they can take over the account.",
+      "recommendation": "Call `req.session.regenerate()` after successful authentication and before setting `userId`. Save the session before redirecting.",
+      "confidence": 0.7
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 0,
+    "medium_severity": 2,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

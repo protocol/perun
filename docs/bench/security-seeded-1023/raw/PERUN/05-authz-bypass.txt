@@ -1,0 +1,7 @@
+I couldn't write `rows.json` because the permission was denied, so `security_verify.py` was not run. I didn't work around it with a shell write. I checked the finding by hand against `change.patch`. Here is the result:
+
+```json
+[{"file": "app/admin.py", "line": 6, "cwe": "CWE-862"}]
+```
+
+The `/admin/users/<uid>/delete` handler only checks that `user_id` is in the session. It never checks for an admin role. Any logged-in user can therefore reach `remove_user(uid)` on line 9 for any `uid`. I found no guard on that path.

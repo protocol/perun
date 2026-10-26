@@ -1,0 +1,25 @@
+diff --git a/src/Import/InvoiceImporter.php b/src/Import/InvoiceImporter.php
+new file mode 100644
+--- /dev/null
++++ b/src/Import/InvoiceImporter.php
+@@ -0,0 +1,20 @@
++<?php
++namespace Acme\Import;
++
++class InvoiceImporter
++{
++    public function parse(string $xml): array
++    {
++        $doc = new \DOMDocument();
++        $doc->loadXML($xml, LIBXML_NOENT | LIBXML_DTDLOAD);
++        $out = [];
++        foreach ($doc->getElementsByTagName('line') as $line) {
++            $out[] = [
++                'sku' => $line->getAttribute('sku'),
++                'qty' => (int) $line->getAttribute('qty'),
++                'note' => $line->textContent,
++            ];
++        }
++        return $out;
++    }
++}

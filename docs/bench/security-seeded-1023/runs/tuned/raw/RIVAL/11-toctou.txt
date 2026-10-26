@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/export.py",
+      "line": 4,
+      "severity": "MEDIUM",
+      "category": "toctou_race_condition_symlink",
+      "description": "write_report() checks os.path.exists(path) and then separately opens the path with open(path, \"w\"). This is a time-of-check/time-of-use race (CWE-367). os.path.exists() follows symlinks and returns False for a dangling symlink. open(..., \"w\") also follows symlinks, and it creates and truncates the symlink's target. If the report path is in a directory that a lower-privileged user can write to, such as /tmp or a shared export directory, that user can plant a symlink there. The privileged process will then create or overwrite whatever file the symlink points to. The check does not protect against this. I did not review the callers, so I could not confirm that `path` is reachable from untrusted input.",
+      "exploit_scenario": "The export service runs with higher privileges and writes reports into a shared or world-writable directory. A local attacker creates a symlink at the expected report path, pointing to a sensitive file such as ~/.ssh/authorized_keys or an application config file. The symlink dangles, or the attacker swaps it in right after the exists() check. The service then opens the path with \"w\", which follows the symlink and writes attacker-influenced report data into the target file. This allows arbitrary file creation or overwrite, and it can lead to privilege escalation. If `path` also comes from user input, there is no traversal or base-directory restriction either.",
+      "recommendation": "Create the file atomically and refuse to follow symlinks. Use os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600) and wrap the descriptor with os.fdopen(), or use open(path, \"x\") and handle FileExistsError. Write reports only to a private directory the service controls, and resolve and validate that any caller-supplied path stays inside that directory.",
+      "confidence": 0.7
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 0,
+    "medium_severity": 1,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

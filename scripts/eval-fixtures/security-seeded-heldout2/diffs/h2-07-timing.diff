@@ -1,0 +1,27 @@
+diff --git a/api/webhook.go b/api/webhook.go
+new file mode 100644
+--- /dev/null
++++ b/api/webhook.go
+@@ -0,0 +1,22 @@
++package api
++
++import (
++	"crypto/hmac"
++	"crypto/sha256"
++	"encoding/hex"
++	"io"
++	"net/http"
++	"os"
++)
++
++func Webhook(w http.ResponseWriter, r *http.Request) {
++	body, _ := io.ReadAll(r.Body)
++	mac := hmac.New(sha256.New, []byte(os.Getenv("ACME_WEBHOOK_SECRET")))
++	mac.Write(body)
++	want := hex.EncodeToString(mac.Sum(nil))
++	if r.Header.Get("X-Acme-Signature") != want {
++		http.Error(w, "bad signature", http.StatusUnauthorized)
++		return
++	}
++	w.WriteHeader(http.StatusNoContent)
++}

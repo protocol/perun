@@ -1,27 +1,30 @@
 #!/usr/bin/env bash
-# review_checks.sh [--base REF] [--tests] [--timeout SECS] — run local, read-only analyzers over the files
+# review_checks.sh [--base REF] [--tests] [--history] [--timeout SECS] — run local, read-only analyzers over the files
 # changed since REF (default origin/main, compared as REF...HEAD) and print findings as a JSON array on
 # stdout: [{"file","line","rule","message","text","tool"}]. `text` ("rule: message") is the key
 # scripts/score_review.py matches on. Findings are LEADS: verify each against the code before reporting.
 #
-# Tools, each run only when installed and only on matching changed files: shellcheck + bash -n (*.sh/*.bash),
-# python -m py_compile + ruff/pyflakes (*.py), node --check (*.js/*.mjs/*.cjs), tsc --noEmit (*.ts/*.tsx and a
-# root tsconfig.json), go vet (*.go and a root go.mod), jq empty (*.json). Optional security scanners:
-# gitleaks (changed files only; the secret value is redacted and never printed), osv-scanner (only when a
-# changed file is a lockfile and env REVIEW_OSV=1, since it queries the OSV API), semgrep (only with a local rules path in env REVIEW_SEMGREP_CONFIG; never
-# `--config auto`, which phones home). `--tests` also runs the command
+# Tools (linters, gitleaks, osv-scanner, semgrep, trivy): see references/method-situational.md. Each runs only when
+# installed and only on matching changed files. Secrets are redacted and never printed; osv-scanner needs env
+# REVIEW_OSV=1 (network); semgrep uses local rules only (never `--config auto`); trivy is offline.
+# `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
+# dirs and .claude/worktrees are never scanned; each heavy scanner takes the heavy lease only when it runs (waits
+# REVIEW_LEASE_WAIT s, default 120, else skipped) and releases it afterwards.
+# A summary "N findings; N files excluded; analyzers ran: ...; skipped (not installed): ..." goes to stderr. `--tests` also runs the command
 # declared in env REVIEW_TEST_CMD (opt-in; it executes project code). Never installs anything. A missing tool
 # or a timeout prints "review_checks: not run: <tool> (<why>)" on stderr and is not a failure.
 # Each tool is timeboxed (default 60s). Exit 0 even with findings; 2 on usage/unresolvable base.
 set -euo pipefail
 
-base=origin/main tests=0 tmo=60
+base=origin/main tests=0 hist=0 tmo=60 ran="" missing="" lease=ok leased=0 full=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --base) base=${2:?--base needs a ref}; shift 2 ;;
+    --base) base=${2:?--base needs a ref}; case "$base" in -*) echo "review_checks: --base must not start with '-'" >&2; exit 2 ;; esac; shift 2 ;;
     --timeout) tmo=${2:?--timeout needs seconds}; shift 2 ;;
     --tests) tests=1; shift ;;
-    *) echo "usage: review_checks.sh [--base REF] [--tests] [--timeout SECS]" >&2; exit 2 ;;
+    --history) hist=1; shift ;;
+    --full-history) hist=1 full=1; shift ;;
+    *) echo "usage: review_checks.sh [--base REF] [--tests] [--history] [--timeout SECS]" >&2; exit 2 ;;
   esac
 done
 case "$tmo" in ''|*[!0-9]*) echo "review_checks: --timeout must be an integer" >&2; exit 2 ;; esac
@@ -30,7 +33,11 @@ cd "$(git rev-parse --show-toplevel)"
 
 raw=$(mktemp "${TMPDIR:-/tmp}/review-raw.XXXXXX") out=$(mktemp "${TMPDIR:-/tmp}/review-out.XXXXXX") tsv=$(mktemp "${TMPDIR:-/tmp}/review-tsv.XXXXXX")
 trap 'rm -f "$raw" "$out" "$tsv"' EXIT
-files=$(git diff --name-only --diff-filter=ACMR "$base"...HEAD)
+# Vendored, build and worktree dirs are never scanned (a changed file under them is dropped here, for every tool).
+XRE='(^|/)(node_modules|\.claude/worktrees|vendor|dist|build|\.git|\.venv|venv|target|__pycache__)/'
+all=$(git diff --name-only --diff-filter=ACMR "$base"...HEAD)
+files=$(printf '%s\n' "$all" | grep -Ev "$XRE" || true)
+nex=$(( $(printf '%s\n' "$all" | grep -c .) - $(printf '%s\n' "$files" | grep -c .) ))
 rc=0
 
 # Existing changed files matching extended regex $1, one per line.
@@ -43,12 +50,36 @@ tbox() {
   else perl -e 'alarm shift; exec @ARGV' "$tmo" "$@" >"$out" 2>&1; fi
 }
 # have TOOL: 0 when installed, else prints the not-run line.
-have() { command -v "$1" >/dev/null || { skip "$1" "not installed"; return 1; }; }
+# Heavy scanners take the machine-wide heavy lease (held by this shell) lazily, only once installed and about to run, so
+# concurrent sessions queue instead of piling on; lease_drop frees it after the last one. Waits REVIEW_LEASE_WAIT s
+# (default 120) then reports the scanner as skipped. Fail open: no perun_policy.py (review-only install) or an
+# unexpected exit from it (reported once) means no gate.
+pp="$(dirname "$0")/../../agentic-delivery/scripts/perun_policy.py"
+lease_take() {
+  [ "$leased" = 1 ] && return 0
+  [ "$lease" = ok ] || return 1
+  [ -f "$pp" ] && command -v python3 >/dev/null || return 0
+  local w=${REVIEW_LEASE_WAIT:-120} r
+  while :; do
+    r=0; python3 "$pp" heavy-acquire >/dev/null 2>&1 || r=$?
+    case "$r" in
+      0) leased=1; return 0 ;;
+      1) if [ "$w" -le 0 ]; then lease=full; return 1; fi; sleep 5; w=$((w - 5)) ;;
+      *) skip lease "policy rc=$r"; lease=none; return 0 ;;
+    esac
+  done
+}
+lease_drop() { [ "$leased" = 1 ] && { python3 "$pp" heavy-release >/dev/null 2>&1 || true; leased=0; }; true; }
+have() {
+  command -v "$1" >/dev/null || { skip "$1" "not installed"; missing+=" $1"; return 1; }
+  case "$1" in gitleaks|osv-scanner|semgrep|trivy) lease_take || { skip "$1" "heavy lease full"; return 1; } ;; esac
+}
 # add TOOL FILE LINE RULE MSG -> one TSV row.
 add() { printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" >>"$raw"; }
 # run_one TOOL CMD... : sets rc; returns 1 (with a not-run line) on timeout.
 run_one() {
   local tool=$1; shift; rc=0
+  case " $ran " in *" $tool "*) ;; *) ran+=" $tool" ;; esac
   tbox "$@" || rc=$?
   case "$rc" in 124|142) skip "$tool" "timeout ${tmo}s"; return 1 ;; esac
   return 0
@@ -140,11 +171,18 @@ d = json.JSONDecoder().raw_decode(t[i:])[0]
 if kind == "gitleaks":
     if not isinstance(d, list):
         sys.exit("sjson: gitleaks report is not a list")
+elif kind == "trivy":
+    if not isinstance(d, dict):
+        sys.exit("sjson: trivy output is not an object")
 elif not isinstance(d, dict) or not isinstance(d.get("results"), list):
     sys.exit(f"sjson: {kind} output has no results list")
 rows = []
 if kind == "gitleaks":  # Secret/Match fields are deliberately never read
     rows = [(r.get("File"), r.get("StartLine"), r.get("RuleID"), r.get("Description") or "secret detected") for r in d]
+elif kind == "trivy":
+    for r in d.get("Results") or []:  # Secrets are skipped: gitleaks owns them and trivy's Match would leak the value
+        rows += [(r["Target"], 0, v.get("VulnerabilityID"), f"{v.get('PkgName')}@{v.get('InstalledVersion')}: {v.get('Title', '')}") for v in r.get("Vulnerabilities") or []]
+        rows += [(r["Target"], (m.get("CauseMetadata") or {}).get("StartLine", 0), m.get("ID"), m.get("Title", "")) for m in r.get("Misconfigurations") or []]
 elif kind == "semgrep":
     rows = [(r["path"], r["start"]["line"], r.get("check_id"), (r.get("extra") or {}).get("message", "")) for r in d["results"]]
 else:
@@ -170,6 +208,15 @@ if have gitleaks; then
     sjson gitleaks "$rep" >"$tsv" || { skip gitleaks "unparseable report for $f"; continue; }
     while IFS=$'\t' read -r _ l r m; do add gitleaks "$f" "$l" "$r" "$m"; done <"$tsv"
   done <<<"$files"
+  if [ "$hist" = 1 ]; then # history: the commits in BASE...HEAD (the file list's range), not just the final file state
+    : >"$rep"
+    lo=(--log-opts "$base...HEAD"); [ "$full" = 0 ] || lo=() # default: only the commits since BASE
+    if run_one gitleaks-history gitleaks detect --no-banner --redact --exit-code 0 -f json -r "$rep" ${lo[@]+"${lo[@]}"} -s . && scan_ok gitleaks-history; then
+      [ -s "$rep" ] || echo '[]' >"$rep"
+      if sjson gitleaks "$rep" >"$tsv"; then while IFS=$'\t' read -r f l r m; do [[ $f =~ $XRE ]] || add gitleaks-history "$f" "$l" "$r" "$m"; done <"$tsv"
+      else skip gitleaks-history "unparseable report"; fi
+    fi
+  fi
 fi
 
 lock_files=$(changed '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.sum|Cargo\.lock|poetry\.lock|requirements[^/]*\.txt|composer\.lock)$')
@@ -184,14 +231,16 @@ elif have osv-scanner; then
   done <<<"$lock_files"
 fi
 
-if [ -z "${REVIEW_SEMGREP_CONFIG:-}" ]; then skip semgrep "REVIEW_SEMGREP_CONFIG not set; --config auto is never used"
-elif [ ! -e "$REVIEW_SEMGREP_CONFIG" ]; then skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"
+sgc=${REVIEW_SEMGREP_CONFIG:-}
+[ -n "$sgc" ] || for c in .semgrep.yml .semgrep; do [ -e "$c" ] && { sgc=$c; break; }; done
+if [ -z "$sgc" ]; then skip semgrep "no local rules (REVIEW_SEMGREP_CONFIG, .semgrep.yml or .semgrep); --config auto is never used"
+elif [ ! -e "$sgc" ]; then skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"
 elif have semgrep; then
   sg=()
   while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
   # One call per 200 files: typically a single run, but bounded argv and a timeout that is not shared by everything.
   for ((i = 0; i < ${#sg[@]}; i += 200)); do
-    run_one semgrep semgrep --config "$REVIEW_SEMGREP_CONFIG" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
+    run_one semgrep semgrep --config "$sgc" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
     scan_ok semgrep || continue
     e=0; sjson semgrep "$out" >"$tsv" || e=$?
     if [ "$e" = 0 ] || [ "$e" = 3 ]; then
@@ -201,6 +250,17 @@ elif have semgrep; then
   done
 fi
 
+# trivy: offline against the cached DB (no download); no DB or any crash reads as not-run, never as clean.
+if [ -n "$files" ] && have trivy; then
+  if run_one trivy trivy fs --quiet --format json --scanners vuln,misconfig --skip-db-update --offline-scan --skip-dirs node_modules,.claude/worktrees,vendor,dist,build,.git,.venv,venv,target . && scan_ok trivy; then
+    if sjson trivy "$out" >"$tsv"; then
+      while IFS=$'\t' read -r f l r m; do printf '%s\n' "$files" | grep -qxF -- "$f" && add trivy "$f" "$l" "$r" "$m"; done <"$tsv"
+    else skip trivy "unparseable output"; fi
+  fi
+fi
+
+lease_drop
+
 if [ "$tests" = 1 ]; then
   if [ -z "${REVIEW_TEST_CMD:-}" ]; then skip tests "REVIEW_TEST_CMD not set"
   elif run_one tests bash -c "$REVIEW_TEST_CMD"; then
@@ -208,9 +268,11 @@ if [ "$tests" = 1 ]; then
   fi
 fi
 
-python3 - "$raw" <<'PY'
+python3 - "$raw" "$ran" "$missing" "$nex" <<'PY'
 import json, sys
 rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1], encoding="utf-8", errors="replace")]
 print(json.dumps([{"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "rule": t[3], "message": t[4],
                    "text": f"{t[3]}: {t[4]}", "tool": t[0]} for t in rows if len(t) == 5], indent=1))
+n = sum(len(t) == 5 for t in rows)
+print(f"review_checks: {n} findings; {sys.argv[4]} files excluded; analyzers ran: {', '.join(sys.argv[2].split()) or 'none'}; skipped (not installed): {', '.join(sys.argv[3].split()) or 'none'}", file=sys.stderr)
 PY

@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "acme/files/download.go",
+      "line": 17,
+      "severity": "HIGH",
+      "category": "path_traversal",
+      "description": "The user-controlled 'name' query parameter is joined to baseDir with filepath.Join and passed to os.ReadFile without validation. filepath.Join cleans the path, so '../' sequences resolve outside /srv/acme/uploads. Nothing checks that the resulting path stays inside baseDir. Absolute paths are not an issue, since Join treats them as relative. Traversal sequences are the problem.",
+      "exploit_scenario": "An attacker requests /download?name=../../../etc/passwd, or ../../../proc/self/environ, or any application config or key file readable by the service user. The handler returns the file contents in the response, giving arbitrary file read on the server. This can expose credentials, source code and other users' data.",
+      "recommendation": "Reject names that contain path separators or '..', and use filepath.Base(name). Better, resolve the final path and verify it has the prefix baseDir + separator. In Go 1.24+, use os.OpenRoot(baseDir) and root.ReadFile(name), which prevents escaping the root, including through symlinks. Also consider adding authorization checks for file access.",
+      "confidence": 0.97
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}
