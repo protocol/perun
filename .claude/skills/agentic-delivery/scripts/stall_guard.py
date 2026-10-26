@@ -7,8 +7,10 @@ lanes, reviews and builds were still open. A denial stops only that action.
 RULE: read the hook JSON on stdin. Allow (print nothing) when `stop_hook_active` is true (the host sets it on the stop
 that follows a block, so the nudge is one-shot and cannot loop) or `PERUN_STALL_GUARD=off`. Otherwise read the last
 turn from `transcript_path` (Claude Code JSONL; the last 1 MB): the assistant entries after the last real user prompt.
-When the last assistant text block matches STALL and that turn made no tool_use of `Agent`/`Task` and none with
-`run_in_background` true, print {"decision":"block","reason":REASON}. STALL is first person ("I'm stopped", "I am
+When the last assistant text block matches STALL and that turn made no tool_use of `Agent`/`Task`/`Workflow` and none with
+`run_in_background` true, print {"decision":"block","reason":REASON}. Second trigger (idle wait): the turn called
+`ScheduleWakeup` or `CronCreate`, launched nothing, and the last text matches WAITING (CI, checks, merge, waiting):
+block with WAIT_REASON, because a scheduled wake-up while a backlog is open is a stall, not progress. STALL is first person ("I'm stopped", "I am
 holding") or names the owner ("waiting on you", "blocked by the owner"); fenced code, inline code and `>` quote lines
 are removed first, so a quoted log line or "PR #12 on hold" never matches. REASON lets an owner-requested stop end the
 turn, and the one-shot rule means that second stop passes.
@@ -23,9 +25,12 @@ import re
 import sys
 
 TAIL = 1 << 20
-LAUNCH = ("Agent", "Task")
+LAUNCH = ("Agent", "Task", "Workflow")
+SLEEP = ("ScheduleWakeup", "CronCreate")
 REASON = ("A denial or blocker stops only that action. Launch the next lane, review or build now, "
           "end if the owner asked you to stop or pause, or end by naming the one owner-only blocker and what keeps running.")
+WAIT_REASON = "Waiting on CI is not a stop: launch the next priority lane now, then wake on the CI notification."
+WAITING = re.compile(r"\b(?:CI|checks?|merg(?:e|ed|ing)|waiting)\b", re.I)
 # ponytail: phrase list, not a classifier; a miss just lets the stop through. Add phrases when the field shows one.
 STALL = re.compile(
     r"\b(?:i(?:'m| am) (?:stopp(?:ed|ing)|paus(?:ed|ing)|holding(?: here| off)?|standing by|on hold)"
@@ -42,13 +47,13 @@ def _blocks(entry):
 
 
 def last_turn(path):
-    """(last assistant text block, launched?) for the turn after the last real user prompt in the transcript at `path`.
+    """(last assistant text block, launched?, scheduled a wake-up?) for the turn after the last real user prompt in the transcript at `path`.
     Sidechain (subagent) entries are skipped; a tool_use with run_in_background true counts as a launch."""
     with open(path, "rb") as fh:
         fh.seek(0, 2)
         fh.seek(max(0, fh.tell() - TAIL))
         lines = fh.read().decode("utf-8", "ignore").splitlines()
-    text, launched = "", False
+    text, launched, slept = "", False, False
     for ln in reversed(lines):
         try:
             e = json.loads(ln)
@@ -66,20 +71,26 @@ def last_turn(path):
         for b in reversed(bl):
             if b.get("type") == "tool_use":
                 inp = b.get("input") if isinstance(b.get("input"), dict) else {}
+                slept = slept or b.get("name") in SLEEP
                 launched = launched or b.get("name") in LAUNCH or inp.get("run_in_background") is True
             elif b.get("type") == "text" and not text:
                 text = str(b.get("text") or "")
-    return text, launched
+    return text, launched, slept
 
 
 def decide(payload):
     """The block dict for this Stop payload, or None to allow."""
     if payload.get("stop_hook_active") or os.environ.get("PERUN_STALL_GUARD", "").lower() == "off":
         return None
-    text, launched = last_turn(payload["transcript_path"])
-    if launched or not STALL.search(QUOTED.sub("", text)):
+    text, launched, slept = last_turn(payload["transcript_path"])
+    text = QUOTED.sub("", text)
+    if launched:
         return None
-    return {"decision": "block", "reason": REASON}
+    if STALL.search(text):
+        return {"decision": "block", "reason": REASON}
+    if slept and WAITING.search(text):
+        return {"decision": "block", "reason": WAIT_REASON}
+    return None
 
 
 def main():

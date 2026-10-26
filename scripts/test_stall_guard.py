@@ -4,6 +4,7 @@ that launched an Agent or a background tool, the kill switch, a non-stall reply,
 garbage input; plus the operating-layer wiring. Fixtures are synthetic transcripts in a temp dir."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -102,7 +103,52 @@ class Guard(unittest.TestCase):
             self.assertEqual(run({"transcript_path": str(p)})[:2], (0, ""))
 
 
+WAIT = "CI is running; next check at 13:42, merge on green."
+
+
+class IdleWait(unittest.TestCase):
+    """Planted RED transcripts: a turn that only schedules a wake-up while waiting on CI."""
+
+    def reason(self, entries, **kw):
+        out = run(kw, entries)[1]
+        return json.loads(out)["reason"] if out else ""
+
+    def test_wakeup_only_turn_blocks(self):
+        for sleeper in (tool("ScheduleWakeup", delaySeconds=600), tool("CronCreate", cron="*/10 * * * *")):
+            r = self.reason([PROMPT, tool("Bash", command="gh pr checks"), RESULT, sleeper, RESULT, text(WAIT)])
+            self.assertEqual(r, "Waiting on CI is not a stop: launch the next priority lane now, then wake on the CI notification.")
+
+    def test_launch_passes(self):
+        for launch in (tool("Agent", prompt="x"), tool("Task", prompt="x"), tool("Workflow", script="x"),
+                       tool("Bash", command="make", run_in_background=True)):
+            self.assertEqual(self.reason([PROMPT, launch, RESULT, tool("ScheduleWakeup"), RESULT, text(WAIT)]), "")
+
+    def test_one_shot_kill_switch_and_unrelated_text_pass(self):
+        e = [PROMPT, tool("ScheduleWakeup"), RESULT, text(WAIT)]
+        self.assertEqual(self.reason(e, stop_hook_active=True), "")
+        self.assertEqual(run({}, e, env={"PERUN_STALL_GUARD": "off"})[1], "")
+        self.assertEqual(self.reason([PROMPT, tool("ScheduleWakeup"), RESULT, text("Reminder set for tomorrow.")]), "")
+        self.assertEqual(self.reason([PROMPT, text(WAIT)]), "")  # no wake-up scheduled: not this trigger
+        self.assertEqual(self.reason([PROMPT, tool("ScheduleWakeup"), RESULT, text("`merge on green`")]), "")
+
+
 class Wiring(unittest.TestCase):
+    def test_plugin_hooks_register_stall_guard_once_on_stop(self):
+        hj = json.loads((ROOT / "hooks/hooks.json").read_text())
+        stop = [h for e in hj["hooks"]["Stop"] for h in e["hooks"] if "stall_guard.py" in h["command"]]
+        self.assertEqual(len(stop), 1)
+        self.assertTrue(stop[0]["command"].endswith("|| true"))
+        self.assertTrue((ROOT / stop[0]["command"].split('"')[1].replace("${CLAUDE_PLUGIN_ROOT}", ".")).is_file())
+
+    def test_default_delivery_install_applies_template_idempotently(self):
+        if not shutil.which("jq"):
+            self.skipTest("jq missing")
+        with tempfile.TemporaryDirectory() as d:
+            for _ in range(2):
+                subprocess.run(["bash", str(ROOT / "install.sh"), "--with-delivery", d], capture_output=True, check=True)
+            stop = json.loads((Path(d) / ".claude/settings.local.json").read_text())["hooks"]["Stop"]
+            self.assertEqual(json.dumps(stop).count("stall_guard.py"), 1)
+
     def test_template_registers_stop_and_doctor_checks_it(self):
         stop = [e for e in json.loads(TEMPLATE.read_text())["hooks"]["Stop"] if "stall_guard.py" in json.dumps(e)]
         self.assertEqual(len(stop), 1)
