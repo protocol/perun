@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/session_store.py",
+      "line": 6,
+      "severity": "HIGH",
+      "category": "insecure_deserialization",
+      "description": "load_session() base64-decodes a cookie value and passes it directly to pickle.loads(). The cookie is client-controlled and is neither signed nor authenticated, so pickle will deserialize attacker-supplied bytes. Pickle can invoke arbitrary callables during unpickling (e.g. via __reduce__), which gives remote code execution.",
+      "exploit_scenario": "An attacker builds a pickle payload whose __reduce__ returns (os.system, ('<command>',)), base64-encodes it, and sends it as the session cookie. When the server calls load_session(), the command runs with the privileges of the application process. No authentication is needed, because the cookie is read before any session is established.",
+      "recommendation": "Never unpickle data that comes from the client. Use a safe format such as JSON, and sign or encrypt it with an HMAC (e.g. itsdangerous or Flask's signed sessions). Better still, keep session data on the server and put only a random opaque session ID in the cookie. If pickle can't be avoided, verify an HMAC with a server-side secret key before deserializing, though this is still weaker than switching formats.",
+      "confidence": 0.97
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

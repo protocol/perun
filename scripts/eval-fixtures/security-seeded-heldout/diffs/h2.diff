@@ -1,0 +1,24 @@
+diff --git a/lib/settings.js b/lib/settings.js
+new file mode 100644
+--- /dev/null
++++ b/lib/settings.js
+@@ -0,0 +1,19 @@
++const express = require("express");
++const router = express.Router();
++
++const defaults = { theme: "light", notifications: { email: true } };
++
++function merge(target, source) {
++  for (const key of Object.keys(source)) {
++    if (source[key] && typeof source[key] === "object") target[key] = merge(target[key] || {}, source[key]);
++    else target[key] = source[key];
++  }
++  return target;
++}
++
++router.post("/settings", express.json(), (req, res) => {
++  const settings = merge({}, req.body);
++  res.json(merge(settings, defaults));
++});
++
++module.exports = router;

@@ -1,0 +1,26 @@
+diff --git a/acme/files/safe.go b/acme/files/safe.go
+new file mode 100644
+--- /dev/null
++++ b/acme/files/safe.go
+@@ -0,0 +1,21 @@
++package files
++
++import (
++	"crypto/subtle"
++	"errors"
++	"os"
++	"path/filepath"
++	"strings"
++)
++
++func SafeOpen(base, name string) (*os.File, error) {
++	p := filepath.Join(base, filepath.Clean("/"+name))
++	if !strings.HasPrefix(p, filepath.Clean(base)+string(os.PathSeparator)) {
++		return nil, errors.New("outside base")
++	}
++	return os.Open(p)
++}
++
++func TokenOK(got, want string) bool {
++	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
++}

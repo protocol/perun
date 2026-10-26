@@ -113,6 +113,20 @@ checks the skill files against `SHA256SUMS` (the installer scripts are not in it
 comes from the same tag, so it proves skill-file integrity, not authenticity: trust rests
 on the repository owner's tags and `main`.
 
+**When auto-update cannot reach an install.** Two cases stay manual, and
+`python3 scripts/perun_doctor.py` reports both. (1) A user-global install at
+`~/.claude/skills` is not a project, so the hook never updates it: the doctor's
+"global copy" row prints the one command to run (`DCR_NO_PULL=1 bash
+<checkout>/scripts/update-installed.sh ~`). Global and non-git targets skip the git and repo
+checks. (2) If the permission classifier denies the updater ("Code from External"),
+Perun does not bypass it: run the same command yourself, with the `!` prefix inside Claude Code.
+
+**One copy per install.** `install.sh` writes the real skill copy to `.claude/skills`
+and symlinks `.cursor/skills` and `.agents/skills` (and other hosts) to it, so
+copies cannot drift. If a symlink cannot be made, or you set `DCR_COPY_HOSTS=1`, it
+writes real copies and the doctor's "drifted copies" row flags any that differ from the
+`.claude` copy by hash.
+
 Without the operating layer, pull or check out a newer release tag in your clone,
 verify the checksums, and run `install.sh` again with the same flags. It copies
 files; it never symlinks, so nothing changes until you re-run it.

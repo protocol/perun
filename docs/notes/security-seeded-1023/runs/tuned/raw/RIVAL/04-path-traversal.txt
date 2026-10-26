@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/files.py",
+      "line": 8,
+      "severity": "HIGH",
+      "category": "path_traversal",
+      "description": "The user-controlled query parameter 'name' is joined to UPLOAD_DIR with os.path.join and passed to send_file without validation. os.path.join discards the base directory when 'name' is an absolute path (e.g. '/etc/passwd'). Sequences like '../../etc/passwd' also escape the upload directory. send_file, unlike send_from_directory, does no containment checks.",
+      "exploit_scenario": "An unauthenticated or low-privileged attacker requests /download?name=/etc/passwd, or ?name=../../../etc/passwd. The server returns arbitrary files readable by the app process, such as application source, environment files, SSH keys and cloud credentials. This can lead to a data breach and further compromise.",
+      "recommendation": "Use flask.send_from_directory(UPLOAD_DIR, name), which rejects traversal using safe_join. Alternatively, resolve the path with os.path.realpath and verify it is inside UPLOAD_DIR using os.path.commonpath before serving. Also consider mapping opaque IDs to files instead of accepting raw filenames, and add authorization checks.",
+      "confidence": 0.97
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

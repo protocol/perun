@@ -1,4 +1,8 @@
-Read this when you are about to report a security finding, when a project asks to tune which low-signal security categories are reported, or when a finding is confirmed and you must look for siblings. Sibling of `security-appsec.md`; it adds the gate between "a scanner or hunch flagged this" and "the report says this". Taint, secret-validity and scanner-ingestion proof lives in `appsec-corroboration.md`; do not repeat it here.
+Read this when you are about to report a security finding, when a project asks to tune which low-signal security categories are reported, or when a finding is confirmed and you must look for siblings. Sibling of `security-appsec.md`; it adds the gate between "a scanner or hunch flagged this" and "the report says this". Taint, secret-validity and scanner-ingestion proof lives in `appsec-corroboration.md`; do not repeat it here. Also read it for a security review of a small DIFF (routed from `SKILL.md`): start at section 0.
+
+## 0. Small-DIFF security sweep
+
+Read the patch once. On every added line, ask whether an attacker-reachable value reaches: a query, shell, template, `eval` or other interpreter; HTML or script output; an outbound request URL; a file path or archive entry name; a deserializer or object loader; a redirect target; a privileged action or object lookup with no authentication, role or ownership check; a check-then-use on a file or record; an embedded credential; or weak or misused cryptography. Run section 1 on each candidate. When only the patch is in scope, skip the script, the override file and section 3; when the full security playbook would settle a doubtful guard, open only the matching `security-appsec.md` section. Anchor each finding at the line a fix would change: where the unsafe value takes effect, the privileged call a missing check should guard, or the line holding an embedded secret.
 
 ## 1. Verify or drop: no exploit path, no finding
 

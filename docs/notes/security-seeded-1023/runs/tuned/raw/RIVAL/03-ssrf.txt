@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/preview.py",
+      "line": 6,
+      "severity": "HIGH",
+      "category": "ssrf",
+      "description": "The user-controlled 'url' query parameter is passed directly to urllib.request.urlopen with no scheme, host, or IP validation. urllib supports http, https, ftp and file schemes, so the server will fetch any URL an attacker supplies. The first 2048 bytes of the response are returned to the caller, so this is a full-read SSRF and not a blind one.",
+      "exploit_scenario": "An attacker requests /preview?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/ and receives cloud instance metadata, including IAM credentials. They can also use http://localhost:<port>/ or internal hostnames to read internal-only services and admin endpoints. With file:///etc/passwd, or other local files such as app config and environment files, they can read local files, because urllib handles the file:// scheme. Redirects are followed by default, so an allowlist that only checks the initial host can be bypassed. DNS rebinding can bypass a hostname-only check as well.",
+      "recommendation": "Restrict the scheme to http/https only. Resolve the hostname and reject loopback, link-local, private and metadata IP ranges, then connect to the validated IP, or use an allowlist of permitted domains. Disable or re-validate redirects. Do not return the raw response body. Return only extracted metadata such as the title and Open Graph tags. Require authentication on the endpoint.",
+      "confidence": 0.95
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 1,
+    "medium_severity": 0,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}

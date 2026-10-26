@@ -5,10 +5,15 @@ Read this when `method.md` routes here (its "Situational Phase 1 checks" bullet 
 **Phase 1 — gate disputes and target-shape preflights.**
 
 - **On a `DIFF`, run `scripts/review_checks.sh --base <base>` first.** It runs only the installed local
-  analyzers (shellcheck, `bash -n`, py_compile, ruff/pyflakes, `node --check`, tsc, `go vet`, jq) on the changed
-  files and prints findings JSON; `--tests` adds the declared `REVIEW_TEST_CMD`. Its findings are leads: verify
+  analyzers (shellcheck, `bash -n`, py_compile, ruff/pyflakes, `node --check`, tsc, `go vet`, jq, plus
+  gitleaks, semgrep with local rules only, trivy offline, and osv-scanner only with `REVIEW_OSV=1` since it uses
+  the network) on the changed files and prints findings JSON; `--history` scans commit history, `--tests` adds
+  the declared `REVIEW_TEST_CMD`; stderr ends with a one-line ran/skipped summary. Its findings are leads: verify
   each against the code before reporting, report a `not run` line as unchecked surface, and never read an empty
-  list as clean (analyzers miss fail-open and logic defects).
+  list as clean (analyzers miss fail-open and logic defects). **Verify or drop every scanner lead:** open the
+  cited line, confirm the flagged code is reachable and, for a secret, that a real value is present (a name like
+  `api_key` or `*_key` with no value, a placeholder or a fixture is not a secret); drop what fails and report
+  "N raw, M verified" so the reader sees both counts.
 - **Out-of-diff tracing — mandatory on a multi-file or contract-changing `DIFF`.** A changed signature,
   return shape, error, default or exported name is read at its callers and callees, not just in the
   hunk. Run `scripts/impact_map.py --base <base>` (changed symbols to callers and callees; JSON, capped)

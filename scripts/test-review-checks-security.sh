@@ -7,6 +7,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RC="$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh"
 T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-rcsec.XXXXXX"); trap 'rm -rf "$T"' EXIT
+export PERUN_HEAVY_DIR="$T/heavy" REVIEW_LEASE_WAIT=0 # isolate from the real machine-wide lease dir
 fail=0
 ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=1; }
@@ -53,7 +54,7 @@ grep -q SUPERSECRETVALUE "$T/out" "$T/err" && bad "secret never printed" || ok "
 jq -e 'all(.[]; has("file") and has("line") and has("rule") and has("message") and has("tool") and has("text"))' "$T/out" >/dev/null && ok "schema keys" || bad "schema keys"
 has package-lock.json osv-scanner GHSA-test-0001 && has requirements-dev.txt osv-scanner GHSA-test-0001 && ok "osv lockfiles" || bad "osv lockfiles"
 [ "$(wc -l <"$OSV_LOG")" -eq 2 ] && ! grep -q 'leak.txt\|clean.txt' "$OSV_LOG" && ok "osv only on lockfiles" || bad "osv only on lockfiles"
-grep -q 'not run: semgrep (REVIEW_SEMGREP_CONFIG not set' "$T/err" && [ ! -s "$SG_LOG" ] && ok "semgrep needs config" || bad "semgrep needs config"
+grep -q 'not run: semgrep (no local rules' "$T/err" && [ ! -s "$SG_LOG" ] && ok "semgrep needs config" || bad "semgrep needs config"
 : >"$OSV_LOG"; run
 grep -q 'not run: osv-scanner (REVIEW_OSV not set' "$T/err" && [ ! -s "$OSV_LOG" ] && ok "osv needs REVIEW_OSV" || bad "osv needs REVIEW_OSV"
 

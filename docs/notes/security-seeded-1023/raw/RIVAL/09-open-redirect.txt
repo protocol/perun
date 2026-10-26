@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "file": "app/login.py",
+      "line": 5,
+      "severity": "MEDIUM",
+      "category": "open_redirect",
+      "description": "The `next` query parameter is passed directly to `redirect()` without any validation. An attacker can supply an absolute URL (e.g. `https://evil.com`) or a protocol-relative URL (`//evil.com`), and the user will be redirected to an attacker-controlled site after login.",
+      "exploit_scenario": "An attacker sends a victim the link `https://app.example.com/login?next=https://evil.example/login`. After the victim authenticates, `after_login` redirects them to the attacker's look-alike page. That page can show a fake 'session expired, re-enter your password' prompt to harvest credentials, or it can be used for phishing and OAuth/token-leak chains. The link starts on the trusted domain, so it is more convincing.",
+      "recommendation": "Only allow relative, same-origin redirect targets. Parse the value with `urllib.parse.urlparse` and reject it if it has a scheme or netloc. Also reject values that start with `//` or `\\`. Alternatively, keep an allowlist of permitted paths or hosts, and fall back to `/` when validation fails.",
+      "confidence": 0.9
+    }
+  ],
+  "analysis_summary": {
+    "files_reviewed": 1,
+    "high_severity": 0,
+    "medium_severity": 1,
+    "low_severity": 0,
+    "review_completed": true
+  }
+}
