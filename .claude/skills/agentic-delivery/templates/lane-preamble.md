@@ -13,6 +13,7 @@ default for this lane, not a suggestion.
 - First command: `python3 .claude/skills/agentic-delivery/scripts/lane_guard.py --expect-branch <branch>`. Refusal → stop; hand back the `LANE_GUARD REFUSE:` line plus changed files.
 - Resuming after a hold or a pause: re-read the shared record/backlog file for any new standing rule before continuing prior work — a rule posted mid-hold lives there, not in chat.
 - Before your first push: `git config core.hooksPath .githooks` (shared by every worktree; do it once). The pre-push hook then checks conflict markers, skip-ci tokens and privacy of changed files, and runs your configured fast tier; it does not re-run CI steps (CI on the exact pushed sha is the gate). Do not commit `SHA256SUMS`, `INDEX.md` or `size-budgets.tsv` rows from a lane: CI rebuilds them and `land-release.sh` commits them at land time. Never `--no-verify` around it.
+- On a coordinator host commit hooks run fast checks only (capped at 60s by `stage_run.py --hook`, `PERUN_COMMIT_HOOK_MIN`; a hung hook exits nonzero with `COULD-NOT-CHECK: hook exceeded 60s; index.lock holder: ...`, never a pass); full suites run on the train host.
 - One writer per worktree. Never bare `git stash` (stack is shared — use a WIP commit instead). Never `--no-verify`. Never force-push without an owner-authored grant on file.
 - Stage explicit paths only (`git add <path>...`); never `git add -A` or `git add .`, and never `git stash` (it sweeps in files other lanes own).
 - Stacked on a parent lane not yet pushed: branch off its LOCAL ref (`git rev-parse <parent-branch>`), never poll the remote — the shared `.git` already sees it (#1152).
@@ -23,6 +24,8 @@ default for this lane, not a suggestion.
 ## Scope
 - Before starting: `python3 .claude/skills/agentic-delivery/scripts/focus_gate.py check --item <issue>`, then `python3 .claude/skills/agentic-delivery/scripts/claim_probe.py --repo <owner/name> --issue <issue> --ref '#<issue>' --paths <glob> --agent <agent-id> --claim --post` (checks and, only on GO, posts the CLAIM in one call) — abort if it prints NO-GO (a YIELD readout is always also NO-GO).
 - Any ask outside this brief's scope: `python3 .claude/skills/agentic-ceo/scripts/task_ledger.py add --ask "<text>"` — never a private note or a silent scope-creep edit.
+
+- A workaround tied to issue #N is checked before it is applied: read #N's state (`gh issue view N --json state`); if it is closed, drop the workaround and use the fix.
 
 ## Communication
 - Zero chat between tool calls: no narration, plans, recaps or "now I will…"; a turn is tool calls only (nobody reads intermediate prose, and it is billed output). Caveman ultra for reasoning; code, commits, and docs stay normal prose.

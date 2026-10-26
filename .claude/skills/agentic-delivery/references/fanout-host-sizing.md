@@ -61,6 +61,15 @@ shared files — correct sizing narrows the fan-out to one lane per shared file 
 target it) instead of one lane per fix, and inserts a split-first lane ahead of the fan-out for the file with
 the most collisions.
 
+## Never size a stage's parallelism once from the load at its start — re-size between shards
+
+A busy instant at stage start (load 5 on 36 CPUs from a neighbour that exits a minute later) sized once pins the whole stage:
+a run held 2 workers for 30+ minutes on an idle host. Read the probe again between shards (or batches) and size each from that
+reading, or size from a reserved CPU slice (`local_cpu`) that other work does not use. A timeout may be scaled by start-time
+load (`stage_run.py` does, capped at 3x); a worker count may not be fixed by it.
+
+**🚩** a worker count computed once before the first shard and logged for the whole run.
+
 ## Escalate a lane, don't just retry it
 
 **Escalate a lane, don't just retry it.** After two equivalent failures on the

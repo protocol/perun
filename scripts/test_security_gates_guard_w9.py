@@ -5,7 +5,7 @@ is allowed, `rm` of credential files, `gpg --delete-*keys` and `security delete-
 block reason names the rule and ends with a rewrite hint (checked over every reason string in the guard source). Offline; commands are only classified."""
 import ast, importlib.util, pathlib, re, time
 
-G = pathlib.Path(__file__).resolve().parent.parent / ".claude/skills/agentic-delivery/scripts/destructive_guard.py"
+G = pathlib.Path(__file__).resolve().parent.parent / ".claude/skills/agentic-delivery/scripts/destructive_guard_core.py"
 spec = importlib.util.spec_from_file_location("dg", G)
 dg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dg)

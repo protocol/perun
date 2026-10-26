@@ -25,6 +25,8 @@ change. Read it first; the essentials are only summarized here.
   and no-fabrication rules; they apply to code, comments, docs, commits, and git
   history.
 
+Optional: `python3 scripts/mutation_safety.py [heavy_gate|perun_policy|secret_scan] --python <venv python with mutmut>` reruns the mutation score for the safety scripts in a scratch tree (CI does not run it; `destructive_guard` is not scored).
+
 ## Releasing without version collisions
 
 Parallel lanes must not bump the version: each one claims "main + 1" and all but one collide.

@@ -23,7 +23,7 @@ fi
 
 hits=$(cd "$ROOT" && grep -rEn --include='*.sh' --include='*.py' "$BARE" .claude/skills scripts \
   | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' \
-  | grep -vE '^(\.claude/skills/agentic-delivery/scripts/destructive_guard\.py|scripts/test_security_gates[^:]*\.py):' || true)
+  | grep -vE '^(\.claude/skills/agentic-delivery/scripts/destructive_guard(_core)?\.py|scripts/test_security_gates[^:]*\.py):' || true)
 if [ -z "$hits" ]; then
   ok "no bare mktemp in shipped scripts"
 else

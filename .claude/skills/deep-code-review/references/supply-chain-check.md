@@ -22,6 +22,13 @@ silent pass: it prints `SKIPPED <tool>: <reason>` and the run exits 3 (INCOMPLET
 Pre-deploy: `--online --fail-on high`; block the release on any non-zero exit. osv-scanner exit 128 (no package
 sources found) is reported as a failure, not confirmed as "nothing to scan".
 
+## Sandbox degradation
+
+Under the macOS agent sandbox, `supply_chain_check.sh` retries a crashed `osv-scanner` CLI (Go TLS x509 -26276) via the
+OSV API with curl (npm `package-lock.json`, pinned `requirements*.txt`) and prints `osv: api-fallback`. `review_checks.sh`
+runs semgrep with `HOME`/`SEMGREP_USER_HOME` in a temp dir, and retries a failed trivy misconfig scan with
+`--scanners secret`, printing `trivy: secret-only (misconfig bundle unreachable)`. Fallbacks are always announced.
+
 ## CodeQL template (copy into the target repo)
 
 Not installed for you. Free on public repos; private repos need GitHub Code Security. Save as `.github/workflows/codeql.yml`,

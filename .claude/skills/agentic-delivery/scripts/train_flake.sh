@@ -32,7 +32,10 @@ norm() { sed -E 's/[[:space:]]+$//'; }
 one_run() {
   local d rc=0; d=$(mktemp -d "$T/flake-store.XXXXXX") || return 125; echo "train_flake: store $d (left for OS temp cleanup)" >&2
   export TEST=$1 FLAKE_RUN=$2 FLAKE_STORE=$d
-  if [ -z "${FLAKE_SETUP_CMD:-}" ] || bash -c "$FLAKE_SETUP_CMD" >/dev/null 2>&1 </dev/null; then bash -c "$RERUN_CMD" >"${RERUN_OUT:-/dev/null}" 2>&1 </dev/null || rc=1; else rc=125; fi
+  if [ -z "${FLAKE_SETUP_CMD:-}" ] || bash -c "$FLAKE_SETUP_CMD" >/dev/null 2>&1 </dev/null; then python3 "$(dirname "$0")/stage_run.py" --name train-rerun -- bash -c "$RERUN_CMD" >"${RERUN_OUT:-/dev/null}" 2>&1 </dev/null || rc=$?
+    # stage_run exit 75 (heavy slot DEFER) or 124 (stage timeout) means the re-run never gave a verdict: infra (125), never a red/real failure.
+    case $rc in 0) ;; 75|124) echo "train_flake: re-run of $1 did not complete (stage_run rc=$rc: deferred or timed out); not a failure verdict" >&2; rc=125 ;; *) rc=1 ;; esac
+  else rc=125; fi
   return $rc
 }
 if [ "${1:-}" = --one ]; then [ -n "${2:-}" ] && [ -n "${RERUN_CMD:-}" ] || { echo "usage: RERUN_CMD=... train_flake.sh --one <id>" >&2; exit 2; }; one_run "$2" 1; exit $?; fi

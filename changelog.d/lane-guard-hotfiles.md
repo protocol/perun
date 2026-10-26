@@ -1,0 +1,1 @@
+`lane_guard.py hotfiles` warns when a PR touches a file that more than 5 other open PRs also touch (a shared append-only ledger makes trains conflict); record entries as one fragment file each, like `changelog.d/`.

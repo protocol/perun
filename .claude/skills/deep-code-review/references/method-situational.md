@@ -10,7 +10,8 @@ Read this when `method.md` routes here (its "Situational Phase 1 checks" bullet 
   the network) on the changed files and prints findings JSON; `--history` scans commit history, `--tests` adds
   the declared `REVIEW_TEST_CMD`; stderr ends with a one-line ran/skipped summary. Its findings are leads: verify
   each against the code before reporting, report a `not run` line as unchecked surface, and never read an empty
-  list as clean (analyzers miss fail-open and logic defects). **Verify or drop every scanner lead:** open the
+  list as clean (analyzers miss fail-open and logic defects). Its gitleaks pass uses `templates/gitleaks.toml`
+  (default rules plus a skip list for `.history/`, `fixtures/`, `testdata/` and generated registry JSON; the skip count is printed) when the repo has no `.gitleaks.toml`. **Verify or drop every scanner lead:** open the
   cited line, confirm the flagged code is reachable and, for a secret, that a real value is present (a name like
   `api_key` or `*_key` with no value, a placeholder or a fixture is not a secret); drop what fails and report
   "N raw, M verified" so the reader sees both counts.
@@ -19,7 +20,8 @@ Read this when `method.md` routes here (its "Situational Phase 1 checks" bullet 
   hunk. Run `scripts/impact_map.py --base <base>` (changed symbols to callers and callees; JSON, capped)
   and `scripts/context_pack.py --base <base> [--intent <file>]` (adds `git log --follow` history and the
   PR intent), then open every file in `out_of_diff_files` that reads the changed contract. They are leads,
-  not a call graph: grep for what they miss. Zero out-of-diff files opened on a contract change is a
+  not a call graph: grep for what they miss. Before reading a large file for one symbol, run
+  `scripts/outline.py <file>` (symbol line ranges; stdlib, ctags or regex) and read only that range. Zero out-of-diff files opened on a contract change is a
   machine-report warning (`machine-report.md` §2).
 
 - **Check a firing gate against its own standard first.** A gate *stricter* than

@@ -23,6 +23,11 @@
 # A FLAKE-only red lands only when every flaked id also fails >= 1 of FLAKE_RUNS solo runs on the base; one that passes N of N there is CANT (exit 3).
 # FLAKE_LEDGER_DIR=<dir> (flake_ledger.py): an id on its active quarantine list that re-runs as a flake is reported `quarantined-flake`, does not block, and skips the base check.
 # Flake triage (see train_flake.sh; BROWSER_CMD must print `FAIL <id>` per failure and `FAILURES <n>`): RERUN_CMD (TEST=<id>), BASELINE_FAILS (ids failing on the base); LOCK_TIMEOUT_MIN (30), PUSH_WAIT_SECS and LEASE_WAIT_SECS (both default LOCK_TIMEOUT_MIN*60).
+# Stage limits: VERIFY_CMD and BROWSER_CMD each run under stage_run.py (heavy-slot lease + wall-clock timeout). TRAIN_STAGE_TIMEOUT_MIN (default 180, a union of N PRs
+# outlasts a single pre-push; 0 = none) kills the stage's process group; TRAIN_SLOT_WAIT_SECS (default 1800) bounds the wait for a free heavy slot. A deferred (rc 75)
+# or timed-out (rc 124) stage is infrastructure, not RED: the train ends exit 3 "stage did not complete", skips ratchet attribution and solo re-runs, and lands nothing.
+# The exclusive lease is NOT held through that slot wait (it is dropped while waiting, retaken after; TRAIN_SLOT_RECHECK_SECS, default 60, is the final short wait), and a
+# background heartbeat renews it every PERUN_LEASE_HEARTBEAT_SECS (600) so a stage longer than LEASE_TTL (2h) keeps it. Ratchet attribution runs under stage_run too (TRAIN_RATCHET_TIMEOUT_MIN, 30).
 # Waiting, not refusing: a gate that finds the exclusive heavy lease held waits up to LEASE_WAIT_SECS, then DEFERs (exit 4, nothing built, retry later). A landing train's
 # push lock is waited out BEFORE the fetch and compose, so the union is built on the base that landing leaves and a held or stale lock fails before any gate work.
 # The lease is released once the push lock is held (landing is not heavy). Composing during another train's landing is deliberately not done: that union is stale at its own land.
@@ -80,7 +85,7 @@ qn=${PERUN_QUEUE_NOTE_SECS:-120}; [[ $qn =~ ^[0-9]+$ ]] && [ "$qn" -gt 0 ] || qn
 take_lease() {  # 0 = held (or unavailable: WARN, the gate runs without it); 1 = still held by another gate after LEASE_WAIT_SECS
   local lw=${LEASE_WAIT_SECS:-$((LT * 60))} q0=$SECONDS ql=$SECONDS xrc
   while :; do
-    xrc=0; python3 "$HERE/perun_policy.py" heavy-exclusive >/dev/null 2>&1 || xrc=$?
+    xrc=0; PERUN_HOLDER_PID=$$ python3 "$HERE/perun_policy.py" heavy-exclusive >/dev/null 2>&1 || xrc=$?
     [ "$xrc" -eq 1 ] && [ "$lw" -gt 0 ] || break
     [ $((SECONDS - ql)) -lt "$qn" ] || { ql=$SECONDS; echo "queued $((SECONDS - q0))s: another gate holds the exclusive heavy lease; ${lw}s of wait left (LEASE_WAIT_SECS)" >&2; }
     lw=$((lw - 1)); sleep 1
@@ -90,12 +95,16 @@ take_lease() {  # 0 = held (or unavailable: WARN, the gate runs without it); 1 =
   return 0
 }
 take_lease || { echo "DEFER: another gate holds the exclusive heavy lease; nothing built, retry later" >&2; lock_drop "$LOCK"; exit 4; }
+# Heartbeat: a stage may run up to TRAIN_STAGE_TIMEOUT_MIN (default 180) but the exclusive lease expires after LEASE_TTL (2h) without a
+# renew, so renew it in the background for the life of the gate. Releasing it (slot wait) makes the renew a no-op; the EXIT trap stops it.
+( while sleep "${PERUN_LEASE_HEARTBEAT_SECS:-600}"; do PERUN_HOLDER_PID=$$ python3 "$HERE/perun_policy.py" heavy-exclusive-renew >/dev/null 2>&1 || true; done ) >/dev/null 2>&1 </dev/null &
+HB=$!
 PQ=$(git rev-parse --git-common-dir)/train-push.lock PW=${PUSH_WAIT_SECS:-$((LT * 60))}
 # Split bookkeeping, read by the EXIT trap: ALL = the PRs given, landed = what land_train merged, gates = verify passes run.
 split=0 landed= gates=0 ALL="$*"
 unl() { local n; for n in $ALL; do [[ " $landed " == *" $n "* ]] || printf '%s ' "$n"; done; }  # every PR land_train did not merge
 split_report() { [ "$split" -eq 1 ] || return 0; local u; u=$(unl); echo "SPLIT done: landed #${landed# }; CANT (not landed) #${u% }; gates=$gates"; }
-trap 'split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
+trap 'kill "$HB" 2>/dev/null; split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
 # A landing train holds the push lock and is moving the base: wait it out before any gate work (a union composed mid-land is stale at its own land).
 lock_take "$PQ" "$PW" "$LT" || exit 1; lock_drop "$PQ"
 if [ -n "${CLEAN_ROOT:-}" ]; then  # start-of-train cleanup of your own finished work; never blocks the train
@@ -136,10 +145,24 @@ green() { printf '%s %s\n' "$B" "$U" >"$LOG.gu"; exit 0; }  # train() success: h
 renew() { PERUN_HOLDER_PID=$$ python3 "$HERE/perun_policy.py" heavy-exclusive-renew >/dev/null 2>&1 || true; }
 # train: one verify + browser pass over PRS, run in a subshell so every exit below is that pass's result (0 GREEN, 9 split
 # requested, else the old exit codes). With TRAIN_SPLIT_DEPTH 0 or no split it is the old script: the first non-zero exit is final.
+# slot NAME: be sure a heavy slot is free before the stage starts, WITHOUT holding the exclusive lease through a long wait (it freezes every
+# other heavy command). Free now: no change. Full: drop the exclusive lease, wait up to TRAIN_SLOT_WAIT_SECS (default 1800), retake it.
+# rc 0 = go; 75 = no slot freed in time (nothing ran; the caller reports "did not complete"). A lost retake DEFERs (exit 4).
+slot() {
+  local rc=0
+  python3 "$HERE/stage_run.py" --name "$1" --probe --wait 0 >/dev/null 2>&1 </dev/null && return 0
+  PERUN_HOLDER_PID=$$ python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true
+  python3 "$HERE/stage_run.py" --name "$1" --probe --wait "${TRAIN_SLOT_WAIT_SECS:-1800}" >/dev/null 2>&1 </dev/null || rc=$?
+  [ "$rc" -eq 0 ] || return "$rc"
+  take_lease || { echo "DEFER: another gate holds the exclusive heavy lease; split stopped, retry the unlanded PRs later" >&2; exit 4; }
+}
 train() {
 while :; do
 renew
-rc=0; "$(dirname "$0")/scrub_env.sh" bash -c "$VERIFY_CMD" _ "$T" "${PRS[@]}" >"$LOG" 2>&1 </dev/null || rc=$?
+rc=0; slot train-verify || rc=$?
+[ "$rc" -ne 0 ] || "$(dirname "$0")/scrub_env.sh" python3 "$HERE/stage_run.py" --name train-verify --timeout "${TRAIN_STAGE_TIMEOUT_MIN:-180}" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$VERIFY_CMD" _ "$T" "${PRS[@]}" >"$LOG" 2>&1 </dev/null || rc=$?
+# stage_run 75 = no heavy slot freed in time, 124 = stage timeout: the verify never gave a verdict, so it is not RED (no ratchet culprit hunt).
+case $rc in 75|124) echo "stage did not complete (train-verify rc=$rc: $([ "$rc" = 75 ] && echo 'no heavy slot' || echo 'timed out'); last log line: $(tail -1 "$LOG" 2>/dev/null)); nothing landed" >&2; exit 3 ;; esac
 # Filter by verdict prefix, never by position; `|| true` keeps pipefail from aborting on no match.
 grep -E '^(DEFER|DROP|GREEN|RED|STALE|CONFLICT)' "$LOG" | tail -4 || true
 L=$(grep -E '^GREEN' "$LOG" | tail -1 || true)
@@ -150,8 +173,11 @@ if [ -z "$L" ]; then
     base=$(git rev-parse HEAD)
     for n in "${PRS[@]}"; do
       git checkout -q --detach "$base"
-      if git fetch -q "$REMOTE" "pull/$n/head" && git merge -q --no-edit FETCH_HEAD >/dev/null 2>&1 \
-        && ! PR=$n bash -c "$RATCHET_CMD" >/dev/null 2>&1 </dev/null; then echo "CULPRIT #$n fails the ratchet alone on the base"; fi
+      if git fetch -q "$REMOTE" "pull/$n/head" && git merge -q --no-edit FETCH_HEAD >/dev/null 2>&1; then
+        rr=0; PR=$n python3 "$HERE/stage_run.py" --name train-ratchet --timeout "${TRAIN_RATCHET_TIMEOUT_MIN:-30}" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$RATCHET_CMD" >/dev/null 2>&1 </dev/null || rr=$?
+        case $rr in 0) ;; 75|124) echo "could not check: ratchet for #$n did not complete (stage rc=$rr: $([ "$rr" = 75 ] && echo 'no heavy slot' || echo 'timed out')); no culprit named" >&2 ;;
+          *) echo "CULPRIT #$n fails the ratchet alone on the base" ;; esac
+      fi
       git merge --abort 2>/dev/null || true
     done
     git checkout -q --detach "$base"
@@ -164,8 +190,10 @@ if [ -z "${BROWSER_CMD:-}" ] || [ "$BROWSER_CMD" = skip ]; then
   green
 fi
 renew; git checkout -q --detach "$U"
-rc=0; UNION_SHA=$U BASE_SHA=$B bash -c "$BROWSER_CMD" >"$LOG.browser" 2>&1 </dev/null || rc=$?
+rc=0; slot train-browser || rc=$?
+[ "$rc" -ne 0 ] || UNION_SHA=$U BASE_SHA=$B python3 "$HERE/stage_run.py" --name train-browser --timeout "${TRAIN_STAGE_TIMEOUT_MIN:-180}" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$BROWSER_CMD" >"$LOG.browser" 2>&1 </dev/null || rc=$?
 if [ $rc -eq 0 ]; then git checkout -q --detach "$REMOTE/$BASE_BRANCH"; green; fi
+case $rc in 75|124) git checkout -q --detach "$REMOTE/$BASE_BRANCH"; echo "stage did not complete (train-browser rc=$rc: $([ "$rc" = 75 ] && echo 'no heavy slot' || echo 'timed out')); not a browser RED; nothing landed" >&2; exit 3 ;; esac
 # Red browser gate. With RERUN_CMD, "FAIL <id>" lines (minus BASELINE_FAILS) are re-run alone; flakes never block, only
 # REAL failures do, and only the PR(s) that fail them alone on the base are dropped. Without RERUN_CMD it stays all-or-nothing.
 BR="BROWSER RED: union $U fails browser specs (see $LOG.browser); nothing landed"

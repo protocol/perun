@@ -473,6 +473,12 @@ for skill in "${SKILLS[@]}"; do
       "${TARGET_DIR}/${host}/skills/${skill}" \
       "${TARGET_DIR}/${host}/skill-backups"
   done
+  # One canonical copy (the first host's); every other host's copy must be byte-identical, else fail naming it.
+  # Guards partial or failed copies (cp interrupted, pre-existing leftovers); later drift is perun_doctor's job.
+  for host in "${HOSTS[@]:1}"; do
+    diff -rq "${TARGET_DIR}/${HOSTS[0]}/skills/${skill}" "${TARGET_DIR}/${host}/skills/${skill}" >/dev/null \
+      || { echo "error: ${TARGET_DIR}/${host}/skills/${skill} differs from ${TARGET_DIR}/${HOSTS[0]}/skills/${skill}; vendored copies drifted" >&2; exit 1; }
+  done
 done
 
 # The generated entry index (one line per skill, command and script): the host rules point agents at it.
@@ -659,6 +665,8 @@ HOUSE
       def up: sub("python3 (?<p>\\.claude/skills/[A-Za-z0-9_./-]+\\.py)"; "python3 \"$CLAUDE_PROJECT_DIR/\(.p)\"")
               | sub("HOUSE_DEFAULTS_FILE=(?<p>\\.claude/[A-Za-z0-9_./-]+)"; "HOUSE_DEFAULTS_FILE=\"$CLAUDE_PROJECT_DIR/\(.p)\"");
       (.hooks[]?[]?.hooks[]? | select((.command? | type) == "string") | .command) |= up
+      # The heavy_gate entry carries its own timeout, so an old copy (5s) would sit beside the template one and kill the in-hook wait: drop it unless it equals the template entry, the union below re-adds the current one.
+      | (if (.hooks.PreToolUse? | type) == "array" then .hooks.PreToolUse |= map(select((([.hooks[]?.command? // ""] | any(contains("heavy_gate.py"))) | not) or (. as $x | ($t.hooks.PreToolUse // []) | index([$x])))) else . end)
       | reduce ($t.hooks | keys[]) as $e (.;
           (.hooks[$e] // []) as $a
           | .hooks[$e] = $a + ($t.hooks[$e] | map(select(. as $x | $a | index([$x]) | not))))
