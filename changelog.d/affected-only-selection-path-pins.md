@@ -1,3 +1,0 @@
-Fast-gate and merge-train guidance (`references/merge-queue-worktrees.md`) now states that affected-only test selection by import graph misses tests that read repo files by path string (doc pins, ledgers, fixtures): the selector also picks any test whose source contains a changed file's repo path, an unsure selection runs the full suite, and a base-red fix rides a solo train, never inside a full train. Pinned by an `evals/evals.json` case.
-
-size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 37954→38969 the one rule section on path-string test pins, full-suite fallback and solo-train base-red fix

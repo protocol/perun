@@ -3,6 +3,122 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.607.0] — 2026-10-27
+
+Fast-gate and merge-train guidance (`references/merge-queue-worktrees.md`) now states that affected-only test selection by import graph misses tests that read repo files by path string (doc pins, ledgers, fixtures): the selector also picks any test whose source contains a changed file's repo path, an unsure selection runs the full suite, and a base-red fix rides a solo train, never inside a full train. Pinned by an `evals/evals.json` case.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 37954→38969 the one rule section on path-string test pins, full-suite fallback and solo-train base-red fix
+
+### Added
+- `scripts/app_pentest.sh URL` (deep-code-review): black-box pass over a running app with OWASP ZAP baseline (passive) and nuclei (default templates, rate-limited), each reported `skipped` when not installed. It refuses any target that is not localhost, 127.0.0.1 or listed in `APP_PENTEST_ALLOW`, validates the port and resolves the host (addresses are printed); an active scan needs `--active`, an allowlisted host and loopback/private addresses, and runs a throttled ZAP full scan. Output is JSON leads marked `verified: false` for the reviewer to reproduce, per the new `references/app-pentest.md` (routed from `full-map.md`'s domain-B row). Tested with fake scanners on PATH in `scripts/test_app_pentest.sh`, wired into `scripts/test-ci-gates.sh`.
+
+size-budget-raise: .claude/skills/deep-code-review/references/full-map.md 18889→18990 one routing line for the new app-pentest.md and supply-chain-check.md references
+
+### Added
+- agentic-delivery: two lessons. A watchdog or budget must be shorter than the hard timeout it pre-empts (`references/pipeline-optimizer.md`, asserted by `scripts/test_budget_below_timeout.py` over CI step, job and heavy-lease timeouts). A fix for a recurring failure class is replayed against past instances and keyed on signals the change carries, not labels (`references/retrospective.md`, new eval case `recurring-fix-replay-signals`).
+
+size-budget-raise: .claude/skills/agentic-delivery/references/pipeline-optimizer.md 17583→17784 one anti-stall rule on budgets shorter than timeouts
+size-budget-raise: .claude/skills/agentic-delivery/references/retrospective.md 4577→4844 one paragraph on replaying fixes against past instances
+
+### Fixed
+- `lane_guard.py` shadow-fix closer match also accepts `Fixes https://github.com/<owner>/<repo>/issues/N`; `test_prepush_gate_cache.py` no longer raises on a blank shim log line and asserts the `stage_run.py` wrapper line.
+
+- Pre-push gate now runs under `nice -n 19` (`scripts/test_prepush_nice.py`); `host-enforcement.md` gains one shared-host bullet (nice and capped workers, fixture teardown matched by the reaper, read `load1` before recommending parallelism). No xdist or throughput-alarm code exists in this repo, so no further check.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/host-enforcement.md 42637→43026 one shared-host bullet
+- `test_security_gates_corpus.py` superlinearity check takes the min of 7 runs after a warm-up and fails only when the ratio breach also exceeds a 20 ms floor, so runner noise no longer flakes it.
+- `test_security_gates_corpus.py` superlinearity check now compares the guard against an in-process `shlex` pass over the same blob (the guard is linear, exponent about 1.1; the old fixed 30x ratio flaked on shared CI runners) and fails only if that relative cost grows over 3x with size.
+
+### Added
+- `templates/gitleaks.toml` for the review skill: default gitleaks rules plus a skip list for `.history/`, test-fixture dirs and registry JSON. `review_checks.sh` passes it with `--config` only when the target repo has no `.gitleaks.toml`.
+- `install.sh` treats the first host's skill copy as canonical and fails, naming the copy, if any other host's vendored copy differs.
+size-budget-raise: .claude/skills/deep-code-review/references/method-situational.md 42574→42794 one-line pointer to the gitleaks allowlist template
+
+### Added
+- `repeat_poll_guard.py`: a PreToolUse(Bash) hook that nudges (never blocks) toward one detached job when the same command runs more than 3 times in a session. Test: `scripts/test_repeat_poll_and_brief_lint.py`.
+- `subagent_brief_lint.py`: a PreToolUse(Agent|Task) hook that stops, once per distinct brief, a brief naming a tool the lane lacks (`Monitor`) or a lowercase built-in tool name (`bash tool`). Same test file. Both hooks are wired in the operating-layer template and `perun_doctor.py`.
+
+### Fixed
+- `destructive_guard.py` no longer blocks reviewed false positives found by replaying a heavy user's real blocks: `kill $(cat X.pid)` (pidfile in a lane-owned dir only), `pkill -P <pid>` (own process tree only) / bare `pkill -V`, `curl | python3 -c 'json.load(sys.stdin)'`, edit-script heredocs whose replacement text mentions `rm -rf`, `git worktree remove --force` of a clean tree and `git branch -D` of a pushed or merged branch. Each is pinned next to the true block it must keep (`scripts/test_destructive_fp.py`).
+- `token_report.py --rollup` is one lean streaming pass per file (`rollup_session`): it parses only lines with usage and, under `--since`, skips files and lines older than the window. Output is identical to the old path (`scripts/test_token_report_rollup.py`).
+
+### Changed
+- `install.sh` writes one canonical skill copy in `.claude/skills` and symlinks the other hosts (`.cursor`, `.agents`, `.codex` and the extra roots) to it, so vendored copies cannot drift. If `ln -s` fails, or `DCR_COPY_HOSTS=1` is set, it falls back to real copies. A re-run leaves correct links alone (no backup churn), and `perun_uninstall.py` removes the links.
+
+### Fixed
+- `perun_doctor.py` prints one exact copy-paste `update-installed.sh` command when the user-global `~/.claude` install is stale (auto-update and `--fix` cannot reach it, and a classifier-denied updater is never bypassed). It now skips the git probe for a global or non-git target, and flags a real host copy that differs from the `.claude` copy by hash. The updater logs `pr skip: target is not a git repo (global install)` instead of `fetch origin failed` for such a target.
+
+`lane_guard.py hotfiles` warns when a PR touches a file that more than 5 other open PRs also touch (a shared append-only ledger makes trains conflict); record entries as one fragment file each, like `changelog.d/`.
+
+### Added
+- Mutation and property tests for the safety-critical scripts: kill tests for `heavy_gate.py`, the lease and lock logic in `perun_policy.py`, and the `secret_scan.py` rules (`destructive_guard.py` is not mutation-scored), plus Hypothesis property tests for the command splitter, the guard decision, secret matching and the lease-record parser (CI installs a pinned `hypothesis` so they run there; locally they skip cleanly when it is missing). `python3 scripts/mutation_safety.py [target ...]` is an opt-in local rerun of the mutmut pass in a scratch tree; CI does not run it.
+
+The delivery pipeline tooling gains three measurements. `landing_watchdog.py` warns when the p50 or p90 age of green waiting PRs passes policy `ready_age_p50_h` or `ready_age_p90_h`. `feeder_order.py` orders a work queue so a fix for a recurring ledgered failure class runs before features. `pipeline_profile.py tests --run` prices each test script before batch size or workers are tuned. The procedure is in `references/pipeline-optimizer.md`.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/pipeline-optimizer.md 17583→18717 one section for per-test gate cost, fix-before-feature order and ready-PR age
+size-budget-raise: .claude/skills/INDEX.md 14021→14148 one generated index row for feeder_order.py
+size-budget-raise: .claude/skills/agentic-delivery/INDEX-scripts.md 14140→14323 one generated index row for feeder_order.py
+
+### Fixed
+- Scanner scripts degrade gracefully under the macOS agent sandbox: `supply_chain_check.sh` falls back to the OSV API when the osv-scanner CLI crashes (`osv: api-fallback`), `review_checks.sh` runs semgrep with a temp HOME and retries trivy secret-only when the misconfig bundle is unreachable. Every degraded run says so.
+size-budget-raise: .claude/skills/deep-code-review/references/supply-chain-check.md 2688→3178 five-line sandbox-degradation section (fallbacks are announced, not silent)
+
+### Added
+- `review_checks.sh` runs trivy offline and a local `.semgrep.yml` by default when installed, adds `--history` for gitleaks over commit history, and prints an "N findings; analyzers ran; skipped" summary on stderr. `method-situational.md` adds a verify-or-drop step for scanner leads. Test: `scripts/test-review-checks-scan-summary.sh`.
+
+size-budget-raise: .claude/skills/deep-code-review/references/method-situational.md 42574→43115 scanner verify-or-drop step
+size-budget-raise: .claude/skills/deep-code-review/INDEX-scripts.md 4648→4660 new --history flag in the review_checks.sh usage row
+
+### Changed
+- deep-code-review: a security review of a small diff now reads only `references/appsec-verify.md`, starting at a new section 0 (a one-paragraph sink sweep), instead of the full map and the 28 KB AppSec playbook. Findings cite the new-file line (hunk `+start` plus offset), never a line number inside the patch text, and each finding is cited at the line a fix would change. With the harness fixes below, on 10 blind held-out diffs (an unfrozen, non-preregistered single run) Perun ties the rival (8/8 recall each, Wilson 95% interval 0.68 to 1.00, precision 0.80 each, 0/2 decoys) at 1.39x the rival's cost, down from about 4x in the first run (`docs/notes/security-seeded-1023/README.md`). The bench cannot separate the skill's share of the gain from the harness's.
+- `scripts/security_bench_score.py` reports recall with a Wilson 95% score interval and `n` instead of a percentile bootstrap, which collapsed to [1, 1] at full recall.
+size-budget-raise: .claude/skills/deep-code-review/SKILL.md 2966→2999 the small-diff security route and the new-file line rule; a security diff review reads about 47 KB less
+size-budget-raise: .claude/skills/deep-code-review/references/appsec-verify.md 5779→6783 section 0, the small-diff sink sweep that replaces the full playbook on that route
+
+### Added
+- Two seeded security fixture sets: `scripts/eval-fixtures/security-seeded-heldout` (8 diffs, burned: the same author wrote it and the skill change, so it is regression data only) and `scripts/eval-fixtures/security-seeded-heldout2` (10 blind diffs written by a separate lane, the honest held-out measure). Both sets are retired after one use: a future claim needs a new blind set.
+- The seeded security bench harness (`docs/notes/security-seeded-1023/run.py`) gives both arms the diff inline and the same read-only tools, keeps the fixture id out of the rival's PR title, logs per-call token usage, and scores strict and location-only.
+
+### Changed
+- CI selftests shard 3 runs about 11 minutes faster locally: `scripts/test-train-flake-rate.sh` runs each distinct pre-drawn outcome through the real `train_flake.sh` once and counts the 1000 and 300 seeded trials from that cache (591 s to 19 s, same assertions and counts), and `scripts/test-land-release.sh` no longer copies and commits `docs/bench` into its scratch repo (139 s to 25 s, same assertions).
+- `session_brief.py` reads `PERUN_BRIEF_BUDGET` (seconds, default 5 unchanged) to scale its subprocess budget and per-call caps; `scripts/test-run-ledger.sh` sets 60 so a loaded runner no longer reports the run ledger as NOT CHECKED, and `scripts/test-train-flake-rate.sh` asserts two runs of one outcome sequence give the same verdict.
+
+### Added
+- `lane_guard.py shadow-fix --base REF --body-file FILE` (agentic-delivery): refuses a `Fixes/Closes/Resolves #N` PR body when the diff adds a default-off flag or env default, or touches pipeline/CI/train/hook paths without two distinct `production run: <log url>` lines (also the pass path for a default-off flag), because a fix merged behind a shadow flag has not changed production. The reference now says to use `Refs #N` with an enforce-flip checklist (shadow line seen in 2 runs, flip PR, 2 production runs). Tested in `scripts/test_lane_guard_shadow_fix.py`.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/work-tracking.md 3687→4132 one bullet: default-off and pipeline fixes close on production evidence
+
+Train, pregate and pre-push stages now run through `stage_run.py`: each takes the machine-wide heavy lease that `heavy_gate.py` counts (bounded wait, then DEFER exit 75) and is killed, process group included, after the policy key `stage_timeout_min` (default 120 minutes; the train uses `TRAIN_STAGE_TIMEOUT_MIN`, default 180), with the stage name logged. A deferred (75) or timed-out (124) stage is infrastructure, not RED: `train_land.sh` ends exit 3 "stage did not complete" without a ratchet culprit hunt, `train_flake.sh` returns 125, and a command that itself exits 75 or 124 is reported as 1. The lease records pid and start times, so a SIGKILLed `stage_run` has its orphaned child reaped by the next one and a reused pid never holds a slot. New `file_finding.py` searches each title word and refuses to file an issue that matches an open issue, a closed issue or a PR merged in the last 14 days (at least two shared title keywords, or any explicit keyword; `--force REASON` overrides and logs). The `heavy_gate.py` PreToolUse hook now waits inside the hook for a transient load or lease HOLD (backoff, `PERUN_HEAVY_HOOK_WAIT_SECS`, default 60, cap 120, 0 = old immediate deny) before it denies the turn, clamped to the hook's own timeout minus 2s; the operating-layer template raises that timeout from 5s to 70s and `install.sh --apply-operating-layer` replaces an older 5s entry instead of adding a second one. The repo `pre-commit` hook now runs under `stage_run.py --hook` with a 60s wall-clock cap (`PERUN_COMMIT_HOOK_MIN`): a hung hook exits nonzero with `COULD-NOT-CHECK: hook exceeded 60s; index.lock holder: <pid cmd or unknown>`, only reports that holder and never signals it, and never passes; the lane preamble says commit hooks run fast checks only and full suites run on the train host. `stage_run.py` also skips, with a warning, a process group it may not signal (PermissionError) and keeps that lease instead of running unleased; leases record the host and another host's lease is ignored; a malformed `PERUN_HEAVY_WAIT_SECS` exits 2; the stage timeout is stretched by max(1, load1/cores), capped at 3x, measured at stage start (never for the commit hook). `file_finding.py` ignores empty and under-3-character keywords, matches keywords as whole words and, for a title with fewer than 2 qualifying words, matches only an equal normalized title. The `pre-commit` hook warns on stderr when it cannot apply the cap. `stage_run.py` now exits 2 on a nan, inf or negative timeout or wait, handles SIGHUP and the death of its parent process (the stage's group is killed and the lease released) and installs its signal handlers before the slot wait; `--probe` waits for a slot and gives it back. `train_land.sh` renews the exclusive heavy lease in the background (`PERUN_LEASE_HEARTBEAT_SECS`, default 600) so a stage longer than the 2h lease TTL keeps it, drops it while waiting for a full slot (`TRAIN_SLOT_WAIT_SECS`) and retakes it, and runs ratchet attribution under `stage_run.py` (`TRAIN_RATCHET_TIMEOUT_MIN`, default 30; a timed-out ratchet names no culprit). `file_finding.py` never matches on an empty normalized title and also searches open PRs. `pre-push-verify.sh` prints `deferred: heavy slot busy` or a timed-out message for stage rc 75 / 124 and still rejects the push. Three generic lessons: fanout sizing is re-read between shards and never fixed from the load at stage start, a heavy slot guards only the contended stage and not the whole train, and a lane checks the state of issue #N before applying a workaround tied to it.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/fanout-host-sizing.md 47776→48424 the one section on re-sizing parallelism between shards
+size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 37954→39714 the path-string test pin rule and the one section on scoping a heavy slot to the contended stage
+size-budget-raise: .claude/skills/agentic-delivery/references/host-enforcement.md 41319→42637 the one paragraph routing stage_run.py and file_finding.py, with the 75/124 infra codes, orphan reaping and the heavy_gate hook timeout
+
+### Added
+- `supply_chain_check.sh` and `references/supply-chain-check.md`: one command that reuses OSS tools for supply-chain gating. `osv-scanner` lockfile advisories (opt-in, since it queries api.osv.dev; fails at a configurable severity and prints counts plus fixed versions), `zizmor` and `actionlint` on workflows, an OpenSSF Scorecard command for public repos, and a copyable CodeQL workflow template. Each tool runs only when installed; a skipped check is reported and the run exits 3 (INCOMPLETE) unless `--allow-skip`, and an advisory of unknown severity fails closed. Routed from `full-map.md` domain K.
+
+### Added
+- `token_report.py` now prints concrete actions under a flagged orchestration share (over 20%): a lane-count estimate computed from the measured main/subagent split, field-only handback advice naming lanes over the 800-character cap, and batching advice. Test: `scripts/test_token_orchestration_actions.py`.
+- `deep-code-review/scripts/outline.py` prints symbol line ranges (stdlib `ast` for Python, universal-ctags when installed, a regex outline otherwise; no new dependency) so a lane reads one range instead of a whole file. On three files in this repo (`token_report.py`, `destructive_guard.py`, `impact_map.py`) the map plus one symbol is 34014 bytes against 332746 for the full files, a 89.8% cut. Test: `scripts/test_outline.py`.
+- `scripts/test_hook_latency.py` pins a budget on the fastest of seven runs for the hooks that run on every tool call (the Bash guards, `lane_cap.py`, `cost_statusline.py`); it skips when the 1-minute load average exceeds the core count.
+
+### Fixed
+- `cost_statusline.py` recompiled the 2800-line `token_report.py` on every status-line refresh because it disabled bytecode writing; it now caches bytecode in `~/.cache/perun-pyc`. On a loaded host (load average ~80), 25 interleaved runs per arm on one fixed transcript: median 193 ms to 133 ms, minimum unchanged (52 vs 53 ms), so the gain is real only for the recompile cost and disappears on an idle machine's best case. The cache is skipped when `PYTHONDONTWRITEBYTECODE` is set.
+- `destructive_guard.py` (the Bash PreToolUse hook) is now a small stub that runs the unchanged guard logic from `destructive_guard_core.py` out of the `__pycache__` bytecode cache. Python never caches the script it is started on, so the 2079-line file was recompiled on every tool call. The hook command, exit codes, `import destructive_guard` and `--selftest` are unchanged, and the stub blocks (exit 2) if the core cannot be loaded. A crash inside the core's `main()` also exits 2, with its own "guard crashed" message. 25 interleaved runs per arm on a loaded host (load average ~50), same payload, warm cache: minimum 64 ms to 42 ms, median 77 ms to 50 ms; reproduce with `python3 scripts/bench_hook_latency.py BEFORE.py AFTER.py` (the before copy comes from `git show <base>:<path>`). Where the skills directory is read-only or `PYTHONDONTWRITEBYTECODE` is set, no cache is written and the cost is as before. Tests: `scripts/test_destructive_guard_stub.py`, `scripts/test_destructive_guard_stub_crash.py`.
+
+size-budget-raise: .claude/skills/deep-code-review/references/method-situational.md 42574→42723 one-line route to outline.py
+
+### Added
+- Train admission gate in `stage_run.py` (policy `train_gate` = `shadow|enforce|off`, default `shadow`; `heavy_trains`, default 1): caps live `train-browser` stages and, while one runs, other `train-*` stages (one prepared train), so queued trains hold before compile/unit instead of piling load on the host. `shadow` only prints WOULD-BLOCK; `enforce` holds the stage with the existing wait and DEFER (75). Reuses the heavy lease (kind word `browser` or `train`) and `perun_policy.train_gate`; tested in `scripts/test-train-gate.sh`, wired through `scripts/ci-tests.d/train-gate.sh`. The merge-queue reference gains one rule citing the WIP-limit and Little's Law reasoning.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 39714→40258 one rule: cap live heavy trains (WIP limit)
+
+Merge-train tooling now reports landing yield, not just merge rate. `train_land.sh` records each started train through the new `train_yield.py`, and `landing_watchdog.py` warns when fewer than half the recent trains landed a PR or one PR re-rode 5 or more trains, saying it points at infra (timebox or load) rather than the PR. `land_ready.py` logs the `feeder_order.py` priority order it would sweep in (shadow by default; `PERUN_PRECHECK_ORDER=on` applies it) so fixes are not starved of a receipt check. The procedure is in `references/pipeline-optimizer.md`.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/pipeline-optimizer.md 18717→19151 one bullet for train yield and receipt order
+size-budget-raise: .claude/skills/INDEX.md 14148→14274 generated index row for train_yield.py
+size-budget-raise: .claude/skills/agentic-delivery/INDEX-scripts.md 14323→14489 generated index row for train_yield.py
+
 ## [1.606.0] — 2026-10-26
 
 ### Changed

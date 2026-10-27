@@ -1,9 +1,0 @@
-### Changed
-- deep-code-review: a security review of a small diff now reads only `references/appsec-verify.md`, starting at a new section 0 (a one-paragraph sink sweep), instead of the full map and the 28 KB AppSec playbook. Findings cite the new-file line (hunk `+start` plus offset), never a line number inside the patch text, and each finding is cited at the line a fix would change. With the harness fixes below, on 10 blind held-out diffs (an unfrozen, non-preregistered single run) Perun ties the rival (8/8 recall each, Wilson 95% interval 0.68 to 1.00, precision 0.80 each, 0/2 decoys) at 1.39x the rival's cost, down from about 4x in the first run (`docs/notes/security-seeded-1023/README.md`). The bench cannot separate the skill's share of the gain from the harness's.
-- `scripts/security_bench_score.py` reports recall with a Wilson 95% score interval and `n` instead of a percentile bootstrap, which collapsed to [1, 1] at full recall.
-size-budget-raise: .claude/skills/deep-code-review/SKILL.md 2966→2999 the small-diff security route and the new-file line rule; a security diff review reads about 47 KB less
-size-budget-raise: .claude/skills/deep-code-review/references/appsec-verify.md 5779→6783 section 0, the small-diff sink sweep that replaces the full playbook on that route
-
-### Added
-- Two seeded security fixture sets: `scripts/eval-fixtures/security-seeded-heldout` (8 diffs, burned: the same author wrote it and the skill change, so it is regression data only) and `scripts/eval-fixtures/security-seeded-heldout2` (10 blind diffs written by a separate lane, the honest held-out measure). Both sets are retired after one use: a future claim needs a new blind set.
-- The seeded security bench harness (`docs/notes/security-seeded-1023/run.py`) gives both arms the diff inline and the same read-only tools, keeps the fixture id out of the rival's PR title, logs per-call token usage, and scores strict and location-only.
