@@ -7,7 +7,7 @@ SD = os.path.join(ROOT, ".claude", "skills", "deep-code-review", "scripts")
 sys.path.insert(0, SD)
 import security_verify as s  # noqa: E402
 
-full = {"source": "app/views.py:10", "sink": "app/db.py:42"}
+full = {"source": "app/views.py:10", "sink": "app/db.py:42", "hunter": "u1", "verifier": "u2"}
 ex, _ = s.effective()
 
 

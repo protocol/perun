@@ -1,4 +1,4 @@
-Read this when the review is FILE or FULL scope, a DIFF over 300 changed lines or with a blast-radius flag, or anything the SKILL.md fast path does not cover. It is the core of the full map: scope modes, the first-response block, hard rules, the phase and domain routing. Principles 4-6, 10, 11 and the Project stage model are in `full-map-principles.md`; the Findings report and Definition of done (a) are in `full-map-report.md`. References that cite `SKILL.md` principles, Project stage, Severity rubric or Definition of done mean those sections, wherever they now live.
+Read this when the review is FILE/FULL scope, a DIFF over 300 lines or with a blast-radius flag, or anything past the SKILL.md fast path. Full map core: scope modes, first-response block, hard rules, phase/domain routing. Principles 4-6, 10, 11 and Project stage: `full-map-principles.md`; Findings report and Definition of done (a): `full-map-report.md`. References citing `SKILL.md` principles, Project stage, Severity rubric or Definition of done mean those sections wherever they live.
 
 # Deep Code Review
 
@@ -55,6 +55,7 @@ affected tests only (import graph), full suite once before land; batch all reads
 | api / service | A B E F I J | `security-appsec.md`, `security-api.md`, `api-contracts.md` |
 | data / ETL | A D E F G J | `data-quality.md`, `performance-db-cost.md` |
 | agent / LLM / MCP | A B C E F J | `security-ai-agents.md`, `security-agent-skills.md`, `security-appsec.md` |
+| desktop / native | A B E F K | `desktop-native-appsec.md`, `security-appsec.md` |
 | IaC / platform | B K L N | `infra-iac-containers.md` |
 | lib / SDK | A H I J K | `api-contracts.md`, `dependency-currency-and-upgrades.md` |
 

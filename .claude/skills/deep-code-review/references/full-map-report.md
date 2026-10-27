@@ -37,3 +37,5 @@ reports are ID + severity + area only.
   security/authz changes on their own PR.
 - Standards not claimed unless walked.
 - `mechanism-unproven` fixes keep the finding open.
+
+Strict verdict rows and the coverage-map completeness check: `scripts/finding_verdict.py`, `scripts/coverage_ledger.py` (rules in `machine-report.md`).
