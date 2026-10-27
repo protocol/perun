@@ -65,7 +65,7 @@ class PolicyCli(unittest.TestCase):
     def test_heavy_slots_injected_load(self):
         self.assertEqual(perun_policy.heavy_slots(10, 4.0), 6)
         self.assertEqual(perun_policy.heavy_slots(10, 50.0), 2)  # floor of 2, never starves
-        self.assertEqual(perun_policy.heavy_slots(1), 2)
+        self.assertEqual(perun_policy.heavy_slots(1), 1)  # floor never exceeds the core count
 
     def test_heavy_admission_injected_load(self):
         import host_probe

@@ -13,6 +13,11 @@ matches), `bash|sh|zsh -c STR` and `eval STR` recurse, and `env [-i|-u X|VAR=v]`
 for the rest of the command. Option values (the `-m`/`-F` argument) are skipped, so a message that
 says `--no-verify` or `SKIP=1` is not a hit.
 
+Also denies any command whose text mentions `approvals` (any spelling: no slash, `cd` into it, `$VAR`/`$'\\x..'` paths, `ln -s`, an
+unparseable line) unless every segment is a read-only command (cat/ls/grep/head/tail/wc/stat/test/diff). Only a verified human writes
+gate-override approvals (an owner-run `!` command, which bypasses this hook); a lane never self-approves. This is a TRIPWIRE for honest
+mistakes (a name split across quotes still passes); the boundary is the sandbox / filesystem permissions on `.perun/approvals`.
+
 Unparseable input -> allow plus a one-line stderr note.
 # ponytail: a deny hook that blocks on a parse error breaks legit commands, so it fails open; ceiling:
 # guards honest mistakes; deliberate evasion is backstopped by the host classifier. `g=git; $g commit -n`, aliases and scripts that wrap git are not seen. Upgrade: resolve the command
@@ -34,6 +39,16 @@ OPT_VAL = ("-u", "-n", "-I", "-P", "-L", "-d", "-E", "-s", "-a", "-C", "-S")  # 
 WRAP = ("env", "command", "exec", "nohup", "sudo", "time", "builtin")
 MSG = ("Blocked git hook bypass ({why}). Fix the failing hook; never bypass it "
        "(no --no-verify, commit -n, HUSKY=0, SKIP=, GIT_CONFIG_*, core.hooksPath).")
+
+
+APPROVALS = "approvals"
+READ = ("cat", "ls", "grep", "head", "tail", "wc", "stat", "test", "[", "diff")
+HUMAN = "a gate override (.perun/approvals) needs a verified human, never a lane"
+
+
+def _approval_write(cmd, segs):
+    """Fail closed: a command that mentions `approvals` in any form is denied unless every segment is led by a read-only command."""
+    return APPROVALS in cmd.lower() and not all(os.path.basename(g[0]) in READ for g in segs if g)
 
 
 def _env_bad(a):
@@ -101,13 +116,15 @@ def bypass(cmd, _sticky=None):
         toks = list(lex)
     except ValueError as e:
         print(f"bypass_guard: could not parse command ({e}); allowed", file=sys.stderr)
-        return ""
+        return HUMAN if APPROVALS in cmd.lower() else ""
     segs = [[]]
     for t in toks:
         if re.fullmatch(r"[;&|()<>\n]+", t):
             segs.append([])
         else:
             segs[-1].append(t)
+    if _approval_write(cmd, segs):
+        return HUMAN
     gated = False
     for seg in segs:
         i, env = 0, []

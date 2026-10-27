@@ -70,6 +70,8 @@ load (`stage_run.py` does, capped at 3x); a worker count may not be fixed by it.
 
 **🚩** a worker count computed once before the first shard and logged for the whole run.
 
+A fan-out's worker count has a floor that scales with the core count (`perun_policy.py` `slot_floor`: an eighth of the cores, never a fixed 2 or 8): when the host is too busy to give the floor, wait for it (`fanout_workers`, `PERUN_FANOUT_WAIT_SECS`) instead of shrinking; a 2-worker run froze for an hour at load 39 on an 88-vCPU host. `xargs -P` takes the core count, never a literal (`scripts/test_host_scaling.py`).
+
 ## Escalate a lane, don't just retry it
 
 **Escalate a lane, don't just retry it.** After two equivalent failures on the

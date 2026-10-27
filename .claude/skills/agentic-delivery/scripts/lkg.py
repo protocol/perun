@@ -5,6 +5,8 @@
 (the landing watchdog's state dir, PERUN_LANDING_DIR or $XDG_CACHE_HOME/perun/landing-watchdog), keyed on the git common dir so
 worktrees share one pointer. Written atomically; it survives the watchdog's stamp pruning (ends in `.lkg.json`). `check <sha>` exits 0 only when <sha> IS the LKG, else 1 with the
 untested gap (commits since the LKG; also 1 when none is recorded). `age` prints the LKG age in hours. Side effects: `record` overwrites the pointer.
+Provenance: `record` stores `runner`, the blob of `scripts/run-ci-tests.sh` at the sha, and REFUSES (ValueError, exit 1) when the working-tree copy differs from it (a stale or edited runner
+is not the gate that HEAD defines); `check` rejects a receipt whose `runner` is missing or not that sha's blob. Repos without the runner skip both.
 Policy: `lkg_gate` shadow|enforce|off (land-release.sh, default shadow), `lkg_stale_h` (hours >= 0, 0 = off) for the watchdog alarm.
 """
 import hashlib
@@ -24,10 +26,25 @@ def path(cwd="."):
     return os.path.join(base, hashlib.sha1(common.encode()).hexdigest()[:16] + ".lkg.json")
 
 
+RUNNER = "scripts/run-ci-tests.sh"
+
+
+def runner_blob(sha, cwd="."):
+    """Blob id of the gate runner at `sha`, or '' when that commit has none; RuntimeError on any other git failure (fail closed)."""
+    r = subprocess.run(["git", "ls-tree", sha, "--", RUNNER], cwd=cwd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"git ls-tree {sha[:12]} failed: {r.stderr.strip()[:200]}")
+    return r.stdout.split()[2] if r.stdout.strip() else ""
+
+
 def record(cwd=".", sha=None, now=None):
-    """Write the pointer for `sha` (default HEAD) and return it."""
+    """Write the pointer for `sha` (default HEAD) and return it; ValueError when the working-tree runner is not the one at `sha`."""
     sha = lw._run(["git", "rev-parse", "--verify", (sha or "HEAD") + "^{commit}"], cwd).strip()
-    rec = {"sha": sha, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now or time.time()))}
+    rec = {"sha": sha, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now or time.time())), "runner": runner_blob(sha, cwd)}
+    if rec["runner"]:
+        have = subprocess.run(["git", "hash-object", "--no-filters", RUNNER], cwd=cwd, capture_output=True, text=True).stdout.strip()
+        if have != rec["runner"]:
+            raise ValueError(f"stale runner: working-tree {RUNNER} ({have[:12] or 'missing'}) is not {sha[:12]}'s ({rec['runner'][:12]}); rerun the gate from that commit's script")
     tmp = f"{path(cwd)}.{os.getpid()}.tmp"
     with open(tmp, "w") as f:
         json.dump(rec, f)
@@ -56,6 +73,9 @@ def check(sha, cwd="."):
     if not rec:
         return False, "no last-known-good recorded"
     if rec["sha"] == sha:
+        want = runner_blob(sha, cwd)
+        if want and rec.get("runner") != want:
+            return False, f"{sha[:12]} receipt rejected: runner provenance {(rec.get('runner') or 'missing')[:12]} is not {RUNNER} at that commit ({want[:12]}); rerun it"
         return True, f"{sha[:12]} is the last-known-good ({rec['utc']})"
     r = subprocess.run(["git", "rev-list", "--count", f"{rec['sha']}..{sha}"], cwd=cwd, capture_output=True, text=True)
     anc = subprocess.run(["git", "merge-base", "--is-ancestor", rec["sha"], sha], cwd=cwd, capture_output=True).returncode == 0
@@ -66,7 +86,11 @@ def check(sha, cwd="."):
 def main(argv):
     cmd = argv[1] if len(argv) > 1 else ""
     if cmd == "record":
-        print(json.dumps(record(sha=argv[2] if len(argv) > 2 else None)))
+        try:
+            print(json.dumps(record(sha=argv[2] if len(argv) > 2 else None)))
+        except (ValueError, RuntimeError) as e:
+            print(f"lkg: {e}", file=sys.stderr)
+            return 1
     elif cmd == "check" and len(argv) > 2:
         ok, msg = check(argv[2])
         print(msg)

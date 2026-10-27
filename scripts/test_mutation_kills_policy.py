@@ -40,7 +40,7 @@ def test_free_cores_lanes_slots():
     assert pp.lanes("efficient", 8) == 4 and pp.lanes("efficient", 1) == 1 and pp.lanes("efficient", 9, tokens="maximize") == 4
     assert pp.lanes("off", 8) == 1 and pp.lanes("garbage", 8) == 4 and pp.lanes(3, 8) == 3 and pp.lanes(0, 8) == 1 and pp.lanes(2.7, 8) == 2
     assert pp.lanes(6, 8, tokens="efficient") == 2 and pp.lanes(1, 8) == 1
-    assert pp.heavy_slots(8, 3.0) == 5 and pp.heavy_slots(8, 7.9) == 2 and pp.heavy_slots(8, 99.0) == 2 and pp.heavy_slots(1, None) == 2
+    assert pp.heavy_slots(8, 3.0) == 5 and pp.heavy_slots(8, 7.9) == 2 and pp.heavy_slots(8, 99.0) == 2 and pp.heavy_slots(1, None) == 1
     assert pp.heavy_slots(8, 3.0, tokens="efficient") == 2 and pp.heavy_slots(8, 0.0, tokens=3) == 3 and pp.heavy_slots(8, 3.0, idle_pct=75.0) == 6
 
 

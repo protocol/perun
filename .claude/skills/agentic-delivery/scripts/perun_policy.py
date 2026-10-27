@@ -253,7 +253,37 @@ def heavy_slots(cores: int, load1: float | None = None, tokens="maximize", idle_
     (cores x CPU idle%, else cores minus load1) but never below 2, so a busy host still makes progress. A primitive: callers opt in.
     Pair with `host_probe.py --lane-type heavy`, which defers the job when load1 > cores or RAM is low.
     `tokens` caps the result (token_cap). Kill criterion: if the median pre-push time rises after adopting this, revert to the flat cap."""
-    return token_cap(max(2, free_cores(cores, load1, idle_pct)), tokens)
+    return token_cap(max(slot_floor(cores), free_cores(cores, load1, idle_pct)), tokens)
+
+
+def slot_floor(cores: int) -> int:
+    """Minimum slots/workers a gate admits however busy the host: 2, or an eighth of the cores (a fixed 2 starved an 88-core host),
+    never more than the core count. Intent: a saturated host still gets this much (deliberate bounded over-subscription), not more."""
+    return min(max(2, cores // 8), max(1, cores))
+
+
+def _wait_secs() -> float:
+    """$PERUN_FANOUT_WAIT_SECS as seconds (default 30); a non-numeric or negative value warns on stderr and uses the default."""
+    v = os.environ.get("PERUN_FANOUT_WAIT_SECS", "30")
+    try:
+        if float(v) >= 0:
+            return float(v)
+    except ValueError:
+        pass
+    print(f"perun_policy: bad PERUN_FANOUT_WAIT_SECS={v!r}; using 30", file=sys.stderr)
+    return 30.0
+
+
+def fanout_workers(cores: int, read, wait=30.0, sleep=time.sleep, now=time.time) -> int:
+    """Worker count for a fan-out stage, computed once at stage start: idle cores, never below `slot_floor`. When the host is too
+    busy to give the floor, WAIT (re-read `read()` -> (load1, idle_pct) until `wait` seconds pass) instead of shrinking; after the wait,
+    the floor is still returned. Side effects: sleeps."""
+    end = now() + wait
+    while True:
+        n = free_cores(cores, *read())
+        if n >= slot_floor(cores) or now() >= end:
+            return max(n, slot_floor(cores))
+        sleep(1)
 
 
 LEASE_TTL = 2 * 3600
@@ -560,7 +590,14 @@ def main(argv: list) -> int:
         if argv == ["lanes"]:
             import host_probe  # lazy: host_probe imports this module
             load1, cores = host_probe.read_load1_and_cores()
-            print(lanes(pol["local_cpu"], cores or os.cpu_count() or 1, load1, pol["tokens"], host_probe.read_cpu_idle_pct()))
+            cores = cores or os.cpu_count() or 1
+            n = lanes(pol["local_cpu"], cores, load1, pol["tokens"], host_probe.read_cpu_idle_pct())
+            if pol["local_cpu"] == "maximize":  # fan-out sized at stage start: wait for the floor, never shrink below it
+                def fresh():  # idle% is cached per process: drop it so each wait iteration re-samples
+                    host_probe._IDLE_CACHE.clear()
+                    return host_probe.read_load1_and_cores()[0], host_probe.read_cpu_idle_pct()
+                n = token_cap(fanout_workers(cores, fresh, _wait_secs()), pol["tokens"])
+            print(n)
             return 0
         if argv == ["heavy-slots"]:
             import host_probe
@@ -635,7 +672,7 @@ def _selftest() -> int:
     assert lanes("maximize", 8, 99) == 1
     assert [lanes("maximize", 16, 0, t) for t in ("efficient", "maximize", "off", 3, 0)] == [2, 16, 1, 3, 1]
     assert [heavy_slots(16, 0, t) for t in ("efficient", "maximize", "off", 5)] == [2, 16, 1, 5]
-    assert [heavy_slots(8, 3), heavy_slots(8, 7.5), heavy_slots(8, 99), heavy_slots(1), heavy_slots(8)] == [5, 2, 2, 2, 8]
+    assert [heavy_slots(8, 3), heavy_slots(8, 7.5), heavy_slots(8, 99), heavy_slots(1), heavy_slots(8)] == [5, 2, 2, 1, 8]
     ld = d / "leases"
     assert heavy_acquire(ld, 1, os.getpid()) and active_leases(ld) == [os.getpid()]
     assert not heavy_acquire(ld, 1, 4194301) and heavy_acquire(ld, 1, os.getpid())

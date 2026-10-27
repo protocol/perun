@@ -230,7 +230,7 @@ cmd_privacy() {
   # Fail closed: python3 missing or the scanner erroring blocks, never passes.
   if [ "${#scan[@]}" -gt 0 ]; then
     local sstatus=0 sout
-    sout="$(printf '%s\0' "${scan[@]}" | xargs -0 -n 1000 -P 8 python3 -I "$(dirname "${BASH_SOURCE[0]}")/secret_scan.py")" || sstatus=$?
+    sout="$(printf '%s\0' "${scan[@]}" | xargs -0 -n 1000 -P "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 8)" python3 -I "$(dirname "${BASH_SOURCE[0]}")/secret_scan.py")" || sstatus=$?
     if [ "$sstatus" -eq 0 ]; then :
     elif [ -n "$sout" ]; then printf 'BLOCK: a gitleaks rule matched (content withheld); files:\n%s\n' "$sout" >&2; hit=1
     else die "privacy: secret_scan.py failed (exit $sstatus); failing closed"

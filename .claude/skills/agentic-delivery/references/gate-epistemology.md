@@ -47,6 +47,10 @@ Copied as principles, not as anyone's private playbook:
    earlier in the run (principles 9 and 11 apply the same discipline to a close and to the
    owner's rendered surface).
 
+## Principle 3, a stale-runner case — a receipt names the script that produced it
+
+A gate receipt records the blob of the runner it ran (`lkg.py record` stores `scripts/run-ci-tests.sh` at the commit) and is refused when the working-tree copy differs from HEAD's; `lkg.py check` rejects a receipt with no or a different runner. A lane that ran an old worktree copy proved nothing about HEAD's gate.
+
 ## Principle 3, an empty-baseline case — a gate with nothing to check is not the same as a gate that checked and passed
 
 A gate that compares a run against a **baseline** (a ratchet, a pin count, a regression set) and finds the
