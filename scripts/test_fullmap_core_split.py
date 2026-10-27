@@ -83,7 +83,7 @@ class FullMapSplit(unittest.TestCase):
         self.assertIn("## Severity rubric & gate", core)
         for gone in ("## Findings report", "**(a) Review method complete**", "4. **Do no harm", "11. **Confidentiality by default"):
             self.assertNotIn(gone, core)
-        self.assertLess(len(core.encode()), 19000)
+        self.assertLess(len(core.encode()), 19200)
 
     def test_moved_sections_live_in_the_split_files(self):
         pri, rep = text("full-map-principles.md"), text("full-map-report.md")

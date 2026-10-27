@@ -7,7 +7,7 @@ Steps: drop gap rows whose numeric `confidence_score` is below 80 (MIN_CONF; DIF
 normalized title, then the id) when first-evidence lines are within 10, keeping the highest-severity row
 (the first on a tie) and unioning evidence; rank Blocker>Critical>High>Medium>Low>Nit/Info (stable); keep the top
 --cap (default 20). Strength rows pass through uncapped. Output: {"findings": [...], "dropped":
-{"low_confidence": n, "ungrounded": n, "duplicate": n, "over_cap": n}} on stdout. An empty `findings` list is a valid result:
+{"low_confidence": n, "ungrounded": n, "duplicate": n, "over_cap": n}} on stdout. Gap rows that carry a `verdict` are first checked with finding_verdict.check_row: invalid rows (listed under `verdict_errors`) and `rejected` rows are dropped, `needs_validation` rows are listed under `needs_validation` and never ranked (counted under `dropped.invalid_verdict` / `dropped.rejected`, keys present only when nonzero). An empty `findings` list is a valid result:
 a clean diff yields NONE. If an input carries a machine-report `coverage` map, a `not-applicable` row without non-empty `probe` (what was
 searched) and `fact` (what fired) is prose-only: it is downgraded to `not-scanned` and listed under `na_flagged` in the output. Exit 0, or 2 on usage/unreadable input. Side effects: none.
 """
@@ -15,6 +15,7 @@ import json, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from finding_ground_check import check, parse  # noqa: E402
+from finding_verdict import check_row, norm_pol, norm_sev  # noqa: E402
 
 NEAR = 10  # same file+mechanism merges only when first-evidence lines are within this many lines
 MIN_CONF = 80  # method.md anti-slop / compact-mode.md: report only findings scored >= 80 that this change causes a real failure
@@ -22,7 +23,7 @@ SEV = {"blocker": -1, "critical": 0, "high": 1, "medium": 2, "low": 3, "nit": 4,
 
 
 def _sev(f):
-    return SEV.get(str(f.get("severity", "")).lower(), 5)
+    return SEV.get(norm_sev(f.get("severity")), 5)
 
 
 def _key(f):
@@ -33,9 +34,19 @@ def _key(f):
 
 def merge(rows, cap=20, root=".", ref=None, floor=True):
     drop = {"low_confidence": 0, "ungrounded": 0, "duplicate": 0, "over_cap": 0}
-    strengths, best = [], {}
+    strengths, best, bad, questions = [], {}, [], []
     for f in rows:
-        if f.get("polarity", "gap") != "gap":
+        if "verdict" in f and norm_pol(f) != "strength":  # opt-in strict verdict rows (finding_verdict.py); fail closed
+            errs = check_row(f)
+            if errs or f["verdict"] in ("rejected", "needs_validation"):
+                k = "invalid_verdict" if errs else f["verdict"]
+                if k == "needs_validation":
+                    questions.append(f)
+                else:
+                    drop[k] = drop.get(k, 0) + 1
+                bad += [{"id": f.get("id"), "error": e} for e in errs]
+                continue
+        elif f.get("polarity", "gap") != "gap":
             strengths.append(f)
             continue
         c = f.get("confidence_score")
@@ -59,7 +70,12 @@ def merge(rows, cap=20, root=".", ref=None, floor=True):
         group[i] = (line if keep is f else group[i][0], keep)
     ranked = sorted((f for g in best.values() for _, f in g), key=_sev)
     drop["over_cap"] = max(0, len(ranked) - cap)
-    return {"findings": ranked[:cap] + strengths, "dropped": drop}
+    out = {"findings": ranked[:cap] + strengths, "dropped": drop}
+    if bad:
+        out["verdict_errors"] = bad
+    if questions:
+        out["needs_validation"] = questions
+    return out
 
 
 def na_gate(coverage):

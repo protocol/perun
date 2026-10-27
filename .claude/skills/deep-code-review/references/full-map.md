@@ -55,6 +55,7 @@ affected tests only (import graph), full suite once before land; batch all reads
 | api / service | A B E F I J | `security-appsec.md`, `security-api.md`, `api-contracts.md` |
 | data / ETL | A D E F G J | `data-quality.md`, `performance-db-cost.md` |
 | agent / LLM / MCP | A B C E F J | `security-ai-agents.md`, `security-agent-skills.md`, `security-appsec.md` |
+| desktop / native | A B E F K | `desktop-native-appsec.md`, `security-appsec.md` |
 | IaC / platform | B K L N | `infra-iac-containers.md` |
 | lib / SDK | A H I J K | `api-contracts.md`, `dependency-currency-and-upgrades.md` |
 

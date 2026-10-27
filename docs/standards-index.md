@@ -257,6 +257,7 @@ design-quality checklist in `references/migration-parity.md` (#124).
 
 ## Referenced by name (not fetched this session — verify before citing a URL)
 
+- **Peer security-audit skill (Cloudflare `security-audit-skill`)** — a rival skill whose verdict-evidence rules, coverage-ledger completeness rule and separate verifier idea informed `finding_verdict.py`, `coverage_ledger.py` and the fresh-verifier rule in `appsec-verify.md`. Re-implemented from scratch, no text copied; its repository was not fetched this session, so no URL is recorded and no claim about its contents is made here beyond the name.
 - **Published metric/measurement standards** — cited in `data-scoring.md` (#396) as the
   constructive escape from an invented score: **CHAOSS** (community activity/health metrics +
   metric-models), **Fellegi-Sunter** (probabilistic record-linkage match tiers, incl. a

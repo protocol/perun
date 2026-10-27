@@ -19,12 +19,13 @@ rows = s.from_semgrep(res)
 assert rows[0] == {"rule": "r.sqli", "severity": "high", "sink": "a.py:9", "source": "a.py:3"}, rows[0]
 assert rows[1]["sink"] == "b.py:4" and "source" not in rows[1] and rows[1]["severity"] == "low"
 assert "source" not in rows[2] and rows[2]["sink"] == "c.py:1"
-out = s.triage(rows, set())
+out = s.triage([{**rows[0], "hunter": "tool", "verifier": "human"}] + rows[1:], set())
 assert [r["status"] for r in out] == ["confirmed", "unverified", "unverified"], out
+assert s.triage(rows[:1], set())[0]["status"] == "needs_validation", "no verifier recorded"
 # CLI accepts the report directly; a non-report object is still rejected.
 sv = os.path.join(SK, "scripts", "security_verify.py")
 p = subprocess.run([sys.executable, sv, "-", os.devnull], input=json.dumps(res), capture_output=True, text=True)
-assert p.returncode == 0 and json.loads(p.stdout)["rows"][0]["status"] == "confirmed", p.stderr
+assert p.returncode == 0 and json.loads(p.stdout)["rows"][0]["status"] == "needs_validation", p.stderr
 assert subprocess.run([sys.executable, sv, "-", os.devnull], input="{}", capture_output=True, text=True).returncode == 2
 
 # 2. Bundled rules on a generic mini fixture (needs semgrep; skipped otherwise).

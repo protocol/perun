@@ -11,7 +11,7 @@ where each row has `status`:
   dropped         - category is excluded and severity is below High (`reason` names the slug)
   needs-evidence  - category is excluded but severity is High or Critical (any case, or missing): kept, never hidden
   unverified      - no concrete source and sink `path:line`, or the row is malformed; report as a question
-  confirmed       - source and sink both present (still re-read the cited lines; this checks shape, not truth)
+  confirmed       - source and sink both present and distinct non-empty `hunter` and `verifier` ids (else needs_validation) (still re-read the cited lines; this checks shape, not truth)
 
 Override file (default `.dcr-security-exclusions` in the cwd; a missing default file is fine, an explicit path that
 is missing or unreadable exits 2): one entry per line, `#` starts a comment. `+slug` adds an exclusion, `-slug`
@@ -97,7 +97,11 @@ def triage(rows, excluded):
             else:  # High, Critical, or severity missing/odd: never hide
                 r["status"], r["reason"] = "needs-evidence", "excluded category %s but severity is High, Critical or unknown" % cat
         elif LOC.match(str(r.get("source", ""))) and LOC.match(str(r.get("sink", ""))):
-            r["status"] = "confirmed"
+            h, v = (str(r.get(k) or "").strip().lower() for k in ("hunter", "verifier"))
+            if not (h and v and h != v):  # fresh-verifier rule: a distinct verifier must have re-read it
+                r["status"], r["reason"] = "needs_validation", "hunter and verifier must both be set and differ; re-verify with a fresh reader"
+            else:
+                r["status"] = "confirmed"
         else:
             r["status"], r["reason"] = "unverified", "no concrete source and sink path:line"
         out.append(r)

@@ -171,6 +171,17 @@ Field rules, beyond the comments above:
   file so a consumer can compute fixed / still-open / changed without a person
   writing the table.
 
+### Strict verdict rows and the ledger check (optional, mechanical)
+
+A gap row may carry `verdict`, which `scripts/finding_verdict.py` (also run inside `merge_findings.py`, which drops failing rows) holds to these rules:
+
+- `confirmed`: needs `root_cause`, `observation` (the observed result), `fix` (the remediation), `severity`, `demonstrated_impact` (same scale; `severity` may not rank above it), plus `hunter`, `verifier` and `rechecked_by`. The verifier and the final re-check must be someone other than the hunter. Only this verdict carries `severity`.
+- `needs_validation`: a non-empty `blockers` list and a `validation_plan`; no `severity`. It is a question, not a ranked finding.
+- `rejected`: a `reject_reason`; no `severity`; never ranked.
+- Any field outside the schema above is an error. Rows without `verdict` stay valid for back-compat but are unvalidated: nothing has checked their evidence chain, verifier or severity cap. A `needs_validation` row is listed apart from the ranked findings (`merge_findings.py` output key `needs_validation`).
+
+`scripts/coverage_ledger.py` is a standalone, advisory check (no gate runs it; run it on the findings file before Phase 5 sign-off). It checks `coverage` (and an optional fan-out `units` list): every assigned domain has a row, a `partial` or `not-scanned` row says why, a `not-applicable` row has `probe` and `fact`, and any run that is not fully scanned states `incomplete_reason` at the top level.
+
 ## 3. Re-verifying a prior review (`PRIOR <path>`)
 
 When invoked with a prior machine report — or when `code-review/` already
