@@ -136,7 +136,7 @@ Principles 4-6, 10 and 11 (do no harm, respect the existing design, rank, outcom
 Work phases in order. Skip only when it provably does not apply, and say so.
 **Full procedure:** `method.md` — **read it when** executing a
 review after the first-response block.
-Lazy phase files, read only on their trigger: `method-diff.md` on a `DIFF` or `FILE`; `method-lenses.md` when a call site may bypass or re-derive a shared helper or predicate, or a changed unit has no covering test.
+Lazy phase files, read on trigger: `method-diff.md` on a `DIFF` or `FILE`; `method-lenses.md` when a call site may bypass or re-derive a shared helper or predicate, or a changed unit has no covering test.
 
 | Phase | Does | Load |
 |---|---|---|
@@ -147,6 +147,8 @@ Lazy phase files, read only on their trigger: `method-diff.md` on a `DIFF` or `F
 | 4 Synthesize | Dedup, compounds, snippet-or-drop at `START_SHA`, fail-open vs fail-closed, **anti-slop** | `method.md` |
 | 5 Report | Chat BLUF ≤30 lines + full table out-of-tree; in-repo `code-review/` only on confirmation | `method-report.md`, `report-format.md`, `example-review-report.md` |
 | 6 Imprint | Opt-in `AGENTS.md` + gates; detect-and-stop if present; pair each standard with a gate | `docs-and-dx.md` |
+
+Scanners: `tool-hub.md`.
 
 Phase 6 imprints **this project's review bar**, never delivery (an overlay
 below, on the owner's yes).
@@ -187,7 +189,7 @@ applicable domains. Language footguns:
 | T | Multi-tenancy & isolation | `domain-t.md` (when one deployment serves multiple tenants) |
 | W | Workflows, jobs & scheduling | `domain-w.md` (when the target runs cron, queues, or multi-step workflows) |
 
-Also: `app-pentest.md` (scan a running local app), `supply-chain-check.md` (dependency advisories).
+Also: `app-pentest.md` (scan a running app), `supply-chain-check.md` (advisories).
 
 ---
 
@@ -215,7 +217,7 @@ Google eng-practices: approve once the change **definitely improves overall
 code health** — never wave a Blocker/Critical, never approve a regression on
 another axis (principle 4).
 
-Findings report templates (`report-format.md`, `machine-report.md`, `example-review-report.md`): `full-map-report.md` — **read it when** writing Phase 5.
+Findings report templates (`report-format.md`, `machine-report.md`, `example-review-report.md`): `full-map-report.md` — **read** when writing Phase 5.
 
 ---
 
@@ -233,7 +235,7 @@ Stage never relaxes the next rule. Model, table and guardrails 1 and 3: `full-ma
 
 Two checklists; they fail independently.
 
-(a) Review method complete: `full-map-report.md` — **read it when** closing a review.
+(a) Review method complete: `full-map-report.md` — **read** when closing a review.
 
 **(b) Target ship-ready**
 - Builds and runs with the documented one-command setup.
