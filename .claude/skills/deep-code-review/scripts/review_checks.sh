@@ -7,6 +7,8 @@
 # Tools (linters, gitleaks, osv-scanner, semgrep, trivy): see references/method-situational.md. Each runs only when
 # installed and only on matching changed files. Secrets are redacted and never printed; osv-scanner needs env
 # REVIEW_OSV=1 (network); semgrep uses repo rules, else the bundled taint rules plus p/default (never `--config auto`); trivy is offline.
+# Tool hub: zizmor, bandit, gosec, grype, checkov, hadolint (snyk-agent-scan is unverified, skipped) run from one registry
+# (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
 # dirs and .claude/worktrees are never scanned; each heavy scanner takes the heavy lease only when it runs (waits
 # REVIEW_LEASE_WAIT s, default 120, else skipped) and releases it afterwards.
@@ -45,7 +47,8 @@ rc=0
 
 # Existing changed files matching extended regex $1, one per line.
 changed() { { printf '%s\n' "$files" | grep -E "$1" || true; } | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done; true; }
-skip() { echo "review_checks: not run: $1 ($2)" >&2; }
+# Inside the tool hub ($hubtool set) a skip also lands in the JSON as a not-checked row, so `[]` never hides a tool that did not run.
+skip() { echo "review_checks: not run: $1 ($2)" >&2; [ -z "${hubtool:-}" ] || add "$hubtool" "" 0 not-checked "$2"; }
 # Run "$@" under a timebox; stdout+stderr -> $out. perl alarm when no timeout(1) (stock macOS).
 tbox() {
   if command -v timeout >/dev/null; then timeout "$tmo" "$@" >"$out" 2>&1
@@ -82,7 +85,7 @@ add() { printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" >>"$raw"; }
 # run_one TOOL CMD... : sets rc; returns 1 (with a not-run line) on timeout.
 run_one() {
   local tool=$1; shift; rc=0
-  case " $ran " in *" $tool "*) ;; *) ran+=" $tool" ;; esac
+  [ -n "${hubtool:-}" ] || case " $ran " in *" $tool "*) ;; *) ran+=" $tool" ;; esac # hub tools count as ran only after a good parse
   tbox "$@" || rc=$?
   case "$rc" in 124|142) skip "$tool" "timeout ${tmo}s"; return 1 ;; esac
   return 0
@@ -177,6 +180,21 @@ if kind == "gitleaks":
 elif kind.startswith("trivy"):
     if not isinstance(d, dict):
         sys.exit("sjson: trivy output is not an object")
+elif kind in ("zizmor", "hadolint"):
+    if not isinstance(d, list):
+        sys.exit(f"sjson: {kind} output is not a list")
+elif kind in ("gosec", "grype"):
+    k = "Issues" if kind == "gosec" else "matches"
+    if not isinstance(d, dict) or not (isinstance(d.get(k), list) or (kind == "gosec" and k in d and d[k] is None)):
+        sys.exit(f"sjson: {kind} output has no {k} list")
+    if kind == "gosec" and d.get("Golang errors"):  # package load errors leave Issues empty: -no-fail hides them
+        sys.exit("sjson: gosec reported Golang errors")
+elif kind == "checkov":
+    ds = d if isinstance(d, list) else [d]
+    if not ds or not all(isinstance(x, dict) and isinstance(x.get("results"), dict) for x in ds):
+        sys.exit("sjson: checkov output has no results object")
+    if any(x["results"].get("parsing_errors") for x in ds):  # an unparsed file must not read as clean
+        sys.exit("sjson: checkov could not parse the file")
 elif not isinstance(d, dict) or not isinstance(d.get("results"), list):
     sys.exit(f"sjson: {kind} output has no results list")
 rows = []
@@ -212,6 +230,28 @@ elif kind.startswith("trivy"):
         if kind == "trivy-secret": rows += [(r["Target"], s.get("StartLine", 0), s.get("RuleID"), s.get("Title", "secret detected")) for s in r.get("Secrets") or []]
         rows += [(r["Target"], 0, v.get("VulnerabilityID"), f"{v.get('PkgName')}@{v.get('InstalledVersion')}: {v.get('Title', '')}") for v in r.get("Vulnerabilities") or []]
         rows += [(r["Target"], (m.get("CauseMetadata") or {}).get("StartLine", 0), m.get("ID"), m.get("Title", "")) for m in r.get("Misconfigurations") or []]
+elif kind == "zizmor":  # row is 0-based in json-v1; fixes and snippets are never read
+    for x in d:
+        l = ((x.get("locations") or [{}])[0])
+        f = (((l.get("symbolic") or {}).get("key") or {}).get("Local") or {}).get("verbatim_path")
+        r = (((l.get("concrete") or {}).get("location") or {}).get("start_point") or {}).get("row", -1)
+        rows.append((f, r + 1, x.get("ident"), x.get("desc", "")))
+elif kind == "bandit":  # issue_text (B105 embeds the secret) and code are never read
+    rows = [(os.path.relpath(r["filename"]), r.get("line_number", 0), r.get("test_id"), "potential issue (see the bandit docs for this test id)") for r in d["results"]]
+elif kind == "gosec":
+    for r in d["Issues"] or []:
+        ln = str(r.get("line", "0")).split("-")[0]
+        rows.append((os.path.relpath(r["file"]), int(ln) if ln.isdigit() else 0, r.get("rule_id"), r.get("details", "")))
+elif kind == "grype":  # file comes from the caller (it scanned one target)
+    for m in d["matches"]:
+        v, a = m.get("vulnerability") or {}, m.get("artifact") or {}
+        rows.append(("", 0, v.get("id"), f"{a.get('name')}@{a.get('version')}: {(v.get('description') or '')[:200]}"))
+elif kind == "checkov":  # code_block is never read
+    for x in ds:
+        for c in x["results"].get("failed_checks") or []:
+            rows.append(("", (c.get("file_line_range") or [0])[0], c.get("check_id"), c.get("check_name", "")))
+elif kind == "hadolint":
+    rows = [(r.get("file"), r.get("line", 0), r.get("code"), r.get("message", "")) for r in d]
 elif kind == "semgrep":
     rows = [(r["path"], r["start"]["line"], r.get("check_id"), (r.get("extra") or {}).get("message", "")) for r in d["results"]]
 else:
@@ -311,6 +351,58 @@ if [ -n "$files" ] && have trivy; then
     else skip trivy "unparseable output"; fi
   fi
 fi
+
+# Tool hub registry: name;flags status;mode;match (ERE on changed files);license class;install hint. One row per routed tool.
+# Flags were checked against each tool's official docs (verified) or not (unverified: skipped by default). License class:
+# route-only = never bundled, only run when the user installed it (licenses unchecked, so nothing is bundle-ok yet).
+hub=(
+  'zizmor;verified;batch;^\.github/workflows/[^/]+\.ya?ml$;route-only;pipx install zizmor'
+  'bandit;verified;batch;\.py$;route-only;pipx install bandit'
+  'gosec;verified;batch;\.go$;route-only;go install github.com/securego/gosec/v2/cmd/gosec@latest'
+  'grype;verified;each;(^|/)[^/]*(sbom|bom)[^/]*\.json$;route-only;brew install grype'
+  'checkov;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.tf|docker-compose[^/]*\.ya?ml)$;route-only;pipx install checkov'
+  'hadolint;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.dockerfile)$;route-only;brew install hadolint'
+  'snyk-agent-scan;unverified;each;(^|/)(\.mcp\.json|mcp[^/]*\.json|SKILL\.md)$;route-only;uvx snyk-agent-scan'
+)
+# hubcmd TOOL TARGET...: sets cmd (argv), okrc (extra non-crash exit codes) and jf (file the JSON lands in).
+hubcmd() {
+  local t=$1; shift; jf=$out okrc=""
+  case $t in
+    zizmor) cmd=(zizmor --format=json --offline "$@"); okrc="11 12 13 14" ;; # 11-14 = findings (docs.zizmor.sh/usage)
+    bandit) cmd=(bandit -q -f json --exit-zero "$@") ;;
+    gosec) jf=$rep; : >"$rep"; cmd=(env GOPROXY=off gosec -fmt=json -no-fail -out "$rep" ./...) ;;
+    grype) cmd=(env GRYPE_DB_AUTO_UPDATE=false grype "sbom:$1" -o json) ;; # SBOM only: dir: scans the whole tree (unverified for lockfiles)
+    checkov) cmd=(checkov -f "$1" -o json --quiet --skip-download --soft-fail) ;;
+    hadolint) cmd=(hadolint -f json --no-fail "$1") ;;
+  esac
+}
+while IFS=';' read -r hn hs hm hre _ hh; do
+  hf=$(changed "$hre"); [ -n "$hf" ] || continue
+  nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
+  if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
+  command -v "$hn" >/dev/null || { nc "install: $hh"; missing+=" $hn"; continue; }
+  hubtool=$hn
+  case $hn in grype|checkov|gosec) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
+  [ "$hn" != gosec ] || [ -f go.mod ] || { nc "no go.mod at repo root"; continue; }
+  targets=()
+  if [ "$hm" = batch ]; then while IFS= read -r f; do targets+=("./$f"); done <<<"$hf"; fi
+  # ponytail: batch tools get every matching file in one call (argv/timeout ceiling); chunk like semgrep if it bites.
+  while IFS= read -r f; do
+    if [ "$hm" = batch ]; then hubcmd "$hn" "${targets[@]}"; else
+      hubcmd "$hn" "./$f"
+    fi
+    run_one "$hn" "${cmd[@]}" || { [ "$hm" = batch ] && break; continue; }
+    scan_ok "$hn" $okrc || { [ "$hm" = batch ] && break; continue; }
+    if sjson "$hn" "$jf" >"$tsv"; then
+      case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
+      if [ "$hm" = batch ]; then
+        while IFS=$'\t' read -r p l r m; do printf '%s\n' "$hf" | grep -qxF -- "$p" && add "$hn" "$p" "$l" "$r" "$m"; done <"$tsv"
+      else while IFS=$'\t' read -r _ l r m; do add "$hn" "$f" "$l" "$r" "$m"; done <"$tsv"; fi
+    else skip "$hn" "unparseable output"; fi
+    [ "$hm" != batch ] || break
+  done <<<"$([ "$hm" = batch ] && echo x || printf '%s\n' "$hf")"
+done < <(printf '%s\n' "${hub[@]}")
+hubtool=
 
 lease_drop
 
