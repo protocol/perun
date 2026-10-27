@@ -25,11 +25,15 @@ sim=$(python3 -I - "$SC/train_flake.sh" "$WORK" <<'PY'
 import random, subprocess, sys
 script, work = sys.argv[1:3]
 rng, trials, real, old_real = random.Random(20261016), 1000, 0, 0
+verdict = {}  # the script is a pure function of the 3 pre-drawn outcomes: run each of the 8 distinct draws once, count the rest
+def triage(seq):
+    if seq not in verdict:
+        open(f"{work}/seq", "w").write(seq)
+        verdict[seq] = subprocess.run(["bash", script, f"{work}/id"], capture_output=True, text=True).stdout
+    return verdict[seq]
 for _ in range(trials):
     seq = "".join("F" if rng.random() < 1 / 3 else "P" for _ in range(3))
-    open(f"{work}/seq", "w").write(seq)
-    out = subprocess.run(["bash", script, f"{work}/id"], capture_output=True, text=True).stdout
-    real += out.startswith("REAL")
+    real += triage(seq).startswith("REAL")
     old_real += seq.count("F") >= 2  # the retired 2-of-3 rule on the same draws
 print(trials, real, old_real)
 PY
@@ -42,20 +46,27 @@ ok $? "train_flake: a 1-in-3 flake is blamed <= 5.5% of 1000 seeded trials (all-
 # --- (1b) regression-lands rate: train_land lands a FLAKE verdict only if the test also fails >= 1 of 3 solo runs on the base
 # (train_flake.sh --base with FLAKE_REAL_AT=1). A regression is clean on the base; p = its per-run failure rate. Rates are
 # conditional on the union gate having failed. old = the retired 2-of-3 rule (FLAKE when <= 1 of 3 solo runs fail, then lands).
+# The script is a pure function of the pre-drawn outcomes, so each distinct draw (8 triage, 8 base) is run once and cached; the 300 trials are still counted.
 cat >"$WORK/bb.sh" <<'STUB'
 r=$(head -c1 "$WORK/bseq"); tail -c +2 "$WORK/bseq" >"$WORK/bseq.n"; mv "$WORK/bseq.n" "$WORK/bseq"; [ "$r" != F ] || { echo "FAIL x"; exit 1; }
 STUB
 land=$(python3 -I - "$SC/train_flake.sh" "$WORK" <<'PY'
 import os, random, subprocess, sys
 script, work = sys.argv[1:3]
-rng, trials = random.Random(20261016), 300  # each trial spawns the real script up to 6 times
+rng, trials = random.Random(20261016), 300
 def draw(p): return "".join("F" if rng.random() < p else "P" for _ in range(3))
+tri, base = {}, {}
 def lands(seq, bseq):  # the real triage, then the real base check, as train_land runs them
-    open(f"{work}/seq", "w").write(seq); open(f"{work}/bseq", "w").write(bseq)
-    if not subprocess.run(["bash", script, f"{work}/id"], capture_output=True, text=True).stdout.startswith("FLAKE"):
+    if seq not in tri:
+        open(f"{work}/seq", "w").write(seq)
+        tri[seq] = subprocess.run(["bash", script, f"{work}/id"], capture_output=True, text=True).stdout.startswith("FLAKE")
+    if not tri[seq]:
         return False
-    env = dict(os.environ, RERUN_CMD=f"bash {work}/bb.sh", FLAKE_REAL_AT="1")
-    return subprocess.run(["bash", script, "--base", "x"], env=env, capture_output=True).returncode == 0
+    if bseq not in base:
+        open(f"{work}/bseq", "w").write(bseq)
+        env = dict(os.environ, RERUN_CMD=f"bash {work}/bb.sh", FLAKE_REAL_AT="1")
+        base[bseq] = subprocess.run(["bash", script, "--base", "x"], env=env, capture_output=True).returncode == 0
+    return base[bseq]
 for name, p in (("0.5", 0.5), ("2/3", 2 / 3), ("0.9", 0.9)):
     old = new = 0
     for _ in range(trials):
@@ -83,6 +94,8 @@ printf 'FFFFP' >"$WORK/seq"; FLAKE_RUNS=5 bash "$SC/train_flake.sh" "$WORK/id" >
 [ $rc -eq 0 ] && grep -q '^FLAKE x' "$WORK/o"; ok $? "train_flake: N is configurable (FLAKE_RUNS=5: 4 of 5 failures is FLAKE)"
 printf 'FFFFF' >"$WORK/seq"; FLAKE_RUNS=5 bash "$SC/train_flake.sh" "$WORK/id" >"$WORK/o" 2>/dev/null; rc=$?
 [ $rc -eq 1 ] && grep -q '^REAL x' "$WORK/o"; ok $? "train_flake: FLAKE_RUNS=5 and all 5 fail -> REAL"
+for i in 1 2; do printf 'FFP' >"$WORK/seq"; bash "$SC/train_flake.sh" "$WORK/id" >"$WORK/d$i" 2>/dev/null; done
+cmp -s "$WORK/d1" "$WORK/d2" && [ -s "$WORK/d1" ]; ok $? "train_flake: two runs of the same outcome sequence give the same verdict"
 printf 'PFF' >"$WORK/seq"; bash "$SC/train_flake.sh" "$WORK/id" >/dev/null 2>&1
 [ "$(wc -c <"$WORK/seq")" -eq 2 ]; ok $? "train_flake: stops at the first pass (a flake costs one re-run)"
 

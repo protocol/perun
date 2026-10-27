@@ -22,7 +22,7 @@ Lines (each skipped when its input is missing; nothing is fetched from the netwo
      cache keyed by transcript, settings and date; a miss starts one detached token_report.py --nudge refresh per 90 s (a lock file; the
      child stops after 60 s and caches "" on failure), so this hook never parses a transcript. A cached line older than 14 days is
      dropped. Policy `spend_nudge=off` mutes it.
-Time: all subprocess calls share a 5s budget (BUDGET); once spent, the rest are skipped.
+Time: all subprocess calls share a 5s budget (BUDGET; env PERUN_BRIEF_BUDGET=<seconds> scales it and each per-call cap, default unchanged); once spent, the rest are skipped.
 Output: one JSON object with `additionalContext` (report lines plus the fixed HOST_RULES from subagent_start_inject.py, always) and, when there are report lines, `systemMessage` (shown to the user).
 Any error ends the hook silently with exit 0.
 """
@@ -40,7 +40,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 
-BUDGET = 5.0  # seconds, shared by every subprocess call in one brief
+BUDGET = float(os.environ.get("PERUN_BRIEF_BUDGET") or 5.0)  # seconds, shared by every subprocess call in one brief; the env knob (tests on loaded runners) scales it and every per-call cap with it
+SCALE = BUDGET / 5.0
 _deadline = [float("inf")]
 
 
@@ -49,7 +50,7 @@ def _run(cmd, timeout):
     left = _deadline[0] - time.monotonic()
     if left <= 0:
         raise subprocess.TimeoutExpired(cmd, 0)
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=min(timeout, left))
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=min(timeout * SCALE, left))
 
 
 def _git(repo, *args, timeout=3):
