@@ -245,3 +245,11 @@ that will **never** transition without a re-merge; the loop is not waiting, it i
 waiting for was never dispatched.
 
 **Cheap gates first.** Run `python3 scripts/preflight.py gates.json` before a long commit or push hook cycle: it runs every `cheap` gate without stopping at the first failure, prints all failures together, runs expensive gates only if the cheap ones pass (or `--all`), and a gate that cannot start is `COULD_NOT_RUN`, never a pass. Timeouts kill only the direct child, not its process group.
+
+## Green main has one owner, and a red with no owner within an hour is an alarm
+
+Reserve one slot (a lane or a named person) as the owner of red main; while main is red its only job is the red. Every red test gets a fix PR or a named owner within one hour of going red; a red nobody has claimed is the failure, not the red itself. `scripts/red_main.py` reads the list of reds (`.claude/red-main.json`: `id`, `since`, optional `owner`/`fix`) and prints `reds=N uncovered=U oldest_h=H`, where uncovered means no owner and no fix past the 1h grace. It exits 1 at policy `red_uncovered_max` uncovered reds or when the oldest red reaches `red_oldest_h` hours (both default 0 = off), and 2 on unreadable input.
+
+## A test that passes alone and fails in every full parallel run is neither a flake nor a red: move it to the serial project the same day
+
+Intermittent failures are flakes and consistent failures on one tree are real reds. A third case: the test passes every time it runs alone but fails in every full parallel run. It shares a resource (a port, a file, global state, a CPU-timing assumption) with its neighbours, so re-running it solo proves nothing and quarantining it hides a real isolation bug. Rule: move it the same day to the serial (one-at-a-time) test project, and treat any failure there as a real bug, not a flake. `flake_ledger.py serial [--n N]` lists the candidates from the existing ledger (`SERIAL-CANDIDATE id`: failed in the suite and passed solo on at least N distinct trees, never failed solo on any tree); it exits 1 when any exist.

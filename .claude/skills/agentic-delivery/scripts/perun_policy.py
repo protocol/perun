@@ -26,7 +26,7 @@ branch for `landing_stall_min` minutes (integer >= 1, default 60) while green PR
 `train_gate` takes `shadow|enforce|off` (default `shadow`) and `heavy_trains` an integer >= 1 (default 1): stage_run.py admits at most `heavy_trains` live `train-browser` stages plus `heavy_trains` other `train-*` stages while one runs; `shadow` only logs WOULD-BLOCK, `enforce` holds the stage.
 `train_budget_min` (integer >= 0, default 90, 0 = off) and `train_max_bisect_rounds` (integer >= 0, default 8, 0 = off): train_land.sh stops itself, releases its locks and leases, prints the culprit-suspect PRs and exits 5 (DEFER; 4 means the heavy lease was held) once a train has run that many minutes or that many gate rounds (first gate plus split halves); env `TRAIN_BUDGET_MIN` / `TRAIN_MAX_BISECT_ROUNDS` override.
 `wip_cap` takes an integer >= 0 (default 0 = off, opt-in): the same hook adds a "WIP: N open PRs > cap M" warn line when more non-draft PRs are open.
-`ready_age_p50_h` and `ready_age_p90_h` (hours; the watchdog warns when green PRs wait longer), `merges_per_hour_target` and `train_yield_floor` take an integer >= 0 (default 0 = off, opt-in): the same hook warns when merges per hour on the default branch fall below the target while green PRs wait, and when PRs per landed train (merges landed back-to-back) fall below the floor. `lkg_gate` (`shadow|enforce|off`, default `shadow`): land-release.sh warns (shadow) or refuses (enforce) to cut a release from a commit that is not the last-known-good recorded by lkg.py (the newest commit where the full ci-tests suite passed; otherwise the untested gap is reported); `lkg_stale_h` (hours >= 0, default 0 = off) makes the watchdog warn when that pointer is older. `lane_idle_h` (hours >= 0, 0 = off) with `lane_globs` ({lane: [fnmatch globs]}) makes the watchdog warn when a lane has ready PRs and its last merge is older than `lane_idle_h`.
+`ready_age_p50_h` and `ready_age_p90_h` (hours; the watchdog warns when green PRs wait longer), `merges_per_hour_target` and `train_yield_floor` take an integer >= 0 (default 0 = off, opt-in): the same hook warns when merges per hour on the default branch fall below the target while green PRs wait, and when PRs per landed train (merges landed back-to-back) fall below the floor. `lkg_gate` (`shadow|enforce|off`, default `shadow`): land-release.sh warns (shadow) or refuses (enforce) to cut a release from a commit that is not the last-known-good recorded by lkg.py (the newest commit where the full ci-tests suite passed; otherwise the untested gap is reported); `lkg_stale_h` (hours >= 0, default 0 = off) makes the watchdog warn when that pointer is older. `red_uncovered_max` and `red_oldest_h` (integers >= 0, 0 = off) are the red_main.py thresholds: reds with no owner or fix, and the age in hours of the oldest red. `lane_idle_h` (hours >= 0, 0 = off) with `lane_globs` ({lane: [fnmatch globs]}) makes the watchdog warn when a lane has ready PRs and its last merge is older than `lane_idle_h`.
 `background_guard` takes `off|warn|block` (default `warn`): whether handback_cap.py (SubagentStop) warns or blocks when a lane hands back
 while a test or build started from its worktree is still running; env `PERUN_BACKGROUND_GUARD` overrides it.
 `auto_compact` takes `on|off` (default `on`): whether `install.sh --apply-operating-layer` may set `autoCompactWindow: 200000`
@@ -110,7 +110,7 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "hold_labels": ["do-not-merge"], "landing_watchdog": "warn", "landing_stall_min": 60, "stage_timeout_min": 120, "wip_cap": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "train_budget_min": 90, "train_max_bisect_rounds": 8, "ready_age_p50_h": 0, "ready_age_p90_h": 0, "lane_idle_h": 0, "lane_globs": {}, "lkg_gate": "shadow", "lkg_stale_h": 0, "background_guard": "warn", "lockfile_skip_review": "off", "train_gate": "shadow", "heavy_trains": 1}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "hold_labels": ["do-not-merge"], "landing_watchdog": "warn", "landing_stall_min": 60, "stage_timeout_min": 120, "wip_cap": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "train_budget_min": 90, "train_max_bisect_rounds": 8, "ready_age_p50_h": 0, "ready_age_p90_h": 0, "lane_idle_h": 0, "lane_globs": {}, "lkg_gate": "shadow", "lkg_stale_h": 0, "red_uncovered_max": 0, "red_oldest_h": 0, "background_guard": "warn", "lockfile_skip_review": "off", "train_gate": "shadow", "heavy_trains": 1}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
@@ -131,7 +131,7 @@ def validate(raw: dict) -> dict:
             ok = isinstance(v, int) and not isinstance(v, bool) and v >= 1
         elif k == "wip_cap":  # opt-in: None or 0 = off, else warn above this many open non-draft PRs
             ok = v is None or (isinstance(v, int) and not isinstance(v, bool) and v >= 0)
-        elif k in ("merges_per_hour_target", "train_yield_floor", "ready_age_p50_h", "ready_age_p90_h", "lane_idle_h", "lkg_stale_h", "train_budget_min", "train_max_bisect_rounds"):  # opt-in flow alarms: integer >= 0, 0 = off
+        elif k in ("merges_per_hour_target", "train_yield_floor", "ready_age_p50_h", "ready_age_p90_h", "lane_idle_h", "lkg_stale_h", "red_uncovered_max", "red_oldest_h", "train_budget_min", "train_max_bisect_rounds"):  # opt-in flow alarms: integer >= 0, 0 = off
             ok = isinstance(v, int) and not isinstance(v, bool) and v >= 0
         elif k == "lane_globs":  # {lane: [fnmatch globs]} for the watchdog's per-lane stall alarm
             ok = isinstance(v, dict) and all(isinstance(g, list) and g and all(isinstance(x, str) and x for x in g) for g in v.values())
@@ -349,7 +349,8 @@ def lane_weight(kind: str | None, age: float, cpu: float | None) -> float:
     is 1. Undeclared: LIGHT_WEIGHT only when its measured CPU is known, below LIGHT_CPU_PCT and the lease is past
     WARMUP; every unknown counts 1, so a lane that cannot be measured is assumed heavy (fail closed)."""
     if kind is not None:
-        return LIGHT_WEIGHT if kind.lower() in LIGHT_KINDS else 1.0
+        base, _, w = kind.partition("@")  # `kind@2.5`: a static per-stage weight (stage_run PERUN_STAGE_WEIGHTS); a malformed one counts 1
+        return (float(w) if re.fullmatch(r"\d{1,3}(\.\d{1,2})?", w) and float(w) > 0 else 1.0) if w else LIGHT_WEIGHT if base.lower() in LIGHT_KINDS else 1.0
     return LIGHT_WEIGHT if cpu is not None and age >= WARMUP and cpu < LIGHT_CPU_PCT else 1.0
 
 
@@ -368,10 +369,23 @@ def heavy_acquire(d: Path, slots: int, pid: int, kind: str | None = None) -> boo
     `kind="light"` for a read-only or doc lane so it counts LIGHT_WEIGHT. Re-acquire by the same pid refreshes it.
     Side effect: creates `d`. ponytail: check-then-write is racy across simultaneous starts; the host_probe HOLD
     retry absorbs it, add O_EXCL slot files if overshoot is measured."""
-    if kind is not None and not re.fullmatch(r"[A-Za-z][A-Za-z-]{0,15}", kind):
+    if kind is not None and not re.fullmatch(r"[A-Za-z][A-Za-z-]{0,15}(@\d{1,3}(\.\d{1,2})?)?", kind):
         raise ValueError(f"bad lane kind {kind!r}")
-    if lease_load(d, exclude=pid) >= slots:
+    if "@" in (kind or "") and float(kind.split("@")[1]) <= 0:
+        raise ValueError(f"lane weight must be > 0: {kind!r}")
+    load, w = lease_load(d, exclude=pid), lane_weight(kind, 0, None)
+    wait = d / ".waiting"  # a weighted stage that does not fit marks itself; newer small stages then queue behind it (no starvation)
+    try:
+        queued = time.time() - wait.stat().st_mtime < 30 and wait.read_text() != str(pid)
+    except OSError:
+        queued = False
+    if load >= slots or (w > 1 and load > 0 and load + w > slots) or (queued and w < 1):
+        if w > 1:
+            d.mkdir(parents=True, exist_ok=True)
+            wait.write_text(str(pid))
         return False
+    if w > 1 and wait.exists():
+        wait.unlink(missing_ok=True)
     d.mkdir(parents=True, exist_ok=True)
     (d / str(pid)).write_text(f"{pid} {int(time.time())}" + (f" {kind}" if kind else ""))
     return True
@@ -384,7 +398,7 @@ def train_gate(d: Path, kind: str | None, cap: int = 1, pid: int | None = None) 
     ponytail: check-then-lease is racy like heavy_acquire; the shadow log shows whether it overshoots."""
     if kind not in ("browser", "train"):
         return ""
-    kinds = [k for _, _, k in _leases(d, time.time(), pid)]
+    kinds = [(k or "").split("@")[0] for _, _, k in _leases(d, time.time(), pid)]
     if kind == "browser":
         return f"{kinds.count('browser')} live heavy train(s) >= cap {cap}" if kinds.count("browser") >= cap else ""
     return f"heavy lock held and {kinds.count('train')} prepared train(s) >= cap {cap}" if "browser" in kinds and kinds.count("train") >= cap else ""

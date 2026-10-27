@@ -30,6 +30,9 @@ COMMANDS (state lives in --dir, default .claude/flake-ledger: ledger.jsonl appen
                                  exit 1 when any id is BLOCKING, 2 on usage/IO error (fails closed). `--quarantine -` reads
                                  the quarantine list from stdin: the caller holds it in memory, read before untrusted code ran
                                  (train_land.sh / train_flake.sh), so no file can be overwritten to forge an entry.
+  serial [--n N]                 detector: tests that failed in the full parallel run AND passed solo on >= N distinct trees and
+                                 never failed solo on any tree (suite-only failure). Neither a flake nor a real red: prints `SERIAL-CANDIDATE id`;
+                                 move it to the serial (one-at-a-time) project the same day. Exit 1 when any candidate.
   guard                          exit 2 when --dir resolves under the cwd or the git toplevel (a path PR code can write).
 DECISION (trust boundary) AND KNOWN CEILING
   Context: the code under test (PR code in BROWSER_CMD / RERUN_CMD) runs as the same user as the train and could write the ledger
@@ -125,6 +128,12 @@ def flake_trees(stats, test):
     return sum(1 for f, p, _ in stats[test].values() if f and p)
 
 
+def serial_trees(stats, test):
+    if any(f for f, _, _ in stats[test].values()):  # any solo fail on any tree: a real bug or flake, not a serial-only failure
+        return 0
+    return sum(1 for f, p, su in stats[test].values() if su and p)  # suite fail + solo PASS record (PASS rows are always solo runs)
+
+
 def consistent(stats, test, tree):
     f, p, s = stats[test].get(tree, (0, 0, 0))
     return f + s >= 2 and p == 0
@@ -169,6 +178,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("record"); s.add_argument("--tree")
     s = sub.add_parser("report"); s.add_argument("--n", type=int, default=3)
+    s = sub.add_parser("serial"); s.add_argument("--n", type=int, default=3)
     s = sub.add_parser("quarantine"); s.add_argument("--n", type=int, default=3); s.add_argument("--days", type=int, default=14)
     s = sub.add_parser("renew"); s.add_argument("id"); g = s.add_mutually_exclusive_group(required=True)
     g.add_argument("--days", type=int); g.add_argument("--expires")
@@ -221,6 +231,11 @@ def main(argv=None):
         for t, e in sorted(q.items()):
             print(f"{'EXPIRED' if day(e['expires']) < today else 'QUARANTINED'}\t{t}\texpires={e['expires']}")
         return 0
+    if a.cmd == "serial":
+        c = [t for t in sorted(stats) if serial_trees(stats, t) >= a.n]
+        for t in c:
+            print(f"SERIAL-CANDIDATE {t}\tsuite-only-fail-trees={serial_trees(stats, t)}")
+        return 1 if c else 0
     try:  # check
         q = json.loads(sys.stdin.read() or "{}") if a.quarantine == "-" else load_q(qpath)
     except ValueError:
