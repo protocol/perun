@@ -34,7 +34,8 @@ cd "$(git rev-parse --show-toplevel)"
 
 raw=$(mktemp "${TMPDIR:-/tmp}/review-raw.XXXXXX") out=$(mktemp "${TMPDIR:-/tmp}/review-out.XXXXXX") tsv=$(mktemp "${TMPDIR:-/tmp}/review-tsv.XXXXXX")
 sgh=$(mktemp -d "${TMPDIR:-/tmp}/review-sg.XXXXXX") # semgrep HOME: the macOS agent sandbox denies writes to ~/.semgrep
-trap 'rm -rf "$raw" "$out" "$tsv" "$sgh"' EXIT
+rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX") gla=$(mktemp "${TMPDIR:-/tmp}/review-gla.XXXXXX") # mktemp files are mode 600
+trap 'rm -rf "$raw" "$out" "$tsv" "$sgh" "$rep" "$gla"' EXIT INT TERM HUP
 # Vendored, build and worktree dirs are never scanned (a changed file under them is dropped here, for every tool).
 XRE='(^|/)(node_modules|\.claude/worktrees|vendor|dist|build|\.git|\.venv|venv|target|__pycache__)/'
 all=$(git diff --name-only --diff-filter=ACMR "$base"...HEAD)
@@ -162,7 +163,7 @@ fi
 # Fails closed: missing, empty or malformed JSON exits non-zero instead of reading as "no findings".
 sjson() {
   python3 - "$1" "$2" <<'PY'
-import json, sys
+import hashlib, json, os, re, sys
 kind = sys.argv[1]
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 i = min([x for x in (t.find("{"), t.find("[")) if x >= 0], default=-1)
@@ -180,7 +181,32 @@ elif not isinstance(d, dict) or not isinstance(d.get("results"), list):
     sys.exit(f"sjson: {kind} output has no results list")
 rows = []
 if kind == "gitleaks":  # Secret/Match fields are deliberately never read
-    rows = [(r.get("File"), r.get("StartLine"), r.get("RuleID"), r.get("Description") or "secret detected") for r in d]
+    # Rewrite-proof allowlist: "rule path-glob sha256(secret)" lines (not the commit fingerprint, which a history rewrite breaks).
+    # Fail closed: any unreadable or malformed line voids the whole list and every finding is kept.
+    al = []
+    try:
+        for l in open(os.environ.get("GL_ALLOW") or os.devnull, encoding="utf-8"):
+            if l.strip() and not l.lstrip().startswith("#"):
+                a = l.split()
+                if len(a) != 3 or not re.fullmatch(r"[0-9a-fA-F]{64}", a[2]) or a[2].lower() == hashlib.sha256(b"").hexdigest():
+                    raise ValueError(l.strip()[:40])
+                al.append((a[0], a[1], a[2].lower()))
+    except (ValueError, OSError) as e:  # UnicodeDecodeError is a ValueError
+        print(f"review_checks: .gitleaks-allow ignored, malformed ({type(e).__name__}); all findings kept", file=sys.stderr)
+        al = []
+    def rx(g):  # segment-aware: * and ? stop at /, ** crosses it
+        return re.compile(re.sub(r"\*\*|\*|\?|[^*?]+", lambda m: {"**": ".*", "*": "[^/]*", "?": "[^/]"}.get(m[0]) or re.escape(m[0]), g) + r"\Z")
+    def allowed(r):
+        sec = r.get("Secret") or ""
+        if not sec:
+            return False
+        h = hashlib.sha256(sec.encode()).hexdigest()
+        f = (r.get("File") or "").removeprefix("./")
+        return any(a[0] == r.get("RuleID") and a[2] == h and rx(a[1]).match(f) for a in al)
+    kept = [r for r in d if not allowed(r)]
+    if len(kept) < len(d):
+        print(f"review_checks: .gitleaks-allow suppressed {len(d) - len(kept)} finding(s)", file=sys.stderr)
+    rows = [(r.get("File"), r.get("StartLine"), r.get("RuleID"), r.get("Description") or "secret detected") for r in kept]
 elif kind.startswith("trivy"):
     for r in d.get("Results") or []:  # Secrets only in the secret-only fallback, and never the Match (it would leak the value)
         if kind == "trivy-secret": rows += [(r["Target"], s.get("StartLine", 0), s.get("RuleID"), s.get("Title", "secret detected")) for s in r.get("Secrets") or []]
@@ -201,16 +227,19 @@ PY
 }
 
 if have gitleaks; then
+  # Content-hash allowlist (templates/gitleaks.toml): trusted only as of BASE, so a change cannot approve its own secret.
+  # A missing file or unresolvable base means an empty list; an entry the change adds or edits is itself a finding.
+  export GL_ALLOW=$gla; git show "$base:.gitleaks-allow" >"$gla" 2>/dev/null || : >"$gla"
+  if [ -f .gitleaks-allow ] && ! cmp -s .gitleaks-allow "$gla"; then add gitleaks .gitleaks-allow 0 allowlist-changed "allowlist differs from $base; the change's entries are NOT applied, review them"; fi
   glcfg=(); [ -f .gitleaks.toml ] || glcfg=(--config "$here/../templates/gitleaks.toml") # no repo config: use the allowlist template
   if [ ${#glcfg[@]} -gt 0 ]; then # say what the template hides, so a skipped file is never silent
     skipped=$(printf '%s\n' "$files" | grep -cE "$(sed -n "s/^  '''\(.*\)''',\$/\1/p" "$here/../templates/gitleaks.toml" | paste -sd'|' -)" || true)
     [ "${skipped:-0}" -eq 0 ] || echo "review_checks: gitleaks template skipped $skipped changed file(s) under .history/, fixtures/, testdata/ or generated registry JSON" >&2
   fi
-  rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX"); trap 'rm -f "$raw" "$out" "$tsv" "$rep"' EXIT
   while IFS= read -r f; do
     [ -f "$f" ] || continue
     : >"$rep" # a stale report from the previous file must never be read for this one
-    run_one gitleaks gitleaks detect ${glcfg[@]+"${glcfg[@]}"} --no-git --no-banner --redact --exit-code 0 -f json -r "$rep" -s "./$f" || continue
+    run_one gitleaks gitleaks detect ${glcfg[@]+"${glcfg[@]}"} --no-git --no-banner --exit-code 0 -f json -r "$rep" -s "./$f" || continue
     scan_ok gitleaks || continue
     [ -s "$rep" ] || echo '[]' >"$rep" # gitleaks may leave an empty report for a clean file
     sjson gitleaks "$rep" >"$tsv" || { skip gitleaks "unparseable report for $f"; continue; }
@@ -219,7 +248,7 @@ if have gitleaks; then
   if [ "$hist" = 1 ]; then # history: the commits in BASE...HEAD (the file list's range), not just the final file state
     : >"$rep"
     lo=(--log-opts "$base...HEAD"); [ "$full" = 0 ] || lo=() # default: only the commits since BASE
-    if run_one gitleaks-history gitleaks detect --no-banner --redact --exit-code 0 -f json -r "$rep" ${lo[@]+"${lo[@]}"} -s . && scan_ok gitleaks-history; then
+    if run_one gitleaks-history gitleaks detect --no-banner --exit-code 0 -f json -r "$rep" ${lo[@]+"${lo[@]}"} -s . && scan_ok gitleaks-history; then
       [ -s "$rep" ] || echo '[]' >"$rep"
       if sjson gitleaks "$rep" >"$tsv"; then while IFS=$'\t' read -r f l r m; do [[ $f =~ $XRE ]] || add gitleaks-history "$f" "$l" "$r" "$m"; done <"$tsv"
       else skip gitleaks-history "unparseable report"; fi
