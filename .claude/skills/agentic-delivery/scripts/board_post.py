@@ -17,7 +17,7 @@ refuses a post that breaks a rule, before anything reaches the forge.
 RULES (each rejection names the rule; exit 1)
 ---------------------------------------------
 - TYPE must be one of CLAIM RELEASE DECISION HANDOFF BLOCKER FIX-CLAIM
-  QUESTION ANSWER AUDIT. STATUS/ACK/READY/LANDED are rejected as chatter; a body
+  QUESTION ANSWER AUDIT. STATUS/ACK/READY/LANDED are rejected as chatter, except an ACK carrying `--token` (the explicit read receipt of a directive posted with `--token`, see peer_ack.py); a body
   that is only an acknowledgement ("ok", "thanks", "+1", ...) is rejected too.
 - Header + body <= MAX_POST_CHARS (1000). Longer content belongs in a
   committed file or PR, linked from the post.
@@ -311,7 +311,7 @@ def compose(args, body: str, rules: list, runner) -> tuple:
     fields = {k: str(v) for k, v in (("sha", args.sha), ("branch", args.branch), ("test", args.test),
                                      ("verdict", args.verdict), ("resolved", args.resolved), ("topic", args.topic),
                                      ("ttl", args.ttl), ("to", args.to), ("of", args.of), ("gate", args.gate),
-                                     ("rule", args.rule)) if v is not None}
+                                     ("rule", args.rule), ("token", args.token)) if v is not None}
     errors = []
     if not bc.validate_agent(args.agent):
         errors.append("--agent must match [A-Za-z0-9][A-Za-z0-9._-]{0,63}")
@@ -319,7 +319,7 @@ def compose(args, body: str, rules: list, runner) -> tuple:
     stripped = body.strip()
     if not stripped:
         errors.append("body is empty: a post with nothing to say is chatter")
-    elif stripped.lower().strip(" .!") in ACK_ONLY:
+    elif stripped.lower().strip(" .!") in ACK_ONLY and not (args.type == "ACK" and "token" in fields):
         errors.append("body is only an acknowledgement: your board_sync.py cursor advance is the ack")
     if stripped.startswith("[agent:"):
         errors.append("body starts with its own [agent:] header; the script writes the only header")
@@ -358,6 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--gate")
     p.add_argument("--rule", help=f"RELEASE only: {' | '.join(bc.RELEASE_RULES)}; required on a contested ref, "
                                   "else defaults to done")
+    p.add_argument("--token", help="read receipt: on a DECISION/HANDOFF/BLOCKER/QUESTION it asks for an ack; on an ACK it is the explicit token ack (peer_ack.py)")
     p.add_argument("--default-branch")
     p.add_argument("--repo-dir", default=".")
     p.add_argument("--banlist")

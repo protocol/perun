@@ -60,7 +60,7 @@ from urllib.parse import parse_qs, urlsplit
 TYPES = ("CLAIM", "RELEASE", "DECISION", "HANDOFF", "BLOCKER", "FIX-CLAIM", "QUESTION", "ANSWER", "AUDIT", "REVIEW")
 CHATTER_TYPES = ("STATUS", "ACK", "READY", "LANDED")
 
-FIELD_ORDER = ("sha", "branch", "test", "verdict", "resolved", "topic", "ttl", "to", "of", "gate", "rule")
+FIELD_ORDER = ("sha", "branch", "test", "verdict", "resolved", "topic", "ttl", "to", "of", "gate", "rule", "token")
 
 AGENT_PATTERN = r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}"
 _AGENT_RE = re.compile(rf"^{AGENT_PATTERN}$")
@@ -85,6 +85,8 @@ FIELD_RULES = {
     "to": _AGENT_RE,
     "of": re.compile(r"^[0-9]{1,20}$"),
     "gate": re.compile(r"^owner$"),
+    # Read receipt (peer_ack.py): a directive carries `token:`, the recipient's ACK echoes it. An ACK is chatter only without one.
+    "token": re.compile(r"^[0-9a-f]{8}$"),
     # The union of every TYPE's verdicts; VERDICTS below narrows it per TYPE.
     "verdict": re.compile(r"^(?:gap|done|na|approve|changes)$"),
     # REVIEW: the PR head branch the attested sha was read from, and how many
@@ -109,11 +111,12 @@ VERDICTS = {"AUDIT": ("gap", "done", "na"), "REVIEW": ("approve", "changes")}
 TYPE_FIELDS = {
     "CLAIM": {"ttl"},
     "RELEASE": {"rule"},
-    "HANDOFF": {"to", "ttl"},
-    "DECISION": {"of", "topic"},
-    "BLOCKER": {"topic", "gate"},
+    "HANDOFF": {"to", "ttl", "token"},
+    "ACK": {"token"},
+    "DECISION": {"of", "topic", "token"},
+    "BLOCKER": {"topic", "gate", "token"},
     "FIX-CLAIM": {"sha", "test", "topic"},
-    "QUESTION": {"gate"},
+    "QUESTION": {"gate", "token"},
     "ANSWER": {"of"},
     "AUDIT": {"sha", "verdict", "topic"},
     "REVIEW": {"sha", "branch", "verdict", "resolved"},
@@ -122,6 +125,7 @@ TYPE_FIELDS = {
 # it is a post-time requirement (board_post.py), not a grammar one.
 TYPE_REQUIRED = {
     "HANDOFF": {"to"},
+    "ACK": {"token"},
     "FIX-CLAIM": {"sha", "test"},
     "ANSWER": {"of"},
     "AUDIT": {"sha", "verdict"},
@@ -156,13 +160,13 @@ def validate_post(ptype: str, refs: str, fields: dict) -> list:
     Pure: no I/O. Does NOT check git reachability (see board_post.py).
     """
     errors = []
-    if ptype in CHATTER_TYPES:
+    if ptype in CHATTER_TYPES and not (ptype == "ACK" and "token" in fields):
         errors.append(
             f"{ptype} is chatter: forge state (CI, merges, PRs) is derivable and an ack is "
             "your board_sync.py cursor advance; do not post it"
         )
         return errors
-    if ptype not in TYPES:
+    if ptype not in TYPES and ptype != "ACK":
         errors.append(f"unknown TYPE {ptype!r}; allowed: {', '.join(TYPES)}")
         return errors
     if not _REFS_RE.match(refs or ""):

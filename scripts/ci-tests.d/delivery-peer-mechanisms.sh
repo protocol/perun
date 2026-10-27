@@ -1,0 +1,1 @@
+python3 scripts/test_delivery_peer_mechanisms.py

@@ -257,6 +257,7 @@ if [[ "${GLOBAL_RULES}" -eq 1 ]]; then
     cp "${GR_SET}" "${GR_SET}.bak.$(date +%Y%m%d%H%M%S)"; cat "${GR_NEW}" > "${GR_SET}"; rm -f "${GR_NEW}"  # write through: keeps a symlinked settings.json
     echo "global rules merged into ${GR_SET} (backup saved); restart open sessions to load the hooks"
   fi
+  python3 "${GR_SRC}/scripts/host_installer.py" applied global-rules >/dev/null 2>&1 || true  # clears the "Installer unapplied" alarm
   exit 0
 fi
 

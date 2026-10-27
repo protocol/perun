@@ -131,3 +131,5 @@ environment, not a transient flake.
 
 
 **Handles are identifiers too.** A brief that names a person by handle can get that handle copied into a code string. Names and handles belong only in PR bodies and comments, never in code, and the privacy gate's pattern list should also scan for handles.
+
+- **A faster checker may run fail-fast before the authoritative gate only after error parity is proven.** The wrapper that runs both checkers on a commit appends the outcome at gate time (`scripts/pregate_parity.py record <ledger> <sha> <gate_failed 0|1> <fast_failed 0|1>`); `pregate_parity.py check <ledger>` allows the pregate only with at least 5 distinct failing commits and no row anywhere where the gate failed and the fast checker passed. This reorders the run only: a fast red may stop early, a fast green never skips the gate, and the authoritative gate remains the only thing that can pass a merge. This repo has no fast-checker caller; a project that adds one wires the wrapper.

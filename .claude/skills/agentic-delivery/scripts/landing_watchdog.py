@@ -22,6 +22,12 @@ the count stops at 100. When that count exceeds policy `wip_cap` (integer >= 0; 
 "WIP: N open PRs > cap M. Drain (review, land) before spawning." It is independent of the stall line, warn-only, and
 shares the same throttle, cache and CLI (`check` exits 1 for either line).
 
+WIP exemption: one open, non-draft PR labelled `p0-recurrence` with a `Fixes: #N` trailer (the reopened P0 issue) whose issue gh shows reopened (and not closed again) less than 24 h ago is not
+counted, so a recurrence fix is never queued behind the cap; at most one PR is exempt (so one per issue), the 24 h runs from the reopen, and any gh failure or an unverified issue exempts nothing.
+
+Installer alarm (opt-in, policy `installer_unapplied_h`, hours >= 0, default 0 = off): "Installer unapplied: <name> merged H h ago ..." for a
+host installer recorded by host_installer.py and not marked applied; warn-only, the owner runs the printed `! ` command.
+
 Flow alarms (opt-in, policy `merges_per_hour_target` and `train_yield_floor`, integer >= 0, default 0 = off): when something merged in
 the window, "Landing slow: R merged/h to <branch> < target T, K green PRs waiting." fires if merges per hour fall below the target while
 green PRs wait, and "Train yield low: Y PRs per landed train < floor F. Rerun the failing checks alone before bisecting." fires if the
@@ -157,16 +163,49 @@ def _age(ages, limits):
     return None
 
 
+P0_LABEL, P0_TTL_H = "p0-recurrence", 24
+
+
+def p0_issue(pr):
+    """Issue number from a `Fixes: #N` trailer (digits only) on a non-draft PR labelled `p0-recurrence`, else None."""
+    names = {l.get("name") for l in pr.get("labels") or [] if isinstance(l, dict)}
+    for x in (pr.get("body") or "").splitlines():
+        x = x.strip()
+        if x.lower().startswith("fixes: #") and x[8:].isdigit() and P0_LABEL in names and not pr.get("isDraft"):
+            return int(x[8:])
+    return None
+
+
+def reopened_at(cwd, n):
+    """Epoch of issue n's latest `reopened` event when it is still open after it (no later `closed`), else None. Raises when gh fails (caller fails closed)."""
+    ev = json.loads(_run(["gh", "api", f"repos/{{owner}}/{{repo}}/issues/{n}/events?per_page=100"], cwd, timeout=30))
+    last = [e for e in ev if e.get("event") in ("reopened", "closed")]
+    return _ts(last[-1]["created_at"]) if last and last[-1]["event"] == "reopened" else None
+
+
+def p0_exempt(prs, cwd, now):
+    """1 when one PR fixes an issue verified reopened less than P0_TTL_H ago, else 0. At most one exemption in total (so one per issue); any gh problem exempts nothing."""
+    for p in prs:
+        n = p0_issue(p)
+        try:
+            t = reopened_at(cwd, n) if n else None
+        except Exception:
+            t = None
+        if t and now - t < P0_TTL_H * 3600:
+            return 1
+    return 0
+
+
 def probe(cwd, minutes):
     """(branch, merged_count, green_count, open_non_draft_count, green_ages_hours). Raises on any git/gh problem; callers fail open."""
     branch = default_branch(cwd)
     _run(["git", "fetch", "-q", "origin", branch], cwd, timeout=20)
     merged = _run(["git", "log", "--first-parent", f"--since={minutes} minutes ago", "--format=%H", "origin/" + branch], cwd)
     prs = json.loads(_run(["gh", "pr", "list", "--state", "open", "--base", branch, "--limit", "100",
-                           "--json", "isDraft,statusCheckRollup,createdAt"], cwd, timeout=30))
+                           "--json", "isDraft,statusCheckRollup,createdAt,body,labels"], cwd, timeout=30))
     now = time.time()
     ages = [a for a in (_age_h(p, now) for p in prs if green(p)) if a is not None]
-    return branch, len(merged.split()), sum(green(p) for p in prs), sum(not p.get("isDraft") for p in prs), ages
+    return branch, len(merged.split()), sum(green(p) for p in prs), sum(not p.get("isDraft") for p in prs) - p0_exempt(prs, cwd, now), ages
 
 
 def settings():
@@ -305,6 +344,17 @@ def _lkg(cwd):
         return None
 
 
+def _installer(cwd):
+    """Merged-but-unapplied host installer alarm (host_installer.py), or None. Off unless policy `installer_unapplied_h` > 0. Fails open."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import host_installer
+        import perun_policy
+        return host_installer.alarm(perun_policy.load().get("installer_unapplied_h") or 0)
+    except Exception:
+        return None
+
+
 def _all(cwd, probed, minutes, cap, ages_lim=None, lanes=None):
     """Stall + WIP + flow lines for one probe result, newline-joined, or None."""
     b, merged, k, n_open, *rest = probed
@@ -319,7 +369,7 @@ def _all(cwd, probed, minutes, cap, ages_lim=None, lanes=None):
         lane = _lanes(cwd, b, lanes if lanes is not None else lane_cfg())
     except Exception:  # fail open: lane lines never drop the others
         lane = None
-    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra, lane, _train_yield(cwd), _lkg(cwd), _age(rest[0] if rest else [], ages_lim if ages_lim is not None else age_limits())) if x) or None
+    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra, lane, _train_yield(cwd), _lkg(cwd), _installer(cwd), _age(rest[0] if rest else [], ages_lim if ages_lim is not None else age_limits())) if x) or None
 
 
 def _event(data):

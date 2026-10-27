@@ -86,3 +86,5 @@ Fetched fresh for this file (entries 1–5 verified 2026-09-09; entry 6, 2026-09
   self-reported-evidence-is-not-a-trusted-control rule plus the co-evolve-a-body-gate-with-its-producers rule
   that this file's `Verify:`-line section reuses.
 - `docs/standards-index.md` — fetch dates and full citations for the six sources above.
+
+- **A P0 recurrence fix is exempt from the open-PR cap, once.** Label the PR `p0-recurrence` and put `Fixes: #N` (digits only) in its body. The landing watchdog does not count it toward `wip_cap` only when `gh` shows issue N reopened (and not closed again) less than 24 h ago; any gh failure or unverified issue exempts nothing. At most one PR is exempt in total, so a second recurrence PR counts normally.

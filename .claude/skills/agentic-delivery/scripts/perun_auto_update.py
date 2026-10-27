@@ -396,6 +396,22 @@ def legacy_marker(target: Path) -> dict | None:
     return {"version": m.group(1), "remote": CANONICAL_REMOTE} if m and version(m.group(1)) else None
 
 
+RULES = ("reply_cap", "decision_gate", "handback_cap", "subagent_start_inject", "lane_liveness")  # install.sh --global-rules copies these
+
+
+def announce_rules(src: Path, target: Path) -> None:
+    """After an update: when the machine-wide rules copies differ from the new source, record the owner command (host_installer.py) and log the `! ` line. Fails open."""
+    try:
+        home = Path.home() / ".claude/perun-rules"
+        scripts = src / ".claude/skills/agentic-delivery/scripts"
+        if home.is_dir() and any((home / f"{n}.py").read_bytes() != (scripts / f"{n}.py").read_bytes() for n in RULES if (home / f"{n}.py").exists()):
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            import host_installer
+            log(target, "global rules out of date, owner runs: " + host_installer.announce("global-rules", src))
+    except Exception as e:
+        log(target, f"installer announce skipped: {e}")
+
+
 def run(target: Path) -> int:
     """Background worker body (see module doc). Returns 0 skip/current/updated, 1 failed update."""
     cache().mkdir(parents=True, exist_ok=True)
@@ -463,6 +479,7 @@ def run(target: Path) -> int:
                 f"{((r.stderr or r.stdout).strip().splitlines() or ['?'])[-1]}")
             return 1
         log(target, f"updated {marker['version']} -> {newest} (backups: .claude/settings.local.json.bak.*, skill-backups/)")
+        announce_rules(src, target)
         pr_step(target)
         return 0
 
