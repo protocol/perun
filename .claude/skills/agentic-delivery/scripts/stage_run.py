@@ -35,6 +35,7 @@ import argparse
 import contextlib
 import math
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -144,6 +145,9 @@ def main(argv=None) -> int:
     cls = "browser" if a.name == "train-browser" else "train" if a.name.startswith("train-") else "heavy"  # train_gate classes
     enforce = pol["train_gate"] == "enforce"
     kind = cls if enforce else "heavy"  # shadow/off leave the lease format untouched
+    w = dict(x.split("=", 1) for x in os.environ.get("PERUN_STAGE_WEIGHTS", "").split(",") if "=" in x).get(a.name, "")  # static per-stage weight
+    if re.fullmatch(r"\d{1,3}(\.\d{1,2})?", w) and float(w) > 0:
+        kind = f"{kind}@{w}"
     gate_wait = float(os.environ.get("PERUN_TRAIN_GATE_WAIT_SECS", max(0, (tmo * 60 if tmo > 0 else 1800) - 60)))  # train_gate hold, kept under the stage's own budget
     warned = held = False
     kid = [None]

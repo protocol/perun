@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# gh PATH shim: retry with backoff, ONLY for idempotent reads, when the failure looks transient. Writes run exactly once.
+# Reads: `pr|issue|run|release|repo|workflow` view/list, `pr checks|diff|status`, and `api` with no method override, no body
+# flags and no graphql (GET). Anything else (merge, create, edit, comment, close, api -X POST, ...) passes through once.
+# Put this directory first on PATH; global flags before the subcommand (-R o/r) are skipped when classifying. GH_SHIM_TRIES (default 4) and GH_SHIM_SLEEP (first backoff secs, default 1, doubles).
+# Retry only when stderr shows a transient fault (5xx, timeout, reset, EOF, rate limit); real failures (404, checks red) return at once.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+real=""
+IFS=: read -ra dirs <<<"$PATH"
+for d in "${dirs[@]}"; do
+  [ "$(cd "$d" 2>/dev/null && pwd)" = "$here" ] && continue
+  [ -x "$d/gh" ] && { real="$d/gh"; break; }
+done
+[ -n "$real" ] || { echo "gh-shim: no real gh on PATH" >&2; exit 127; }
+orig=("$@")
+read_only=0
+args=("$@")
+while [ "${#args[@]}" -gt 0 ]; do  # skip global flags before the subcommand (`gh -R o/r pr view`)
+  case "${args[0]}" in -R|--repo|--hostname) args=("${args[@]:2}") ;; -*) args=("${args[@]:1}") ;; *) break ;; esac
+done
+set -- "${args[@]}"
+case "$1 $2" in
+  "pr view"|"pr list"|"pr checks"|"pr diff"|"pr status"|"issue view"|"issue list"|"run view"|"run list"|"release view"|"release list"|"repo view"|"workflow view"|"workflow list") read_only=1 ;;
+  "api "*) read_only=1
+    for a in "${@:2}"; do case "$a" in -X*|--method|--method=*|-f*|-F*|--field*|--raw-field*|--input*|graphql) read_only=0 ;; esac; done ;;
+esac
+[ "$read_only" = 1 ] || exec "$real" "${orig[@]}"
+tries="$GH_SHIM_TRIES"; nap="$GH_SHIM_SLEEP"
+[[ "$tries" =~ ^[0-9]+$ ]] || tries=4; [[ "$nap" =~ ^[0-9]+$ ]] || nap=1
+[ "$tries" -ge 1 ] || tries=1
+set -- "${orig[@]}"
+{ err="$(mktemp "${TMPDIR:-/tmp}/ghshim.XXXXXX")" && out="$(mktemp "${TMPDIR:-/tmp}/ghshim.XXXXXX")"; } || exec "$real" "$@"; trap 'rm -f "$err" "$out"' EXIT
+for ((i = 1; ; i++)); do
+  "$real" "$@" >"$out" 2>"$err"; rc=$?  # buffered: a failed attempt never leaks partial output
+  if [ "$rc" = 0 ] || [ "$i" -ge "$tries" ] || ! grep -qiE 'HTTP 5[0-9][0-9]|timeout|timed out|connection (reset|refused)|EOF|rate limit|temporar|TLS handshake' "$err"; then
+    cat "$out"; cat "$err" >&2; exit "$rc"
+  fi
+  sleep "$nap"; nap=$((nap * 2))
+done
