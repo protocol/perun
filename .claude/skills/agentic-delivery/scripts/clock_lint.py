@@ -29,6 +29,10 @@ bets that flake on a busy runner. Same `clock-lint: allow` escape (on any line o
 (needs `--base`) makes ONLY a timing bet in a file ADDED in base...head count toward exit 1; every other finding still
 prints but is a warning (exit 0), so one hook call blocks new files and only warns for old ones. A crash in this rule
 is COULD_NOT_CHECK (exit 2), never a finding.
+Also advisory (py/js tests, prints only, exit unchanged): `file:line: advisory: day/week-relative text asserted ...` for an
+line starting with expect(/assert naming "this week", "today", "3 days ago" etc. when the file has no fake clock. Playwright
+`setFixedTime`/`clock.install`/`clock.pauseAt` silence only this advisory: they fix the browser clock, not the runner's, so
+real-clock reads stay findings.
 Output: `file:line: real clock in test; pin a fake clock or inject now`. Escape: `clock-lint: allow` in a comment
 on the same line or on a comment-only line above. Exit 0 clean, 1 findings, 2 COULD_NOT_CHECK (unreadable file,
 git failure or `--deadline` exceeded (checked per file; the pre-push hook passes 5); printed, never silent; 2 only when there are no findings).
@@ -71,6 +75,10 @@ NAME = re.compile(r"^\s*(?:export\s+)?(?:const\s+|let\s+|var\s+)?([A-Za-z_]\w*)\
 CMP = re.compile(r"<=|>=|==|!=|(?<![-=])>|<|\b(?:isBefore|isAfter|isSameOrBefore|isSameOrAfter)\b")
 URGENT_DAYS = 30
 TMSG = "timing bet under load; wait on an event or inject the clock (or add `clock-lint: allow`)"
+PWCLOCK = re.compile(r"\bsetFixedTime\b|\bclock\.(install|pauseAt)\b")
+RELTEXT = re.compile(r"^\s*(await\s+)?(expect\s*\(|(self\.)?assert\w*[\s(])"
+                     r".*?(\b(this|last|next)\s+(week|month|year)\b|\b(today|yesterday|tomorrow)\b|\b\d+\s+(minute|hour|day|week)s?\s+ago\b)", re.I)
+RMSG = "advisory: day/week-relative text asserted with no fixed clock; pin it (page.clock.setFixedTime, useFakeTimers+setSystemTime, freeze_time)"
 ELAPSED = re.compile(r"elapsed|duration|latency|took|runtime|wall", re.I)
 WAITS = {"run", "call", "check_call", "check_output", "communicate", "wait", "get"}
 CLOCKS = {"time", "time_ns", "monotonic", "monotonic_ns", "perf_counter", "perf_counter_ns"}
@@ -135,6 +143,17 @@ def scan(path, text, hit=None, fake=FAKE, allow=ALLOW):
                 continue
             out.append((i + 1, lines[i]))
     return out
+
+
+def reltext(path, text):
+    """Line numbers asserting day/week-relative text ("No demos yet this week") in a py/js test file with no fake clock."""
+    lines = text.split("\n")
+    if any((FAKE.search(l) or PWCLOCK.search(l)) and not IMPORT.match(l) for l in lines):
+        return []
+    raw = lines
+    lines = [re.sub(r"\s(//|#).*$", "", l) for l in raw]  # trailing comments never count
+    return [i + 1 for i, l in enumerate(lines) if RELTEXT.search(l) and not COMMENT.match(l) and ALLOW not in raw[i]
+            and not (i and ALLOW in raw[i - 1] and COMMENT.match(raw[i - 1]))]
 
 
 def bombs(path, text, today):
@@ -278,6 +297,13 @@ def run(root, base, args, head="HEAD", deadline=None, today=None, strict=False, 
         for n, _ in scan(f, text):
             print("%s:%d: %s" % (rel, n, MSG))
             bad += not added
+        if EXT[f.rsplit(".", 1)[-1]] in ("py", "js"):
+            try:  # advisory: printed, never changes the exit code; a crash is COULD_NOT_CHECK
+                for n in reltext(f, text):
+                    print("%s:%d: %s" % (rel, n, RMSG))
+            except Exception as e:
+                print("COULD_NOT_CHECK %s: %s" % (rel, e))
+                cant += 1
         if f.endswith(".py"):
             try:  # fail open: a crash here is COULD_NOT_CHECK, never a finding that blocks a push
                 tb = timing(os.path.relpath(os.path.realpath(f), os.path.realpath(root)), text)

@@ -77,6 +77,7 @@ SLOW = "Landing slow: {r:.1f} merged/h to {b} < target {t}, {k} green PRs waitin
 YIELD = "Train yield low: {y:.1f} PRs per landed train < floor {f}. Rerun the failing checks alone before bisecting."
 AGE = "Ready PRs aging: p50 {a:.1f} h (limit {t}), p90 {b:.1f} h (limit {u}), {k} green PRs waiting. Land or review them before new work."
 LANE = "Lane stalled: {l} has {k} ready PRs, last merge {h} (limit {t} h). Land that lane before new work."
+LKG = "Last-known-good is {h:.1f} h old (limit {t} h): no full ci-tests pass recorded since. Check the merge gate."
 LINE = "Landing stalled: 0 merged to {b} in {n} min, {k} green PRs waiting. Fix landing before starting new work."
 
 
@@ -291,6 +292,19 @@ def _train_yield(cwd):
         return None
 
 
+def _lkg(cwd):
+    """Stale last-known-good alarm line (lkg.py), or None. Off unless policy `lkg_stale_h` > 0. Fails open: never drops the other lines."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import lkg
+        import perun_policy
+        lim = perun_policy.load().get("lkg_stale_h") or 0
+        a = lkg.age_h(cwd) if lim else None
+        return LKG.format(h=a, t=lim) if a is not None and a > lim else None
+    except Exception:
+        return None
+
+
 def _all(cwd, probed, minutes, cap, ages_lim=None, lanes=None):
     """Stall + WIP + flow lines for one probe result, newline-joined, or None."""
     b, merged, k, n_open, *rest = probed
@@ -305,7 +319,7 @@ def _all(cwd, probed, minutes, cap, ages_lim=None, lanes=None):
         lane = _lanes(cwd, b, lanes if lanes is not None else lane_cfg())
     except Exception:  # fail open: lane lines never drop the others
         lane = None
-    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra, lane, _train_yield(cwd), _age(rest[0] if rest else [], ages_lim if ages_lim is not None else age_limits())) if x) or None
+    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra, lane, _train_yield(cwd), _lkg(cwd), _age(rest[0] if rest else [], ages_lim if ages_lim is not None else age_limits())) if x) or None
 
 
 def _event(data):

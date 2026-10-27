@@ -13,6 +13,9 @@ Runs in order and stops at the first red step, printing `handback RED: <step>` a
   ff        BASE is an ancestor of SHA, so BASE can fast-forward to it; otherwise rebase first.
   diff      `git diff --check BASE...SHA` is clean.
   fragment  the range adds a file under --fragment-dir (default changelog.d; pass '' to skip).
+  tests     the commits' `Tests:` lines (BASE..SHA) must all be X/X with total X>0, or carry a `No-Tests-Reason:` trailer (a BLOCKED/WIP head
+            subject is exempt). Run last, before any merge. HANDBACK_TESTS_COUNT=enforce exits 4 `UNVERIFIED: no passing test count`;
+            default shadow only warns; off skips.
   spec      each --spec PATH (a .py run with python3, anything else with bash) runs 3 times in --worktree, each under --timeout; one
             failure or timeout is red (`handback RED: spec PATH`), and so is a worktree that is not clean at SHA. --spec is REQUIRED
             when any BASE..SHA commit subject matches `^fix.*flak(e|y|iness)` (case-insensitive) or the diff changes a file named by
@@ -28,7 +31,7 @@ refuses a head that moved past SHA; `[skip ci]` is added when policy github_acti
 as in land_train.sh). --apply runs it, only after every step above is GREEN; a refused or failed merge is `handback RED: merge`,
 and the --tracker-issue post runs only after the merge. A train of several PRs is `train_land.sh`.
 It PRINTS the teardown commands (`clean_finished.sh`, `reap_own.sh --report`) and a branch-prune command and never
-runs them, and never pushes: the only forge write besides --send is the --apply merge. Exit 0 green, 1 red, 2 bad arguments, 3 unverified (the checks have not finished; re-run).
+runs them, and never pushes: the only forge write besides --send is the --apply merge. Exit 0 green, 1 red, 2 bad arguments, 3 unverified (the checks have not finished; re-run), 4 unverified test count (HANDBACK_TESTS_COUNT=enforce).
 Side effects: whatever the gate commands do; --send posts one issue comment; --apply merges one PR.
 """
 import argparse
@@ -94,6 +97,22 @@ def required_checks(slug, base, sha, timeout, strict=False):
     if code != sc.COULD_NOT_CHECK:
         return code == sc.FAIL, 0
     return False, sum(int(n) for n in re.findall(r"(\d+) (?:PENDING|NO-RUN)", summary or "")) or 1
+
+
+def tests_claim(msgs):
+    """Why the lane's commit messages (base..sha, newest first) prove no passing test run, or '' when they do.
+    Each `Tests: ...` line (leading space, `>`, `*`, `-` allowed) needs every X/Y on it with X==Y and total Y>0; one bad line fails
+    the lot. A non-empty `No-Tests-Reason:` trailer or a BLOCKED/WIP head subject (not a done claim) waives it."""
+    if re.search(r"^No-Tests-Reason:[ \t]*\S", msgs, re.M) or re.match(r"\s*(blocked|wip)\b", msgs, re.I):
+        return ""
+    lines = re.findall(r"^[ \t>*-]*Tests?\b[^:\n]*:(.*)$", msgs, re.M | re.I)
+    if not lines:
+        return "no `Tests: X/X` line"
+    for t in lines:
+        c = re.findall(r"(\d+)/(\d+)", t)
+        if not c or any(x != y for x, y in c) or sum(int(y) for _, y in c) == 0:
+            return f"`Tests:{t}` is not X/X with X>0"
+    return ""
 
 
 def main(argv):
@@ -201,6 +220,15 @@ def main(argv):
         failed, unverified = required_checks(a.repo, a.base, a.sha, a.timeout, strict=bool(a.merge_pr))
         if failed:
             return red("checks: a required check run failed")
+    mode = os.environ.get("HANDBACK_TESTS_COUNT", "shadow")  # shadow (default) warns, enforce => exit 4, off skips
+    rc, msgs = (0, "") if mode == "off" else run(["git", "log", "--format=%B", f"{a.base}..{a.sha}"], cwd=a.worktree)
+    why = "cannot read commit message" if rc else tests_claim(msgs) if mode != "off" else ""
+    if why:
+        print(f"handback tests-count {'UNVERIFIED: no passing test count' if mode == 'enforce' else 'shadow'}: {why}; add a real count or a No-Tests-Reason: trailer")
+        if unverified:
+            print(f"handback UNVERIFIED: {unverified} checks could not run")
+        if mode == "enforce":
+            return 4
     if unverified:
         print(f"handback UNVERIFIED: {unverified} checks could not run")
         return 3

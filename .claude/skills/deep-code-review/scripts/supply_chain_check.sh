@@ -40,17 +40,27 @@ def api(url, body=None):
     c = ["curl", "-fsS", "--max-time", "60", url] + (["-H", "Content-Type: application/json", "-d", json.dumps(body)] if body else [])
     return json.loads(subprocess.run(c, capture_output=True, text=True, check=True).stdout)
 pk = set()
+cand = []
 for d, ds, fs in os.walk(sys.argv[1]):
     ds[:] = [x for x in ds if x not in (".git", "node_modules", ".venv", "venv", "vendor")]
-    for f in fs:
-        p = os.path.join(d, f)
-        if f == "package-lock.json":
-            for k, v in (json.load(open(p)).get("packages") or {}).items():
-                if "node_modules/" in k and v.get("version"): pk.add(("npm", k.rsplit("node_modules/", 1)[1], v["version"]))
-        elif re.fullmatch(r"requirements.*\.txt", f):
-            for l in open(p):
-                m = re.match(r"([A-Za-z0-9_.-]+)==([^\s;#]+)", l)
-                if m: pk.add(("PyPI", m[1], m[2]))
+    cand += [os.path.join(d, f) for f in fs if f == "package-lock.json" or re.fullmatch(r"requirements.*\.txt", f)]
+# like osv-scanner -r: skip gitignored copies (stale build/worktree locks), else old versions flag a patched repo.
+# One git call; any git failure (missing, not a repo, rc 128) means nothing is treated as ignored.
+ign = set()
+try:
+    g = subprocess.run(["git", "-C", sys.argv[1], "check-ignore", "--stdin", "-z"], input="\0".join(cand), capture_output=True, text=True)
+    if g.returncode in (0, 1): ign = set(g.stdout.split("\0"))
+except OSError: pass
+for p in cand:
+    f = os.path.basename(p)
+    if p in ign: print("skipped gitignored: " + p, file=sys.stderr); continue
+    if f == "package-lock.json":
+        for k, v in (json.load(open(p)).get("packages") or {}).items():
+            if "node_modules/" in k and v.get("version"): pk.add(("npm", k.rsplit("node_modules/", 1)[1], v["version"]))
+    else:
+        for l in open(p):
+            m = re.match(r"([A-Za-z0-9_.-]+)==([^\s;#]+)", l)
+            if m: pk.add(("PyPI", m[1], m[2]))
 pk = sorted(pk)
 if not pk: sys.exit("osv api fallback: no npm/pip lockfile packages found")
 res = []

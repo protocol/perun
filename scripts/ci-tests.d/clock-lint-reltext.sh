@@ -1,0 +1,1 @@
+python3 scripts/test_clock_lint_reltext.py

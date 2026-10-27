@@ -104,6 +104,15 @@ if [ "$mode" = regen ]; then regen; exit 0; fi
 
 [ -z "$(git status --porcelain)" ] || { echo "land-release: dirty tree" >&2; exit 1; }
 git fetch -q "$REMOTE" "$BASE_BRANCH"
+lkg=$(python3 .claude/skills/agentic-delivery/scripts/perun_policy.py get lkg_gate 2>/dev/null || echo shadow)   # shadow|enforce|off
+if [ "$lkg" != off ]; then   # origin/main must be the commit the full suite last passed on (lkg.py record, scripts/run-ci-tests.sh)
+  rc=0; msg=$(python3 .claude/skills/agentic-delivery/scripts/lkg.py check "$(git rev-parse "$REMOTE/$BASE_BRANCH")" 2>&1) || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "land-release: lkg gate ($lkg): ${msg:-lkg.py failed}" >&2
+    if [ "$lkg" = enforce ]; then [ "$rc" -eq 1 ] && exit 1; echo "land-release: lkg.py crashed (rc=$rc); refusing under enforce" >&2; exit 2; fi
+  fi
+fi
+
 if ! git merge -q --no-edit "$REMOTE/$BASE_BRANCH" >/dev/null 2>&1; then
   conflicts=$(git diff --name-only --diff-filter=U)
   bad=$(printf '%s\n' "$conflicts" | grep -vE "^($GENERATED)$" || true)

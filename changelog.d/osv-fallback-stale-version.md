@@ -1,0 +1,2 @@
+### Fixed
+- supply_chain_check.sh osv API fallback walked every `package-lock.json` and `requirements*.txt` under the target, including gitignored stale copies (build output, old worktrees), so a lockfile already patched to a fixed version still reported a critical from an old copy's version. It now skips gitignored files, matching `osv-scanner -r`. Test: `scripts/test-supply-chain-osv-fallback.sh`.

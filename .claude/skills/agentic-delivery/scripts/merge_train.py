@@ -578,7 +578,7 @@ class Train:
     def eligible(self):
         """Return eligible members [{number, head}] in PR-number order; one line per PR."""
         _, out, _ = self.run(["gh", "pr", "list", *self.repo_flag, "--base", self.a.base, "--state", "open",
-                              "--limit", str(PR_LIMIT), "--json", "number,headRefOid,isDraft,mergeable,isCrossRepository"])
+                              "--limit", str(PR_LIMIT), "--json", "number,headRefOid,isDraft,mergeable,isCrossRepository,labels"])
         prs = json.loads(out or "[]")
         if len(prs) >= PR_LIMIT:
             raise ForgeError(f"pr list hit the {PR_LIMIT} limit; refusing a truncated plan")
@@ -607,6 +607,8 @@ class Train:
         """'' when `pr` may join the train, else the reason it is skipped. `waive`: checks a PARTIAL-PASS receipt left unchecked."""
         if pr.get("isDraft"):
             return "draft"
+        if held := self._held(pr):
+            return held
         if pr.get("isCrossRepository") and not self.a.allow_forks:
             return "fork (verify would run its code here; --allow-forks)"
         if str(pr["number"]) in parked:
@@ -621,6 +623,18 @@ class Train:
         if bad:
             return f"check {bad}"
         return f"checks {passed}<{self.a.min_checks}" if passed < self.a.min_checks else ""
+
+    def _held(self, pr):
+        """'' unless `pr` carries a policy `hold_labels` label (default do-not-merge), else the reason."""
+        try:
+            spec = importlib.util.spec_from_file_location("perun_policy", os.path.join(os.path.dirname(os.path.abspath(__file__)), "perun_policy.py"))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            hold = {h.strip().casefold() for h in mod.load()["hold_labels"]}
+        except Exception as e:  # fail closed: an unreadable or invalid policy skips the PR rather than guessing the hold list
+            return f"policy unreadable ({clean(str(e))})"
+        hit = sorted(n for lb in pr.get("labels") or [] if (n := str(lb.get("name", "")).strip()).casefold() in hold)
+        return f"held (label {clean(hit[0])})" if hit else ""
 
     def _carry(self, pr, passed, bad):
         """(passed, bad) unchanged, or the prior green head's receipt when only the base moved (equal patch-id)."""
@@ -943,6 +957,14 @@ class Train:
             if i:
                 self.sleep(self.delay(i))
             self.poll()  # last cancel point before the irreversible call
+            try:  # TOCTOU: a hold, draft or close after the plan cached this member must stop it; fail closed on any read error
+                pr = json.loads(self.run(["gh", "pr", "view", str(m["number"]), *self.repo_flag,
+                                          "--json", "state,isDraft,labels"])[1])
+                why = f"state={clean(pr.get('state'))}" if pr.get("state") != "OPEN" else "draft" if pr.get("isDraft") else self._held(pr)
+            except (ForgeError, OSError, subprocess.TimeoutExpired, ValueError, AttributeError, TypeError) as e:
+                why = f"cannot re-read PR state before merge: {clean(str(e))}"
+            if why:
+                return why
             rc, _, err = self.run(["gh", "pr", "merge", str(m["number"]), *self.repo_flag, "--merge",
                                    "--match-head-commit", m["head"], *(["--body", body] if body else [])],
                                   ok=False)
@@ -1745,7 +1767,8 @@ class FakeForge:
         a = [args[0], *args[5:]] if args[1:5] == GIT_ID else args
         a = [a[0], *a[4:]] if a[1:4] == TRUST_GIT else a
         if a[:3] == ["gh", "pr", "list"]:
-            rows = [{"number": n, "headRefOid": p["head"], **{k: p[k] for k in ("isDraft", "mergeable", "isCrossRepository")}}
+            rows = [{"number": n, "headRefOid": p["head"], **{k: p[k] for k in ("isDraft", "mergeable", "isCrossRepository")},
+                    "labels": [{"name": x} for x in p.get("labels", [])]}
                     for n, p in self.prs.items() if p["state"] == "OPEN"]
             return 0, json.dumps(rows), ""
         if a[:4] == ["gh", "api", "-X", "POST"]:
@@ -1761,7 +1784,8 @@ class FakeForge:
         if a[:3] == ["gh", "pr", "view"]:
             p = self.prs[int(a[3])]
             row = {"state": p["state"], "headRefOid": p["head"], "mergeable": p["mergeable"],
-                   "isDraft": p["isDraft"], "isCrossRepository": p["isCrossRepository"], "baseRefName": "main"}
+                   "isDraft": p["isDraft"], "isCrossRepository": p["isCrossRepository"], "baseRefName": "main",
+                   "labels": [{"name": x} for x in p.get("labels", [])]}
             row.update(self.view_override.get(int(a[3]), {}))
             return 0, json.dumps(row), ""
         if a[:3] == ["gh", "pr", "merge"]:
