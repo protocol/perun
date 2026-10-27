@@ -67,6 +67,6 @@ echo "leftover count at session start: before=$before after=$after"
 
 # session_brief surfaces the count at session start
 git -C "$R" worktree add -q -b b-merged-sb "$T/wt-merged-sb" 2>/dev/null; PERUN_RUN_ID=runD bash "$S" record-worktree "$T/wt-merged-sb"
-out=$(cd "$R" && PERUN_SOURCE=/nonexistent python3 "$SC/session_brief.py" </dev/null)
+out=$(cd "$R" && PERUN_BRIEF_BUDGET=60 PERUN_SOURCE=/nonexistent python3 "$SC/session_brief.py" </dev/null)
 ok $(grep -q "1 leftover(s) this machine" <<<"$out"; echo $?) "session_brief reports the ledger leftover count: $out"
 echo "Tests: $pass/$((pass+fail))"; [ "$fail" = 0 ]

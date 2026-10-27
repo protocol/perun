@@ -12,7 +12,8 @@ g() { git -C "$R" -c user.email=t@example.com -c user.name=T "$@"; }
 
 git init -q --bare -b main "$WORK/origin.git"
 R="$WORK/repo"; mkdir "$R"
-rsync -a --exclude=.git --exclude=.claude/worktrees --exclude=changelog.d "$ROOT/" "$R/"
+# docs/bench (400+ MB, ~90k files) is outside docs/INDEX.md (regen excludes it) and every gate below; copying and committing it cost ~100 s.
+rsync -a --exclude=.git --exclude=.claude/worktrees --exclude=changelog.d --exclude=/docs/bench "$ROOT/" "$R/"
 git -C "$R" init -q -b main; g remote add origin "$WORK/origin.git"
 g add -A; g commit -q -m base; g push -q origin main; BASE=$(g rev-parse HEAD)
 V0=$(cat "$R/.claude/skills/deep-code-review/VERSION")
