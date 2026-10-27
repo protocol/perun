@@ -121,6 +121,8 @@ take_lease() {  # 0 = held (or unavailable: WARN, the gate runs without it); 1 =
   return 0
 }
 take_lease || { echo "DEFER: another gate holds the exclusive heavy lease; nothing built, retry later" >&2; lock_drop "$LOCK"; exit 4; }
+# Stage publishing (TRAIN_STAGES=0 turns it off): this script, not the agent session, posts each stage (queued, gating, landing, done, failed + an ETA upper bound)
+# on every PR head as commit status perun/train-stage via `merge_train.py stage`, so a second host can read liveness and recover. A failed post is a WARN, never a train failure.
 # Heartbeat: a stage may run up to TRAIN_STAGE_TIMEOUT_MIN (default 180) but the exclusive lease expires after LEASE_TTL (2h) without a
 # renew, so renew it in the background for the life of the gate. Releasing it (slot wait) makes the renew a no-op; the EXIT trap stops it.
 ( while sleep "${PERUN_LEASE_HEARTBEAT_SECS:-600}"; do PERUN_HOLDER_PID=$$ python3 "$HERE/perun_policy.py" heavy-exclusive-renew >/dev/null 2>&1 || true; done ) >/dev/null 2>&1 </dev/null &
@@ -130,7 +132,9 @@ PQ=$(git rev-parse --git-common-dir)/train-push.lock PW=${PUSH_WAIT_SECS:-$((LT 
 split=0 landed= gates=0 ALL="$*"
 unl() { local n; for n in $ALL; do [[ " $landed " == *" $n "* ]] || printf '%s ' "$n"; done; }  # every PR land_train did not merge
 split_report() { [ "$split" -eq 1 ] || return 0; local u; u=$(unl); echo "SPLIT done: landed #${landed# }; CANT (not landed) #${u% }; gates=$gates"; }
-trap 'kill "$HB" 2>/dev/null; rm -f "$TRAIN_LAND_COPY"; [ -z "$OWNP" ] || rm -f "$LOG.pid"; [ "$gates" -eq 0 ] || python3 "$HERE/train_yield.py" record "$T" "$ALL" "$landed" "$([ -e "$LOG.red" ] && echo red)" || true; rm -f "$LOG.red"; split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
+stage() { { [ "${TRAIN_STAGES:-1}" != 0 ] && [ $# -ge 3 ]; } || return 0; python3 "$HERE/merge_train.py" stage --base "$BASE_BRANCH" --stage "$1" ${2:+--eta "$2"} ${@:3} </dev/null >&2 || true; }  # stage NAME ETA_SECS PR...
+stage_end() { case $1 in 0) stage done "" $landed; stage skipped "" $(unl) ;; 4|5) stage deferred "" $(unl) ;; *) stage failed "" $(unl) ;; esac; }  # EXIT: landed = done; rc 0 with PRs unlanded (SKIP/REFUSE) = skipped; DEFER = deferred; else failed
+trap 'stage_end $?; kill "$HB" 2>/dev/null; rm -f "$TRAIN_LAND_COPY"; [ -z "$OWNP" ] || rm -f "$LOG.pid"; [ "$gates" -eq 0 ] || python3 "$HERE/train_yield.py" record "$T" "$ALL" "$landed" "$([ -e "$LOG.red" ] && echo red)" || true; rm -f "$LOG.red"; split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
 # A landing train holds the push lock and is moving the base: wait it out before any gate work (a union composed mid-land is stale at its own land).
 lock_take "$PQ" "$PW" "$LT" || exit 1; lock_drop "$PQ"
 if [ -n "${CLEAN_ROOT:-}" ]; then  # start-of-train cleanup of your own finished work; never blocks the train
@@ -151,13 +155,14 @@ disjoint() { local n f all= gen=0  # 0 = no shared path and <= 1 PR touches a ge
   for n; do f=$("$GH" pr diff "$n" --name-only </dev/null) || return 1
     all+=$(sort -u <<<"$f")$'\n'; ! grep -qE "^($GEN_RE)$" <<<"$f" || gen=$((gen + 1)); done
   [ "$gen" -le 1 ] && [ -z "$(sort <<<"$all" | uniq -d | grep . || true)" ]; }
+stage queued "" "$@"
 if [ "${TRAIN_UNION:-auto}" != always ] && disjoint "$@"; then
   PQ=$(git rev-parse --git-common-dir)/train-push.lock
   echo "train_land: #$* touch disjoint paths and share no generated file; landing back-to-back, no union proof (CI on each exact head is the gate; TRAIN_UNION=always forces one)" >&2
   lock_take "$PQ" "${PUSH_WAIT_SECS:-$((LT * 60))}" "$LT" || exit 1
   python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true
   lrc=0; LAND_PRS="$*" bash "$HERE/land_train.sh" "$(git rev-parse HEAD)" - || lrc=$?
-  lock_drop "$PQ"; exit "$lrc"
+  lock_drop "$PQ"; [ "$lrc" -ne 0 ] || landed=" $*"; exit "$lrc"
 fi
 GC="$HERE/../../deep-code-review/scripts/gate_cache.py"  # shared tree-keyed PASS cache (gate_cache.py): absent = run uncached
 audit=(bash -c "${BASE_AUDIT_CMD:-}"); [ ! -f "$GC" ] || audit=(python3 "$GC" run --stage train --no-pipefail --ignore 'train*.log*' -c "${BASE_AUDIT_CMD:-}")
@@ -209,6 +214,7 @@ slot() {
 train() {
 while :; do
 renew; tick
+stage gating "$(( $(stg) * 60 ))" "${PRS[@]}"
 rc=0; slot train-verify || rc=$?
 [ "$rc" -ne 0 ] || "$HERE/scrub_env.sh" python3 "$HERE/stage_run.py" --name train-verify --timeout "$(stg)" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$VERIFY_CMD" _ "$T" "${PRS[@]}" >"$LOG" 2>&1 </dev/null || rc=$?
 # stage_run 75 = no heavy slot freed in time, 124 = stage timeout: the verify never gave a verdict, so it is not RED (no ratchet culprit hunt).
@@ -372,6 +378,7 @@ while [ -n "$Q" ]; do
   fi
   cancelled  # a cancel that arrived during the gate means no land; stale is deliberately not checked here (the gate drains and lands on the version it started with)
   python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true  # push lock held first, so the next gate's wait for it cannot miss this landing
+  stage landing "" "${PRS[@]}"
   lrc=0; bash "$HERE/land_train.sh" "$B" "$U" >"$LOG.land" || lrc=$?  # not exec: the EXIT trap must still fire
   cat "$LOG.land"  # landed = what land_train merged (a SKIP/REFUSE exits 0 but lands nothing), not the PR list
   landed="$landed $(sed -nE '/: FAILED rc=/!s/^#([0-9]+)\(.*/\1/p' "$LOG.land" | paste -sd' ' -)"

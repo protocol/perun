@@ -169,6 +169,10 @@ With --rerun-cmd a failing --verify-cmd is first re-run through that command alo
 checks or specs, `nice -n 19`, env PERUN_LOW_LOAD=1 and PERUN_VERIFY_OUT=<the failed run's output>): exit 0
 is a flake only if it also prints `RERAN <n>` with n >= 1 and the failed output named `FAIL <id>` lines (else it is bisected, fail closed); `FLAKE`, recorded in the state file's `flakes`, the union counts as green and the batch lands);
 a failure there means the red reproduces, skips the full re-runs below, and goes to bisection.
+With --vs-base (needs --rerun-cmd) a union red whose `FAIL <id>` lines all also fail on the base commit is not a
+new failure: only those ids are re-run on the base (same --rerun-cmd and env, the failing ids as PERUN_VERIFY_OUT) and
+the union counts as green (`KNOWN-RED`). Any id the base run does not report as `FAIL <id>` is new and the red stays;
+a base run that errors (no `RERAN <n>` n >= 1 line) fails closed, the red stays.
 A failing --verify-cmd is re-run up to --retries times on the same tree with
 exponential backoff (--gate-backoff seconds, default 5, doubling, capped at
 300 s: a test re-run needs no long cool-down). A re-run that passes is reported
@@ -196,11 +200,23 @@ catches mistakes and agent-written grants, not a determined forger. The
 script never pushes: any `git push` it is asked to run raises HALT, so it cannot force-push a shared branch. --verify-cmd
 runs PR code on this machine, which is why fork PRs are skipped by default.
 
+RED MAIN ADMISSION AND STAGES
+-----------------------------
+--admit-red (verify, merge): a red base no longer halts the whole queue. verify runs --verify-cmd once on the base,
+collects its `FAIL <id>` lines, and admits only a PR that touches a failing test: a changed file equal to the id's
+path (text before `::`) or a `Fixes: <id>` line in its commit messages. PR titles and bodies never decide. No failing
+ids (gate passes on the base, or prints no `FAIL <id>`) = nothing admitted, fail closed. Pair it with --vs-base so
+the admitted union is judged on new failures only, and an admitted id that still fails on the union rejects it. merge accepts a red base only when every recorded member was admitted.
+`stage --stage queued|gating|landing|done|failed|skipped|deferred [--eta SECS] PR...` (run by the queue script, not the agent session)
+posts commit status `perun/train-stage` on each PR head: description `<stage> run=<id> at=<epoch> [eta<=Ns]`. A second
+host reads `gh api repos/OWNER/NAME/commits/<sha>/statuses`: a stale `at=` on a non-terminal stage means the queue died.
+A failed post is a WARN, never an error.
+
 OUTPUT AND EXIT CODES
 ---------------------
 One line per action (ELIGIBLE, SKIP, PLAN, FAIL, FLAKY, PARK, GREEN, RED,
 KEYSTONE, WOULD-MERGE, MERGED, KILL, WOULD-REVERT, REVERT, KEPT, PENDING, UNVERIFIED, WOULD-UPDATE, UPDATED, UPDATE-FAILED, DUP-FIX,
-SIMILAR-FIX, WARN, NOOP, HALT, ERROR, DROP-FAILED, RUN, CANCELLED, DROPPED, CARRIED). Untrusted text (check
+SIMILAR-FIX, KNOWN-RED, ADMIT, STATUS, WARN, NOOP, HALT, ERROR, DROP-FAILED, RUN, CANCELLED, DROPPED, CARRIED). Untrusted text (check
 names, file names, forge errors) is stripped of control characters and
 truncated.
   0  plan listed; union green; dry-run printed; members merged; nothing to do;
@@ -220,8 +236,10 @@ USAGE
   merge_train.py plan   --base main [--repo OWNER/NAME] [--min-checks K]
   merge_train.py verify --base main --verify-cmd 'make test'
                         [--count-cmd CMD --cap N --marker-key size-budget-raise]
+                        [--rerun-cmd CMD --vs-base] [--admit-red]
                         [--retries 2] [--backoff 30] [--gate-backoff 5] [--timeout 3600]
-  merge_train.py merge  --base main [--apply --grant REF]
+  merge_train.py merge  --base main [--apply --grant REF] [--admit-red]
+  merge_train.py stage  --base main --stage gating [--eta SECS] PR [PR ...]
   merge_train.py partial-kill --base main [--apply] [--wait 3600]
   merge_train.py keystone --base main --pr N --verify-cmd CMD --only GLOB
                         [--only GLOB ...] [--owner-email E ...] [--require-signed] [--apply]
@@ -282,6 +300,7 @@ STALE = 6  # own script changed on disk mid-run (STALE_SELF_EXIT=enforce)
 SRC = os.path.abspath(__file__)
 OK, RED, ERROR, HALT, DEFER = 0, 1, 2, 3, 5  # 4 is train_land.sh's lease-held DEFER; 5 = own budget spent
 GATE_CONTEXT = "perun/train-gate"
+STAGE_CONTEXT = "perun/train-stage"
 GREEN_CONCLUSIONS = {"success", "neutral", "skipped"}
 PR_LIMIT = 200
 MAX_BACKOFF = 300
@@ -403,6 +422,8 @@ class Train:
         self.run_id = f"{os.getpid()}-{uuid.uuid4().hex[:12]}"  # never a per-process counter (#1139)
         self.src_h = src_hash()  # a long run must notice a newer copy of this script landing under it
         self.t0, self.rounds = time.monotonic(), 0  # own budget: wall clock and gate rounds (union, base and bisect probes)
+        self.admitted = set()  # ids that --admit-red admitted a PR for: the union must pass them, not just match the base's reds
+        self.known = False  # the last gate passed only because its reds also fail on the base (--vs-base)
         self.flake_n = 0  # reds excused as flakes this run; over MAX_FLAKES they bisect
         self.verdicts = {}  # git tree SHA -> fails() verdict for this run: an identical tree is never re-tested
         self.refs = set()  # refs this run fetched into; dropped when the run ends
@@ -711,6 +732,9 @@ class Train:
         if members[0]["number"] == self.a.base_fix:
             self.say(f"BASE-FIX #{self.a.base_fix} leads the lineup on red base {self.a.base}@{sha[:7]}")
             return False
+        if getattr(self.a, "admit_red", False):
+            self.say(f"RED-BASE {self.a.base}@{sha[:7]} red: {clean(','.join(red), 120)}; --admit-red: only PRs touching a failing test")
+            return True
         self.say(f"REFUSED red-base {self.a.base}@{sha[:7]} red: {clean(','.join(red), 120)}; "
                  "lineup head must be the base fix (--base-fix PR)")
         return True
@@ -775,8 +799,9 @@ class Train:
                 self.say(f"CACHED {label} tree {sha[:7]} verdict=pass (gate_cache)")
                 self.verdicts[sha] = ""
                 return ""
+            self.known = False
             self.verdicts[sha] = why = self._gate(wt, label)
-            if ctx and not why:  # only a PASS is persisted; a FAIL is re-tested every run
+            if ctx and not why and not self.known:  # only a PASS is persisted; a FAIL is re-tested every run
                 _GC.store(ctx, "train verify", "train")
         return why
 
@@ -816,6 +841,17 @@ class Train:
                 ok = True
             else:
                 attempts = 1  # reproduced alone at low load (or rerun proved nothing): deterministic, skip the full re-runs
+        if not ok and failing and rerun and getattr(self.a, "vs_base", False):
+            new = self.new_failures(failing)
+            if new is None:
+                self.say(f"WARN {label} --vs-base: the base run errored (no `RERAN <n>`); failing closed")
+            elif (open_ := sorted(set(failing) & self.admitted)):
+                self.say(f"FAIL {label} admitted id still fails: {clean(','.join(open_), 120)}")
+            elif not new:
+                self.say(f"KNOWN-RED {label} every failing id also fails on base {self.base_sha[:7]}: {clean(','.join(failing), 120)}")
+                ok = self.known = True  # a green with known reds is never persisted as a PASS (fails())
+            else:
+                self.say(f"FAIL {label} new failures vs base {self.base_sha[:7]}: {clean(','.join(new), 120)}")
         for i in range(1, attempts):
             if ok:
                 break
@@ -832,6 +868,39 @@ class Train:
                 self.say(f"FAIL {label} cap {count}>{self.a.cap}")
                 return f"cap {count}>{self.a.cap}"
         return ""
+
+    def new_failures(self, failing):
+        """Ids in `failing` that do not also fail on the base: re-run only them there with --rerun-cmd. None = the base run errored."""
+        with self.tree(self.base_sha, []) as wt:
+            logf = os.path.join(os.path.dirname(wt), "verify.out")  # outside the worktree
+            with open(logf, "w") as f:
+                f.write("".join(f"FAIL {i}\n" for i in failing))
+            low = ["env", "PERUN_LOW_LOAD=1", f"PERUN_VERIFY_OUT={logf}", "nice", "-n", "19", "sh", "-c", self.a.rerun_cmd]
+            out = self.run(low, cwd=wt, ok=False, timeout=self.a.timeout)[1]
+        ran = re.search(r"^RERAN +(\d+)\s*$", out, re.M)
+        if not ran or int(ran.group(1)) < 1:
+            return None
+        red = set(re.findall(r"^FAIL +(\S.*?)\s*$", out, re.M))
+        return [i for i in failing if i not in red]
+
+    def admit_red(self, members):
+        """Red base: the members that touch a test failing on the base (changed file == the id's path, or a `Fixes: <id>` line)."""
+        with self.tree(self.base_sha, []) as wt:
+            rc, out, err = self.run(["sh", "-c", self.a.verify_cmd], cwd=wt, ok=False, timeout=self.a.timeout)
+        red = set(re.findall(r"^FAIL +(\S.*?)\s*$", out + err, re.M))
+        if rc == 0 or not red:
+            self.say("REFUSED red-base: the base gate names no failing `FAIL <id>`, so no PR can be matched to a failing test")
+            return []
+        kept = []
+        for m in members:
+            files = set(self.changed(self.base_sha, m["head"]))
+            fixes = set(re.findall(r"^Fixes:[ \t]*(\S.*?)\s*$", self.run(["git", "log", "--format=%B", f"{self.base_sha}..{m['head']}"])[1], re.M))
+            hit = sorted({i for i in red if i.split("::")[0] in files} | (red & fixes))
+            self.say(f"ADMIT #{m['number']} touches {clean(','.join(hit), 120)}" if hit else f"SKIP #{m['number']} red base: touches no failing test")
+            if hit:
+                self.admitted |= set(hit)
+                kept.append({**m, "admit": hit})
+        return kept
 
     def count(self, wt):
         """Run --count-cmd in `wt`; it must print exactly one integer (else fail closed)."""
@@ -874,7 +943,7 @@ class Train:
         """The `verify` subcommand: find the largest green union, parking culprits; record it."""
         members = self.eligible()
         self.base_sha, members = self.fetch(members)
-        if self.red_base(self.base_sha, members):
+        if self.red_base(self.base_sha, members) and not (self.a.admit_red and (members := self.admit_red(members))):
             return HALT
         members = self.screen(members)  # a recorded, unlanded keystone parks its copies (#1142)
         parked_any = False
@@ -904,8 +973,20 @@ class Train:
         self.say("RED no green union: every member parked" if parked_any else "NOOP no eligible members")
         return RED if parked_any else OK
 
-    def post_status(self, m, state):
-        """Post commit status `perun/train-gate` (success|error) on member `m`'s head; True only when the post succeeded.
+    def stage(self):
+        """The `stage` subcommand: publish --stage (+ ETA upper bound) on each PR head as commit status `perun/train-stage`; WARN-only."""
+        state = {"queued": "pending", "gating": "pending", "landing": "pending", "done": "success", "failed": "failure", "skipped": "failure", "deferred": "error"}[self.a.stage]
+        desc = f"{self.a.stage} run={self.run_id[:8]} at={int(time.time())}" + (f" eta<={self.a.eta}s" if self.a.eta else "")
+        for n in self.a.prs:
+            rc, head, _ = self.run(["gh", "pr", "view", str(n), *self.repo_flag, "--json", "headRefOid", "-q", ".headRefOid"], ok=False, timeout=30)
+            if rc == 0 and head.strip():
+                self.post_status({"number": n, "head": head.strip()}, state, STAGE_CONTEXT, desc)
+            else:
+                self.say(f"WARN {STAGE_CONTEXT} NOT posted on #{n}: cannot read its head")
+        return OK
+
+    def post_status(self, m, state, context=GATE_CONTEXT, desc=None):
+        """Post commit status `context` (default `perun/train-gate`) on member `m`'s head; True only when the post succeeded.
 
         Called only from the apply merge path, right before that member's merge, so the vouch is never stale. A failed
         post is a WARN (never raised, never claimed posted); --no-status skips it.
@@ -913,19 +994,19 @@ class Train:
         if self.a.no_status:
             return False
         repo = self.a.repo or "{owner}/{repo}"
-        body = json.dumps({"state": state, "context": GATE_CONTEXT,
-                           "description": f"train: {state} for union on {self.a.base}@{self.state['base_sha'][:7]}"})
+        body = json.dumps({"state": state, "context": context,
+                           "description": desc or f"train: {state} for union on {self.a.base}@{self.state['base_sha'][:7]}"})
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
             fh.write(body)
         try:
-            rc, _, err = self.run(["gh", "api", "-X", "POST", f"repos/{repo}/statuses/{m['head']}", "--input", fh.name], ok=False)
+            rc, _, err = self.run(["gh", "api", "-X", "POST", f"repos/{repo}/statuses/{m['head']}", "--input", fh.name], ok=False, timeout=30)
         finally:
             os.unlink(fh.name)
         if rc == 0:
-            self.say(f"STATUS posted {GATE_CONTEXT}={state} on #{m['number']} {m['head'][:7]}")
+            self.say(f"STATUS posted {context}={state} on #{m['number']} {m['head'][:7]}")
             return True
-        self.say(f"WARN {GATE_CONTEXT}={state} NOT posted on #{m['number']} {m['head'][:7]} ({clean(err.strip(), 120)}); "
-                 "a base that requires it will block this merge")
+        self.say(f"WARN {context}={state} NOT posted on #{m['number']} {m['head'][:7]} ({clean(err.strip(), 120)})"
+                 + ("; a base that requires it will block this merge" if context == GATE_CONTEXT else ""))
         return False
 
     # ---- merge ----------------------------------------------------------
@@ -1012,7 +1093,7 @@ class Train:
         self.bind(members)
         prev = self.fetch()[0]
         self.same_base(self.state["base_sha"], prev)
-        if self.red_base(prev, members):
+        if self.red_base(prev, members) and not (getattr(self.a, "admit_red", False) and all(m.get("admit") for m in members)):
             return HALT
         self.poll()
         if not self.a.apply:
@@ -1658,9 +1739,16 @@ def build_parser():
     v.add_argument("--timeout", type=int, default=3600, help="seconds per gate command")
     v.add_argument("--budget-min", type=float, default=90, help="whole-train wall-clock budget in minutes; spent = DEFER (exit 5) with the suspect set; 0 = off")
     v.add_argument("--max-rounds", type=int, default=8, help="max gate runs (union, base, bisect probes); over it = DEFER (exit 5); 0 = off")
+    v.add_argument("--vs-base", action="store_true", help="a union red whose failing ids all also fail on the base (--rerun-cmd run there) is KNOWN-RED, not new; a base run that errors fails closed")
+    v.add_argument("--admit-red", action="store_true", help="red base: admit only PRs touching a test failing on the base (changed file or `Fixes: <id>`), never by title")
     m = sub.add_parser("merge", parents=[common])
+    m.add_argument("--admit-red", action="store_true", help="accept a red base when every verified member was admitted by verify --admit-red")
     m.add_argument("--apply", action="store_true", help="actually merge (default is a dry run)")
     m.add_argument("--grant", default="", help="the owner's decision or recorded standing grant authorising this merge")
+    sg = sub.add_parser("stage", parents=[common])
+    sg.add_argument("--stage", required=True, choices=["queued", "gating", "landing", "done", "failed", "skipped", "deferred"])
+    sg.add_argument("--eta", type=int, default=0, help="seconds the stage may still take (upper bound; 0 = unknown)")
+    sg.add_argument("prs", type=int, nargs="+")
     pk = sub.add_parser("partial-kill", parents=[common])
     pk.add_argument("--apply", action="store_true", help="open the revert PR (default is a dry run)")
     pk.add_argument("--wait", type=float, default=3600.0, help="seconds after the merge before a still-absent unchecked check is UNVERIFIED")
@@ -1707,6 +1795,8 @@ def run(argv, runner=default_runner, out=sys.stdout, sleep=time.sleep) -> int:
         problems.append("--retries/--backoff/--gate-backoff must be >= 0")
     if a.cmd == "verify" and bool(a.count_cmd) != (a.cap is not None):
         problems.append("--count-cmd and --cap go together")
+    if a.cmd == "verify" and a.vs_base and not a.rerun_cmd:
+        problems.append("--vs-base needs --rerun-cmd")
     if a.cmd == "merge" and a.apply and not a.grant.strip():
         problems.append("--apply needs --grant naming the integration owner's decision or a recorded standing grant")
     if a.cmd == "keystone":
