@@ -32,6 +32,10 @@ Ready-PR age (opt-in, policy `ready_age_p50_h` and `ready_age_p90_h`, integer ho
 hours the green PRs waiting have been green (since their last check finished, else since creation; an unparseable time is skipped); "Ready PRs aging: p50 X h (limit T), p90 Y h (limit U), K green PRs waiting." when
 either percentile (nearest rank) exceeds its nonzero limit. Warn-only; shares the throttle, cache and CLI.
 
+Lane stall (opt-in, policy `lane_idle_h` hours >= 0 plus `lane_globs` {lane: [fnmatch globs]}, default off): a PR's lane is the first
+lane whose glob matches a changed file; "Lane stalled: <lane> has K ready PRs, last merge H h ago (limit L h)." when a lane has green PRs and its
+last merge (last 100 merged PRs) is older than the limit, so one busy lane cannot hide an idle one. Two extra `gh pr list` calls; warn-only.
+
 Train landing yield (always on, no policy key): train_land.sh records each started train in a ledger (train_yield.py); "Train landing
 yield: L of S trains landed ..." fires when fewer than half the recent trains landed a PR or one PR re-rode 5+ trains, and says it points
 at infra (timebox or load), not the PR. No ledger or zero trains = silent. Warn-only; shares the throttle, cache and CLI.
@@ -52,6 +56,7 @@ covers `gh api` only, not `gh pr list`, so under that sandbox this hook stays si
 Side effects: `git fetch origin <default branch>` (updates that remote-tracking ref only) and the cache file.
 """
 import calendar
+import fnmatch
 import hashlib
 import json
 import math
@@ -71,6 +76,7 @@ WIP = "WIP: {n} open PRs > cap {c}. Drain (review, land) before spawning."
 SLOW = "Landing slow: {r:.1f} merged/h to {b} < target {t}, {k} green PRs waiting."
 YIELD = "Train yield low: {y:.1f} PRs per landed train < floor {f}. Rerun the failing checks alone before bisecting."
 AGE = "Ready PRs aging: p50 {a:.1f} h (limit {t}), p90 {b:.1f} h (limit {u}), {k} green PRs waiting. Land or review them before new work."
+LANE = "Lane stalled: {l} has {k} ready PRs, last merge {h} (limit {t} h). Land that lane before new work."
 LINE = "Landing stalled: 0 merged to {b} in {n} min, {k} green PRs waiting. Fix landing before starting new work."
 
 
@@ -197,6 +203,46 @@ def flow_limits():
         return 0, 0
 
 
+def lane_cfg():
+    """(lane_idle_h, lane_globs) from policy; (0, {}) = off. An unreadable policy reads as off."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import perun_policy
+        pol = perun_policy.load()
+        return pol.get("lane_idle_h") or 0, pol.get("lane_globs") or {}
+    except Exception:  # fail open
+        return 0, {}
+
+
+def _lane(pr, globs):
+    """Every lane in `globs` ({lane: [fnmatch globs]}) matching any changed file of the PR (a cross-lane PR counts for each)."""
+    paths = [f.get("path", "") for f in pr.get("files") or []]
+    return [l for l, gs in globs.items() if any(fnmatch.fnmatch(x, g) for x in paths for g in gs)]
+
+
+def _lanes(cwd, branch, cfg, now=None):
+    """Per-lane stall lines, newline-joined, or None: a lane with ready (green) PRs whose last merge is older than lane_idle_h.
+    A total-merges alarm hides this when one busy lane keeps the total up. Looks at the last 100 merged PRs only."""
+    limit, globs = cfg
+    if not limit or not globs:
+        return None
+    now = now or time.time()
+    gh = lambda st, fields, n: json.loads(_run(["gh", "pr", "list", "--state", st, "--base", branch, "--limit", str(n), "--json", fields], cwd, timeout=60))
+    last, ready = {}, {}
+    for pr in gh("merged", "mergedAt,files", 100):
+        for l in _lane(pr, globs) if pr.get("mergedAt") else []:
+            last[l] = max(last.get(l, 0), _ts(pr["mergedAt"]))
+    for pr in gh("open", "isDraft,statusCheckRollup,files", 1000):  # high cap: a truncated list would hide a stalled lane's ready PRs
+        for l in _lane(pr, globs) if green(pr) else []:
+            ready[l] = ready.get(l, 0) + 1
+    out = []
+    for l, k in ready.items():
+        age = (now - last[l]) / 3600 if l in last else None
+        if age is None or age > limit:  # age == limit is not yet stalled
+            out.append(LANE.format(l=l, k=k, h="none in the last 100 merged" if age is None else f"{age:.1f} h ago", t=limit))
+    return "\n".join(out) or None
+
+
 def trains(times):
     """Number of trains in a list of commit unix times: runs with gaps under TRAIN_GAP_S."""
     t = sorted(times)
@@ -245,7 +291,7 @@ def _train_yield(cwd):
         return None
 
 
-def _all(cwd, probed, minutes, cap, ages_lim=None):
+def _all(cwd, probed, minutes, cap, ages_lim=None, lanes=None):
     """Stall + WIP + flow lines for one probe result, newline-joined, or None."""
     b, merged, k, n_open, *rest = probed
     def times():
@@ -255,7 +301,11 @@ def _all(cwd, probed, minutes, cap, ages_lim=None):
         extra = _flow(b, merged, k, minutes, flow_limits(), times)
     except Exception:  # the flow alarms must never drop the stall and WIP lines
         extra = None
-    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra, _train_yield(cwd), _age(rest[0] if rest else [], ages_lim if ages_lim is not None else age_limits())) if x) or None
+    try:
+        lane = _lanes(cwd, b, lanes if lanes is not None else lane_cfg())
+    except Exception:  # fail open: lane lines never drop the others
+        lane = None
+    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra, lane, _train_yield(cwd), _age(rest[0] if rest else [], ages_lim if ages_lim is not None else age_limits())) if x) or None
 
 
 def _event(data):
@@ -301,21 +351,21 @@ def _line(data, now=None):
     mode, minutes = settings()
     if mode == "off" or not _event(data):
         return None
-    cap, alim = wip_cap(), age_limits()
+    cap, alim, lcfg = wip_cap(), age_limits(), list(lane_cfg())
     cwd = data.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     path, now = cache_file(cwd), now or time.time()
     try:
         with open(path) as f:
             c = json.load(f)
-        if now - c["ts"] < THROTTLE_S and c.get("minutes") == minutes and c.get("cap") == cap and c.get("flow", [0, 0]) == list(flow_limits()) and c.get("age", [0, 0]) == list(alim):
+        if now - c["ts"] < THROTTLE_S and c.get("minutes") == minutes and c.get("cap") == cap and c.get("flow", [0, 0]) == list(flow_limits()) and c.get("age", [0, 0]) == list(alim) and c.get("lane", [0, {}]) == lcfg:
             return c.get("line")
     except (OSError, ValueError, KeyError, TypeError):
         pass
     with open(path, "w") as f:  # stamp first: a failing or hanging remote is not retried on every prompt
-        json.dump({"ts": now, "minutes": minutes, "cap": cap, "flow": list(flow_limits()), "age": list(alim), "line": None}, f)
-    line = _all(cwd, probe(cwd, minutes), minutes, cap, alim)
+        json.dump({"ts": now, "minutes": minutes, "cap": cap, "flow": list(flow_limits()), "age": list(alim), "lane": lcfg, "line": None}, f)
+    line = _all(cwd, probe(cwd, minutes), minutes, cap, alim, tuple(lcfg))
     with open(path, "w") as f:
-        json.dump({"ts": now, "minutes": minutes, "cap": cap, "flow": list(flow_limits()), "age": list(alim), "line": line}, f)
+        json.dump({"ts": now, "minutes": minutes, "cap": cap, "flow": list(flow_limits()), "age": list(alim), "lane": lcfg, "line": line}, f)
     return line
 
 

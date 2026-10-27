@@ -25,7 +25,7 @@ branch for `landing_stall_min` minutes (integer >= 1, default 60) while green PR
 `train_gate` takes `shadow|enforce|off` (default `shadow`) and `heavy_trains` an integer >= 1 (default 1): stage_run.py admits at most `heavy_trains` live `train-browser` stages plus `heavy_trains` other `train-*` stages while one runs; `shadow` only logs WOULD-BLOCK, `enforce` holds the stage.
 `train_budget_min` (integer >= 0, default 90, 0 = off) and `train_max_bisect_rounds` (integer >= 0, default 8, 0 = off): train_land.sh stops itself, releases its locks and leases, prints the culprit-suspect PRs and exits 5 (DEFER; 4 means the heavy lease was held) once a train has run that many minutes or that many gate rounds (first gate plus split halves); env `TRAIN_BUDGET_MIN` / `TRAIN_MAX_BISECT_ROUNDS` override.
 `wip_cap` takes an integer >= 0 (default 0 = off, opt-in): the same hook adds a "WIP: N open PRs > cap M" warn line when more non-draft PRs are open.
-`ready_age_p50_h` and `ready_age_p90_h` (hours; the watchdog warns when green PRs wait longer), `merges_per_hour_target` and `train_yield_floor` take an integer >= 0 (default 0 = off, opt-in): the same hook warns when merges per hour on the default branch fall below the target while green PRs wait, and when PRs per landed train (merges landed back-to-back) fall below the floor.
+`ready_age_p50_h` and `ready_age_p90_h` (hours; the watchdog warns when green PRs wait longer), `merges_per_hour_target` and `train_yield_floor` take an integer >= 0 (default 0 = off, opt-in): the same hook warns when merges per hour on the default branch fall below the target while green PRs wait, and when PRs per landed train (merges landed back-to-back) fall below the floor. `lane_idle_h` (hours >= 0, 0 = off) with `lane_globs` ({lane: [fnmatch globs]}) makes the watchdog warn when a lane has ready PRs and its last merge is older than `lane_idle_h`.
 `background_guard` takes `off|warn|block` (default `warn`): whether handback_cap.py (SubagentStop) warns or blocks when a lane hands back
 while a test or build started from its worktree is still running; env `PERUN_BACKGROUND_GUARD` overrides it.
 `auto_compact` takes `on|off` (default `on`): whether `install.sh --apply-operating-layer` may set `autoCompactWindow: 200000`
@@ -109,7 +109,7 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "stage_timeout_min": 120, "wip_cap": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "train_budget_min": 90, "train_max_bisect_rounds": 8, "ready_age_p50_h": 0, "ready_age_p90_h": 0, "background_guard": "warn", "lockfile_skip_review": "off", "train_gate": "shadow", "heavy_trains": 1}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "stage_timeout_min": 120, "wip_cap": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "train_budget_min": 90, "train_max_bisect_rounds": 8, "ready_age_p50_h": 0, "ready_age_p90_h": 0, "lane_idle_h": 0, "lane_globs": {}, "background_guard": "warn", "lockfile_skip_review": "off", "train_gate": "shadow", "heavy_trains": 1}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
@@ -130,8 +130,10 @@ def validate(raw: dict) -> dict:
             ok = isinstance(v, int) and not isinstance(v, bool) and v >= 1
         elif k == "wip_cap":  # opt-in: None or 0 = off, else warn above this many open non-draft PRs
             ok = v is None or (isinstance(v, int) and not isinstance(v, bool) and v >= 0)
-        elif k in ("merges_per_hour_target", "train_yield_floor", "ready_age_p50_h", "ready_age_p90_h", "train_budget_min", "train_max_bisect_rounds"):  # opt-in flow alarms: integer >= 0, 0 = off
+        elif k in ("merges_per_hour_target", "train_yield_floor", "ready_age_p50_h", "ready_age_p90_h", "lane_idle_h", "train_budget_min", "train_max_bisect_rounds"):  # opt-in flow alarms: integer >= 0, 0 = off
             ok = isinstance(v, int) and not isinstance(v, bool) and v >= 0
+        elif k == "lane_globs":  # {lane: [fnmatch globs]} for the watchdog's per-lane stall alarm
+            ok = isinstance(v, dict) and all(isinstance(g, list) and g and all(isinstance(x, str) and x for x in g) for g in v.values())
         elif k == "landing_watchdog":
             ok = v in ("off", "warn")
         elif k == "auto_update_pr_base":  # '' = origin/HEAD; else a plain branch name (no option-like or `..` names)

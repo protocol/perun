@@ -1,0 +1,2 @@
+### Added
+- agentic-delivery: the landing watchdog now alarms per lane. Opt-in policy `lane_idle_h` (hours) plus `lane_globs` (`{lane: [fnmatch globs]}`) emit "Lane stalled: ..." when a lane has green PRs waiting and its last merge (last 100 merged PRs) is older than the limit, so a busy lane can no longer hide an idle one behind the total-merges alarm. No map or limit keeps today's behavior. Test: `scripts/test_lane_stall.py`.
