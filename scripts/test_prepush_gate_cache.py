@@ -128,7 +128,9 @@ class Plumbing(Hook):
         (shim / "python3").chmod(0o755)
         p = self.push(PATH=f"{shim}{os.pathsep}{os.environ['PATH']}", **env)
         self.assertEqual(p.returncode, 0, p.stderr)
-        return [ln for ln in log.read_text().splitlines() if ln.split()[0].endswith("gate_cache.py")]  # not the stage_run.py wrapper line that carries the same argv
+        lines = log.read_text().splitlines()
+        self.assertTrue(any(ln.split()[:1] and ln.split()[0].endswith("stage_run.py") for ln in lines), "stage_run.py wrapper line missing")
+        return [ln for ln in lines if ln.split()[:1] and ln.split()[0].endswith("gate_cache.py")]  # not the stage_run.py wrapper line that carries the same argv
 
     def test_the_hook_passes_the_pushed_commit_tree_and_the_range(self):
         (call,) = self.shimmed_push()
