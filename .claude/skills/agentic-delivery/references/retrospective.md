@@ -88,3 +88,5 @@ should have caught this actually fire, and if not, why not.
 - **Planted-defect test 2:** a second postmortem citing the same root cause as
   an earlier one, with no new regression test or gate referenced since → the
   gate flags "repeat cause, no new gate."
+
+Replay a proposed fix for a recurring failure class against the past instances before accepting it, and key it on signals the change itself carries (touched paths, shadow or default-off wording) rather than labels, which are absent or wrong exactly when it matters.

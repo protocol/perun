@@ -55,16 +55,24 @@ GOOD = [
 ]
 fail = []
 import time
-def best(blob):
-    return min(t1 - t0 for t0, _, t1 in [(time.perf_counter(), dg.check(blob), time.perf_counter()) for _ in range(3)])
+import shlex
+def best(blob, f=lambda b: dg.check(b)):
+    f(blob)  # warm up once
+    return min(t1 - t0 for t0, _, t1 in [(time.perf_counter(), f(blob), time.perf_counter()) for _ in range(7)])
 
 
-# Scaling check, not an absolute cap: 10x input should cost ~10x (linear) vs ~100x (quadratic); fail above 30x.
-# The 1 ms floor on the small run keeps timer noise from inflating the ratio; 1 s is a loose absolute ceiling.
+def lex(blob):  # linear baseline measured in-process: the guard's dominant primitive is one shlex pass
+    return list(shlex.shlex(blob, posix=True, punctuation_chars=True))
+
+
+# Scaling check, not an absolute cap: the guard's cost relative to one shlex pass over the same blob must not grow
+# with size (linear: ratio flat; quadratic: ratio grows ~10x for 10x input). Fail above 3x growth, so a slow or noisy
+# runner (which slows guard and baseline alike) cannot trip it; 1 s is a loose absolute ceiling.
 for name, unit, n in (("dyn", "$x ", 8000), ("word", "a", 25000), ("colon", ":", 25000)):
-    small, big = best(unit * (n // 10)), best(unit * n)
-    if big > 1 or big / max(small, 0.001) > 30:
-        fail.append(f"guard slow on 25KB {name}: {big * 1000:.0f} ms vs {small * 1000:.1f} ms at 2.5KB")
+    small, big = unit * (n // 10), unit * n
+    rs, rb = best(small) / best(small, lex), best(big) / best(big, lex)
+    if best(big) > 1 or rb / rs > 3:
+        fail.append(f"guard slow on 25KB {name}: {rb:.1f}x shlex vs {rs:.1f}x at 2.5KB")
 for c in BAD:
     if not dg.check(c):
         fail.append(f"guard missed: {c}")

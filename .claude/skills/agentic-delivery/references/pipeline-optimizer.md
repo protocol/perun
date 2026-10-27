@@ -34,6 +34,7 @@ This agrees with `host-enforcement.md` *Cost discipline* (run every gate locally
 3. **Report the measured delta at every step**, in one line: `fix=<id> metric=<m> before=<x> after=<y> n=<runs> surface=<local|CI> verdict=<KEEP|REVERT|UNVERIFIED>`. A step with no number is not progress.
 4. **Escalate a blocker once.** A permission, sandbox, branch-protection or secret gap goes to the owner as ONE batched ask with the exact commands to run. Then continue with the next row that needs none of it. Do not retry the blocked step or route around the control (`SKILL.md` *Human gates*).
 5. **A data gap is not a stop.** `profile` records an API rate limit and keeps what it has; resume with the same `--data` file, or measure locally (`time`, `suites --run`, `hooks --run`).
+6. **A watchdog or budget is shorter than the hard timeout it pre-empts.** Equal or longer never fires first; `scripts/test_budget_below_timeout.py` asserts it for the CI step, job and lease timeouts.
 
 ## Step 1: map (mandatory)
 

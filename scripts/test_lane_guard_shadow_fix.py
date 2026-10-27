@@ -31,7 +31,7 @@ class ShadowFix(unittest.TestCase):
 
     def test_refuses_default_off_with_closer(self):
         for line in ('[ "${GUARD_ENFORCE:-0}" = 1 ] && x', 'v = os.environ.get("GUARD", "false")', 'GUARD_SHADOW=off'):
-            for body in ("Fixes #12", "closes org/repo#12", "Resolves: #12"):
+            for body in ("Fixes #12", "closes org/repo#12", "Resolves: #12", "Fixes https://github.com/acme/widgets/issues/12", "Fixes https://ghe.example.com/acme/widgets/issues/12"):
                 self.assertEqual(self.run_case(line, body), lane_guard.REFUSED, (line, body))
 
     def test_allows_refs_or_default_on(self):
