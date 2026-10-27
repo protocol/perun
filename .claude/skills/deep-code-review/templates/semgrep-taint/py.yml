@@ -1,0 +1,327 @@
+# Bundled generic taint rules (Python). Sources: request data and function parameters (excluding self/cls).
+# Sinks: classic injection calls. A guard `if X not in ALLOW: raise|return` before the sink suppresses it for X.
+rules:
+- id: perun.py.sqli
+  mode: taint
+  languages: [python]
+  severity: ERROR
+  message: Untrusted data reaches a SQL string passed to execute(). Use bound parameters.
+  pattern-sources:
+  - patterns:
+    - pattern: $X
+    - pattern-either:
+      - pattern-inside: |
+          def $F(..., $X, ...):
+            ...
+      - pattern: request.$A.get(...)
+      - pattern: request.$A[...]
+      - pattern: flask.request.$A.get(...)
+      - pattern: input(...)
+    - metavariable-regex:
+        metavariable: $X
+        regex: ^(?!self$|cls$)
+    - focus-metavariable: $X
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $C.execute($S, ...)
+      - pattern: $C.executemany($S, ...)
+      - pattern: $C.executescript($S)
+      - pattern: $C.raw($S, ...)
+      - pattern: text($S)
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: int(...)
+  - pattern: float(...)
+- id: perun.py.command-injection
+  mode: taint
+  languages: [python]
+  severity: ERROR
+  message: Untrusted data reaches a shell command. Use an argv list without shell=True.
+  pattern-sources:
+  - patterns:
+    - pattern: $X
+    - pattern-either:
+      - pattern-inside: |
+          def $F(..., $X, ...):
+            ...
+      - pattern: request.$A.get(...)
+      - pattern: request.$A[...]
+      - pattern: flask.request.$A.get(...)
+      - pattern: input(...)
+    - metavariable-regex:
+        metavariable: $X
+        regex: ^(?!self$|cls$)
+    - focus-metavariable: $X
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: os.system($S)
+      - pattern: os.popen($S, ...)
+      - pattern: subprocess.$M($S, ..., shell=True, ...)
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... os.system(<... $G ...>) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... os.popen(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... subprocess.$M(<... $G ...>, ..., shell=True, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... os.system(<... $G ...>) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... os.popen(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... subprocess.$M(<... $G ...>, ..., shell=True, ...) ...>
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: shlex.quote(...)
+  - pattern: int(...)
+- id: perun.py.path-traversal
+  mode: taint
+  languages: [python]
+  severity: WARNING
+  message: Untrusted data reaches a filesystem path. Resolve and confine to a base directory, or use an allowlist.
+  pattern-sources:
+  - patterns:
+    - pattern: $X
+    - pattern-either:
+      - pattern-inside: |
+          def $F(..., $X, ...):
+            ...
+      - pattern: request.$A.get(...)
+      - pattern: request.$A[...]
+      - pattern: flask.request.$A.get(...)
+      - pattern: input(...)
+    - metavariable-regex:
+        metavariable: $X
+        regex: ^(?!self$|cls$)
+    - focus-metavariable: $X
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: open($S, ...)
+      - pattern: os.path.join($B, $S)
+      - pattern: send_file($S, ...)
+      - pattern: send_from_directory($B, $S, ...)
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... open(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... os.path.join($B, <... $G ...>) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... send_file(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... send_from_directory($B, <... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... open(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... os.path.join($B, <... $G ...>) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... send_file(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... send_from_directory($B, <... $G ...>, ...) ...>
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: os.path.basename(...)
+  - pattern: secure_filename(...)
+  - patterns:
+    - pattern: $M[...]
+    - metavariable-regex:
+        metavariable: $M
+        regex: ^[A-Z][A-Z0-9_]*$
+- id: perun.py.ssrf
+  mode: taint
+  languages: [python]
+  severity: ERROR
+  message: Untrusted data selects an outbound request URL. Allowlist scheme and host.
+  pattern-sources:
+  - patterns:
+    - pattern: $X
+    - pattern-either:
+      - pattern-inside: |
+          def $F(..., $X, ...):
+            ...
+      - pattern: request.$A.get(...)
+      - pattern: request.$A[...]
+      - pattern: flask.request.$A.get(...)
+      - pattern: input(...)
+    - metavariable-regex:
+        metavariable: $X
+        regex: ^(?!self$|cls$)
+    - focus-metavariable: $X
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: requests.$M($S, ...)
+      - pattern: httpx.$M($S, ...)
+      - pattern: urllib.request.urlopen($S, ...)
+      - pattern: urlopen($S, ...)
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... requests.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... httpx.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... urllib.request.urlopen(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... urlopen(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... requests.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... httpx.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... urllib.request.urlopen(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... urlopen(<... $G ...>, ...) ...>
+    - focus-metavariable: $S
+- id: perun.py.deserialize
+  mode: taint
+  languages: [python]
+  severity: ERROR
+  message: Untrusted data reaches an unsafe deserializer. Use json or yaml.safe_load.
+  pattern-sources:
+  - patterns:
+    - pattern: $X
+    - pattern-either:
+      - pattern-inside: |
+          def $F(..., $X, ...):
+            ...
+      - pattern: request.$A.get(...)
+      - pattern: request.$A[...]
+      - pattern: flask.request.$A.get(...)
+      - pattern: input(...)
+    - metavariable-regex:
+        metavariable: $X
+        regex: ^(?!self$|cls$)
+    - focus-metavariable: $X
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: pickle.loads($S, ...)
+      - pattern: pickle.load($S, ...)
+      - pattern: marshal.loads($S)
+      - pattern: yaml.load($S, ...)
+      - pattern: yaml.unsafe_load($S, ...)
+      - pattern: jsonpickle.decode($S, ...)
+    - focus-metavariable: $S
+- id: perun.py.xss
+  mode: taint
+  languages: [python]
+  severity: WARNING
+  message: Untrusted data is returned as markup without escaping.
+  pattern-sources:
+  - patterns:
+    - pattern: $X
+    - pattern-either:
+      - pattern-inside: |
+          def $F(..., $X, ...):
+            ...
+      - pattern: request.$A.get(...)
+      - pattern: request.$A[...]
+      - pattern: flask.request.$A.get(...)
+      - pattern: input(...)
+    - metavariable-regex:
+        metavariable: $X
+        regex: ^(?!self$|cls$)
+    - focus-metavariable: $X
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: Markup($S)
+      - pattern: HttpResponse($S, ...)
+      - pattern: render_template_string($S, ...)
+      - pattern: mark_safe($S)
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: escape(...)
+  - pattern: html.escape(...)
+  - pattern: markupsafe.escape(...)
+- id: perun.py.open-redirect
+  mode: taint
+  languages: [python]
+  severity: WARNING
+  message: Untrusted data selects a redirect target. Allowlist relative paths or known hosts.
+  pattern-sources:
+  - patterns:
+    - pattern: $X
+    - pattern-either:
+      - pattern-inside: |
+          def $F(..., $X, ...):
+            ...
+      - pattern: request.$A.get(...)
+      - pattern: request.$A[...]
+      - pattern: flask.request.$A.get(...)
+      - pattern: input(...)
+    - metavariable-regex:
+        metavariable: $X
+        regex: ^(?!self$|cls$)
+    - focus-metavariable: $X
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: redirect($S, ...)
+      - pattern: HttpResponseRedirect($S, ...)
+    - focus-metavariable: $S

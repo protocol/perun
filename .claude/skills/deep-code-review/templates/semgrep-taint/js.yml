@@ -1,0 +1,637 @@
+# Bundled generic taint rules (JavaScript/TypeScript). Sources: req/request query, body, params, cookies, headers.
+# Sinks: classic injection calls on well-known receivers. A guard `if (!ALLOW.has(x)) return|throw` before the sink suppresses it for x.
+rules:
+- id: perun.js.sqli
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: Untrusted data reaches a SQL string passed to query(). Use bound parameters.
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.query.$P
+    - pattern: req.query
+    - pattern: req.body.$P
+    - pattern: req.body
+    - pattern: req.params.$P
+    - pattern: req.params
+    - pattern: req.cookies.$P
+    - pattern: req.cookies
+    - pattern: req.headers.$P
+    - pattern: req.headers
+    - pattern: request.query.$P
+    - pattern: request.query
+    - pattern: request.body.$P
+    - pattern: request.body
+    - pattern: request.params.$P
+    - pattern: request.params
+    - pattern: request.cookies.$P
+    - pattern: request.cookies
+    - pattern: request.headers.$P
+    - pattern: request.headers
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $DB.query($S, ...)
+      - pattern: $DB.execute($S, ...)
+      - pattern: $DB.raw($S, ...)
+    - metavariable-regex:
+        metavariable: $DB
+        regex: ^(db|pool|client|conn|connection|knex|sequelize|mysql|pg)$
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: parseInt(...)
+  - pattern: Number(...)
+- id: perun.js.command-injection
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: Untrusted data reaches a shell command. Use execFile with an argv array.
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.query.$P
+    - pattern: req.query
+    - pattern: req.body.$P
+    - pattern: req.body
+    - pattern: req.params.$P
+    - pattern: req.params
+    - pattern: req.cookies.$P
+    - pattern: req.cookies
+    - pattern: req.headers.$P
+    - pattern: req.headers
+    - pattern: request.query.$P
+    - pattern: request.query
+    - pattern: request.body.$P
+    - pattern: request.body
+    - pattern: request.params.$P
+    - pattern: request.params
+    - pattern: request.cookies.$P
+    - pattern: request.cookies
+    - pattern: request.headers.$P
+    - pattern: request.headers
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: exec($S, ...)
+      - pattern: execSync($S, ...)
+      - pattern: child_process.exec($S, ...)
+      - pattern: child_process.execSync($S, ...)
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... exec(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... execSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... child_process.exec(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... child_process.execSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... exec(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... execSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... child_process.exec(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... child_process.execSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... exec(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... execSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... child_process.exec(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... child_process.execSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... exec(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... execSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... child_process.exec(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... child_process.execSync(<... $G ...>, ...) ...>
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: parseInt(...)
+  - pattern: Number(...)
+- id: perun.js.path-traversal
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: Untrusted data reaches a filesystem path. Resolve and confine to a base directory, or use an allowlist.
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.query.$P
+    - pattern: req.query
+    - pattern: req.body.$P
+    - pattern: req.body
+    - pattern: req.params.$P
+    - pattern: req.params
+    - pattern: req.cookies.$P
+    - pattern: req.cookies
+    - pattern: req.headers.$P
+    - pattern: req.headers
+    - pattern: request.query.$P
+    - pattern: request.query
+    - pattern: request.body.$P
+    - pattern: request.body
+    - pattern: request.params.$P
+    - pattern: request.params
+    - pattern: request.cookies.$P
+    - pattern: request.cookies
+    - pattern: request.headers.$P
+    - pattern: request.headers
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: fs.readFile($S, ...)
+      - pattern: fs.readFileSync($S, ...)
+      - pattern: fs.createReadStream($S, ...)
+      - pattern: fsp.readFile($S, ...)
+      - pattern: res.sendFile($S, ...)
+      - pattern: res.download($S, ...)
+      - pattern: response.sendFile($S, ...)
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... fs.readFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... fs.readFileSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... fs.createReadStream(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... fsp.readFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... res.sendFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... res.download(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... response.sendFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... fs.readFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... fs.readFileSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... fs.createReadStream(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... fsp.readFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... res.sendFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... res.download(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... response.sendFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... fs.readFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... fs.readFileSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... fs.createReadStream(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... fsp.readFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... res.sendFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... res.download(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... response.sendFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... fs.readFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... fs.readFileSync(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... fs.createReadStream(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... fsp.readFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... res.sendFile(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... res.download(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... response.sendFile(<... $G ...>, ...) ...>
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: path.basename(...)
+- id: perun.js.ssrf
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: Untrusted data selects an outbound request URL. Allowlist scheme and host.
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.query.$P
+    - pattern: req.query
+    - pattern: req.body.$P
+    - pattern: req.body
+    - pattern: req.params.$P
+    - pattern: req.params
+    - pattern: req.cookies.$P
+    - pattern: req.cookies
+    - pattern: req.headers.$P
+    - pattern: req.headers
+    - pattern: request.query.$P
+    - pattern: request.query
+    - pattern: request.body.$P
+    - pattern: request.body
+    - pattern: request.params.$P
+    - pattern: request.params
+    - pattern: request.cookies.$P
+    - pattern: request.cookies
+    - pattern: request.headers.$P
+    - pattern: request.headers
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: fetch($S, ...)
+      - pattern: axios($S, ...)
+      - pattern: axios.$M($S, ...)
+      - pattern: got($S, ...)
+      - pattern: http.get($S, ...)
+      - pattern: https.get($S, ...)
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... fetch(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... axios(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... axios.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... got(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... http.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) return ...;
+        ...
+        <... https.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... fetch(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... axios(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... axios.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... got(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... http.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G)) throw ...;
+        ...
+        <... https.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... fetch(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... axios(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... axios.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... got(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... http.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) return ...;
+        ...
+        <... https.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... fetch(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... axios(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... axios.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... got(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... http.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.includes($G)) throw ...;
+        ...
+        <... https.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) return ...;
+        ...
+        <... fetch(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) return ...;
+        ...
+        <... axios(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) return ...;
+        ...
+        <... axios.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) return ...;
+        ...
+        <... got(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) return ...;
+        ...
+        <... http.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) return ...;
+        ...
+        <... https.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) throw ...;
+        ...
+        <... fetch(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) throw ...;
+        ...
+        <... axios(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) throw ...;
+        ...
+        <... axios.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) throw ...;
+        ...
+        <... got(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) throw ...;
+        ...
+        <... http.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.hostname)) throw ...;
+        ...
+        <... https.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) return ...;
+        ...
+        <... fetch(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) return ...;
+        ...
+        <... axios(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) return ...;
+        ...
+        <... axios.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) return ...;
+        ...
+        <... got(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) return ...;
+        ...
+        <... http.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) return ...;
+        ...
+        <... https.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) throw ...;
+        ...
+        <... fetch(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) throw ...;
+        ...
+        <... axios(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) throw ...;
+        ...
+        <... axios.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) throw ...;
+        ...
+        <... got(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) throw ...;
+        ...
+        <... http.get(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if (!$A.has($G.host)) throw ...;
+        ...
+        <... https.get(<... $G ...>, ...) ...>
+    - focus-metavariable: $S
+- id: perun.js.deserialize-eval
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: Untrusted data is evaluated or unsafely deserialized.
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.query.$P
+    - pattern: req.query
+    - pattern: req.body.$P
+    - pattern: req.body
+    - pattern: req.params.$P
+    - pattern: req.params
+    - pattern: req.cookies.$P
+    - pattern: req.cookies
+    - pattern: req.headers.$P
+    - pattern: req.headers
+    - pattern: request.query.$P
+    - pattern: request.query
+    - pattern: request.body.$P
+    - pattern: request.body
+    - pattern: request.params.$P
+    - pattern: request.params
+    - pattern: request.cookies.$P
+    - pattern: request.cookies
+    - pattern: request.headers.$P
+    - pattern: request.headers
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: eval($S)
+      - pattern: new Function(..., $S)
+      - pattern: yaml.load($S, ...)
+      - pattern: jsyaml.load($S, ...)
+      - pattern: unserialize($S, ...)
+      - pattern: vm.runInNewContext($S, ...)
+      - pattern: vm.runInThisContext($S, ...)
+    - focus-metavariable: $S
+- id: perun.js.xss
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: Untrusted data is written into markup without escaping.
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.query.$P
+    - pattern: req.query
+    - pattern: req.body.$P
+    - pattern: req.body
+    - pattern: req.params.$P
+    - pattern: req.params
+    - pattern: req.cookies.$P
+    - pattern: req.cookies
+    - pattern: req.headers.$P
+    - pattern: req.headers
+    - pattern: request.query.$P
+    - pattern: request.query
+    - pattern: request.body.$P
+    - pattern: request.body
+    - pattern: request.params.$P
+    - pattern: request.params
+    - pattern: request.cookies.$P
+    - pattern: request.cookies
+    - pattern: request.headers.$P
+    - pattern: request.headers
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $E.innerHTML = $S
+      - pattern: $E.outerHTML = $S
+      - pattern: document.write($S)
+      - pattern: res.send($S)
+      - pattern: response.send($S)
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: escapeHtml(...)
+  - pattern: encodeURIComponent(...)
+- id: perun.js.open-redirect
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: Untrusted data selects a redirect target. Allowlist relative paths or known hosts.
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.query.$P
+    - pattern: req.query
+    - pattern: req.body.$P
+    - pattern: req.body
+    - pattern: req.params.$P
+    - pattern: req.params
+    - pattern: req.cookies.$P
+    - pattern: req.cookies
+    - pattern: req.headers.$P
+    - pattern: req.headers
+    - pattern: request.query.$P
+    - pattern: request.query
+    - pattern: request.body.$P
+    - pattern: request.body
+    - pattern: request.params.$P
+    - pattern: request.params
+    - pattern: request.cookies.$P
+    - pattern: request.cookies
+    - pattern: request.headers.$P
+    - pattern: request.headers
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: res.redirect($S)
+      - pattern: res.redirect($ST, $S)
+      - pattern: response.redirect($S)
+    - focus-metavariable: $S

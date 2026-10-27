@@ -6,7 +6,7 @@ Read this when `method.md` routes here (its "Situational Phase 1 checks" bullet 
 
 - **On a `DIFF`, run `scripts/review_checks.sh --base <base>` first.** It runs only the installed local
   analyzers (shellcheck, `bash -n`, py_compile, ruff/pyflakes, `node --check`, tsc, `go vet`, jq, plus
-  gitleaks, semgrep with local rules only, trivy offline, and osv-scanner only with `REVIEW_OSV=1` since it uses
+  gitleaks, semgrep with the repo's rules or else the bundled taint rules plus p/default (`REVIEW_SEMGREP_REGISTRY=0` drops the registry pack), trivy offline, and osv-scanner only with `REVIEW_OSV=1` since it uses
   the network) on the changed files and prints findings JSON; `--history` scans commit history, `--tests` adds
   the declared `REVIEW_TEST_CMD`; stderr ends with a one-line ran/skipped summary. Its findings are leads: verify
   each against the code before reporting, report a `not run` line as unchecked surface, and never read an empty

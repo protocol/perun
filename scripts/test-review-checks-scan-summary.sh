@@ -44,7 +44,7 @@ grep -Eq 'review_checks: [0-9]+ findings; [0-9]+ files excluded; analyzers ran: 
 grep -q 'skipped (not installed):' "$T/err" && ok "summary skipped list" || bad "summary skipped list"
 jq -e 'type=="array"' "$T/out" >/dev/null && ok "stdout stays JSON" || bad "stdout JSON"
 grep -q -- '--log-opts' "$GL_LOG" && bad "history off by default" || ok "history off by default"
-grep -q 'not run: semgrep (no local rules' "$T/err" && [ ! -s "$SG_LOG" ] && ok "semgrep skipped without rules" || bad "semgrep skipped"
+grep -q -- 'templates/semgrep-taint' "$SG_LOG" && grep -q -- '--config p/default' "$SG_LOG" && ! grep -q auto "$SG_LOG" && ok "semgrep bundled rules + p/default without repo rules" || bad "semgrep bundled default"
 
 echo "rules: []" >.semgrep.yml
 git add . && git -c user.email=t@example.com -c user.name=t commit -q -m rules

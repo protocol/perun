@@ -6,7 +6,7 @@
 #
 # Tools (linters, gitleaks, osv-scanner, semgrep, trivy): see references/method-situational.md. Each runs only when
 # installed and only on matching changed files. Secrets are redacted and never printed; osv-scanner needs env
-# REVIEW_OSV=1 (network); semgrep uses local rules only (never `--config auto`); trivy is offline.
+# REVIEW_OSV=1 (network); semgrep uses repo rules, else the bundled taint rules plus p/default (never `--config auto`); trivy is offline.
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
 # dirs and .claude/worktrees are never scanned; each heavy scanner takes the heavy lease only when it runs (waits
 # REVIEW_LEASE_WAIT s, default 120, else skipped) and releases it afterwards.
@@ -241,14 +241,23 @@ fi
 
 sgc=${REVIEW_SEMGREP_CONFIG:-}
 [ -n "$sgc" ] || for c in .semgrep.yml .semgrep; do [ -e "$c" ] && { sgc=$c; break; }; done
-if [ -z "$sgc" ]; then skip semgrep "no local rules (REVIEW_SEMGREP_CONFIG, .semgrep.yml or .semgrep); --config auto is never used"
-elif [ ! -e "$sgc" ]; then skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"
+sgcfg=(--config "$sgc")
+if [ -z "$sgc" ]; then # no repo rules: bundled taint rules, plus the p/default registry pack unless REVIEW_SEMGREP_REGISTRY=0 (never --config auto)
+  sgc=$here/../templates/semgrep-taint; sgcfg=(--config "$sgc")
+  [ "${REVIEW_SEMGREP_REGISTRY:-1}" = 0 ] || sgcfg+=(--config p/default)
+fi
+if [ ! -e "$sgc" ]; then
+  if [ -z "${REVIEW_SEMGREP_CONFIG:-}" ] && [ "$sgc" = "$here/../templates/semgrep-taint" ]; then skip semgrep "bundled rules missing at $sgc (reinstall the skill)"
+  else skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"; fi
 elif have semgrep; then
   sg=()
   while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
   # One call per 200 files: typically a single run, but bounded argv and a timeout that is not shared by everything.
   for ((i = 0; i < ${#sg[@]}; i += 200)); do
-    run_one semgrep env HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep --config "$sgc" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
+    run_one semgrep env HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep "${sgcfg[@]}" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
+    if [ "$rc" != 0 ] && [ ${#sgcfg[@]} -gt 2 ]; then # registry pack unreachable (offline): rerun with the bundled rules alone
+      run_one semgrep env HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep --config "$sgc" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
+    fi
     scan_ok semgrep || continue
     e=0; sjson semgrep "$out" >"$tsv" || e=$?
     if [ "$e" = 0 ] || [ "$e" = 3 ]; then

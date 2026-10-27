@@ -2,7 +2,9 @@
 """security_verify.py - triage security findings: verify-or-drop plus a tunable exclusion list.
 
 Usage: security_verify.py [findings.json|-] [override-file]
-Input: JSON list of findings on stdin or a file. Each row may carry `severity`, `category` (an exclusion slug),
+Input: JSON list of findings on stdin or a file, or a semgrep `--json` report (an object with a `results` list; each
+result maps to a row: `sink` = its path:line, `source` = extra.dataflow_trace.taint_source location when present,
+`severity` from ERROR/WARNING/INFO, `rule` = check_id). Each row may carry `severity`, `category` (an exclusion slug),
 `source` and `sink` (both `path:line`). Output: one JSON record
   {"active_exclusions": sorted slugs, "override_read": bool, "added_nondefault": [slugs], "rows": [...]}
 where each row has `status`:
@@ -30,6 +32,41 @@ DEFAULTS = {
 }
 LOC = re.compile(r"^[^\s:]+:\d+(-\d+)?$")
 HIGH = {"high", "critical"}
+
+
+def _loc(node):
+    """path:line of a semgrep trace node, or None. Trace nodes are ["CliLoc", [loc, content]] or {"location": loc}."""
+    try:
+        if isinstance(node, list):
+            node = node[1][0] if node[0] == "CliLoc" else node[0]
+        loc = node.get("location", node)
+        return "%s:%d" % (loc["path"], loc["start"]["line"])
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return None
+
+
+def from_semgrep(report):
+    """Map a semgrep JSON report to findings rows; no taint source in the trace leaves `source` unset (unverified)."""
+    sev = {"ERROR": "high", "WARNING": "medium", "INFO": "low"}
+    rows = []
+    for r in report["results"]:
+        if not isinstance(r, dict):
+            rows.append(r)
+            continue
+        ex = r.get("extra") or {}
+        tr = ex.get("dataflow_trace") or {}
+        row = {"rule": r.get("check_id"), "severity": sev.get(ex.get("severity"), "medium")}
+        try:
+            row["sink"] = _loc(tr.get("taint_sink")) or "%s:%d" % (r["path"], r["start"]["line"])
+        except (KeyError, TypeError):
+            pass
+        src = _loc(tr.get("taint_source"))
+        if src:
+            row["source"] = src
+        else:  # semgrep OSS never emits dataflow_trace (Pro engines do), so its taint hits stay questions
+            row["note"] = "no dataflow_trace in the semgrep report; trace the source by hand"
+        rows.append(row)
+    return rows
 
 
 def effective(override_text=""):
@@ -81,8 +118,10 @@ def main(argv):
     except (OSError, ValueError) as e:
         print("security_verify: bad findings input: %s" % e, file=sys.stderr)
         return 2
+    if isinstance(rows, dict) and isinstance(rows.get("results"), list):
+        rows = from_semgrep(rows)
     if not isinstance(rows, list):
-        print("security_verify: findings input must be a JSON list", file=sys.stderr)
+        print("security_verify: findings input must be a JSON list or a semgrep report", file=sys.stderr)
         return 2
     ex, added = effective(ov)
     json.dump({"active_exclusions": sorted(ex), "override_read": read, "added_nondefault": added,
