@@ -42,7 +42,7 @@
 # Self-limit (no outside stop needed): TRAIN_BUDGET_MIN (policy train_budget_min, default 90, 0 = off) is the whole train's wall clock and TRAIN_MAX_BISECT_ROUNDS (policy
 # train_max_bisect_rounds, default 8, 0 = off) caps whole gate rounds (a split re-gates halves; per-PR bisect steps are not counted, only the clock bounds them); each stage timeout is clamped to the budget left. On exhaustion it prints
 # "DEFER: train budget spent ...; culprit suspects #...", exits 5 (the EXIT trap frees locks and leases; 5 is not 4, which means the lease was held and nothing was built), lands nothing more. A red base ends the train at once with BASE_RED_FAILFAST=enforce (default shadow: logs only).
-# Exit: 0 landed, 1 base/browser red or lock held, 4 DEFER (lease still held after LEASE_WAIT_SECS; nothing built), 5 DEFER (own budget spent; see Self-limit), 6 STALE (this script changed on disk mid-run, STALE_SELF_EXIT=enforce), 2 usage/refused (also a live tag, TRAIN_UNIQUE_RUN=enforce), 3 something not landed (see the SPLIT done line; some PRs may have landed): no GREEN union or CANT
+# Exit: 0 landed, 1 base/browser red or lock held, 4 DEFER (lease still held after LEASE_WAIT_SECS; nothing built), 5 DEFER (own budget spent; see Self-limit), 6 STALE (this script changed on disk and STALE_SELF_EXIT=enforce: checked only before a gate starts, a running gate drains and lands; or `touch $LOG.cancel` = urgent stop at the next tick, file consumed), 2 usage/refused (also a live tag, TRAIN_UNIQUE_RUN=enforce), 3 something not landed (see the SPLIT done line; some PRs may have landed): no GREEN union or CANT
 # (CANT = a real browser failure not attributed: not re-failing alone, pre-existing on the base, or not pinned to a culprit PR; flaky-only bisects print FLAKY, never blame). Without a split, 3 means nothing landed.
 # Every started train (a gate ran) is appended to the yield ledger on exit (train_yield.py; landing_watchdog.py alarms on low yield or a PR that re-rides). A train ended by BASE RED or CULPRIT is recorded as red and left out of both.
 # Optional: CLEAN_ROOT (your own worktree tree: runs reap_own.sh and clean_finished.sh on it first), BASE_AUDIT_CMD (run via bash -c on the bare fresh base before verifying; non-zero prints
@@ -187,7 +187,8 @@ stale() {  # STALE_SELF_EXIT=shadow|enforce|off (default shadow): the repo file 
   [ "$now" != "$SELF_H" ] || return 0
   if [ "${STALE_SELF_EXIT:-shadow}" = enforce ]; then git merge --abort 2>/dev/null || true; echo "STALE: $(basename "$SELF") changed on disk since this train started; locks and leases released, restart to run the new code" >&2; exit 6; fi
   [ -n "${STALE_SAID:-}" ] || { STALE_SAID=1; echo "SHADOW stale-self-exit: $(basename "$SELF") changed on disk; set STALE_SELF_EXIT=enforce to exit 6" >&2; }; }
-tick() { stale; ! spent || defer "$(( (SECONDS - T0) / UN ))m of ${TB}m"; }  # wall clock only: bounds every gate, stage wait and per-PR bisect step
+cancelled() { [ ! -e "$LOG.cancel" ] || { rm -f "$LOG.cancel"; git merge --abort 2>/dev/null || true; echo "CANCEL: $LOG.cancel found; locks and leases released, nothing landed" >&2; exit 6; }; }  # urgent stop (human operator or owner-approved tool only)
+tick() { cancelled; ! spent || defer "$(( (SECONDS - T0) / UN ))m of ${TB}m"; }  # wall clock only: bounds every gate, stage wait and per-PR bisect step
 stg() { local m=${TRAIN_STAGE_TIMEOUT_MIN:-180} r; [ "$TB" -gt 0 ] || { echo "$m"; return; }; r=$((TB - (SECONDS - T0) / UN)); [ "$r" -ge 1 ] || r=1; { [ "$m" -eq 0 ] || [ "$r" -lt "$m" ]; } && echo "$r" || echo "$m"; }
 green() { printf '%s %s\n' "$B" "$U" >"$LOG.gu"; exit 0; }  # train() success: hand B/U to the lander
 # Keep the lease fresh (TTL by mtime). train() runs in a subshell, so name the script's shell as the holder (else getppid() is the subshell and renew is a no-op).
@@ -369,7 +370,7 @@ while [ -n "$Q" ]; do
     [ "$(git rev-parse "$REMOTE/$BASE_BRANCH")" = "$(git rev-parse "$B^{commit}" 2>/dev/null)" ] \
       || { lock_drop "$PQ"; echo "CANT leaf #${PRS[*]}: $BASE_BRANCH moved past its gated base $B; nothing landed for it" >&2; continue; }
   fi
-  stale  # the gate may have run for hours: never land with an outdated script
+  cancelled  # a cancel that arrived during the gate means no land; stale is deliberately not checked here (the gate drains and lands on the version it started with)
   python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true  # push lock held first, so the next gate's wait for it cannot miss this landing
   lrc=0; bash "$HERE/land_train.sh" "$B" "$U" >"$LOG.land" || lrc=$?  # not exec: the EXIT trap must still fire
   cat "$LOG.land"  # landed = what land_train merged (a SKIP/REFUSE exits 0 but lands nothing), not the PR list

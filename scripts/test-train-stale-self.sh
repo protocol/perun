@@ -11,7 +11,9 @@ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null PERUN_HEAVY_DIR="$WORK/
 pass=0 fail=0
 ok() { if [ "$1" -eq 0 ]; then echo "PASS  $2"; pass=$((pass + 1)); else echo "FAIL  $2"; fail=$((fail + 1)); fi; }
 
-# --- merge_train.py: check_stale ---
+# --- merge_train.py: check_stale, check_stop; stale is checked per union cycle, never inside fails() (a running gate drains) ---
+! awk '/def fails\(/{f=1} f&&/check_stale/{x=1} /def [a-z_]+\(/&&!/def fails\(/{f=0} END{exit !x}' "$SC/merge_train.py"
+ok $? "merge_train: fails() (the gate) does not check stale"
 cp "$SC/merge_train.py" "$WORK/mt_copy.py"
 rc=0; python3 -I - <<'P' || rc=$?
 import importlib.util, os, sys
@@ -36,6 +38,12 @@ assert said and "cannot be read" in said[0], said
 os.environ["STALE_SELF_EXIT"] = "enforce"
 try: t.check_stale(); raise SystemExit("no Stale on unreadable")
 except m.Stale: pass
+t.state_path = os.path.join(os.environ["WORK"], "st.json"); t.run_id = "r1"
+t.check_stop()  # no stop file: quiet
+open(os.path.join(os.environ["WORK"], "r1.stop"), "w").close()
+try: t.check_stop(); raise SystemExit("no Stop raised")
+except m.Stop: pass
+assert not os.path.exists(os.path.join(os.environ["WORK"], "r1.stop")) and issubclass(m.Stop, m.Stale)  # consumed once; exit 6 path
 P
 ok $rc "merge_train check_stale: shadow logs once, off skips, enforce raises Stale; a deleted SRC never crashes (shadow logs, enforce raises)"
 
@@ -49,7 +57,8 @@ export B U H1=$(g rev-parse pr1) H2=$(g rev-parse pr2)
 mkdir -p "$WORK/bin"; cat >"$WORK/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 case "$1 $2" in
-  "pr view") case "$5" in headRefOid) v=H$3; echo "${!v}" ;; baseRefName) echo main ;; isDraft) echo false ;;
+  "pr view") case "${STUBEDIT:-}" in edit) echo '# edit' >>"$R/sc/train_land.sh" ;; chmod) chmod 000 "$R/sc/train_land.sh" ;; esac; unset STUBEDIT  # boundary: edit before the first stage starts
+             case "$5" in headRefOid) v=H$3; echo "${!v}" ;; baseRefName) echo main ;; isDraft) echo false ;;
                 mergeable) echo MERGEABLE ;; headRefName) echo br$3 ;; esac ;;
   "pr diff") echo changelog.d/x.md ;;
   "pr merge") echo "merged $3" >>"$WORK/merged.log" ;;
@@ -59,7 +68,6 @@ chmod +x "$WORK/bin/gh"; export PATH="$WORK/bin:$PATH"
 echo 'echo "GREEN base=$B union=$U"' >"$WORK/green.sh"
 # paths baked in: the verify stage runs with a scrubbed environment
 echo "echo \"GREEN base=\$B union=\$U\"; echo '# edit' >>'$R/sc/train_land.sh'" >"$WORK/edit.sh"
-echo "echo \"GREEN base=\$B union=\$U\"; chmod 000 '$R/sc/train_land.sh'" >"$WORK/unread.sh"
 echo 'echo "GREEN base=$B union=$U"; cut -d" " -f1 "$LOG_DIR/traintt.log.pid" >"$WORK/seen"' >"$WORK/mark.sh"
 echo 'echo "GREEN base=$B union=$U"; [ ! -e "$LOG_DIR/traintt.log.pid" ] && echo NOMARK >"$WORK/seen"' >"$WORK/nomark.sh"
 export R; cd "$R"
@@ -71,21 +79,33 @@ out=$(run VERIFY_CMD="bash $WORK/green.sh" STALE_SELF_EXIT=enforce) && rc=0 || r
 [ $rc -eq 0 ] && landed && ! grep -q 'STALE\|SHADOW stale' <<<"$out"
 ok $? "train_land: HEAD moves (base, union) with the script file unchanged: enforce does not exit and the train lands"
 out=$(run VERIFY_CMD="bash $WORK/edit.sh" STALE_SELF_EXIT=enforce) && rc=0 || rc=$?
+[ $rc -eq 0 ] && landed && ! grep -q 'STALE' <<<"$out"
+ok $? "train_land: the script edited mid-gate, enforce does not exit: the running gate drains and lands"
+out=$(run STUBEDIT=edit VERIFY_CMD="bash $WORK/green.sh" STALE_SELF_EXIT=enforce) && rc=0 || rc=$?
 [ $rc -eq 6 ] && grep -q '^STALE: train_land.sh changed on disk' <<<"$out" && [ ! -s "$WORK/merged.log" ] && [ ! -e "$WORK/traintt.log.pid" ]
-ok $? "train_land: the script edited mid-run, enforce exits 6, lands nothing, marker removed"
-out=$(run VERIFY_CMD="bash $WORK/edit.sh") && rc=0 || rc=$?
+ok $? "train_land: the script edited before a stage starts, enforce exits 6, lands nothing, marker removed"
+touch "$WORK/traintt.log.cancel"
+out=$(run VERIFY_CMD="bash $WORK/green.sh") && rc=0 || rc=$?
+[ $rc -eq 6 ] && grep -q '^CANCEL:' <<<"$out" && [ ! -s "$WORK/merged.log" ] && [ ! -e "$WORK/traintt.log.cancel" ] && [ ! -e "$WORK/traintt.log.pid" ]
+ok $? "train_land: a cancel file stops the train at the next tick (exit 6, lands nothing, file and marker removed)"
+out=$(run STUBEDIT=edit VERIFY_CMD="bash $WORK/green.sh") && rc=0 || rc=$?
 [ $rc -eq 0 ] && grep -q 'SHADOW stale-self-exit: train_land.sh changed' <<<"$out" && landed
 ok $? "train_land: the default (shadow) logs the stale script and runs on"
 out=$(run VERIFY_CMD="bash $WORK/edit.sh" STALE_SELF_EXIT=off) && rc=0 || rc=$?
 [ $rc -eq 0 ] && ! grep -q 'stale-self-exit\|STALE' <<<"$out" && landed
 ok $? "train_land: STALE_SELF_EXIT=off never checks"
-out=$(run VERIFY_CMD="bash $WORK/unread.sh" STALE_SELF_EXIT=enforce) && rc=0 || rc=$?
+out=$(run STUBEDIT=chmod VERIFY_CMD="bash $WORK/green.sh" STALE_SELF_EXIT=enforce) && rc=0 || rc=$?
 chmod 644 "$R/sc/train_land.sh"
 [ $rc -eq 0 ] && grep -q 'cannot read train_land.sh' <<<"$out" && landed
 ok $? "train_land: an unreadable script file is log-only even under enforce (no false exit 6)"
 n0=$(ls "${TMPDIR:-/tmp}" | grep -c '^train_land\.' || true); run VERIFY_CMD="bash $WORK/green.sh" >/dev/null || true
 [ "$(ls "${TMPDIR:-/tmp}" | grep -c '^train_land\.' || true)" = "$n0" ]
 ok $? "train_land: the private script copy is removed at exit"
+
+echo "echo \"GREEN base=\$B union=\$U\"; touch '$WORK/traintt.log.cancel'" >"$WORK/cancel.sh"
+out=$(run VERIFY_CMD="bash $WORK/cancel.sh") && rc=0 || rc=$?
+[ $rc -eq 6 ] && grep -q '^CANCEL:' <<<"$out" && [ ! -s "$WORK/merged.log" ] && [ ! -e "$WORK/traintt.log.cancel" ] && [ ! -e "$WORK/traintt.log.pid" ]
+ok $? "train_land: a cancel touched during a green gate means no land (exit 6, file and marker removed)"
 
 # --- unique run tag ---
 sleep 30 & LIVE=$!

@@ -208,7 +208,7 @@ truncated.
   1  verify found no green union (every member parked); refresh had an update
      fail; dupes found a duplicated fix (a SIMILAR-FIX alone does not)
   2  usage or forge/git error (fail closed; nothing is guessed)
-  6  STALE: this script changed on disk mid-run and STALE_SELF_EXIT=enforce (default shadow: logs only); restart
+  6  STALE: this script changed on disk and STALE_SELF_EXIT=enforce (default shadow: logs only), checked only before a union gate starts (a running gate drains); or STOP: `<id>.stop` in the state dir (urgent, consumed; checked in every poll and gate, human operator or owner-approved tool only); restart
   5  DEFER: the train spent its own --budget-min / --max-rounds; stopped cleanly, suspects printed, retry later
   3  HALT: base moved or rewritten, base red, another writer mid-train, a
      member failed at merge time, a member landed but the new base could
@@ -322,6 +322,10 @@ class Halt(Exception):
 
 class ForgeError(Exception):
     """A forge or git call failed or returned something unusable; fail closed."""
+
+
+class Stop(Stale):
+    """A `<run-id>.stop` file asked this run to stop now (exit 6, refs released)."""
 
 
 class Cancelled(Exception):
@@ -448,6 +452,7 @@ class Train:
 
     def poll(self):
         """Consume `<run-id>.cancel` (raise Cancelled) and `<run-id>.drop-<pr>` (add to self.drops) in the state dir."""
+        self.check_stop()  # one shared stop check: gates, merge-phase polls and backoff waits
         d = os.path.dirname(os.path.abspath(self.state_path))
         try:
             found = os.listdir(d)
@@ -732,6 +737,13 @@ class Train:
             self.run(["git", "worktree", "remove", "--force", wt], ok=False)
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def check_stop(self):
+        """Urgent stop: consume `<run-id>.stop` in the state dir and raise Stop (exit 6, refs released); checked before every gate."""
+        p = os.path.join(os.path.dirname(os.path.abspath(self.state_path)), self.run_id + ".stop")
+        if os.path.exists(p):
+            os.remove(p)
+            raise Stop(f"{os.path.basename(p)} found")
+
     def check_stale(self):
         """STALE_SELF_EXIT=shadow (default) logs once, enforce raises Stale, off skips; fires when SRC differs from the hash taken at start."""
         mode = os.environ.get("STALE_SELF_EXIT", "shadow")
@@ -747,7 +759,7 @@ class Train:
 
     def fails(self, members, label):
         """'' when base+members passes the gate, else 'verify' or 'cap C>N'. Raises Defer once the train budget is spent."""
-        self.check_stale()
+        self.check_stop()
         self.rounds += 1
         self.sus = getattr(self, "sus", None) or members  # suspects = the union that first failed, not the shrinking probes
         mins, cap = getattr(self.a, "budget_min", 0), getattr(self.a, "max_rounds", 0)
@@ -867,6 +879,7 @@ class Train:
         members = self.screen(members)  # a recorded, unlanded keystone parks its copies (#1142)
         parked_any = False
         while (members := self.undrop(members)):
+            self.check_stale()  # cycle start, before the union gate: a gate already running (and its bisect) drains on this version
             try:
                 why = self.fails(members, f"union {names(members)}")
             except Conflict as c:
@@ -1716,6 +1729,9 @@ def run(argv, runner=default_runner, out=sys.stdout, sleep=time.sleep) -> int:
     except Defer as exc:
         print(f"DEFER {exc}; nothing more run, refs released, retry later or drop a suspect", file=out)
         return DEFER
+    except Stop as exc:
+        print(f"STOP {exc}; refs released", file=out)
+        return STALE
     except Stale as exc:
         print(f"STALE {exc}; refs released, restart to run the new code", file=out)
         return STALE
@@ -2770,6 +2786,22 @@ def _selftest() -> int:
                 and any(c[:3] == ["git", "update-ref", "-d"] for c in f.calls)
                 and not [n for n in os.listdir(tmp) if n.endswith(".cancel")]), (rc, out)
 
+    def stop_mid_wait_releases_and_exits_six():
+        f = FakeForge(1)
+        st = verified(f, "sx.json")
+        f.view_override = {1: {"mergeable": "UNKNOWN"}}
+        buf = io.StringIO()
+
+        def sleeper(_):
+            open(os.path.join(tmp, re.search(r"RUN (\S+)", buf.getvalue()).group(1) + ".stop"), "w").close()
+
+        rc = run(["merge", "--apply", "--grant", "g", "--base", "main", "--state", os.path.join(tmp, st), "--backoff", "5"],
+                 runner=f, out=buf, sleep=sleeper)
+        out = buf.getvalue()
+        return (rc == STALE and "STOP" in out and not any(c[:3] == ["gh", "pr", "merge"] for c in f.calls)
+                and any(c[:3] == ["git", "update-ref", "-d"] for c in f.calls)
+                and not [n for n in os.listdir(tmp) if n.endswith(".stop")]), (rc, out)
+
     def drop_file_removes_member_and_replans():
         f, buf = FakeForge(3), io.StringIO()
         hook = listen(buf, ".drop-2")
@@ -3044,6 +3076,7 @@ def _selftest() -> int:
         ("refresh-skips-draft-and-fork-prs", refresh_skips_draft_and_fork_prs),
         ("refresh-throttles-and-retries-rate-limit", refresh_throttles_and_retries_rate_limit),
         ("cancel-mid-wait-releases-and-exits-zero", cancel_mid_wait_releases_and_exits_zero),
+        ("stop-mid-wait-releases-and-exits-six", stop_mid_wait_releases_and_exits_six),
         ("drop-file-removes-member-and-replans", drop_file_removes_member_and_replans),
         ("receipt-carries-only-on-equal-patch-id", receipt_carries_only_on_equal_patch_id),
         ("changed-patch-id-or-red-check-does-not-carry", changed_patch_id_or_red_check_does_not_carry),
