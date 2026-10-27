@@ -42,7 +42,7 @@
 # Self-limit (no outside stop needed): TRAIN_BUDGET_MIN (policy train_budget_min, default 90, 0 = off) is the whole train's wall clock and TRAIN_MAX_BISECT_ROUNDS (policy
 # train_max_bisect_rounds, default 8, 0 = off) caps whole gate rounds (a split re-gates halves; per-PR bisect steps are not counted, only the clock bounds them); each stage timeout is clamped to the budget left. On exhaustion it prints
 # "DEFER: train budget spent ...; culprit suspects #...", exits 5 (the EXIT trap frees locks and leases; 5 is not 4, which means the lease was held and nothing was built), lands nothing more. A red base ends the train at once with BASE_RED_FAILFAST=enforce (default shadow: logs only).
-# Exit: 0 landed, 1 base/browser red or lock held, 4 DEFER (lease still held after LEASE_WAIT_SECS; nothing built), 5 DEFER (own budget spent; see Self-limit), 2 usage/refused, 3 something not landed (see the SPLIT done line; some PRs may have landed): no GREEN union or CANT
+# Exit: 0 landed, 1 base/browser red or lock held, 4 DEFER (lease still held after LEASE_WAIT_SECS; nothing built), 5 DEFER (own budget spent; see Self-limit), 6 STALE (this script changed on disk mid-run, STALE_SELF_EXIT=enforce), 2 usage/refused (also a live tag, TRAIN_UNIQUE_RUN=enforce), 3 something not landed (see the SPLIT done line; some PRs may have landed): no GREEN union or CANT
 # (CANT = a real browser failure not attributed: not re-failing alone, pre-existing on the base, or not pinned to a culprit PR; flaky-only bisects print FLAKY, never blame). Without a split, 3 means nothing landed.
 # Every started train (a gate ran) is appended to the yield ledger on exit (train_yield.py; landing_watchdog.py alarms on low yield or a PR that re-rides). A train ended by BASE RED or CULPRIT is recorded as red and left out of both.
 # Optional: CLEAN_ROOT (your own worktree tree: runs reap_own.sh and clean_finished.sh on it first), BASE_AUDIT_CMD (run via bash -c on the bare fresh base before verifying; non-zero prints
@@ -54,12 +54,31 @@
 # is already red blocks every train for nothing); non-zero prints "BROWSER RED" and lands
 # nothing. Unset = loud "WARN" that the union's browser specs were NOT run; BROWSER_CMD=skip is the explicit opt-out).
 set -euo pipefail
+# Run from a private copy: the train's own checkouts rewrite this file (bash reads a script incrementally), and a copy is what STALE_SELF_EXIT compares the repo file against.
+if [ -z "${TRAIN_LAND_COPY:-}" ]; then
+  _orig=$(cd "$(dirname "$0")" && pwd)/$(basename "$0"); _cp=$(mktemp "${TMPDIR:-/tmp}/train_land.XXXXXX") && [ -n "$_cp" ] || { echo "mktemp failed" >&2; exit 2; }
+  cp "$_orig" "$_cp" && TRAIN_LAND_COPY=$_cp TRAIN_LAND_ORIG=$_orig exec bash "$_cp" "$@"; rm -f "$_cp"; exit 2
+fi
+SELF=${TRAIN_LAND_ORIG:-$0}; trap 'rm -f "$TRAIN_LAND_COPY"' EXIT
 unset PERUN_HOLDER_PID  # an inherited value must never name the lease holder; only renew() sets it, for one call
 [ $# -ge 3 ] || { echo "usage: train_land.sh <tag> <pr> <pr> [pr...] (a train is >= 2 PRs)" >&2; exit 2; }
 : "${VERIFY_CMD:?set VERIFY_CMD}" "${UNION_DIRS:?set UNION_DIRS}"
 T=$1; shift
 BASE_BRANCH=${BASE_BRANCH:-main} REMOTE=${REMOTE:-origin} LOG=${LOG_DIR:-.}/train$T.log
-HERE=$(cd "$(dirname "$0")" && pwd) GH=${GH:-$(dirname "$0")/gh_rest.py}
+HERE=$(cd "$(dirname "$SELF")" && pwd) GH=${GH:-$(dirname "$SELF")/gh_rest.py}
+SELF_H=$(cksum <"$SELF" 2>/dev/null) || SELF_H=  # stale-script self-exit baseline (STALE_SELF_EXIT, see stale() below)
+# Unique tag (TRAIN_UNIQUE_RUN=shadow|enforce|off, default shadow): "$LOG.pid" ("<pid>") is created atomically; a live owner (kill -0 on the pid) makes enforce refuse (exit 2) and shadow warn and go on; a dead owner's marker is reaped. off skips all of it.
+OWNP=
+if [ "${TRAIN_UNIQUE_RUN:-shadow}" != off ]; then
+  mark() { ( set -C; echo "$$" >"$LOG.pid" ) 2>/dev/null; }
+  if mark; then OWNP=1; else
+    read -r op <"$LOG.pid" 2>/dev/null || op=  # ponytail: pid-only identity; a recycled pid of a dead train reads as live (refuse, safe side), ceiling = pid reuse; add a random token if it bites
+    if [ -n "$op" ] && kill -0 "$op" 2>/dev/null; then
+      echo "REFUSE tag $T: a live train (pid $op) already owns $LOG; pick a new tag$([ "${TRAIN_UNIQUE_RUN:-shadow}" = enforce ] || echo ' (TRAIN_UNIQUE_RUN=shadow: going on, set enforce to refuse)')" >&2
+      [ "${TRAIN_UNIQUE_RUN:-shadow}" != enforce ] || exit 2
+    else rm -f "$LOG.pid"; ! mark || OWNP=1; fi
+  fi
+fi
 . "$HERE/_clean_union.sh"
 . "$HERE/_dirty_guard.sh"
 echo "train_land: this lands to $BASE_BRANCH: if the host classifier denies the merge, park THAT merge for the owner (do not retry or route around it) and keep every other lane, review and build going." >&2
@@ -111,7 +130,7 @@ PQ=$(git rev-parse --git-common-dir)/train-push.lock PW=${PUSH_WAIT_SECS:-$((LT 
 split=0 landed= gates=0 ALL="$*"
 unl() { local n; for n in $ALL; do [[ " $landed " == *" $n "* ]] || printf '%s ' "$n"; done; }  # every PR land_train did not merge
 split_report() { [ "$split" -eq 1 ] || return 0; local u; u=$(unl); echo "SPLIT done: landed #${landed# }; CANT (not landed) #${u% }; gates=$gates"; }
-trap 'kill "$HB" 2>/dev/null; [ "$gates" -eq 0 ] || python3 "$HERE/train_yield.py" record "$T" "$ALL" "$landed" "$([ -e "$LOG.red" ] && echo red)" || true; rm -f "$LOG.red"; split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
+trap 'kill "$HB" 2>/dev/null; rm -f "$TRAIN_LAND_COPY"; [ -z "$OWNP" ] || rm -f "$LOG.pid"; [ "$gates" -eq 0 ] || python3 "$HERE/train_yield.py" record "$T" "$ALL" "$landed" "$([ -e "$LOG.red" ] && echo red)" || true; rm -f "$LOG.red"; split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
 # A landing train holds the push lock and is moving the base: wait it out before any gate work (a union composed mid-land is stale at its own land).
 lock_take "$PQ" "$PW" "$LT" || exit 1; lock_drop "$PQ"
 if [ -n "${CLEAN_ROOT:-}" ]; then  # start-of-train cleanup of your own finished work; never blocks the train
@@ -161,7 +180,14 @@ spent() { [ "$TB" -gt 0 ] && [ $((SECONDS - T0)) -ge $((TB * UN)) ]; }
 susp() { local x o=; for x in $1; do [[ " ${keep[*]:-} " == *" $x "* ]] || o+="#$x "; done; echo "${o% }"; }  # PRs not yet cleared
 defer() { git merge --abort 2>/dev/null || true; git checkout -q --detach "$REMOTE/$BASE_BRANCH" 2>/dev/null || true
   echo "DEFER: train budget spent ($1); culprit suspects: $(susp "$(unl)"); nothing more run, locks and leases released, retry later or drop a suspect" >&2; exit 5; }
-tick() { ! spent || defer "$(( (SECONDS - T0) / UN ))m of ${TB}m"; }  # wall clock only: bounds every gate, stage wait and per-PR bisect step
+stale() {  # STALE_SELF_EXIT=shadow|enforce|off (default shadow): the repo file of this script changed since start -> enforce exits 6 (the EXIT trap frees locks and leases); unreadable = log only
+  [ "${STALE_SELF_EXIT:-shadow}" != off ] || return 0
+  local now; now=$(cksum <"$SELF" 2>/dev/null) || now=
+  [ -z "$now" ] || [ -z "$SELF_H" ] && { [ -n "${STALE_SAID:-}" ] || { STALE_SAID=1; echo "SHADOW stale-self-exit: cannot read $(basename "$SELF") to compare; no exit" >&2; }; return 0; }
+  [ "$now" != "$SELF_H" ] || return 0
+  if [ "${STALE_SELF_EXIT:-shadow}" = enforce ]; then git merge --abort 2>/dev/null || true; echo "STALE: $(basename "$SELF") changed on disk since this train started; locks and leases released, restart to run the new code" >&2; exit 6; fi
+  [ -n "${STALE_SAID:-}" ] || { STALE_SAID=1; echo "SHADOW stale-self-exit: $(basename "$SELF") changed on disk; set STALE_SELF_EXIT=enforce to exit 6" >&2; }; }
+tick() { stale; ! spent || defer "$(( (SECONDS - T0) / UN ))m of ${TB}m"; }  # wall clock only: bounds every gate, stage wait and per-PR bisect step
 stg() { local m=${TRAIN_STAGE_TIMEOUT_MIN:-180} r; [ "$TB" -gt 0 ] || { echo "$m"; return; }; r=$((TB - (SECONDS - T0) / UN)); [ "$r" -ge 1 ] || r=1; { [ "$m" -eq 0 ] || [ "$r" -lt "$m" ]; } && echo "$r" || echo "$m"; }
 green() { printf '%s %s\n' "$B" "$U" >"$LOG.gu"; exit 0; }  # train() success: hand B/U to the lander
 # Keep the lease fresh (TTL by mtime). train() runs in a subshell, so name the script's shell as the holder (else getppid() is the subshell and renew is a no-op).
@@ -183,7 +209,7 @@ train() {
 while :; do
 renew; tick
 rc=0; slot train-verify || rc=$?
-[ "$rc" -ne 0 ] || "$(dirname "$0")/scrub_env.sh" python3 "$HERE/stage_run.py" --name train-verify --timeout "$(stg)" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$VERIFY_CMD" _ "$T" "${PRS[@]}" >"$LOG" 2>&1 </dev/null || rc=$?
+[ "$rc" -ne 0 ] || "$HERE/scrub_env.sh" python3 "$HERE/stage_run.py" --name train-verify --timeout "$(stg)" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$VERIFY_CMD" _ "$T" "${PRS[@]}" >"$LOG" 2>&1 </dev/null || rc=$?
 # stage_run 75 = no heavy slot freed in time, 124 = stage timeout: the verify never gave a verdict, so it is not RED (no ratchet culprit hunt).
 case $rc in 75|124) tick; echo "stage did not complete (train-verify rc=$rc: $([ "$rc" = 75 ] && echo 'no heavy slot' || echo 'timed out'); last log line: $(tail -1 "$LOG" 2>/dev/null)); nothing landed" >&2; exit 3 ;; esac
 # Filter by verdict prefix, never by position; `|| true` keeps pipefail from aborting on no match.
@@ -316,6 +342,7 @@ done
 # fresh base; a red unattributed half splits again until depth runs out; a leaf keeps the CANT/FLAKY semantics (nothing landed for it).
 Q="$SPLIT:${PRS[*]}"
 while [ -n "$Q" ]; do
+  stale
   it=${Q%%$'\n'*}; Q=${Q#"$it"}; Q=${Q#$'\n'}; SPLITD=${it%%:*}; read -ra PRS <<<"${it#*:}"
   if [ "$gates" -gt 0 ]; then  # a later half: the same waits as the first gate (push lock, then lease), then the base it left
     lock_take "$PQ" "$PW" "$LT" || exit 1; lock_drop "$PQ"
@@ -342,6 +369,7 @@ while [ -n "$Q" ]; do
     [ "$(git rev-parse "$REMOTE/$BASE_BRANCH")" = "$(git rev-parse "$B^{commit}" 2>/dev/null)" ] \
       || { lock_drop "$PQ"; echo "CANT leaf #${PRS[*]}: $BASE_BRANCH moved past its gated base $B; nothing landed for it" >&2; continue; }
   fi
+  stale  # the gate may have run for hours: never land with an outdated script
   python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true  # push lock held first, so the next gate's wait for it cannot miss this landing
   lrc=0; bash "$HERE/land_train.sh" "$B" "$U" >"$LOG.land" || lrc=$?  # not exec: the EXIT trap must still fire
   cat "$LOG.land"  # landed = what land_train merged (a SKIP/REFUSE exits 0 but lands nothing), not the PR list

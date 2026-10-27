@@ -11,7 +11,7 @@ Read this when `method.md` routes here (its "Situational Phase 1 checks" bullet 
   the declared `REVIEW_TEST_CMD`; stderr ends with a one-line ran/skipped summary. Its findings are leads: verify
   each against the code before reporting, report a `not run` line as unchecked surface, and never read an empty
   list as clean (analyzers miss fail-open and logic defects). Its gitleaks pass uses `templates/gitleaks.toml`
-  (default rules plus a skip list for `.history/`, `fixtures/`, `testdata/` and generated registry JSON; the skip count is printed) when the repo has no `.gitleaks.toml`. **Verify or drop every scanner lead:** open the
+  (default rules plus a skip list for `.history/`, `fixtures/`, `testdata/` and generated registry JSON and lockfiles; the skip count is printed) when the repo has no `.gitleaks.toml`. An optional repo-root `.gitleaks-allow` (`rule path-glob sha256-of-secret` per line, format in the template) drops known false positives by content hash, so it survives history rewrites; it is read from the base ref only, and a malformed list is ignored with a warning. **Verify or drop every scanner lead:** open the
   cited line, confirm the flagged code is reachable and, for a secret, that a real value is present (a name like
   `api_key` or `*_key` with no value, a placeholder or a fixture is not a secret); drop what fails and report
   "N raw, M verified" so the reader sees both counts.

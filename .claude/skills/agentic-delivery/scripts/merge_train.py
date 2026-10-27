@@ -208,6 +208,7 @@ truncated.
   1  verify found no green union (every member parked); refresh had an update
      fail; dupes found a duplicated fix (a SIMILAR-FIX alone does not)
   2  usage or forge/git error (fail closed; nothing is guessed)
+  6  STALE: this script changed on disk mid-run and STALE_SELF_EXIT=enforce (default shadow: logs only); restart
   5  DEFER: the train spent its own --budget-min / --max-rounds; stopped cleanly, suspects printed, retry later
   3  HALT: base moved or rewritten, base red, another writer mid-train, a
      member failed at merge time, a member landed but the new base could
@@ -277,6 +278,8 @@ def _load_gate_cache():
 
 _GC = _load_gate_cache()
 
+STALE = 6  # own script changed on disk mid-run (STALE_SELF_EXIT=enforce)
+SRC = os.path.abspath(__file__)
 OK, RED, ERROR, HALT, DEFER = 0, 1, 2, 3, 5  # 4 is train_land.sh's lease-held DEFER; 5 = own budget spent
 GATE_CONTEXT = "perun/train-gate"
 GREEN_CONCLUSIONS = {"success", "neutral", "skipped"}
@@ -296,8 +299,21 @@ RATE_LIMIT_RE = re.compile(r"\b429\b|rate limit", re.I)  # gh's 429 / secondary-
 MAX_FLAKES = 2
 
 
+def src_hash():
+    """sha256 of this script's file, or None when it cannot be read (deleted or unreadable mid-run)."""
+    try:
+        with open(SRC, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return None
+
+
 class Defer(Exception):
     """The train spent its own wall-clock or round budget: stop cleanly, report the suspects, retry later."""
+
+
+class Stale(Exception):
+    """This script file changed on disk since the run started (STALE_SELF_EXIT=enforce): stop, a fresh run loads the new code."""
 
 
 class Halt(Exception):
@@ -381,6 +397,7 @@ class Train:
         self.repo_flag = ["--repo", args.repo] if args.repo else []
         self.base_sha = ""
         self.run_id = f"{os.getpid()}-{uuid.uuid4().hex[:12]}"  # never a per-process counter (#1139)
+        self.src_h = src_hash()  # a long run must notice a newer copy of this script landing under it
         self.t0, self.rounds = time.monotonic(), 0  # own budget: wall clock and gate rounds (union, base and bisect probes)
         self.flake_n = 0  # reds excused as flakes this run; over MAX_FLAKES they bisect
         self.verdicts = {}  # git tree SHA -> fails() verdict for this run: an identical tree is never re-tested
@@ -701,8 +718,22 @@ class Train:
             self.run(["git", "worktree", "remove", "--force", wt], ok=False)
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def check_stale(self):
+        """STALE_SELF_EXIT=shadow (default) logs once, enforce raises Stale, off skips; fires when SRC differs from the hash taken at start."""
+        mode = os.environ.get("STALE_SELF_EXIT", "shadow")
+        now = src_hash()
+        if mode == "off" or (now == self.src_h and now is not None):
+            return
+        msg = f"{os.path.basename(SRC)} {'cannot be read' if now is None or self.src_h is None else 'changed on disk since this run started'}; running stale code"
+        if mode == "enforce":
+            raise Stale(msg)
+        if not getattr(self, "stale_said", False):
+            self.stale_said = True
+            self.say(f"SHADOW stale-self-exit: {msg}; set STALE_SELF_EXIT=enforce to exit {STALE}")
+
     def fails(self, members, label):
         """'' when base+members passes the gate, else 'verify' or 'cap C>N'. Raises Defer once the train budget is spent."""
+        self.check_stale()
         self.rounds += 1
         self.sus = getattr(self, "sus", None) or members  # suspects = the union that first failed, not the shrinking probes
         mins, cap = getattr(self.a, "budget_min", 0), getattr(self.a, "max_rounds", 0)
@@ -1663,6 +1694,9 @@ def run(argv, runner=default_runner, out=sys.stdout, sleep=time.sleep) -> int:
     except Defer as exc:
         print(f"DEFER {exc}; nothing more run, refs released, retry later or drop a suspect", file=out)
         return DEFER
+    except Stale as exc:
+        print(f"STALE {exc}; refs released, restart to run the new code", file=out)
+        return STALE
     except Cancelled:
         print("CANCELLED run cancelled by request; refs released", file=out)
         return OK

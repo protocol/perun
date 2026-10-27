@@ -10,4 +10,13 @@ paths = [
   '''(^|/)\.history/''',
   '''(^|/)(fixtures|testdata)/''',
   '''(^|/)(registry|skills-registry|plugins-registry)\.json$''',
+  '''(^|/)(package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|poetry\.lock|go\.sum|composer\.lock)$''',
 ]
+
+# Rewrite-proof allowlist for one-off false positives: add `.gitleaks-allow` at the repo root (read by review_checks.sh,
+# works with or without a repo .gitleaks.toml). One entry per line, `#` comments allowed:
+#   <rule id> <path glob> <sha256 of the matched secret text>
+# Hash with: printf %s 'the-secret-text' | shasum -a 256. Keyed on content, so a history rewrite cannot invalidate it.
+# Read from the base ref only (a change cannot approve its own secret; entries it adds are reported). `*` stops at `/`, `**` crosses it;
+# a malformed list is ignored with a warning and every finding is kept.
+# Stricter than a path skip: a different secret in the same file is still reported.
