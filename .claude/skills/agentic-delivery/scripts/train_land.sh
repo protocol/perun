@@ -39,7 +39,10 @@
 # CANT (not landed) #<every other PR, dropped culprits included>; gates=<n>" and exits 0 only when every PR landed, else 3 (or the abort code). Flake-on-base CANT never splits.
 # A split gives each half one more independent roll of the same full gate (a REAL id already re-failed every solo re-run at the union), never a retry-until-green of one verdict; each half
 # still lands only on its own green gate and the depth cap bounds the extra gates.
-# Exit: 0 landed, 1 base/browser red or lock held, 4 DEFER (lease still held after LEASE_WAIT_SECS; nothing built), 2 usage/refused, 3 something not landed (see the SPLIT done line; some PRs may have landed): no GREEN union or CANT
+# Self-limit (no outside stop needed): TRAIN_BUDGET_MIN (policy train_budget_min, default 90, 0 = off) is the whole train's wall clock and TRAIN_MAX_BISECT_ROUNDS (policy
+# train_max_bisect_rounds, default 8, 0 = off) caps whole gate rounds (a split re-gates halves; per-PR bisect steps are not counted, only the clock bounds them); each stage timeout is clamped to the budget left. On exhaustion it prints
+# "DEFER: train budget spent ...; culprit suspects #...", exits 5 (the EXIT trap frees locks and leases; 5 is not 4, which means the lease was held and nothing was built), lands nothing more. A red base ends the train at once with BASE_RED_FAILFAST=enforce (default shadow: logs only).
+# Exit: 0 landed, 1 base/browser red or lock held, 4 DEFER (lease still held after LEASE_WAIT_SECS; nothing built), 5 DEFER (own budget spent; see Self-limit), 2 usage/refused, 3 something not landed (see the SPLIT done line; some PRs may have landed): no GREEN union or CANT
 # (CANT = a real browser failure not attributed: not re-failing alone, pre-existing on the base, or not pinned to a culprit PR; flaky-only bisects print FLAKY, never blame). Without a split, 3 means nothing landed.
 # Every started train (a gate ran) is appended to the yield ledger on exit (train_yield.py; landing_watchdog.py alarms on low yield or a PR that re-rides). A train ended by BASE RED or CULPRIT is recorded as red and left out of both.
 # Optional: CLEAN_ROOT (your own worktree tree: runs reap_own.sh and clean_finished.sh on it first), BASE_AUDIT_CMD (run via bash -c on the bare fresh base before verifying; non-zero prints
@@ -80,6 +83,8 @@ export PERUN_GITHUB_ACTIONS PERUN_JOBS
 rm -f "$LOG.red"
 LOCK=$(git rev-parse --git-dir)/train-land.lock
 LT=${LOCK_TIMEOUT_MIN:-30}
+TB=${TRAIN_BUDGET_MIN:-$(python3 "$HERE/perun_policy.py" get train_budget_min)} TR=${TRAIN_MAX_BISECT_ROUNDS:-$(python3 "$HERE/perun_policy.py" get train_max_bisect_rounds)} T0=$SECONDS UN=${TRAIN_BUDGET_UNIT_SECS:-60}  # UN: seconds per budget minute (a test seam)
+[[ $TB =~ ^[0-9]+$ && $TR =~ ^[0-9]+$ ]] || { echo "train_land: TRAIN_BUDGET_MIN / TRAIN_MAX_BISECT_ROUNDS must be integers >= 0" >&2; exit 2; }
 lock_take "$LOCK" 0 "$LT" || exit 1
 # Exclusive machine-wide heavy lease while the gate runs: heavy_gate.py denies other heavy commands ("gate running: wait").
 # Held by another gate: wait for it (up to LEASE_WAIT_SECS), then DEFER with nothing built.
@@ -140,8 +145,24 @@ audit=(bash -c "${BASE_AUDIT_CMD:-}"); [ ! -f "$GC" ] || audit=(python3 "$GC" ru
 if [ -n "${BASE_AUDIT_CMD:-}" ] && ! "${audit[@]}" >"$LOG.base" 2>&1 </dev/null; then
   : >"$LOG.red"; echo "BASE RED: audit fails on bare $REMOTE/$BASE_BRANCH (see $LOG.base); no PR to blame, nothing landed" >&2; exit 1
 fi
+# Fixes-only coverage (FIX_MAP=<file of "<pr><TAB><red title>" lines>, BASELINE_FAILS = the base's red titles; FIXES_COVER=shadow|enforce|off, default shadow): a train of fixes lands only if its union fixes EVERY red title on the base (independent of BASE_RED_FAILFAST). A red title with no fix PR among the given PRs is uncovered: enforce prints
+# them (lane these first) and DEFERs (exit 4, nothing built); shadow only logs. Absent FIX_MAP or BASELINE_FAILS = no verdict.
+if [ "${FIXES_COVER:-shadow}" != off ] && [ -n "${FIX_MAP:-}" ] && [ -r "$FIX_MAP" ] && [ -r "${BASELINE_FAILS:-/dev/null}" ]; then
+  covered=$(for n in "$@"; do awk -F'\t' -v n="$n" '$1 == n { sub(/^[^\t]*\t/, ""); print }' "$FIX_MAP"; done | bash "$HERE/train_flake.sh" --norm)
+  unc=$(bash "$HERE/train_flake.sh" --norm <"$BASELINE_FAILS" | grep -v "^#" | grep . | grep -vxF -e "${covered:-__none__}" || true)
+  if [ -n "$unc" ]; then
+    if [ "${FIXES_COVER:-shadow}" = enforce ]; then echo "DEFER: fixes do not cover every red title on $BASE_BRANCH; uncovered (lane these first): $(tr '\n' ';' <<<"$unc"); nothing built" >&2; exit 4
+    else echo "SHADOW fixes-cover: would DEFER, uncovered red titles: $(tr '\n' ';' <<<"$unc"); set FIXES_COVER=enforce to act" >&2; fi
+  fi
+fi
 PRS=("$@"); SPLIT=${TRAIN_SPLIT_DEPTH:-2}
 [[ $SPLIT =~ ^[0-9]+$ ]] || { echo "WARN: TRAIN_SPLIT_DEPTH='$SPLIT' is not a number; splitting disabled" >&2; SPLIT=0; }
+spent() { [ "$TB" -gt 0 ] && [ $((SECONDS - T0)) -ge $((TB * UN)) ]; }
+susp() { local x o=; for x in $1; do [[ " ${keep[*]:-} " == *" $x "* ]] || o+="#$x "; done; echo "${o% }"; }  # PRs not yet cleared
+defer() { git merge --abort 2>/dev/null || true; git checkout -q --detach "$REMOTE/$BASE_BRANCH" 2>/dev/null || true
+  echo "DEFER: train budget spent ($1); culprit suspects: $(susp "$(unl)"); nothing more run, locks and leases released, retry later or drop a suspect" >&2; exit 5; }
+tick() { ! spent || defer "$(( (SECONDS - T0) / UN ))m of ${TB}m"; }  # wall clock only: bounds every gate, stage wait and per-PR bisect step
+stg() { local m=${TRAIN_STAGE_TIMEOUT_MIN:-180} r; [ "$TB" -gt 0 ] || { echo "$m"; return; }; r=$((TB - (SECONDS - T0) / UN)); [ "$r" -ge 1 ] || r=1; { [ "$m" -eq 0 ] || [ "$r" -lt "$m" ]; } && echo "$r" || echo "$m"; }
 green() { printf '%s %s\n' "$B" "$U" >"$LOG.gu"; exit 0; }  # train() success: hand B/U to the lander
 # Keep the lease fresh (TTL by mtime). train() runs in a subshell, so name the script's shell as the holder (else getppid() is the subshell and renew is a no-op).
 renew() { PERUN_HOLDER_PID=$$ python3 "$HERE/perun_policy.py" heavy-exclusive-renew >/dev/null 2>&1 || true; }
@@ -160,11 +181,11 @@ slot() {
 }
 train() {
 while :; do
-renew
+renew; tick
 rc=0; slot train-verify || rc=$?
-[ "$rc" -ne 0 ] || "$(dirname "$0")/scrub_env.sh" python3 "$HERE/stage_run.py" --name train-verify --timeout "${TRAIN_STAGE_TIMEOUT_MIN:-180}" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$VERIFY_CMD" _ "$T" "${PRS[@]}" >"$LOG" 2>&1 </dev/null || rc=$?
+[ "$rc" -ne 0 ] || "$(dirname "$0")/scrub_env.sh" python3 "$HERE/stage_run.py" --name train-verify --timeout "$(stg)" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$VERIFY_CMD" _ "$T" "${PRS[@]}" >"$LOG" 2>&1 </dev/null || rc=$?
 # stage_run 75 = no heavy slot freed in time, 124 = stage timeout: the verify never gave a verdict, so it is not RED (no ratchet culprit hunt).
-case $rc in 75|124) echo "stage did not complete (train-verify rc=$rc: $([ "$rc" = 75 ] && echo 'no heavy slot' || echo 'timed out'); last log line: $(tail -1 "$LOG" 2>/dev/null)); nothing landed" >&2; exit 3 ;; esac
+case $rc in 75|124) tick; echo "stage did not complete (train-verify rc=$rc: $([ "$rc" = 75 ] && echo 'no heavy slot' || echo 'timed out'); last log line: $(tail -1 "$LOG" 2>/dev/null)); nothing landed" >&2; exit 3 ;; esac
 # Filter by verdict prefix, never by position; `|| true` keeps pipefail from aborting on no match.
 grep -E '^(DEFER|DROP|GREEN|RED|STALE|CONFLICT)' "$LOG" | tail -4 || true
 L=$(grep -E '^GREEN' "$LOG" | tail -1 || true)
@@ -174,7 +195,7 @@ if [ -z "$L" ]; then
   if [ -n "${RATCHET_CMD:-}" ]; then  # attribute: merge each PR alone onto the base, run the ratchet
     base=$(git rev-parse HEAD)
     for n in "${PRS[@]}"; do
-      git checkout -q --detach "$base"
+      tick; git checkout -q --detach "$base"
       if git fetch -q "$REMOTE" "pull/$n/head" && git merge -q --no-edit FETCH_HEAD >/dev/null 2>&1; then
         rr=0; PR=$n python3 "$HERE/stage_run.py" --name train-ratchet --timeout "${TRAIN_RATCHET_TIMEOUT_MIN:-30}" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$RATCHET_CMD" >/dev/null 2>&1 </dev/null || rr=$?
         case $rr in 0) ;; 75|124) echo "could not check: ratchet for #$n did not complete (stage rc=$rr: $([ "$rr" = 75 ] && echo 'no heavy slot' || echo 'timed out')); no culprit named" >&2 ;;
@@ -193,9 +214,9 @@ if [ -z "${BROWSER_CMD:-}" ] || [ "$BROWSER_CMD" = skip ]; then
 fi
 renew; git checkout -q --detach "$U"
 rc=0; slot train-browser || rc=$?
-[ "$rc" -ne 0 ] || UNION_SHA=$U BASE_SHA=$B python3 "$HERE/stage_run.py" --name train-browser --timeout "${TRAIN_STAGE_TIMEOUT_MIN:-180}" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$BROWSER_CMD" >"$LOG.browser" 2>&1 </dev/null || rc=$?
+[ "$rc" -ne 0 ] || UNION_SHA=$U BASE_SHA=$B python3 "$HERE/stage_run.py" --name train-browser --timeout "$(stg)" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$BROWSER_CMD" >"$LOG.browser" 2>&1 </dev/null || rc=$?
 if [ $rc -eq 0 ]; then git checkout -q --detach "$REMOTE/$BASE_BRANCH"; green; fi
-case $rc in 75|124) git checkout -q --detach "$REMOTE/$BASE_BRANCH"; echo "stage did not complete (train-browser rc=$rc: $([ "$rc" = 75 ] && echo 'no heavy slot' || echo 'timed out')); not a browser RED; nothing landed" >&2; exit 3 ;; esac
+case $rc in 75|124) tick; git checkout -q --detach "$REMOTE/$BASE_BRANCH"; echo "stage did not complete (train-browser rc=$rc: $([ "$rc" = 75 ] && echo 'no heavy slot' || echo 'timed out')); not a browser RED; nothing landed" >&2; exit 3 ;; esac
 # Red browser gate. With RERUN_CMD, "FAIL <id>" lines (minus BASELINE_FAILS) are re-run alone; flakes never block, only
 # REAL failures do, and only the PR(s) that fail them alone on the base are dropped. Without RERUN_CMD it stays all-or-nothing.
 BR="BROWSER RED: union $U fails browser specs (see $LOG.browser); nothing landed"
@@ -207,7 +228,7 @@ if [ -r "${BASELINE_FAILS:-/dev/null}" ]; then norm <"${BASELINE_FAILS:-/dev/nul
 pre=0
 # Base-red fail-fast (BASE_RED_FAILFAST=shadow|enforce|off, default shadow): every failing id is already in the base's measured red set
 # (BASELINE_FAILS, read now, after the lease wait, so a waiter judges the base it will land on). enforce ends the train as BASE RED at once
-# (exit 1, no solo re-runs, no bisect; the EXIT trap frees the heavy lease); shadow only logs the decision and runs on as before.
+# (exit 1, no solo re-runs, no bisect; the EXIT trap frees the heavy lease); shadow (the default) only logs the decision and runs on as before.
 # Fail closed: the red set must be stamped with the sha it was measured on ("$BASELINE_FAILS.base" holds that sha) and the stamp must equal
 # this gate's base $B, which must still be the tip of $REMOTE/$BASE_BRANCH now; a missing, stale or moved-base stamp gives no base-red verdict.
 ffs=$(head -1 "${BASELINE_FAILS:-/dev/null}.base" 2>/dev/null || true); fftip=$(git rev-parse "$REMOTE/$BASE_BRANCH" 2>/dev/null || true)
@@ -277,7 +298,7 @@ tri() { local rc=0; RERUN_CMD=$RERUN_CMD FLAKE_INVOCATION=${FLAKE_INVOCATION:-$B
 keep=() ; base=$(git rev-parse HEAD); sed -n 's/^REAL //p' "$LOG.flake" >"$LOG.real"; : >"$LOG.pinned"
 renew
 for n in "${PRS[@]}"; do
-  renew  # per-PR bisect: merge alone onto the base, re-run each REAL id with the same triage
+  renew; tick  # per-PR bisect: merge alone onto the base, re-run each REAL id with the same triage
   git checkout -q --detach "$base"
   git fetch -q "$REMOTE" "pull/$n/head" && git merge -q --no-edit FETCH_HEAD >/dev/null 2>&1 || cant "#$n does not merge alone onto the base, so it cannot be attributed"
   tri "$LOG.real" "$LOG.alone"; git merge --abort 2>/dev/null || true
@@ -301,6 +322,7 @@ while [ -n "$Q" ]; do
     take_lease || { echo "DEFER: another gate holds the exclusive heavy lease; split stopped, retry the unlanded PRs later" >&2; exit 4; }
     git fetch -q "$REMOTE" "$BASE_BRANCH"; git checkout -q --detach "$REMOTE/$BASE_BRANCH"
   fi
+  [ "$TR" -eq 0 ] || [ "$gates" -lt "$TR" ] || defer "$gates gates of $TR"  # the round cap counts gates (first gate + split halves), not per-PR bisect steps
   gates=$((gates + 1)); rm -f "$LOG.leaf"
   rc=0; set +e; ( set -e; train ); rc=$?; set -e
   if [ "$rc" -eq 9 ]; then

@@ -208,6 +208,7 @@ truncated.
   1  verify found no green union (every member parked); refresh had an update
      fail; dupes found a duplicated fix (a SIMILAR-FIX alone does not)
   2  usage or forge/git error (fail closed; nothing is guessed)
+  5  DEFER: the train spent its own --budget-min / --max-rounds; stopped cleanly, suspects printed, retry later
   3  HALT: base moved or rewritten, base red, another writer mid-train, a
      member failed at merge time, a member landed but the new base could
      not be verified, a refused push, or a keystone condition that does
@@ -276,7 +277,7 @@ def _load_gate_cache():
 
 _GC = _load_gate_cache()
 
-OK, RED, ERROR, HALT = 0, 1, 2, 3
+OK, RED, ERROR, HALT, DEFER = 0, 1, 2, 3, 5  # 4 is train_land.sh's lease-held DEFER; 5 = own budget spent
 GATE_CONTEXT = "perun/train-gate"
 GREEN_CONCLUSIONS = {"success", "neutral", "skipped"}
 PR_LIMIT = 200
@@ -293,6 +294,10 @@ RATE_LIMIT_RE = re.compile(r"\b429\b|rate limit", re.I)  # gh's 429 / secondary-
 
 
 MAX_FLAKES = 2
+
+
+class Defer(Exception):
+    """The train spent its own wall-clock or round budget: stop cleanly, report the suspects, retry later."""
 
 
 class Halt(Exception):
@@ -376,6 +381,7 @@ class Train:
         self.repo_flag = ["--repo", args.repo] if args.repo else []
         self.base_sha = ""
         self.run_id = f"{os.getpid()}-{uuid.uuid4().hex[:12]}"  # never a per-process counter (#1139)
+        self.t0, self.rounds = time.monotonic(), 0  # own budget: wall clock and gate rounds (union, base and bisect probes)
         self.flake_n = 0  # reds excused as flakes this run; over MAX_FLAKES they bisect
         self.verdicts = {}  # git tree SHA -> fails() verdict for this run: an identical tree is never re-tested
         self.refs = set()  # refs this run fetched into; dropped when the run ends
@@ -696,7 +702,12 @@ class Train:
             shutil.rmtree(tmp, ignore_errors=True)
 
     def fails(self, members, label):
-        """'' when base+members passes the gate, else 'verify' or 'cap C>N'."""
+        """'' when base+members passes the gate, else 'verify' or 'cap C>N'. Raises Defer once the train budget is spent."""
+        self.rounds += 1
+        self.sus = getattr(self, "sus", None) or members  # suspects = the union that first failed, not the shrinking probes
+        mins, cap = getattr(self.a, "budget_min", 0), getattr(self.a, "max_rounds", 0)
+        if (mins and time.monotonic() - self.t0 >= mins * 60) or (cap and self.rounds > cap):
+            raise Defer(f"train budget spent ({(time.monotonic() - self.t0) / 60:.0f}m of {mins}m, {self.rounds - 1} rounds of {cap}); suspects: {names(self.sus) or 'base'}")
         with self.tree(self.base_sha, members) as wt:
             sha = self.run(["git", "rev-parse", "HEAD^{tree}"], cwd=wt)[1].strip()
             if sha in self.verdicts:
@@ -1579,6 +1590,8 @@ def build_parser():
     v.add_argument("--cap", type=int, default=None, help="maximum allowed --count-cmd value")
     v.add_argument("--marker-key", default="size-budget-raise", help="trailer key recording a deliberate raise")
     v.add_argument("--timeout", type=int, default=3600, help="seconds per gate command")
+    v.add_argument("--budget-min", type=float, default=90, help="whole-train wall-clock budget in minutes; spent = DEFER (exit 5) with the suspect set; 0 = off")
+    v.add_argument("--max-rounds", type=int, default=8, help="max gate runs (union, base, bisect probes); over it = DEFER (exit 5); 0 = off")
     m = sub.add_parser("merge", parents=[common])
     m.add_argument("--apply", action="store_true", help="actually merge (default is a dry run)")
     m.add_argument("--grant", default="", help="the owner's decision or recorded standing grant authorising this merge")
@@ -1647,6 +1660,9 @@ def run(argv, runner=default_runner, out=sys.stdout, sleep=time.sleep) -> int:
     except Halt as exc:
         print(f"HALT {exc}", file=out)
         return HALT
+    except Defer as exc:
+        print(f"DEFER {exc}; nothing more run, refs released, retry later or drop a suspect", file=out)
+        return DEFER
     except Cancelled:
         print("CANCELLED run cancelled by request; refs released", file=out)
         return OK
@@ -2798,6 +2814,17 @@ def _selftest() -> int:
                 and () not in gates and (1,) not in gates
                 and rc2 == OK and "PARK #3" in out2 and (1,) in gates2), (out, gates, out2, gates2)
 
+    def train_budget_defers_with_suspects():
+        outs = []
+        for extra in (["--max-rounds", "1"], ["--budget-min", "1e-9"]):
+            f = FakeForge(3)
+            f.bad = {3}
+            rc, out = go(f, "verify", "--verify-cmd", "t", *extra, state=fresh("bd.json"))
+            outs.append((rc, out))
+        rc0, out0 = go(FakeForge(3), "verify", "--verify-cmd", "t", state=fresh("bd.json"))  # control: default budget
+        return (all(rc == DEFER and "DEFER train budget spent" in o and "suspects: #1,#2,#3" in o for rc, o in outs)
+                and rc0 == OK and "DEFER" not in out0), (outs, out0)
+
     def carry_hashes_raw_bytes_in_a_real_repo():
         repo, remote = tempfile.mkdtemp(dir=tmp), tempfile.mkdtemp(dir=tmp)
 
@@ -2965,6 +2992,7 @@ def _selftest() -> int:
         ("cancel-after-merge-records-it-and-keeps-the-rest", cancel_after_merge_records_it_and_keeps_the_rest),
         ("cancel-at-pre-merge-poll-calls-no-merge", cancel_at_pre_merge_poll_calls_no_merge),
         ("drop-during-failing-gate-no-attribute-or-bisect", drop_during_failing_gate_neither_attributes_nor_bisects),
+        ("train-budget-defers-with-suspects", train_budget_defers_with_suspects),
         ("carry-hashes-raw-bytes-in-a-real-repo", carry_hashes_raw_bytes_in_a_real_repo),
         ("red-base-refuses-verify-and-merge", red_base_refuses_verify_and_merge),
         ("red-base-allows-base-fix-at-head", red_base_allows_base_fix_at_head),

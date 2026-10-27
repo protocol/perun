@@ -3005,13 +3005,24 @@
     {
       "id": "train-base-red-failfast-shadow",
       "prompt": "A merge train goes red at the browser gate, but every failing test title is already in the base sha's measured red set. Should it bisect and hold the heavy slot?",
-      "expected_output": "No. With BASE_RED_FAILFAST=enforce the train ends as BASE RED at once (exit 1): no solo re-runs, no bisect, nothing landed, and the exit trap frees the heavy lease. The default is shadow: it logs 'SHADOW base-red-failfast: would end BASE RED now' and runs on as before. The base red set is read after the lease wait, so a waiter judges the base it will land on. A failing id outside the base red set never fail-fasts. Test: scripts/test-train-liveness.sh.",
+      "expected_output": "No. With BASE_RED_FAILFAST=enforce the train ends as BASE RED at once (exit 1): no solo re-runs, no bisect, nothing landed, and the exit trap frees the heavy lease. The default is shadow (BASE_RED_FAILFAST=enforce acts; shadow only logs 'SHADOW base-red-failfast: would end BASE RED now' and runs on). The base red set is read after the lease wait, so a waiter judges the base it will land on. A failing id outside the base red set never fail-fasts. Test: scripts/test-train-liveness.sh.",
       "expectations": [
         "Fail-fasts only when ALL failing ids are in the base's measured red set, never when one is new",
         "Ends as base-red with no bisect and no landing, and frees the heavy lease",
-        "States the default is shadow (log the decision) and enforce is opt-in, per the throughput-gate rule",
+        "States the default is shadow (log the decision; enforce is opt-in until replay evidence) and that enforce fails closed on an unstamped or stale red set",
         "Reads the base red set at start after the lease wait, not at arm time, and fails closed (no base-red verdict) unless the red set is stamped with the gate's base sha and that sha is still the base tip",
         "Names scripts/test-train-liveness.sh"
+      ]
+    },
+    {
+      "id": "train-self-limits-defer",
+      "prompt": "A merge train is bisecting on a red base and has run for hours; the agent host refuses to let agents kill or cancel running workloads. What should have prevented this, and what does the train do when it runs out of budget?",
+      "expected_output": "Trains self-limit; external stops are human-only in agent hosts. train_land.sh enforces TRAIN_BUDGET_MIN (policy train_budget_min, default 90) and TRAIN_MAX_BISECT_ROUNDS (policy train_max_bisect_rounds, default 8); merge_train.py verify has --budget-min and --max-rounds. On exhaustion it stops cleanly, the exit trap releases the train lock, push lock and heavy lease, it prints the culprit-suspect PRs and exits 5 (DEFER, not 4, which means the lease was held), landing nothing more. With BASE_RED_FAILFAST=enforce a red base ends the train at once with no bisect (the default is shadow). Test: scripts/test-train-budget.sh.",
+      "expectations": [
+        "States that the train enforces its own wall-clock budget and bisect-round cap rather than relying on an outside kill",
+        "On exhaustion: exit 5 (DEFER, distinct from exit 4 lease-held), locks and lease released, culprit-suspect set printed, nothing more landed",
+        "Names BASE_RED_FAILFAST=enforce as the fail-fast switch (default shadow)",
+        "Names scripts/test-train-budget.sh"
       ]
     },
     {
