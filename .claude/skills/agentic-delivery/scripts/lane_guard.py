@@ -707,7 +707,7 @@ def _main_hotfiles(argv):
     return 0
 
 
-_CLOSER_RE = re.compile(r"(?i)\b(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?)\s*:?\s+(?:[\w.-]+/[\w.-]+)?#\d+")
+_CLOSER_RE = re.compile(r"(?i)\b(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?)\s*:?\s+(?:(?:[\w.-]+/[\w.-]+)?#\d+|https?://[\w.-]+/[\w.-]+/[\w.-]+/issues/\d+\b)")
 _OFF_DEFAULT_RE = re.compile(
     r"(?i):-(?:0|false|off|no)\}|(?:getenv|environ\.get|env\.get)\(\s*[\"']\w+[\"']\s*,\s*[\"']?(?:0|false|off|no)\b"
     r"|\b\w*(?:SHADOW|ENFORCE|ENABLE\w*|FLAG)\w*\s*[:=]\s*[\"']?(?:0|false|off|no)\b[\"']?\s*[,;]?\s*(?:#.*)?$")

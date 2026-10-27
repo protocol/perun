@@ -569,3 +569,5 @@ stay silent to the agent and never block the session. Read-only detection: `sess
 `operating_selfcheck.py` WARN `committed Perun vX < installed vY: lanes in other worktrees run old skills;
 open/merge the perun/update PR` when `git show <default>:.claude/skills/deep-code-review/VERSION` is behind the
 working tree. Merging that PR is the human's call (protocol, not enforced).
+
+On a shared host run local hook and test runs under `nice -n 19` with capped workers (`pre-push-verify.sh` does; a test runner's worker count is at most a quarter of the cores), give any test fixture that spawns CPU load a guaranteed teardown that the orphan reaper's pattern also matches, and never let a throughput alarm recommend more trains or parallelism before it has read `load1`.

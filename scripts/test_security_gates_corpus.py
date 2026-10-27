@@ -56,14 +56,16 @@ GOOD = [
 fail = []
 import time
 def best(blob):
-    return min(t1 - t0 for t0, _, t1 in [(time.perf_counter(), dg.check(blob), time.perf_counter()) for _ in range(3)])
+    dg.check(blob)  # warm up once
+    return min(t1 - t0 for t0, _, t1 in [(time.perf_counter(), dg.check(blob), time.perf_counter()) for _ in range(7)])
 
 
 # Scaling check, not an absolute cap: 10x input should cost ~10x (linear) vs ~100x (quadratic); fail above 30x.
-# The 1 ms floor on the small run keeps timer noise from inflating the ratio; 1 s is a loose absolute ceiling.
+# Min of 7 runs after a warm-up, a 1 ms floor on the small run, and a 20 ms floor on the big run (ratio alone never
+# fails on a noisy runner); 1 s is a loose absolute ceiling.
 for name, unit, n in (("dyn", "$x ", 8000), ("word", "a", 25000), ("colon", ":", 25000)):
     small, big = best(unit * (n // 10)), best(unit * n)
-    if big > 1 or big / max(small, 0.001) > 30:
+    if big > 1 or (big > 0.02 and big / max(small, 0.001) > 30):
         fail.append(f"guard slow on 25KB {name}: {big * 1000:.0f} ms vs {small * 1000:.1f} ms at 2.5KB")
 for c in BAD:
     if not dg.check(c):

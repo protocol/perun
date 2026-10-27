@@ -422,6 +422,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   for sr in "$(dirname "$0")/../../agentic-delivery/scripts/stage_run.py" ".claude/skills/agentic-delivery/scripts/stage_run.py"; do
     if [ -f "${sr}" ] && command -v python3 >/dev/null 2>&1; then gate_cmd=(python3 "${sr}" --name pre-push -- "${gate_cmd[@]}"); wrapped=1; break; fi
   done
+  command -v nice >/dev/null 2>&1 && gate_cmd=(nice -n 19 "${gate_cmd[@]}")  # shared host: the gate yields CPU to interactive work
   gate_rc=0
   "${gate_cmd[@]}" </dev/null || gate_rc=$?
   if [ "${gate_rc}" -ne 0 ]; then
