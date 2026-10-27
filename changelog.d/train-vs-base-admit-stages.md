@@ -1,4 +1,0 @@
-### Added
-- agentic-delivery: `merge_train.py verify --vs-base` (with `--rerun-cmd`) judges a red union by new failures only: the failing ids are re-run alone on the base commit, ids that also fail there are `KNOWN-RED`, and a base run that errors fails closed. `--admit-red` (verify, merge) lets a red main admit only PRs that touch a failing test (changed file or `Fixes: <id>` trailer), never by title; an admitted id that still fails on the union rejects it. New `stage` subcommand, called by `train_land.sh` (not the agent session; `TRAIN_STAGES=0` opts out), publishes queued, gating, landing, done, failed, skipped and deferred plus an ETA bound as commit status `perun/train-stage`, so a second host can read liveness. Test: `scripts/test_train_vs_base.py`.
-
-size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 42382→43476 new train paragraph: vs-base gate, red-main admission, queue-published stages

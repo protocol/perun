@@ -1,5 +1,0 @@
-### Changed
-- agentic-delivery: `STALE_SELF_EXIT=enforce` no longer kills a train mid-gate. `train_land.sh` checks the script only at the top of each gate pass (not in every gate wait, not before landing) and `merge_train.py verify` only before each union gate (not inside `fails()`), so a running gate drains (a shadow log for a mid-bisect edit now appears at the next cycle start) and lands on the version it started with; one pipeline-script merge no longer discards every parallel train's in-flight gate.
-- Added explicit urgent stop: `touch <LOG_DIR>/train<tag>.log.cancel` (`train_land.sh`, honored at every tick and right before landing: cancel means no land) or `<run-id>.stop` in the `merge_train.py` state dir (honored in every poll and gate; operator or owner-approved tool only); both release locks and refs and exit 6, file consumed. Test: `scripts/test-train-stale-self.sh`.
-
-size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 41568→42382 one paragraph on draining pipeline-script updates, what is pinned, and the explicit stop files

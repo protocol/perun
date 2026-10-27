@@ -3,6 +3,100 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.608.0] — 2026-10-28
+
+### Added
+- `docs/bench/sast-sca-1027/`: free, reproducible SAST and SCA bench (semgrep `p/default` and OSV querybatch against Perun's deterministic triage layer) over a frozen fictional fixture with 17 planted vulnerabilities and 18 decoys. The LLM verify step was not run (no spend). Re-score with `python3 docs/bench/sast-sca-1027/run.py`.
+
+### Added
+- agentic-delivery: four mechanisms from peer delivery reports. `host_installer.py` announces a fixed named host installer (command built by the script, quoted with shlex), prints the one-line owner `! <command>`, is called by `perun_auto_update.py` after an update and cleared by `install.sh --global-rules`; policy `installer_unapplied_h` (hours, default 0 = off) makes the landing watchdog warn while it stays unapplied, and a corrupt state file alarms and is quarantined. `peer_ack.py` implements a read receipt on the board: a directive posted with `board_post.py --token` is undelivered until the `to:` agent posts an `ACK --token` (the one non-chatter ACK); an unreadable board counts as undelivered. The watchdog's WIP count exempts at most one PR labelled `p0-recurrence` with a numeric `Fixes: #N` trailer, and only when `gh` shows the issue reopened within 24 h (fail closed). `pregate_parity.py` allows a faster checker to run fail-fast before the authoritative gate only after 5 failing commits show it failed too and no counterexample exists; `record` writes the gate-time ledger. Test: `scripts/test_delivery_peer_mechanisms.py`.
+
+### Added
+- review_checks.sh gitleaks pass: optional repo-root `.gitleaks-allow` (`rule path-glob sha256-of-secret` per line) drops known false positives by content hash, read from the base ref only (a change cannot approve its own secret), so it survives history rewrites that break baseline fingerprints. The default allowlist template now also skips lockfiles. Test: `scripts/test-review-checks-gitleaks-allow.sh`.
+
+size-budget-raise: .claude/skills/deep-code-review/references/method-situational.md 43585→43869 one sentence routing the .gitleaks-allow format
+
+### Added
+- agentic-delivery: `handback.py` now checks the lane's commit messages (BASE..SHA) for a real test count. Every `Tests:` line needs each `X/Y` with X==Y and a total above 0; a missing line, `0/0` or `5/6` is unverified, unless a non-empty `No-Tests-Reason:` trailer is present (a BLOCKED/WIP head subject is exempt). `HANDBACK_TESTS_COUNT=enforce` fails closed with `handback tests-count UNVERIFIED: no passing test count` and exit 4; the default `shadow` only warns, `off` skips. Test: `scripts/test_handback_tests_count.py`.
+
+### Fixed
+- agentic-delivery: merge_train.py no longer merges a PR that was held, drafted or closed after the plan cached it. `merge_one()` re-reads the PR state right before each merge and skips it on a hold label, a draft, a non-open state or any read error (fail closed); `eligible()` also skips held PRs at plan time. New policy key `hold_labels` (non-empty list, default `["do-not-merge"]`, case-insensitive; an unreadable policy also skips). Test: `scripts/test_hold_reread.py`.
+
+### Added
+- agentic-delivery: the landing watchdog now alarms per lane. Opt-in policy `lane_idle_h` (hours) plus `lane_globs` (`{lane: [fnmatch globs]}`) emit "Lane stalled: ..." when a lane has green PRs waiting and its last merge (last 100 merged PRs) is older than the limit, so a busy lane can no longer hide an idle one behind the total-merges alarm. No map or limit keeps today's behavior. Test: `scripts/test_lane_stall.py`.
+
+### Added
+- agentic-delivery: last-known-good (LKG) pointer. The new local full-suite runner `scripts/run-ci-tests.sh` runs every `scripts/ci-tests.d` test and, only when all pass, records the sha and UTC time with `lkg.py record` (state beside the landing watchdog's cache, keyed on the git common dir so worktrees share it, written atomically). `land-release.sh` requires `origin/main` to be the LKG and otherwise reports the untested gap: policy `lkg_gate` `shadow` (default, warns), `enforce` (refuses with exit 1; a crashed `lkg.py` refuses with exit 2) or `off`. The landing watchdog warns "Last-known-good is N h old" when policy `lkg_stale_h` (hours, default 0 = off) is exceeded and fails open on any error. Test: `scripts/test_lkg_pointer.py`.
+
+### Fixed
+- supply_chain_check.sh osv API fallback walked every `package-lock.json` and `requirements*.txt` under the target, including gitignored stale copies (build output, old worktrees), so a lockfile already patched to a fixed version still reported a critical from an old copy's version. It now skips gitignored files, matching `osv-scanner -r`. Test: `scripts/test-supply-chain-osv-fallback.sh`.
+
+### Added
+- deep-code-review: bundled generic semgrep taint-mode rules (`templates/semgrep-taint/py.yml`, `js.yml`) for SQL injection, command injection, path traversal, SSRF, unsafe deserialization/eval, XSS and open redirect, with generic sources (request data, function parameters) and sinks and allowlist-guard exclusions. `review_checks.sh` now runs them plus `p/default` when semgrep is installed and the repo has no semgrep config (`REVIEW_SEMGREP_REGISTRY=0` drops `p/default`; an unreachable registry reruns with the bundled rules alone). `security_verify.py` accepts a semgrep `--json` report directly and maps `extra.dataflow_trace` `taint_source`/`taint_sink` to `source`/`sink`.
+- In-sample score on the 2026-10-27 SAST fixture (the rules were tuned against it, so this is not a generalization claim): raw `p/default` TP 8, FP 3, FN 5; bundled rules alone TP 13, FP 0, FN 0; bundled plus `p/default` TP 13, FP 3, FN 0. Caveat: semgrep OSS 1.182 emits no `dataflow_trace` (only the Pro engines do), so on OSS reports every row still reaches `security_verify.py` as `unverified` with a note to trace the source by hand. A blind held-out fixture will judge generalization. Tests: `scripts/test_semgrep_taint.py`, `scripts/test-review-checks-semgrep-default.sh`.
+
+Stage weights, a gh retry shim, a red-main owner alarm and a serial-test detector
+
+- stage_run.py reads PERUN_STAGE_WEIGHTS (stage=weight) and records the weight on its heavy lease; the slot cap, and so heavy_gate.py, count it. A heavier stage waits until it fits, runs alone if it exceeds the cap, and frees its weight to waiting stages when it ends.
+- scripts/gh-shim/gh is a PATH shim that retries idempotent gh reads with backoff on transient errors only; writes run exactly once.
+- red_main.py reports the count of reds with no owner or fix past 1h and the oldest red age; policy keys red_uncovered_max and red_oldest_h (default 0 = off) make it exit nonzero.
+- flake_ledger.py serial lists tests that fail only in the full parallel run and pass solo; the triage reference states the rule: move them to the serial project the same day.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/host-enforcement.md 43026→44133 stage weights and the gh retry shim
+size-budget-raise: .claude/skills/agentic-delivery/references/red-gate-triage.md 23856→25405 green-main owner rule and the passes-alone/fails-parallel rule
+
+Tests: test-stage-weights 4/4, test-gh-shim 12/12, test-red-main 10/10, test-flake-serial 6/6; all scripts/ci-tests.d pass
+
+### Changed
+- agentic-delivery: `STALE_SELF_EXIT=enforce` no longer kills a train mid-gate. `train_land.sh` checks the script only at the top of each gate pass (not in every gate wait, not before landing) and `merge_train.py verify` only before each union gate (not inside `fails()`), so a running gate drains (a shadow log for a mid-bisect edit now appears at the next cycle start) and lands on the version it started with; one pipeline-script merge no longer discards every parallel train's in-flight gate.
+- Added explicit urgent stop: `touch <LOG_DIR>/train<tag>.log.cancel` (`train_land.sh`, honored at every tick and right before landing: cancel means no land) or `<run-id>.stop` in the `merge_train.py` state dir (honored in every poll and gate; operator or owner-approved tool only); both release locks and refs and exit 6, file consumed. Test: `scripts/test-train-stale-self.sh`.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 41568→42382 one paragraph on draining pipeline-script updates, what is pinned, and the explicit stop files
+
+### Added
+- review_checks.sh tool hub: one in-script registry routes zizmor (workflows), bandit (Python), gosec (Go), grype (SBOM and lockfiles), checkov and hadolint (IaC, Dockerfiles) to the user's installed copies, reusing the existing timebox, lease and fail-closed JSON shape check. A matching changed file with the tool missing prints `NOT CHECKED: <tool> (install: <hint>)`, never a silent clean. snyk-agent-scan is registered but unverified (no documented offline mode) and skipped by default. New `references/tool-hub.md` lists the tools and the opt-in route-only skills. Test: `scripts/test-review-checks-tool-hub.sh`.
+
+### Added
+- agentic-delivery: merge trains now limit themselves. `train_land.sh` enforces a whole-train wall-clock budget (`TRAIN_BUDGET_MIN`, policy `train_budget_min`, default 90, 0 = off) and a cap on whole gate rounds (`TRAIN_MAX_BISECT_ROUNDS`, policy `train_max_bisect_rounds`, default 8, 0 = off), clamps each stage timeout to the budget left, and on exhaustion releases its locks and leases, prints the culprit-suspect PRs and exits 5 (DEFER; 4 stays lease-held). `merge_train.py verify` takes `--budget-min` and `--max-rounds` with the same exit 5. Test: `scripts/test-train-budget.sh`; eval `train-self-limits-defer`.
+- `references/merge-queue-worktrees.md`: rule that trains self-limit and external stops are human-only in agent hosts. The log-only-first rule (`cost-quality-guardrails.md`, `work-tracking.md`) now accepts a replay against past logs as the two-run evidence.
+- `train_land.sh` `FIX_MAP` / `FIXES_COVER` (default `shadow`, `enforce` acts): a fixes-only train whose union leaves any red base title without a fix PR starts no train, prints the uncovered titles to lane first and exits 4 (DEFER). Test: `scripts/test-train-budget.sh`.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/cost-quality-guardrails.md 16119→16230 shadow-first evidence accepts a replay against past logs
+size-budget-raise: .claude/skills/agentic-delivery/references/work-tracking.md 4132→4204 shadow-first evidence accepts a replay against past logs
+size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 40258→41568 two train rules: self-limits and fixes-only coverage
+
+### Added
+- agentic-delivery: a long-running train now notices its own script changing under it. `train_land.sh` and `merge_train.py verify` hash their script file at start and re-check each gate round (`train_land.sh` also before landing, and runs from a private temp copy so its own checkouts cannot rewrite the running script); `STALE_SELF_EXIT=enforce` releases locks and leases and exits 6 with a STALE message (default `shadow` only logs once, `off` skips; an unreadable script file is log-only in `train_land.sh`, and in `merge_train.py` shadow logs while enforce exits 6). Test: `scripts/test-train-stale-self.sh`.
+- `train_land.sh` creates `<log>.pid` atomically (`<pid> <start time>`; a recycled pid does not count as live); `TRAIN_UNIQUE_RUN=enforce` refuses (exit 2) a tag whose live run already owns the log so a waiter cannot overwrite it (default `shadow` warns; a dead run's marker is reaped; `off` skips the marker entirely). `merge_train.py` run ids were already unique per process (pid plus uuid); `stage_run.py` writes no run log.
+- SHA-bound verdicts were already enforced: the `train_land.sh` base-red set must be stamped with the gate base sha and the live tip (stale or missing stamp = no verdict, tested in `scripts/test-train-liveness.sh`), and `merge_train.py` reads base check-runs per sha with no cache.
+
+### Added
+- agentic-delivery: `merge_train.py verify --vs-base` (with `--rerun-cmd`) judges a red union by new failures only: the failing ids are re-run alone on the base commit, ids that also fail there are `KNOWN-RED`, and a base run that errors fails closed. `--admit-red` (verify, merge) lets a red main admit only PRs that touch a failing test (changed file or `Fixes: <id>` trailer), never by title; an admitted id that still fails on the union rejects it. New `stage` subcommand, called by `train_land.sh` (not the agent session; `TRAIN_STAGES=0` opts out), publishes queued, gating, landing, done, failed, skipped and deferred plus an ETA bound as commit status `perun/train-stage`, so a second host can read liveness. Test: `scripts/test_train_vs_base.py`.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 42382→43476 new train paragraph: vs-base gate, red-main admission, queue-published stages
+
+### Added
+- deep-code-review: `scripts/finding_verdict.py` validates machine-report gap rows that carry a `verdict`: `confirmed` needs root cause, observed result, remediation, demonstrated impact and a verifier plus final re-check who are not the hunter, and is the only verdict that may carry `severity` (never above the demonstrated impact); `needs_validation` needs blockers and a validation plan; `rejected` needs a reason; unknown fields are errors. `merge_findings.py` applies it, drops failing or rejected rows (`dropped.invalid_verdict`, `dropped.rejected`, `verdict_errors`, present only when nonzero) and lists `needs_validation` rows under their own `needs_validation` key, never ranked. Rows without `verdict` are unchanged.
+- deep-code-review: `scripts/coverage_ledger.py` checks the machine-report `coverage` map and fan-out `units`: every assigned domain has a row, partial or not-scanned rows say why, not-applicable rows carry probe and fact, and an incomplete run states `incomplete_reason`. This is the mechanical form of the coverage-ledger step in `method.md`.
+- deep-code-review: fresh-verifier rule in `appsec-verify.md` section 1; `security_verify.py` marks a row `confirmed` only when `hunter` and `verifier` are both set and differ (else `needs_validation`).
+- deep-code-review: `references/desktop-native-appsec.md` (desktop local IPC, release-binary hardening, updater trust), routed from the archetype table in `full-map.md`.
+- docs: the Cloudflare `security-audit-skill` peer recorded by name in `docs/standards-index.md`.
+
+size-budget-raise: .claude/skills/deep-code-review/references/full-map.md 18990→19074 one archetype row routing the desktop reference
+size-budget-raise: .claude/skills/deep-code-review/references/full-map-report.md 2018→2171 pointer to the verdict and ledger scripts
+size-budget-raise: .claude/skills/deep-code-review/references/appsec-verify.md 6783→7428 fresh-verifier step
+size-budget-raise: .claude/skills/deep-code-review/references/machine-report.md 11602→13064 verdict-row and ledger-check rules
+
+### Added
+- agentic-delivery: `clock_lint.py` now prints an advisory finding for day/week-relative text asserted in a py/js test with no fixed clock (for example "No demos yet this week"); Playwright `setFixedTime` / `clock.install` / `clock.pauseAt` silence only that advisory. Test: `scripts/test_clock_lint_reltext.py`.
+size-budget-raise: .claude/skills/deep-code-review/references/testing-situational.md 41440→41728 clock_lint day/week-relative text advisory routed from the wall-clock bullet
+
+### Added
+- merge_train: on a red base the `--base-fix` PR now rides alone (queued PRs wait); `merge` refuses a longer bound lineup instead of cutting it. landing_watchdog.blocker is the one queue-eligibility rule (draft, fork, mergeable; missing facts fail closed) used by merge_train and the watchdog's waiting count. union_overlap.py `--plan PATH...` flags a new lane whose declared files overlap open PRs before it builds.
+
+size-budget-raise: .claude/skills/INDEX.md 14568→14569 regenerated index row for union_overlap.py --plan
+size-budget-raise: .claude/skills/agentic-delivery/INDEX-scripts.md 15080→15097 regenerated index row for union_overlap.py --plan
+
 ## [1.607.0] — 2026-10-27
 
 Fast-gate and merge-train guidance (`references/merge-queue-worktrees.md`) now states that affected-only test selection by import graph misses tests that read repo files by path string (doc pins, ledgers, fixtures): the selector also picks any test whose source contains a changed file's repo path, an unsure selection runs the full suite, and a base-red fix rides a solo train, never inside a full train. Pinned by an `evals/evals.json` case.

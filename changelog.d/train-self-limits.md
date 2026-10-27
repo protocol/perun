@@ -1,8 +1,0 @@
-### Added
-- agentic-delivery: merge trains now limit themselves. `train_land.sh` enforces a whole-train wall-clock budget (`TRAIN_BUDGET_MIN`, policy `train_budget_min`, default 90, 0 = off) and a cap on whole gate rounds (`TRAIN_MAX_BISECT_ROUNDS`, policy `train_max_bisect_rounds`, default 8, 0 = off), clamps each stage timeout to the budget left, and on exhaustion releases its locks and leases, prints the culprit-suspect PRs and exits 5 (DEFER; 4 stays lease-held). `merge_train.py verify` takes `--budget-min` and `--max-rounds` with the same exit 5. Test: `scripts/test-train-budget.sh`; eval `train-self-limits-defer`.
-- `references/merge-queue-worktrees.md`: rule that trains self-limit and external stops are human-only in agent hosts. The log-only-first rule (`cost-quality-guardrails.md`, `work-tracking.md`) now accepts a replay against past logs as the two-run evidence.
-- `train_land.sh` `FIX_MAP` / `FIXES_COVER` (default `shadow`, `enforce` acts): a fixes-only train whose union leaves any red base title without a fix PR starts no train, prints the uncovered titles to lane first and exits 4 (DEFER). Test: `scripts/test-train-budget.sh`.
-
-size-budget-raise: .claude/skills/agentic-delivery/references/cost-quality-guardrails.md 16119→16230 shadow-first evidence accepts a replay against past logs
-size-budget-raise: .claude/skills/agentic-delivery/references/work-tracking.md 4132→4204 shadow-first evidence accepts a replay against past logs
-size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 40258→41568 two train rules: self-limits and fixes-only coverage

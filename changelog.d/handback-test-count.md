@@ -1,2 +1,0 @@
-### Added
-- agentic-delivery: `handback.py` now checks the lane's commit messages (BASE..SHA) for a real test count. Every `Tests:` line needs each `X/Y` with X==Y and a total above 0; a missing line, `0/0` or `5/6` is unverified, unless a non-empty `No-Tests-Reason:` trailer is present (a BLOCKED/WIP head subject is exempt). `HANDBACK_TESTS_COUNT=enforce` fails closed with `handback tests-count UNVERIFIED: no passing test count` and exit 4; the default `shadow` only warns, `off` skips. Test: `scripts/test_handback_tests_count.py`.

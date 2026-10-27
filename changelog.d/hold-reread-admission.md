@@ -1,2 +1,0 @@
-### Fixed
-- agentic-delivery: merge_train.py no longer merges a PR that was held, drafted or closed after the plan cached it. `merge_one()` re-reads the PR state right before each merge and skips it on a hold label, a draft, a non-open state or any read error (fail closed); `eligible()` also skips held PRs at plan time. New policy key `hold_labels` (non-empty list, default `["do-not-merge"]`, case-insensitive; an unreadable policy also skips). Test: `scripts/test_hold_reread.py`.
