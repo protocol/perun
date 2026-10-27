@@ -1,0 +1,2 @@
+### Changed
+- CI selftests shard 3 runs about 11 minutes faster locally: `scripts/test-train-flake-rate.sh` runs each distinct pre-drawn outcome through the real `train_flake.sh` once and counts the 1000 and 300 seeded trials from that cache (591 s to 19 s, same assertions and counts), and `scripts/test-land-release.sh` no longer copies and commits `docs/bench` into its scratch repo (139 s to 25 s, same assertions).
