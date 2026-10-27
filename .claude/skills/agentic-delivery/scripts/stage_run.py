@@ -9,7 +9,9 @@ subprocess, so nothing capped them (load1 124 on 44 cores) and nothing bounded t
 What it does: (1) first reaps leases left by a stage_run that was SIGKILLed (see below). (2) takes the same non-exclusive
 lease heavy_gate.py counts (perun_policy.heavy_acquire, the slot cap from perun_policy.heavy_slots), retrying every second
 for up to --wait SECS (default $PERUN_HEAVY_WAIT_SECS or 600); a slot still full then is a DEFER: CMD never runs, it prints
-"DEFER: stage ..." and exits 75. (3) runs CMD in its own process group. (4) past the timeout it kills the group (TERM, then
+"DEFER: stage ..." and exits 75. Admission (policy `train_gate`, see perun_policy.train_gate): the lease of `train-browser` is kind
+`browser`, any other `train-*` stage `train`; with `enforce` a browser stage waits for a free browser slot and a train stage waits
+while a browser lease is live and the prepared-train cap is full (held up to $PERUN_TRAIN_GATE_WAIT_SECS, default the stage timeout minus 60s, then DEFER 75: retry, never a RED); `shadow` (default) only prints WOULD-BLOCK. (3) runs CMD in its own process group. (4) past the timeout it kills the group (TERM, then
 KILL after 5s), prints "stage-timeout: NAME ..." to stderr and exits 124. The lease is released on every exit, including SIGTERM
 and SIGHUP (handled from before the slot wait; the stage's group is killed, exit 128+signal) and the death of the parent process
 (noticed within 2s: the stage's group is killed, exit 129). A timeout or wait that is nan, inf or negative exits 2 (fail closed).
@@ -30,6 +32,7 @@ removes the lease. ponytail: a group whose leader already exited but whose grand
 `ps -g` sweep if that is measured.
 """
 import argparse
+import contextlib
 import math
 import os
 import signal
@@ -85,10 +88,10 @@ def lock_holder() -> str:
         return "unknown"
 
 
-def stamp(d, pid: int, own: str, pgid: int = 0, child: str = "-") -> None:
+def stamp(d, pid: int, own: str, pgid: int = 0, child: str = "-", kind: str = "heavy") -> None:
     """(Re)write our lease with the process start times; a write error is ignored (the lease already exists or the dir is unusable)."""
     try:
-        (d / str(pid)).write_text(f"{pid} {int(time.time())} heavy {own} {pgid} {child} {pp.HOST}")
+        (d / str(pid)).write_text(f"{pid} {int(time.time())} {kind} {own} {pgid} {child} {pp.HOST}")
     except OSError:
         pass
 
@@ -138,6 +141,11 @@ def main(argv=None) -> int:
         return 2
     pid, d, t0, ppid0 = os.getpid(), pp.lease_dir(), time.time(), os.getppid()
     leased = not a.hook  # a commit hook is a fast check, not a heavy job: no lease, no slot wait
+    cls = "browser" if a.name == "train-browser" else "train" if a.name.startswith("train-") else "heavy"  # train_gate classes
+    enforce = pol["train_gate"] == "enforce"
+    kind = cls if enforce else "heavy"  # shadow/off leave the lease format untouched
+    gate_wait = float(os.environ.get("PERUN_TRAIN_GATE_WAIT_SECS", max(0, (tmo * 60 if tmo > 0 else 1800) - 60)))  # train_gate hold, kept under the stage's own budget
+    warned = held = False
     kid = [None]
 
     def stop(sig, _frame):  # SIGTERM/SIGHUP, also during the slot wait: kill our stage group, drop a lease not yet owned by `finally`
@@ -157,13 +165,22 @@ def main(argv=None) -> int:
             reap(d)
             load1, cores = host_probe.read_load1_and_cores()
             slots = pp.heavy_slots(cores or os.cpu_count() or 1, load1, pol["tokens"], host_probe.read_cpu_idle_pct())
-            if pp.heavy_acquire(d, slots, pid):
-                break
+            with pp.gate_lock(d) if enforce else contextlib.nullcontext():
+                why = pp.train_gate(d, cls, pol["heavy_trains"], pid) if pol["train_gate"] != "off" else ""
+                held = bool(why) and enforce
+                if why and not enforce and not warned:
+                    print(f"WOULD-BLOCK: stage {a.name}: {why} (train_gate=shadow, not held)", file=sys.stderr)
+                    warned = True
+                if not held and pp.heavy_acquire(d, slots, pid, kind if kind != "heavy" else None):
+                    break
         except OSError as e:  # lease dir unwritable: run unleased, still timed (same stance as train_land's exclusive lease)
             print(f"WARN: stage {a.name}: heavy lease unavailable ({e}); running without it", file=sys.stderr)
             leased = False
             break
-        if time.time() - t0 >= wait:
+        if held and time.time() - t0 >= gate_wait:
+            print(f"DEFER: stage {a.name}: train_gate held it {gate_wait:g}s ({why}); not run, retry later (exit {DEFER}, not a RED)", file=sys.stderr)
+            return DEFER
+        if not held and time.time() - t0 >= wait:
             print(f"DEFER: stage {a.name}: heavy slots full after {wait:g}s; not run (exit {DEFER}, not a RED)", file=sys.stderr)
             return DEFER
         time.sleep(1)
@@ -174,17 +191,17 @@ def main(argv=None) -> int:
     if tmo > 0 and not a.hook:  # a loaded host runs the same stage slower: stretch the budget instead of killing a healthy stage
         scale = load_scale(*host_probe.read_load1_and_cores())
         if scale > 1:
-            tmo *= scale
+            tmo = min(tmo * scale, max(tmo, pp.LEASE_TTL / 60))  # never past the lease TTL (unless the base budget already is)
             print(f"stage_run: stage {a.name}: load {scale:.2f}x cores; timeout stretched to {tmo:g}m", file=sys.stderr)
     own = pp.pstart(pid) or "-"
     if leased:
-        stamp(d, pid, own)
+        stamp(d, pid, own, kind=kind)
     try:
         p = subprocess.Popen(cmd, start_new_session=True)
         kid[0] = p
         child = pp.pstart(p.pid) or "-"
         if leased:
-            stamp(d, pid, own, p.pid, child)
+            stamp(d, pid, own, p.pid, child, kind)
         deadline = time.time() + tmo * 60 if tmo > 0 else None
         beat = time.time()
         try:

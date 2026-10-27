@@ -1,0 +1,4 @@
+### Added
+- Train admission gate in `stage_run.py` (policy `train_gate` = `shadow|enforce|off`, default `shadow`; `heavy_trains`, default 1): caps live `train-browser` stages and, while one runs, other `train-*` stages (one prepared train), so queued trains hold before compile/unit instead of piling load on the host. `shadow` only prints WOULD-BLOCK; `enforce` holds the stage with the existing wait and DEFER (75). Reuses the heavy lease (kind word `browser` or `train`) and `perun_policy.train_gate`; tested in `scripts/test-train-gate.sh`, wired through `scripts/ci-tests.d/train-gate.sh`. The merge-queue reference gains one rule citing the WIP-limit and Little's Law reasoning.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 39714→40258 one rule: cap live heavy trains (WIP limit)

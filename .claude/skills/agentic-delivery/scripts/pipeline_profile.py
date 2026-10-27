@@ -1497,6 +1497,31 @@ def cmd_hooks(args):
     return rc_all
 
 
+def cmd_tests(args):
+    """Time each script matching --glob once (a per-test gate cost), rank them, and price the worker count."""
+    import glob
+    if args.workers < 1:
+        die("pipeline_profile: --workers must be >= 1")
+    files = sorted(glob.glob(os.path.join(args.root, args.glob)))
+    if not files:
+        die("pipeline_profile: no files match --glob %s" % args.glob)
+    if not args.run:
+        print("would time %d scripts (add --run to execute each once)" % len(files))
+        return 0
+    path, rows = timings_path(args.root, args.log), []
+    for f in files:
+        rel = os.path.relpath(f, args.root)
+        rc, wall, _ = record_timing(path, "ci", rel, "bash " + shlex.quote(rel), None, True, args.root)
+        rows.append((wall, rel, rc))
+    total = sum(r[0] for r in rows)
+    for wall, rel, rc in sorted(rows, reverse=True):
+        print("%-8s %5.1f%% rc=%d %s" % (fmt(wall), 100 * wall / (total or 1), rc, rel))
+    floor = max(rows)[0]
+    print("total=%s longest=%s; with W workers wall >= max(longest, total/W): W=%d -> %s" % (
+        fmt(total), fmt(floor), args.workers, fmt(max(floor, total / args.workers))))
+    return 1 if any(r[2] for r in rows) else 0
+
+
 def cmd_suites(args):
     """Time every duplicated suite at the stages that would be dropped, so dedup is priced from real seconds."""
     smap = stage_map(args.root, _extra(args))
@@ -1641,6 +1666,12 @@ def main(argv=None):
     common(p)
     p.add_argument("--run", action="store_true")
     p.set_defaults(fn=cmd_hooks)
+    p = sub.add_parser("tests", help="time each test script once; rank by cost before tuning batch size or workers")
+    common(p)
+    p.add_argument("--glob", default="scripts/ci-tests.d/*.sh")
+    p.add_argument("--workers", type=int, default=4)
+    p.add_argument("--run", action="store_true")
+    p.set_defaults(fn=cmd_tests)
     p = sub.add_parser("suites", help="time each duplicated suite at the stages to drop")
     common(p, True)
     p.add_argument("--stage", action="append", choices=STAGES, help="only these stages (repeatable)")

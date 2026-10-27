@@ -329,6 +329,8 @@ gate takes its lease around the contended command, not around the whole script.
 
 **🚩** two trains queued on a host with idle cores because one holds a slot across stages that share nothing.
 
+Cap live heavy trains, not just workers per train: a Kanban WIP limit on the contended stage, since by Little's Law lead time = work in progress / throughput, so extra concurrent trains past the host's capacity lengthen every train's wall time (a measured peer ran 5 at once, load1 113, a 25-min suite blew its 60-min box, landings fell to 6/day). Policy `train_gate` (`shadow` default logs WOULD-BLOCK, `enforce` holds; `heavy_trains`, default 1) lets one `train-browser` stage plus one prepared train run; the rest wait before compile/unit.
+
 ## CI-offload the heavy gate by default — lane weight, not lane count, drives memory cost
 
 A lane that runs a project's full local aggregate gate — a real build plus the complete browser/E2E suite plus

@@ -41,6 +41,7 @@
 # still lands only on its own green gate and the depth cap bounds the extra gates.
 # Exit: 0 landed, 1 base/browser red or lock held, 4 DEFER (lease still held after LEASE_WAIT_SECS; nothing built), 2 usage/refused, 3 something not landed (see the SPLIT done line; some PRs may have landed): no GREEN union or CANT
 # (CANT = a real browser failure not attributed: not re-failing alone, pre-existing on the base, or not pinned to a culprit PR; flaky-only bisects print FLAKY, never blame). Without a split, 3 means nothing landed.
+# Every started train (a gate ran) is appended to the yield ledger on exit (train_yield.py; landing_watchdog.py alarms on low yield or a PR that re-rides). A train ended by BASE RED or CULPRIT is recorded as red and left out of both.
 # Optional: CLEAN_ROOT (your own worktree tree: runs reap_own.sh and clean_finished.sh on it first), BASE_AUDIT_CMD (run via bash -c on the bare fresh base before verifying; non-zero prints
 # "BASE RED" and exits 1, so a red base is never blamed on a PR; a PASS is cached by the base tree through gate_cache.py, shared with
 # pre-commit/pre-push, so a base that already passed this command skips it: PERUN_GATE_CACHE=0 opts out), RATCHET_CMD (run via bash -c on each PR
@@ -76,6 +77,7 @@ PERUN_GITHUB_ACTIONS=$(python3 "$HERE/perun_policy.py" get github_actions) && PE
   || { echo "train_land: bad .perun/policy.json" >&2; exit 2; }
 export PERUN_GITHUB_ACTIONS PERUN_JOBS
 . "$HERE/_lock.sh"
+rm -f "$LOG.red"
 LOCK=$(git rev-parse --git-dir)/train-land.lock
 LT=${LOCK_TIMEOUT_MIN:-30}
 lock_take "$LOCK" 0 "$LT" || exit 1
@@ -104,7 +106,7 @@ PQ=$(git rev-parse --git-common-dir)/train-push.lock PW=${PUSH_WAIT_SECS:-$((LT 
 split=0 landed= gates=0 ALL="$*"
 unl() { local n; for n in $ALL; do [[ " $landed " == *" $n "* ]] || printf '%s ' "$n"; done; }  # every PR land_train did not merge
 split_report() { [ "$split" -eq 1 ] || return 0; local u; u=$(unl); echo "SPLIT done: landed #${landed# }; CANT (not landed) #${u% }; gates=$gates"; }
-trap 'kill "$HB" 2>/dev/null; split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
+trap 'kill "$HB" 2>/dev/null; [ "$gates" -eq 0 ] || python3 "$HERE/train_yield.py" record "$T" "$ALL" "$landed" "$([ -e "$LOG.red" ] && echo red)" || true; rm -f "$LOG.red"; split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
 # A landing train holds the push lock and is moving the base: wait it out before any gate work (a union composed mid-land is stale at its own land).
 lock_take "$PQ" "$PW" "$LT" || exit 1; lock_drop "$PQ"
 if [ -n "${CLEAN_ROOT:-}" ]; then  # start-of-train cleanup of your own finished work; never blocks the train
@@ -136,7 +138,7 @@ fi
 GC="$HERE/../../deep-code-review/scripts/gate_cache.py"  # shared tree-keyed PASS cache (gate_cache.py): absent = run uncached
 audit=(bash -c "${BASE_AUDIT_CMD:-}"); [ ! -f "$GC" ] || audit=(python3 "$GC" run --stage train --no-pipefail --ignore 'train*.log*' -c "${BASE_AUDIT_CMD:-}")
 if [ -n "${BASE_AUDIT_CMD:-}" ] && ! "${audit[@]}" >"$LOG.base" 2>&1 </dev/null; then
-  echo "BASE RED: audit fails on bare $REMOTE/$BASE_BRANCH (see $LOG.base); no PR to blame, nothing landed" >&2; exit 1
+  : >"$LOG.red"; echo "BASE RED: audit fails on bare $REMOTE/$BASE_BRANCH (see $LOG.base); no PR to blame, nothing landed" >&2; exit 1
 fi
 PRS=("$@"); SPLIT=${TRAIN_SPLIT_DEPTH:-2}
 [[ $SPLIT =~ ^[0-9]+$ ]] || { echo "WARN: TRAIN_SPLIT_DEPTH='$SPLIT' is not a number; splitting disabled" >&2; SPLIT=0; }
@@ -176,7 +178,7 @@ if [ -z "$L" ]; then
       if git fetch -q "$REMOTE" "pull/$n/head" && git merge -q --no-edit FETCH_HEAD >/dev/null 2>&1; then
         rr=0; PR=$n python3 "$HERE/stage_run.py" --name train-ratchet --timeout "${TRAIN_RATCHET_TIMEOUT_MIN:-30}" --wait "${TRAIN_SLOT_RECHECK_SECS:-60}" -- bash -c "$RATCHET_CMD" >/dev/null 2>&1 </dev/null || rr=$?
         case $rr in 0) ;; 75|124) echo "could not check: ratchet for #$n did not complete (stage rc=$rr: $([ "$rr" = 75 ] && echo 'no heavy slot' || echo 'timed out')); no culprit named" >&2 ;;
-          *) echo "CULPRIT #$n fails the ratchet alone on the base" ;; esac
+          *) : >"$LOG.red"; echo "CULPRIT #$n fails the ratchet alone on the base" ;; esac
       fi
       git merge --abort 2>/dev/null || true
     done
@@ -215,7 +217,7 @@ if [ "${BASE_RED_FAILFAST:-shadow}" != off ] && grep -q . "$LOG.fails" && [ -z "
     echo "base-red-failfast refused: red set stamp '${ffs:-none}' vs gate base ${B:0:7} vs $REMOTE/$BASE_BRANCH tip '${fftip:0:7}'; no base-red verdict, running on" >&2
   elif [ "${BASE_RED_FAILFAST:-shadow}" = enforce ]; then
     git checkout -q --detach "$REMOTE/$BASE_BRANCH"
-    echo "BASE RED: all $ffn failing ids are in the measured red set of base ${B:0:7}; no bisect, nothing landed" >&2; exit 1
+    : >"$LOG.red"; echo "BASE RED: all $ffn failing ids are in the measured red set of base ${B:0:7}; no bisect, nothing landed" >&2; exit 1
   else
     echo "SHADOW base-red-failfast: would end BASE RED now ($ffn failing ids all in the measured red set of base ${B:0:7}); set BASE_RED_FAILFAST=enforce to act" >&2
   fi

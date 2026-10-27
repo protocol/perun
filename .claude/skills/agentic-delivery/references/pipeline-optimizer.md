@@ -71,6 +71,13 @@ When one step dominates (the profile prints `DOMINANT STEP`), a step is a suite 
 
 Data comes from the GitHub REST API (`/actions/runs`, `/actions/runs/{id}/jobs`, `/pulls`). Unauthenticated calls are capped at 60 an hour (`gh-rate-limit`); set `GH_TOKEN` or `GITHUB_TOKEN`. The token is sent as an unredirected header and never forwarded. Lead time here is first push to merge, a proxy for the first leg of the DORA change lead time (`dora`), which ends at production.
 
+## Gate cost, feeder order and ready-PR age
+
+- **Per-test cost first.** Before tuning batch size or worker count, run `pipeline_profile.py tests --run` (default `--glob scripts/ci-tests.d/*.sh`, `--workers N`). It times each script once, ranks them, and prints the floor `max(longest, total/W)`: more workers cannot beat the longest script, and a batch cannot beat the total divided by its workers. Tune only what the ranking shows; a local number is a local surface.
+- **Fix before feature.** `feeder_order.py --ledger FILE < items.json` puts a fix whose failure class is recurring in the ledger (default 2 or more occurrences) ahead of other fixes, and those ahead of features (`--max-run`, default 3, promotes a waiting feature after that many fixes in a row). A recurring class costs every later train; features wait.
+- **Ready-PR age.** `landing_watchdog.py` (policy `ready_age_p50_h`, `ready_age_p90_h`, hours, 0 = off) warns when the p50 or p90 age of green waiting PRs (since their last check finished) passes its limit; the stall line only fires on zero merges, the age line catches a slow queue that still lands something.
+- **Train yield and receipt order.** `train_land.sh` logs each started train (`train_yield.py`); `landing_watchdog.py` warns when fewer than half the recent trains landed a PR or one PR re-rode 5 or more trains, which points at infra (timebox or load), not the PR. `land_ready.py` logs the `feeder_order.py` order it would sweep in (shadow, default); `PERUN_PRECHECK_ORDER=on` applies it so a fix is not starved of its receipt check.
+
 ## Step 3: the catalogue (every saving computed from the profile)
 
 Duplicate removal ranks first when it saves more than the noise floor (the larger of 1 s and 1% of the lead time). The rest rank by saving per relative effort (1, 2 or 4: ordinal, not hours). A fix that cannot be priced goes last and says what to measure. `fixes` prints `DECIDE: measure first` while a duplicated stage run is untimed: duplicates rank first once priced, so a stage fix chosen before that is a guess. `--accept-unmeasured` overrides it for a stage that cannot be timed.

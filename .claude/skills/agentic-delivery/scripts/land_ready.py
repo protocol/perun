@@ -6,6 +6,9 @@
 One line per open PR: `#N ready`, or `#N not ready: <reasons>`. Ready means not draft, no merge conflict, not
 BEHIND its base, every check-run green (`surface_check.check_checks`, the repo's one check judge) and commit
 status `perun/review` = success on the CURRENT head (posted by `review_status.py`). Reuses `pr_state.read_pr`.
+Sweep order: open PRs are checked in PR-number order; feeder_order.py's priority key (a `fix`/`bugfix` title prefix before features) is
+logged to stderr as the would-be order (shadow, the default). PERUN_PRECHECK_ORDER=on (or 1/true) sweeps in that order, so a fix is not starved
+of a receipt check while features ahead of it hold the host; =off skips the log.
 Side effects: none (GET and one GraphQL read per PR). Edge cases: first 100 open PRs only; an unreadable PR
 prints `#N not ready: unreadable`. Exit 0 swept, 3 could not list PRs or bad arguments.
 """
@@ -53,6 +56,25 @@ def reasons(slug, num, timeout):
     return out
 
 
+def precheck_order(prs, mode=None):
+    """PRs in sweep order: feeder_order's key when PERUN_PRECHECK_ORDER is on/1/true (any case); otherwise unchanged, with the
+    would-be order logged (shadow, default); off/0/false skips it. Any ordering error returns prs unchanged."""
+    mode = (mode or os.environ.get("PERUN_PRECHECK_ORDER") or "shadow").strip().lower()
+    if mode in ("off", "0", "false") or not prs:
+        return prs
+    try:
+        import feeder_order  # the one priority key
+        items = [{"id": p["number"], "kind": "fix" if str(p.get("title", "")).lower().startswith(("fix", "bugfix")) else "feature"} for p in prs]
+        new = feeder_order.order(items, {})
+        if mode in ("on", "1", "true"):
+            by = {p["number"]: p for p in prs}
+            return [by[i["id"]] for i in new]
+        print("land_ready: shadow precheck order: " + " ".join(f"#{i['id']}" for i in new), file=sys.stderr)
+    except Exception as e:  # ordering is advice: never lose the sweep
+        print(f"land_ready: precheck order skipped: {e}", file=sys.stderr)
+    return prs
+
+
 def main(argv):
     """CLI entry point; returns the exit code."""
     ap = argparse.ArgumentParser(prog="land_ready.py", description=__doc__.splitlines()[0])
@@ -76,7 +98,7 @@ def main(argv):
         return 3
     if len(prs) == 100:
         print("land_ready: warning: 100 open PRs listed, any beyond the first 100 are not swept", file=sys.stderr)
-    for p in prs:
+    for p in precheck_order(prs):
         why = reasons(slug, p["number"], a.timeout)
         print(f"#{p['number']} " + ("not ready: " + "; ".join(why) if why else "ready"))
     return 0
