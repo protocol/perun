@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""union_overlap.py [--repo DIR] --base REF --mine PR_OR_REF... --other PR_OR_REF... | --selftest
+"""union_overlap.py [--repo DIR] --base REF [--plan PATH...] --mine PR_OR_REF... --other PR_OR_REF... | --selftest
 
 WHY: two machines each building a merge union raced into stale trains. Before merging, list the files the
 candidate PRs and the other in-flight union both touch (`git diff --name-only --no-renames <merge-base> <ref>` (a rename counts both paths)).
 A PR number N resolves to `refs/pull/N/head` (fetch it first); anything else is used as a ref.
 Prints one overlapping path per line, exit 1; prints `no overlap` exit 0; prints `COULD_NOT_CHECK: <why>`
 and exits 2 on ANY git error (unknown ref, no merge-base) - never 0 on an unchecked pair.
+Lane start (before any build): `--plan PATH...` adds the paths a new lane declares it will touch to the --mine side,
+so a lane planning the same files as an open PR or another lane is flagged before it builds.
 Limit: path-level overlap only; two PRs editing different hunks of one file still report that file.
 """
 import argparse
 import os
+import posixpath
 import subprocess
 import sys
 import tempfile
@@ -35,10 +38,18 @@ def files(repo, base, ref):
     return set(git(repo, "diff", "--name-only", "--no-renames", mb, ref).split("\n")) - {""}
 
 
-def overlap(repo, base, mine, other):
-    if not mine or not other:
-        raise Fail("need at least one --mine and one --other")
-    a = set().union(*(files(repo, base, r) for r in mine))
+def _plan_path(p):
+    n = posixpath.normpath(p)
+    if p.endswith("/") or n.startswith("/") or n == ".." or n.startswith("../") or n == ".":
+        raise Fail("--plan needs repo-relative file paths, got %r" % p)
+    return n
+
+
+def overlap(repo, base, mine, other, plan=()):
+    if not (mine or plan) or not other:
+        raise Fail("need at least one --mine (or --plan) and one --other")
+    plan = set(map(_plan_path, plan))
+    a = plan.union(*(files(repo, base, r) for r in mine))
     b = set().union(*(files(repo, base, r) for r in other))
     return sorted(a & b)
 
@@ -94,12 +105,13 @@ def main(argv=None):
     ap.add_argument("--base", default="origin/main")
     ap.add_argument("--mine", nargs="+", default=[])
     ap.add_argument("--other", nargs="+", default=[])
+    ap.add_argument("--plan", nargs="+", default=[])
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args(argv)
     if args.selftest:
         return selftest() or 0
     try:
-        hit = overlap(args.repo, args.base, args.mine, args.other)
+        hit = overlap(args.repo, args.base, args.mine, args.other, args.plan)
     except Fail as e:
         print("COULD_NOT_CHECK: %s" % e)
         return 2

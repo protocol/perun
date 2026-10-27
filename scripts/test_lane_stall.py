@@ -31,15 +31,15 @@ def run(merged, opened, cfg=(6, GLOBS)):
 class LaneStall(unittest.TestCase):
     def test_idle_lane_with_ready_prs_alarms_busy_lane_does_not(self):
         merged = [{"mergedAt": iso(0.1), "files": [{"path": "api/a.py"}]}, {"mergedAt": iso(9), "files": [{"path": "app/x.tsx"}]}]
-        opened = [{"isDraft": False, "statusCheckRollup": OK, "files": [{"path": "app/y.tsx"}]},
-                  {"isDraft": False, "statusCheckRollup": OK, "files": [{"path": "api/b.py"}]},
+        opened = [{"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": OK, "files": [{"path": "app/y.tsx"}]},
+                  {"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": OK, "files": [{"path": "api/b.py"}]},
                   {"isDraft": True, "statusCheckRollup": OK, "files": [{"path": "app/z.tsx"}]}]
         out = run(merged, opened)
         self.assertIn("Lane stalled: app has 1 ready PRs, last merge 9.0 h ago (limit 6 h)", out)
         self.assertNotIn("backend", out)
 
     def test_no_merge_ever_alarms_and_no_ready_pr_is_quiet(self):
-        opened = [{"isDraft": False, "statusCheckRollup": OK, "files": [{"path": "app/y.tsx"}]}]
+        opened = [{"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": OK, "files": [{"path": "app/y.tsx"}]}]
         self.assertIn("none in the last 100 merged", run([], opened))
         self.assertIsNone(run([], []))
 
@@ -50,14 +50,14 @@ class LaneStall(unittest.TestCase):
     def test_cross_lane_pr_credits_every_lane(self):
         both = [{"path": "api/a.py"}, {"path": "app/x.tsx"}]
         merged = [{"mergedAt": iso(0.1), "files": both}]
-        opened = [{"isDraft": False, "statusCheckRollup": OK, "files": both}]
+        opened = [{"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": OK, "files": both}]
         self.assertIsNone(run(merged, opened))
         out = run([], opened)
         self.assertIn("backend has 1", out)
         self.assertIn("app has 1", out)
 
     def test_age_equal_limit_is_not_stalled(self):
-        opened = [{"isDraft": False, "statusCheckRollup": OK, "files": [{"path": "app/y.tsx"}]}]
+        opened = [{"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": OK, "files": [{"path": "app/y.tsx"}]}]
         self.assertIsNone(run([{"mergedAt": iso(5.99), "files": [{"path": "app/x"}]}], opened))
         self.assertIsNotNone(run([{"mergedAt": iso(6.1), "files": [{"path": "app/x"}]}], opened))
 

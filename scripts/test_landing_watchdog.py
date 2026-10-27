@@ -30,13 +30,13 @@ echo x >> "$FAKE_GH_COUNT"
 cat "$FAKE_GH_JSON"
 """
 OK = {"__typename": "CheckRun", "status": "COMPLETED", "conclusion": "SUCCESS"}
-GREEN = {"isDraft": False, "statusCheckRollup": [OK, {"__typename": "StatusContext", "state": "SUCCESS"}]}
+GREEN = {"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": [OK, {"__typename": "StatusContext", "state": "SUCCESS"}]}
 NOT_GREEN = [
     {"isDraft": True, "statusCheckRollup": [OK]},
-    {"isDraft": False, "statusCheckRollup": []},
-    {"isDraft": False, "statusCheckRollup": [OK, {"__typename": "CheckRun", "status": "IN_PROGRESS", "conclusion": ""}]},
-    {"isDraft": False, "statusCheckRollup": [OK, {"__typename": "CheckRun", "status": "COMPLETED", "conclusion": "FAILURE"}]},
-    {"isDraft": False, "statusCheckRollup": [{"__typename": "StatusContext", "state": "PENDING"}]},
+    {"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": []},
+    {"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": [OK, {"__typename": "CheckRun", "status": "IN_PROGRESS", "conclusion": ""}]},
+    {"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": [OK, {"__typename": "CheckRun", "status": "COMPLETED", "conclusion": "FAILURE"}]},
+    {"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": [{"__typename": "StatusContext", "state": "PENDING"}]},
 ]
 
 

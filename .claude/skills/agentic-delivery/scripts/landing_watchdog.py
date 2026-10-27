@@ -100,10 +100,30 @@ def _check_ok(r):
     return r.get("status") == "COMPLETED" and r.get("conclusion") in ("SUCCESS", "NEUTRAL", "SKIPPED")
 
 
-def green(pr):
-    """True when the PR is non-draft with at least one check and every check finished successfully."""
+def blocker(pr, allow_forks=False):
+    """The one merge-queue eligibility rule on a PR's current facts: '' when it may join a train, else why not.
+
+    Shared by merge_train (which adds hold, parked and check-run rules) and green(), so a PR the train would skip
+    is never counted as waiting. Fails closed: isDraft or isCrossRepository that is not exactly False counts as
+    draft / fork, and a missing `mergeable` is not MERGEABLE.
+    """
+    if pr.get("isDraft") is not False:
+        return "draft"
+    if pr.get("isCrossRepository") is not False and not allow_forks:
+        return "fork (verify would run its code here; --allow-forks)"
+    if pr.get("mergeable") != "MERGEABLE":
+        return f"mergeable={str(pr.get('mergeable'))[:80]}"
+    return ""
+
+
+def green(pr, allow_forks=False):
+    """True when the PR is queue-eligible (see blocker) with at least one check, all finished successfully.
+
+    mergeable=UNKNOWN is GitHub still computing: counted as eligible here so stall signals do not flicker, while the
+    train itself still blocks it.
+    """
     rolls = pr.get("statusCheckRollup") or []
-    return not pr.get("isDraft") and bool(rolls) and all(_check_ok(r) for r in rolls)
+    return blocker(pr, allow_forks) in ("", "mergeable=UNKNOWN") and bool(rolls) and all(_check_ok(r) for r in rolls)
 
 
 def default_branch(cwd):
@@ -196,16 +216,16 @@ def p0_exempt(prs, cwd, now):
     return 0
 
 
-def probe(cwd, minutes):
+def probe(cwd, minutes, allow_forks=False):
     """(branch, merged_count, green_count, open_non_draft_count, green_ages_hours). Raises on any git/gh problem; callers fail open."""
     branch = default_branch(cwd)
     _run(["git", "fetch", "-q", "origin", branch], cwd, timeout=20)
     merged = _run(["git", "log", "--first-parent", f"--since={minutes} minutes ago", "--format=%H", "origin/" + branch], cwd)
     prs = json.loads(_run(["gh", "pr", "list", "--state", "open", "--base", branch, "--limit", "100",
-                           "--json", "isDraft,statusCheckRollup,createdAt,body,labels"], cwd, timeout=30))
+                           "--json", "isDraft,mergeable,isCrossRepository,statusCheckRollup,createdAt,body,labels"], cwd, timeout=30))
     now = time.time()
-    ages = [a for a in (_age_h(p, now) for p in prs if green(p)) if a is not None]
-    return branch, len(merged.split()), sum(green(p) for p in prs), sum(not p.get("isDraft") for p in prs) - p0_exempt(prs, cwd, now), ages
+    ages = [a for a in (_age_h(p, now) for p in prs if green(p, allow_forks)) if a is not None]
+    return branch, len(merged.split()), sum(green(p, allow_forks) for p in prs), sum(not p.get("isDraft") for p in prs) - p0_exempt(prs, cwd, now), ages
 
 
 def settings():
@@ -260,7 +280,7 @@ def _lane(pr, globs):
     return [l for l, gs in globs.items() if any(fnmatch.fnmatch(x, g) for x in paths for g in gs)]
 
 
-def _lanes(cwd, branch, cfg, now=None):
+def _lanes(cwd, branch, cfg, now=None, allow_forks=False):
     """Per-lane stall lines, newline-joined, or None: a lane with ready (green) PRs whose last merge is older than lane_idle_h.
     A total-merges alarm hides this when one busy lane keeps the total up. Looks at the last 100 merged PRs only."""
     limit, globs = cfg
@@ -272,8 +292,8 @@ def _lanes(cwd, branch, cfg, now=None):
     for pr in gh("merged", "mergedAt,files", 100):
         for l in _lane(pr, globs) if pr.get("mergedAt") else []:
             last[l] = max(last.get(l, 0), _ts(pr["mergedAt"]))
-    for pr in gh("open", "isDraft,statusCheckRollup,files", 1000):  # high cap: a truncated list would hide a stalled lane's ready PRs
-        for l in _lane(pr, globs) if green(pr) else []:
+    for pr in gh("open", "isDraft,mergeable,isCrossRepository,statusCheckRollup,files", 1000):  # high cap: a truncated list would hide a stalled lane's ready PRs
+        for l in _lane(pr, globs) if green(pr, allow_forks) else []:
             ready[l] = ready.get(l, 0) + 1
     out = []
     for l, k in ready.items():

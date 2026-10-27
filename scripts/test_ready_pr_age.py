@@ -28,8 +28,8 @@ class ReadyAge(unittest.TestCase):
         import time
         import unittest.mock as m
         hrs = lambda h: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - h * 3600))
-        prs = [{"isDraft": False, "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS", "completedAt": hrs(10)}], "createdAt": hrs(99)},
-               {"isDraft": False, "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS"}], "createdAt": "garbage"}]
+        prs = [{"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS", "completedAt": hrs(10)}], "createdAt": hrs(99)},
+               {"isDraft": False, "isCrossRepository": False, "mergeable": "MERGEABLE", "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS"}], "createdAt": "garbage"}]
         def run(args, cwd, timeout=15):
             return json.dumps(prs) if args[:2] == ["gh", "pr"] else "main" if "symbolic-ref" in args else ""
         with m.patch.object(lw, "_run", run), m.patch.object(lw, "default_branch", lambda c: "main"):

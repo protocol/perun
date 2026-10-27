@@ -271,6 +271,7 @@ from datetime import date, datetime, timedelta, timezone
 sys.dont_write_bytecode = True  # never litter __pycache__ into a checksummed skill tree
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import partial_pass as pp  # noqa: E402  (PARTIAL-PASS receipts, #1778)
+from landing_watchdog import blocker  # noqa: E402  (the one queue-eligibility rule)
 import gh_rest  # noqa: E402  (curl fallback for gh api under the macOS-sandbox TLS failure)
 import board_common as bc  # noqa: E402  (validate_repo, run_checks)
 import focus_gate as fg  # noqa: E402  (resolve_owners, _owner_problem: the standing-grant owner check)
@@ -635,12 +636,10 @@ class Train:
             return "draft"
         if held := self._held(pr):
             return held
-        if pr.get("isCrossRepository") and not self.a.allow_forks:
-            return "fork (verify would run its code here; --allow-forks)"
         if str(pr["number"]) in parked:
             return f"parked ({parked[str(pr['number'])]['reason']})"
-        if pr.get("mergeable") != "MERGEABLE":
-            return f"mergeable={clean(pr.get('mergeable'))}"
+        if why := blocker(pr, self.a.allow_forks):  # the shared rule (landing_watchdog.blocker)
+            return why
         passed, bad = self._checks(pr["headRefOid"], waive)
         if bad.rsplit("=", 1)[-1] in PENDING or not (passed or bad):
             passed, bad = self._carry(pr, passed, bad)
@@ -720,8 +719,11 @@ class Train:
                 latest[r["name"]] = (key, r)
         return {n: v[1] for n, v in latest.items()}
 
-    def red_base(self, sha, members):
-        """True (after printing REFUSED red-base) when base `sha` has a completed red check and the lineup head is not --base-fix."""
+    def red_base(self, sha, members, lane=False):
+        """True (after printing REFUSED red-base) when base `sha` has a completed red check and the lineup head is not --base-fix.
+
+        Base-fix fast lane: on a red base the fix rides alone. `lane` (verify) trims the queued PRs behind it; a
+        longer lineup at merge is refused, never silently cut."""
         if not members:
             return False
         # ponytail: judges every check on the base, not only the branch-protection required set; add a name filter if noisy
@@ -729,8 +731,9 @@ class Train:
                      if r.get("status") == "completed" and r.get("conclusion") not in GREEN_CONCLUSIONS)
         if not red:
             return False
-        if members[0]["number"] == self.a.base_fix:
-            self.say(f"BASE-FIX #{self.a.base_fix} leads the lineup on red base {self.a.base}@{sha[:7]}")
+        if members[0]["number"] == self.a.base_fix and (lane or len(members) == 1):
+            del members[1:]
+            self.say(f"BASE-FIX #{self.a.base_fix} leads the lineup on red base {self.a.base}@{sha[:7]}; queued PRs wait")
             return False
         if getattr(self.a, "admit_red", False):
             self.say(f"RED-BASE {self.a.base}@{sha[:7]} red: {clean(','.join(red), 120)}; --admit-red: only PRs touching a failing test")
@@ -943,7 +946,7 @@ class Train:
         """The `verify` subcommand: find the largest green union, parking culprits; record it."""
         members = self.eligible()
         self.base_sha, members = self.fetch(members)
-        if self.red_base(self.base_sha, members) and not (self.a.admit_red and (members := self.admit_red(members))):
+        if self.red_base(self.base_sha, members, lane=True) and not (self.a.admit_red and (members := self.admit_red(members))):
             return HALT
         members = self.screen(members)  # a recorded, unlanded keystone parks its copies (#1142)
         parked_any = False
