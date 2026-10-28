@@ -3,6 +3,60 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.611.0] — 2026-10-29
+
+### Added
+- agentic-delivery: `fitness_tick.py` runs each fix's executable fitness check every operating-loop tick (one-line `ALARM`), and `closable NAME` passes only after 2 consecutive passing ticks and a caller. `flake_holder.py` (pre-push, warn-only) names the open PR that already changes a flaky-test fix's test file. `finding_guard.py` (operating-layer PreToolUse hook) runs the `file_finding.py` dedupe search on every `gh issue create --title` and denies a match (`# finding-force: <reason>` overrides; a failed search fails open).
+- agentic-delivery: `wired_check.py` now reports a new script that appears only on an orphan/unused allowlist as `merged-not-wired`.
+- agentic-delivery: `baseline_guard.py` stores a test baseline only after solo re-runs, with the host load recorded, and refuses a run far above the normal failure count. `freeze_gate.py` (pre-push) enforces a freeze file: only pure deletions and `Red-Trunk-Fix:` commits pass. `flow_alarm.py` is one symptom alarm (ready work but nothing merged in 2h, or trunk red over 1h), a stop-starting PreToolUse hook that denies `gh pr create` while 5 or more PRs are ready-but-unmerged, and a value-stream split (`split`). `prevention_lint.py` fails a postmortem action item that lacks an owner, tracking id or verifiable end state.
+
+### Changed
+- agentic-delivery: `reply_cap.py` skips when a user-level Stop hook already runs a different reply-cap script, so an over-cap reply gets one rewrite demand, not two.
+- agentic-delivery: `flake_ledger.py quarantine` takes `--ticket`, flags ticketless entries in `report`, and on a full list (`--max`, default 10) exits 1 and can file a P0 issue (`--file-issue`).
+size-budget-raise: .claude/skills/agentic-delivery/references/unattended-operating-mode.md 26739→27923 fitness-check close rule, finding_guard hook, symptom alarm, stop-starting, value-stream split
+size-budget-raise: .claude/skills/agentic-delivery/references/red-gate-triage.md 27186→28248 flaky-fix holder rule, baseline guard, quarantine ticket, freeze file
+size-budget-raise: .claude/skills/agentic-delivery/references/full-map.md 24381→24488 merged-not-wired allowlist note
+size-budget-raise: .claude/skills/agentic-delivery/references/template-postmortem.md 3387→3519 done-when column and prevention lint
+
+size-budget-raise: .claude/skills/agentic-delivery/references/red-gate-triage.md 27616→28678 peer-lessons rows (freeze gate, flow alarm, fitness tick) routed from triage
+
+### Added
+- deep-code-review `review_checks.sh`: `REVIEW_OSV_DB_DIR` and `REVIEW_TRIVY_CACHE` run osv-scanner and trivy from a pre-seeded vuln DB (no TLS to the DB host); a missing DB stays NOT CHECKED and prints the exact one-line warm command. `--repo DIR` replaces `cd DIR &&` chains, and semgrep also gets a temp `XDG_CACHE_HOME`. `supply_chain_check.sh` honors the same DB dir, runs actionlint without a `cd` chain, and notes `dev-only` packages (npm `dev`, osv dev/build/test group) capped at moderate. `appsec-verify.md` section 0 names `redirect: "follow"` fetch sites and TLS-verify-off flags as review targets. `preflight.py` gains optional `require_files` (warn on a missing env template). Tests: `scripts/test-scanner-offline-db.sh`.
+size-budget-raise: .claude/skills/deep-code-review/references/appsec-verify.md 7428→7863 redirect:follow and TLS-verify-off review targets named
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 4511→4994 offline vuln-DB env vars, --repo, dev-only cap documented
+
+### Fixed
+- agentic-delivery: `train_flake.sh` now removes the flake-store and flake-out temp dirs it creates (EXIT trap over only its own mktemp paths) instead of leaving them for OS cleanup. `scripts/test-train-flake-cleanup.sh` proves none remain.
+### Added
+- agentic-delivery: short rules in `red-gate-triage.md` (rerun failing titles solo with one worker, 2 of 2 passes is a flake, paired base run before a bisect, AIMD batch window), `retrospective.md` (one pin test per finding in every train, fingerprint duplicate check before filing) and `pipeline-optimizer.md` (each pipeline fix removes a knob or code path).
+size-budget-raise: .claude/skills/agentic-delivery/references/red-gate-triage.md 27186→27616 one short rule paragraph added: solo rerun, paired base run, AIMD window
+size-budget-raise: .claude/skills/agentic-delivery/references/retrospective.md 4844→5095 one short rule added: pin test per finding, fingerprint dedupe
+size-budget-raise: .claude/skills/agentic-delivery/references/pipeline-optimizer.md 19352→19480 one short rule added: deletion budget
+
+### Changed
+- agentic-delivery: `fitness_tick.py closable` now needs a real caller (a JSON hook/package entry, CI workflow, `.sh`, Makefile, or a loop entry whose line starts with the command), not a text mention. `baseline_guard.py` refuses a suspect baseline by default (`--normal` 5, `--max-load` 2 x cores; `--force` overrides). `wired_check.py` treats only explicit orphan/unused allowlist names, a `# orphan:` marker and an `allowlist:` key as an allowlist (bare words like "unused" no longer exempt a caller).
+- agentic-delivery: the issue-dedupe hook, fitness check and flow-alarm doctrine now lives once in `references/flow-guards.md`; the other references link to it.
+
+### Added
+- agentic-delivery: `freeze_hook.py`, a fail-closed PreToolUse(Bash) hook in the operating-layer template that parses argv (global flags, wrappers, `bash -c`, `gh api .../merge`) and denies `git push` and `gh pr merge` while a freeze file exists; malformed input or an unreadable freeze state denies, a non-repo cwd allows. Quoting tricks, eval of variables and wrapper scripts remain a known ceiling.
+size-budget-raise: .claude/skills/agentic-delivery/references/full-map.md 24488→24599 route flow-guards.md, narrowed allowlist note
+size-budget-raise: .claude/skills/agentic-delivery/SKILL.md 7134→7202 route flow-guards.md in the red-gate row
+
+### Added
+- deep-code-review `scripts/dynamic_probe.py`: opt-in dynamic step for a locally running app (localhost or 127.0.0.1 only, never follows redirects). Probes malformed percent-encoding and oversized inputs (any 5xx is a finding), a burst on a named endpoint for missing rate limiting, security headers, and open redirect, and prints review_checks-shaped rows (finding, clean or not-checked). Routed from `full-audit.md` via the new `references/dynamic-probe.md`. Tests: `scripts/test_dynamic_probe.py`.
+size-budget-raise: .claude/skills/deep-code-review/references/full-audit.md 6584→6757 route line to the dynamic probe step
+size-budget-raise: .claude/skills/INDEX.md 14885→14993 dynamic_probe.py script row
+size-budget-raise: .claude/skills/deep-code-review/INDEX.md 20406→20551 dynamic-probe.md reference row and script count
+size-budget-raise: .claude/skills/deep-code-review/INDEX-scripts.md 5356→5498 dynamic_probe.py script row
+size-budget-raise: .claude/skills/deep-code-review/references/full-map.md 18985→19020 route to dynamic-probe.md
+
+size-budget-raise: .claude/skills/deep-code-review/references/full-map.md 18985→18997 routes dynamic-probe.md
+
+### Added
+- deep-code-review `review_checks.sh --full`: scan every tracked file against git's empty tree (one batched gitleaks run over the working tree), with no synthetic base needed. gitleaks now drops fingerprints listed in the repo's `.gitleaksignore` (read as of BASE, HEAD under `--full`) in both modes, and a missing gitleaks lands as a `not-checked` row. `perun_policy.py` is now located from the script's resolved dir. Tests: `scripts/test-review-checks-full.sh`.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 4994→5260 documents --full mode and .gitleaksignore handling
+
 ## [1.610.0] — 2026-10-28
 
 ### Added
