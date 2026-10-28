@@ -4,6 +4,8 @@ Read this when you are about to report a security finding, when a project asks t
 
 Read the patch once. On every added line, ask whether an attacker-reachable value reaches: a query, shell, template, `eval` or other interpreter; HTML or script output; an outbound request URL; a file path or archive entry name; a deserializer or object loader; a redirect target; a privileged action or object lookup with no authentication, role or ownership check; a check-then-use on a file or record; an embedded credential; or weak or misused cryptography. Run section 1 on each candidate. When only the patch is in scope, skip the script, the override file and section 3; when the full security playbook would settle a doubtful guard, open only the matching `security-appsec.md` section. Anchor each finding at the line a fix would change: where the unsafe value takes effect, the privileged call a missing check should guard, or the line holding an embedded secret.
 
+Also grep every `redirect: "follow"` fetch call site and every TLS-verify-off flag (`rejectUnauthorized: false`, `NODE_TLS_REJECT_UNAUTHORIZED=0`, `verify=False`, `InsecureSkipVerify: true`, `curl -k`) as review targets: the first follows hops no guard revalidated (use `"manual"` plus a per-hop check), the second disables certificate checks for the call or process. Each hit is a finding unless test-only or pinned to a private CA.
+
 ## 1. Verify or drop: no exploit path, no finding
 
 Run a refuter pass on every security candidate before it reaches the report. The refuter's job is to break the claim, not restate it.

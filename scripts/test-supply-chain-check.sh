@@ -12,7 +12,8 @@ bad() { printf 'FAIL %s\n' "$1"; fail=1; }
 expect() { local n=$1 w=$2 p=$3 o r; shift 4; o=$("$@" 2>&1) && r=0 || r=$?
   [ "$r" = "$w" ] && printf '%s' "$o" | grep -q -- "$p" && ok "$n" || { bad "$n (rc=$r)"; printf '%s\n' "$o"; }; }
 
-mkdir -p "$T/bin" "$T/repo/.github/workflows" "$T/empty" "$T/sys" "$T/nopy"
+mkdir -p "$T/bin" "$T/repo/.github/workflows" "$T/empty" "$T/sys" "$T/nopy" "$T/nowf/.github/workflows"
+: >"$T/repo/.github/workflows/ci.yml"
 for t in cat grep python3 dirname env; do ln -s "$(command -v $t)" "$T/sys/$t"; done # PATH without the fake tools
 for t in cat grep dirname env bash; do ln -s "$(command -v $t)" "$T/nopy/$t"; done       # ... and without python3
 for t in zizmor actionlint scorecard; do
@@ -54,6 +55,8 @@ expect "--scorecard without value is usage error" 2 'needs a value' -- env PATH=
 expect "--scorecard rejects a non owner/repo shape" 2 'bad --scorecard' -- env PATH="$P" bash "$SC" --scorecard 'a b/c;x'
 expect "missing tools reported skipped, exit 3" 3 'SKIPPED actionlint: not installed' -- env PATH="$T/sys" /bin/bash "$SC" --online --scorecard o/r "$T/repo"
 expect "no workflows dir: ci tools skipped" 3 'SKIPPED zizmor: no .github/workflows' -- env PATH="$P" bash "$SC" "$T/empty"
+expect "no workflow files: not-applicable note, no INCOMPLETE" 0 'actionlint: no workflow files, not applicable' -- env PATH="$P" bash "$SC" --allow-skip "$T/nowf"
+bash "$SC" "$T/nowf" 2>&1 | grep -q '^INCOMPLETE:.*actionlint' && bad "no workflows counted as skipped" || ok "no workflows not counted as skipped"
 expect "zizmor failure beats INCOMPLETE" 1 'FAIL zizmor' -- env PATH="$P" FAKE_FAIL=zizmor bash "$SC" "$T/repo"
 expect "actionlint failure fails the gate" 1 'FAIL actionlint' -- env PATH="$P" FAKE_FAIL=actionlint bash "$SC" "$T/repo"
 expect "scorecard failure fails the gate" 1 'FAIL scorecard' -- env PATH="$P" FAKE_FAIL=scorecard bash "$SC" --scorecard acme/widget "$T/repo"

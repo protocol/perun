@@ -8,6 +8,7 @@ CONFIG is JSON, gates in order:
   {"gates": [{"name": "lint", "command": "ruff check .", "cheap": true, "timeout": 60},
              {"name": "tests", "command": "pytest -q", "timeout": 1800}]}
 `command` is split with shlex and run WITHOUT a shell (no pipes, globs, `&&`; wrap those in a script file).
+Optional top-level `"require_files": [".env.production"]`: each missing path prints `WARN preflight: required file missing` on stderr (warn only, no exit effect).
 `cheap` defaults false; `timeout` seconds defaults to 600. Per-gate wall time is merged into --cache (default
 .preflight-times.json, keep it gitignored) and the 3 slowest gates of this run print last, to show what to make cheap.
 Output, one line per gate: PASS | FAIL (exit N) | TIMEOUT | COULD_NOT_RUN (command not startable) | SKIPPED.
@@ -107,7 +108,10 @@ def main(argv=None):
     if a.selftest:
         return selftest() or 0
     try:
-        gates = json.load(open(a.config))["gates"]
+        cfg = json.load(open(a.config))
+        gates = cfg["gates"]
+        need = cfg.get("require_files", [])
+        assert isinstance(need, list) and all(isinstance(x, str) for x in need), "require_files must be a list of paths"
         assert gates and all(g["name"] and g["command"] for g in gates), "empty name/command"
         for g in gates:
             t = g.get("timeout", 600)
@@ -116,6 +120,9 @@ def main(argv=None):
     except (OSError, ValueError, KeyError, TypeError, AssertionError) as e:
         print(f"preflight: bad config: {e!r}", file=sys.stderr)
         return 2
+    for f in need:  # never removes or copies anything: a missing env template the build needs is named, not silently absent
+        if not os.path.exists(f):
+            print(f"WARN preflight: required file missing: {f} (env templates such as .env.production must survive gate prep)", file=sys.stderr)
     res = preflight(gates, a.all)
     for n, s, sec, d in res:
         print(f"{s} {n} ({sec:.1f}s){': ' + d if d else ''}")
