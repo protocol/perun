@@ -4056,6 +4056,13 @@ else
   record 1 "train flake-on-base: a FLAKE lands only if the test also fails on the base, else CANT"; tail -8 "$WORK/train-flake-base.log"
 fi
 
+# train flake cleanup: own per-feature file (scripts/test-train-flake-cleanup.sh), one case here.
+if bash "$ROOT/scripts/test-train-flake-cleanup.sh" >"$WORK/train-flake-cleanup.log" 2>&1; then
+  record 0 "train flake cleanup: temp dirs removed on exit, triage rules present"
+else
+  record 1 "train flake cleanup: temp dirs removed on exit, triage rules present"; tail -8 "$WORK/train-flake-cleanup.log"
+fi
+
 # train split on CANT: own per-feature file (scripts/test-train-split.sh), one case here.
 if bash "$ROOT/scripts/test-train-split.sh" >"$WORK/train-split.log" 2>&1; then
   record 0 "train split: an unattributed red train re-gates halves, lands only green halves, leaves keep CANT"
