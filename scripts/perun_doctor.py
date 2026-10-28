@@ -19,7 +19,7 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parent.parent
 SKIP = {".git", "node_modules", ".venv", "__pycache__", "worktrees", "skill-backups"}
 SKILL_HOSTS = (".claude", ".cursor", ".agents", ".codex", ".gemini", ".opencode", ".github", ".windsurf", ".hermes", ".kiro", ".cline", ".roo", ".factory", ".qwen", ".grok")  # every root install.sh can write
-HOOK_SCRIPTS = ("pipe_mask_guard.py", "bypass_guard.py", "destructive_guard.py", "subagent_start_inject.py", "handback_cap.py", "context_nudge.py", "lane_resume_nudge.py", "ceo_altitude_guard.py", "comms_guard.py", "outcome_claim_guard.py", "landing_watchdog.py", "stall_guard.py", "reply_cap.py", "decision_gate.py", "repeat_poll_guard.py", "subagent_brief_lint.py", "finding_guard.py", "flow_alarm.py")  # operating-layer template
+HOOK_SCRIPTS = ("pipe_mask_guard.py", "bypass_guard.py", "destructive_guard.py", "subagent_start_inject.py", "handback_cap.py", "context_nudge.py", "lane_resume_nudge.py", "ceo_altitude_guard.py", "comms_guard.py", "outcome_claim_guard.py", "landing_watchdog.py", "stall_guard.py", "reply_cap.py", "decision_gate.py", "repeat_poll_guard.py", "subagent_brief_lint.py", "finding_guard.py", "flow_alarm.py", "freeze_hook.py")  # operating-layer template
 
 
 def sha(p):

@@ -12,14 +12,17 @@ its first output line is the reason. The operating loop calls `fitness_tick.py` 
                                                    that times out (60s) or cannot start is an ALARM.
   fitness_tick.py closable NAME [--dir D] [--state F] [--root R]
                                                    exit 0 only when NAME exists in D, has >= 2 consecutive passing
-                                                   ticks (two real runs), AND a caller exists: some file under R
-                                                   (default `.`, excluding .git, tests, this script and the state file)
-                                                   that names `fitness_tick.py`, so the loop really runs it.
+                                                   ticks (two real runs), AND a real caller exists under R (default `.`):
+                                                   a hook/settings/package JSON, CI workflow, `.sh` or Makefile line that
+                                                   runs it (`python3|bash|sh ...fitness_tick.py` or `./...`), or a loop
+                                                   entry (`loop.md`, a `routines/` file) whose line starts with that command.
+                                                   A prose mention or a comment does not count.
                                                    Otherwise exit 1 with the one missing reason.
 Exit 2 on usage error. Side effects: the state file write. Never edits or deletes a check.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -68,9 +71,25 @@ def tick(o):
 
 def has_caller(o):
     skip = {os.path.realpath(__file__), os.path.realpath(o["--state"])}
-    r = subprocess.run(["grep", "-rIl", "--exclude-dir=.git", "--exclude=test*", "-F", "fitness_tick.py", o["--root"]],
+    r = subprocess.run(["grep", "-rIn", "--exclude-dir=.git", "--exclude=test*", "-F", "fitness_tick.py", o["--root"]],
                        capture_output=True, text=True)
-    return any(os.path.realpath(f) not in skip for f in r.stdout.split())
+    for ln in r.stdout.splitlines():
+        f, _, txt = ln.split(":", 2)
+        low, base = "/" + f.lower(), os.path.basename(f.lower())
+        if os.path.realpath(f) in skip:
+            continue
+        # executable wiring only: an interpreter or ./path invocation, never a prose mention or a comment
+        run = r"(?:(?:python3?|bash|sh)\s+\S*|\./\S*)fitness_tick\.py"
+        if base == "loop.md" or "/routines/" in low:  # a loop entry: the line IS the command
+            ok = re.match(r"\s*(?:[-*$>]\s*)*`?" + run, txt)
+        elif base == "makefile" or low.endswith((".json", ".sh", ".yml", ".yaml")):
+            ok = re.search(run, txt) and not txt.lstrip().startswith("#") and (
+                not low.endswith((".yml", ".yaml")) or "/.github/workflows/" in low)
+        else:
+            ok = False
+        if ok:
+            return True
+    return False
 
 
 def closable(o, name):

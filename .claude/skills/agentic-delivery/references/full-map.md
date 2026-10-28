@@ -22,6 +22,7 @@ chat may be terse.
 | Task | Open |
 |---|---|
 | Land PRs as a train | `scripts/merge_train.py`, `scripts/train_land.sh`; depth `references/merge-queue-worktrees.md` |
+| Issue-dedupe hook, per-fix fitness check, flow alarms, stop-starting, freeze | `references/flow-guards.md` |
 | Fix a red gate or union | `references/gate-epistemology.md`, `references/red-gate-triage.md`; repeat flake: `scripts/flake_ledger.py` |
 | Start a lane | `templates/lane-preamble.md`: paste into every lane brief |
 | Isolate a lane's worktree | `references/worktree-isolation.md` |
