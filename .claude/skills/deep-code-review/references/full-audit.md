@@ -78,3 +78,5 @@ Run a lens only when its trigger exists; record the grep and hit count either wa
   id, status and evidence line in the `machine-report.md` ledger so the next run re-checks it automatically.
   On a FULL re-run, load the prior machine report in `code-review/` for the same target by default (`machine-report.md` section 3, no `PRIOR` flag needed) and
   emit `fixed` or `still-open` for every prior id before new hunting.
+
+Opt-in dynamic step: read `dynamic-probe.md` when the app runs locally and static scanners found nothing (malformed-input 5xx, missing rate limit, headers, open redirect).
