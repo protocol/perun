@@ -1,0 +1,5 @@
+### Added
+- agentic-delivery: `scripts/admission_check.py` flags a per-PR admission config that omits a test class the batch runs (e.g. browser/e2e) and a stale or ownerless spec-selection map. `scripts/host_accept.py` is the merge-host acceptance checklist (operator reset without extra IAM, auto-reset on missed heartbeats, per-slice memory caps with sshd/agent reserve). `train_land.sh` runs both (rc != 0 refuses the train) whenever the base branch carries their config. The landing watchdog now surfaces the existing `red_main.py` uncovered/oldest-red alarm, and `flake_ledger.py serial-move` records tests moved to the serial project (never quarantined, failure there is BLOCKING as a real bug).
+
+size-budget-raise: .claude/skills/agentic-delivery/references/red-gate-triage.md 25417→27186 one paragraph: admission completeness and map owner, plus watchdog and serial-move notes
+size-budget-raise: .claude/skills/agentic-delivery/references/fanout-host-sizing.md 48845→49827 one paragraph: merge-host acceptance checklist

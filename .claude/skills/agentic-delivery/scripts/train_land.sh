@@ -91,6 +91,12 @@ if [ -n "$led" ]; then
   _flq=$(cat "$led/quarantine.json" 2>/dev/null) || _flq=
 fi
 require_clean_tree . || exit 2
+# Trusted admission/host gates (admission_check.py, host_accept.py): each runs when the BASE branch carries its config (a PR cannot opt out by deleting it); rc != 0, 2 included, refuses the train.
+for _g in admission_check:.claude/admission.json host_accept:.claude/host-accept.json; do
+  if git cat-file -e "$REMOTE/$BASE_BRANCH:${_g#*:}" 2>/dev/null; then
+    python3 "$HERE/${_g%%:*}.py" --base "$REMOTE/$BASE_BRANCH" >&2 || { echo "train_land: ${_g%%:*} failed (see above); refusing the train" >&2; exit 2; }
+  fi
+done
 # .perun/policy.json: PERUN_JOBS (parallelism from local_cpu) and PERUN_GITHUB_ACTIONS reach VERIFY_CMD and
 # BROWSER_CMD. github_actions=off: this script never waits on or re-runs CI (it has no CI wait at all), and
 # land_train.sh adds [skip ci] to every merge-commit body only; it never suppresses PR-head checks or

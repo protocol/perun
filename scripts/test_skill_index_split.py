@@ -92,7 +92,7 @@ class RealRepo(unittest.TestCase):
         d = ROOT / ".claude/skills/agentic-delivery"
         core, lazy = (d / "INDEX.md").stat().st_size, (d / si.SCRIPTS_INDEX).stat().st_size
         self.assertLess(core, 16962)  # a reference lookup reads core only
-        self.assertLess(core + lazy, 16962 + 2900)  # a script lookup reads both: about the old size, not far above; +130 for the reply_cap and decision_gate rows, +820 for the destructive_guard_core, file_finding, repeat_poll_guard, stage_run and subagent_brief_lint rows, +150 for the feeder_order row, +200 for the train_yield row, +100 for the lkg row, +200 for the red_main row and the stage-weights/serial CLI text, +400 = +348 INDEX-scripts.md (14732->15080: host_installer, peer_ack, pregate_parity rows) +51 skills/INDEX.md (14295->14346), +100 for the vendor_drift row
+        self.assertLess(core + lazy, 16962 + 3100)  # a script lookup reads both: about the old size, not far above; +130 for the reply_cap and decision_gate rows, +820 for the destructive_guard_core, file_finding, repeat_poll_guard, stage_run and subagent_brief_lint rows, +150 for the feeder_order row, +200 for the train_yield row, +100 for the lkg row, +200 for the red_main row and the stage-weights/serial CLI text, +400 = +348 INDEX-scripts.md (14732->15080: host_installer, peer_ack, pregate_parity rows) +51 skills/INDEX.md (14295->14346), +100 for the vendor_drift row, +200 = +284 INDEX-scripts.md growth (admission_check, host_accept rows) plus INDEX.md regen
 
     def test_entry_index_points_at_the_lazy_file(self):
         self.assertIn(si.SCRIPTS_INDEX, (ROOT / ".claude/skills/INDEX.md").read_text(encoding="utf-8"))

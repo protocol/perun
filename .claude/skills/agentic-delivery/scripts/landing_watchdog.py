@@ -364,6 +364,30 @@ def _lkg(cwd):
         return None
 
 
+def _red(cwd):
+    """Red-main alarm line (red_main.py), or None. Off unless policy `red_uncovered_max` or `red_oldest_h` is set. With a threshold set, an unreadable or missing
+    .claude/red-main.json (red_main rc 2) and a red_main that cannot load are alarms too, never silent green; only the render path fails open."""
+    try:
+        d = os.path.dirname(os.path.abspath(__file__))
+        if d not in sys.path:
+            sys.path.insert(0, d)
+        import perun_policy
+        pol = perun_policy.load()
+        if not (pol.get("red_uncovered_max") or pol.get("red_oldest_h")):
+            return None
+        import io
+        import contextlib
+        import red_main
+        buf, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+            rc = red_main.main(["--file", os.path.join(cwd, ".claude", "red-main.json")])
+    except Exception as e:  # policy on but the check itself cannot run: say so
+        return f"Red-main check could not run ({type(e).__name__}); green is unknown."
+    if rc == 1:
+        return "Red main needs an owner: " + " | ".join(buf.getvalue().split("\n")[:3])
+    return f"Red-main check failed (rc {rc}): {err.getvalue().strip()[:160]}; green is unknown." if rc else None
+
+
 def _installer(cwd):
     """Merged-but-unapplied host installer alarm (host_installer.py), or None. Off unless policy `installer_unapplied_h` > 0. Fails open."""
     try:
@@ -389,7 +413,7 @@ def _all(cwd, probed, minutes, cap, ages_lim=None, lanes=None):
         lane = _lanes(cwd, b, lanes if lanes is not None else lane_cfg())
     except Exception:  # fail open: lane lines never drop the others
         lane = None
-    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra, lane, _train_yield(cwd), _lkg(cwd), _installer(cwd), _age(rest[0] if rest else [], ages_lim if ages_lim is not None else age_limits())) if x) or None
+    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra, lane, _train_yield(cwd), _lkg(cwd), _red(cwd), _installer(cwd), _age(rest[0] if rest else [], ages_lim if ages_lim is not None else age_limits())) if x) or None
 
 
 def _event(data):

@@ -33,6 +33,8 @@ COMMANDS (state lives in --dir, default .claude/flake-ledger: ledger.jsonl appen
   serial [--n N]                 detector: tests that failed in the full parallel run AND passed solo on >= N distinct trees and
                                  never failed solo on any tree (suite-only failure). Neither a flake nor a real red: prints `SERIAL-CANDIDATE id`;
                                  move it to the serial (one-at-a-time) project the same day. Exit 1 when any candidate.
+  serial-move ID...              record tests moved to the serial project (serial-project.txt): excluded from `serial` and `quarantine`,
+                                 and `check` reports them BLOCKING (a failure there is a real bug, never excused as a flake).
   guard                          exit 2 when --dir resolves under the cwd or the git toplevel (a path PR code can write).
 DECISION (trust boundary) AND KNOWN CEILING
   Context: the code under test (PR code in BROWSER_CMD / RERUN_CMD) runs as the same user as the train and could write the ledger
@@ -116,6 +118,12 @@ def load_q(path):
         die(f"{p}: not valid JSON")
 
 
+def load_moved(d):
+    """Tests already moved to the serial project (serial-project.txt, one id per line). A failure there is a real bug, never a flake."""
+    p = Path(d) / "serial-project.txt"
+    return set(p.read_text().split("\n")) - {""} if p.exists() else set()
+
+
 def save_q(d, q):
     """Write quarantine.json via a unique temp file + os.replace (callers hold the flock)."""
     fd, tmp = tempfile.mkstemp(dir=d, prefix="quarantine.", suffix=".tmp")
@@ -179,6 +187,7 @@ def main(argv=None):
     s = sub.add_parser("record"); s.add_argument("--tree")
     s = sub.add_parser("report"); s.add_argument("--n", type=int, default=3)
     s = sub.add_parser("serial"); s.add_argument("--n", type=int, default=3)
+    s = sub.add_parser("serial-move"); s.add_argument("ids", nargs="+")
     s = sub.add_parser("quarantine"); s.add_argument("--n", type=int, default=3); s.add_argument("--days", type=int, default=14)
     s = sub.add_parser("renew"); s.add_argument("id"); g = s.add_mutually_exclusive_group(required=True)
     g.add_argument("--days", type=int); g.add_argument("--expires")
@@ -201,6 +210,15 @@ def main(argv=None):
         tree = tree_of(a.tree)
         print(f"recorded {record(a.dir, tree, sys.stdin.read())} result(s) for tree {tree[:12]}")
         return 0
+    if a.cmd == "serial-move":
+        with locked(a.dir):
+            ids = sorted(load_moved(a.dir) | set(a.ids))
+            fd, tmp = tempfile.mkstemp(dir=a.dir, prefix="serial-project.", suffix=".tmp")  # tmp + replace: a crash never truncates the moved set
+            with os.fdopen(fd, "w") as fh:
+                fh.write("\n".join(ids) + "\n")
+            os.replace(tmp, Path(a.dir) / "serial-project.txt")
+        print(f"serial-project: {len(ids)} test(s)")
+        return 0
     if a.cmd == "renew":
         with locked(a.dir):
             q = load_q(qpath)
@@ -213,9 +231,9 @@ def main(argv=None):
     if a.cmd == "quarantine":
         with locked(a.dir):
             stats, latest = load(a.dir)
-            q = load_q(qpath)
+            q, moved = load_q(qpath), load_moved(a.dir)
             for t in sorted(stats):
-                if t not in q and flake_trees(stats, t) >= a.n and not consistent(stats, t, latest[t]):
+                if t not in q and t not in moved and flake_trees(stats, t) >= a.n and not consistent(stats, t, latest[t]):
                     q[t] = {"since": today.isoformat(), "expires": (today + datetime.timedelta(days=a.days)).isoformat()}
                     print(f"QUARANTINE {t} expires={q[t]['expires']}")
             save_q(a.dir, q)
@@ -232,7 +250,8 @@ def main(argv=None):
             print(f"{'EXPIRED' if day(e['expires']) < today else 'QUARANTINED'}\t{t}\texpires={e['expires']}")
         return 0
     if a.cmd == "serial":
-        c = [t for t in sorted(stats) if serial_trees(stats, t) >= a.n]
+        moved = load_moved(a.dir)
+        c = [t for t in sorted(stats) if t not in moved and serial_trees(stats, t) >= a.n]
         for t in c:
             print(f"SERIAL-CANDIDATE {t}\tsuite-only-fail-trees={serial_trees(stats, t)}")
         return 1 if c else 0
@@ -240,9 +259,11 @@ def main(argv=None):
         q = json.loads(sys.stdin.read() or "{}") if a.quarantine == "-" else load_q(qpath)
     except ValueError:
         die("--quarantine -: stdin is not valid JSON")
-    tree, bad = tree_of(a.tree), 0
+    tree, bad, moved = tree_of(a.tree), 0, load_moved(a.dir)
     for t in a.ids:
-        if t not in q:
+        if t in moved:
+            why = "serial-project test: a failure here is a real bug, not a flake"
+        elif t not in q:
             why = "not quarantined"
         elif day(q[t]["expires"]) < today:
             why = f"quarantine expired {q[t]['expires']}; owner review needed"

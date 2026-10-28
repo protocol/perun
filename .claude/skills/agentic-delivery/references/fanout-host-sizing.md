@@ -540,3 +540,7 @@ A red train is first re-run **alone and at low load** (`merge_train.py verify --
 `nice -n 19`, `PERUN_LOW_LOAD=1`). A pass there is a load flake: the batch lands and the flake is logged. Only a red that
 reproduces is bisected. Measure it with `landing_watchdog.py check`: a low yield (PRs per landed train) or merges per hour below
 target (policy `train_yield_floor`, `merges_per_hour_target`) says trains are being lost to reds or starved.
+
+## A merge host is not accepted until it can be recovered without anyone's help
+
+A host that runs the merge train is accepted only when three properties are each verified, not assumed: (a) an operator can reset it with a command that needs no IAM or permissions beyond what they already hold; (b) it resets itself after missed heartbeats, with nobody watching; (c) per-slice memory caps are set and memory is reserved for sshd and the agent session, so a runaway slice cannot lock out the way back in. `scripts/host_accept.py` reads the attestation (`.claude/host-accept.json`: `operator_reset`, `auto_reset`, `mem_caps` with `reserved_mb`, each `"verified": true` with a non-blank `evidence` ref and a past ISO `date`), prints one `NOT-ACCEPTED property` per gap (exit 1) or `ACCEPTED`, and exits 2 on a missing or malformed file. `train_land.sh` runs it whenever the base branch carries the file. It records evidence a human supplied; `scripts/host_probe.py` measures live load.
