@@ -74,7 +74,7 @@ bash "$S/review_checks.sh" --repo "$T/none" >/dev/null 2>&1 && bad "--repo bad d
 # 6. supply_chain_check: dev-only cap. Same critical advisory on a dev-only package fails --fail-on high only when prod-reachable.
 cd "$T/repo"
 rc=0; o=$(REVIEW_OSV_DB_DIR="$T/db" bash "$S/supply_chain_check.sh" --online --allow-skip --fail-on high "$T/repo" 2>&1) || rc=$?
-[ "$rc" = 0 ] && printf '%s' "$o" | grep -q 'moderate=1' && printf '%s' "$o" | grep -q 'devpkg@1.0.0 GHSA-d fixed in: none \[dev-only; capped from critical\]' && ok "dev-only critical capped to moderate, noted" || { bad "dev-only cap (rc=$rc)"; printf '%s\n' "$o"; }
+[ "$rc" = 0 ] && printf '%s' "$o" | grep -q 'critical=1' && printf '%s' "$o" | grep -q 'devpkg@1.0.0 GHSA-d fixed in: none (reach: dev-only)' && ok "dev-only critical skips the gate, noted" || { bad "dev-only cap (rc=$rc)"; printf '%s\n' "$o"; }
 printf '{"packages":{"node_modules/devpkg":{"version":"1.0.0"}}}' >package-lock.json
 rc=0; o=$(REVIEW_OSV_DB_DIR="$T/db" bash "$S/supply_chain_check.sh" --online --allow-skip --fail-on high "$T/repo" 2>&1) || rc=$?
 [ "$rc" = 1 ] && printf '%s' "$o" | grep -q 'critical=1' && ! printf '%s' "$o" | grep -q 'dev-only' && ok "prod-reachable critical is not capped" || { bad "prod critical (rc=$rc)"; printf '%s\n' "$o"; }

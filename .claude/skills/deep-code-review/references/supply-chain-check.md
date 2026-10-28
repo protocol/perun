@@ -22,6 +22,8 @@ silent pass: it prints `SKIPPED <tool>: <reason>` and the run exits 3 (INCOMPLET
 Pre-deploy: `--online --fail-on high`; block the release on any non-zero exit. osv-scanner exit 128 (no package
 sources found) is reported as a failure, not confirmed as "nothing to scan".
 
+osv rows carry a reach tag: an npm package no source file imports prints `(reach: dev-only|transitive)`; only dev-only skips the gate unless `SUPPLY_CHAIN_STRICT=1` (transitive may be reached via a direct dependency); unknown reach is gated.
+
 ## Sandbox degradation
 
 Under the macOS agent sandbox, `supply_chain_check.sh` retries a crashed `osv-scanner` CLI (Go TLS x509 -26276) via the

@@ -11,6 +11,8 @@
 # osv-scanner CLI crash (rc>1) retries via the OSV API with curl and prints "osv: api-fallback"; python3+curl needed.
 # Exit: 0 every check ran clean; 1 finding at/above threshold or a tool failed; 2 usage;
 #       3 INCOMPLETE: a check was skipped (tool or python3 missing, osv/scorecard not requested), nothing failed.
+#       Reach: an npm osv row no source file imports prints "(reach: dev-only|transitive)"; only dev-only skips the gate
+#       unless SUPPLY_CHAIN_STRICT=1 (transitive may be reached via a direct dependency); unknown reach is gated.
 #       --allow-skip turns a skip-only run into exit 0. A finding (1) wins over INCOMPLETE (3). Needs python3 for osv.
 set -u
 online=${SUPPLY_CHAIN_ONLINE:-0}; fail_on=high; sc_repo=; allow_skip=0; skipped=
@@ -74,7 +76,7 @@ pkgs = []
 for (e, n, v), r in zip(pk, res):
     ids = [x["id"] for x in r.get("vulns") or []]
     for x in ids: vs.setdefault(x, None)
-    pkgs.append({"package": {"name": n, "version": v}, "groups": [], "vulnerabilities": ids})
+    pkgs.append({"package": {"name": n, "version": v, "ecosystem": e}, "groups": [], "vulnerabilities": ids})
 for x in vs: vs[x] = api("https://api.osv.dev/v1/vulns/" + x)
 for p in pkgs: p["vulnerabilities"] = [vs[x] for x in p["vulnerabilities"]]
 print(json.dumps({"results": [{"packages": pkgs}]}))
@@ -103,22 +105,37 @@ else
   elif [ "$osv_rc" -gt 1 ]; then echo "FAIL osv-scanner: exit $osv_rc"; rc=1
   else
     printf '%s' "$out" | python3 -I -c '
-import json, os, sys
+import json, os, re, sys
 order = ["low", "moderate", "high", "critical"]
-# Reachability downgrade: a package npm marks "dev": true (reachable only via devDependencies), or osv puts in a dev/build/test
-# dependency group, is "dev-only": noted, and capped at moderate so it cannot fail --fail-on high/critical.
-devs, prods = set(), set()
-for d, ds, fs in os.walk(sys.argv[2]):
-    ds[:] = [x for x in ds if x not in (".git", "node_modules", ".venv", "venv", "vendor")]
+# Reach tag per row: imported (npm name in a JS/TS import, require or dynamic import outside node_modules/.git, and outside
+# a root-level .venv/venv/vendor), dev-only (npm "dev": true on every occurrence, or an osv dev/build/test group), else
+# transitive (it may be reached through a direct dependency, so it still gates). Every row not imported prints "(reach: <tag>)";
+# only dev-only skips the --fail-on gate, unless SUPPLY_CHAIN_STRICT=1. Unknown (unreadable file, lockfile without a "packages"
+# map, non-npm ecosystem, no ecosystem field) is imported = gated. PyPI dist names differ from module names, so PyPI is
+# downgraded only by a dev group. ponytail: regex scan misses computed require(x) and config-string use; symlinks not followed.
+devs, prods, imp, scan_ok = set(), set(), set(), True
+JS = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["\x27\x60]([^"\x27\x60]+)["\x27\x60]""")
+for d, ds, fs in os.walk(sys.argv[2], onerror=lambda e: globals().update(scan_ok=False)):
+    ds[:] = [x for x in ds if x not in (".git", "node_modules") and not (d == sys.argv[2] and x in (".venv", "venv", "vendor"))]
+    for f in fs:
+        if f.endswith((".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts", ".vue", ".svelte", ".astro", ".mdx")):
+            try: txt = open(os.path.join(d, f), errors="replace").read()
+            except OSError: scan_ok = False; continue
+            for m in JS.findall(txt):
+                if m[0] not in ".#/" and ":" not in m: imp.add("/".join(m.split("/")[:2 if m[0] == "@" else 1]))
     if "package-lock.json" in fs:
         try:
-            for k, v in (json.load(open(os.path.join(d, "package-lock.json"))).get("packages") or {}).items():
+            for k, v in json.load(open(os.path.join(d, "package-lock.json")))["packages"].items():  # v1 has no "packages": fail closed
                 if "node_modules/" in k: (devs if v.get("dev") else prods).add(k.rsplit("node_modules/", 1)[1] + "@" + str(v.get("version")))
-        except (OSError, ValueError, AttributeError): pass
+        except (OSError, ValueError, AttributeError, KeyError): scan_ok = False
 def devonly(p):
     k = p["package"]["name"] + "@" + str(p["package"]["version"])
-    if p["package"].get("ecosystem") == "npm" and k in devs and k not in prods: return True  # every occurrence is dev
+    if p["package"].get("ecosystem") == "npm" and (k in devs or k in prods): return k not in prods  # the lock is authoritative: dev only if every occurrence is dev
     return bool({str(g).lower() for g in p.get("dependency_groups") or []} & {"dev", "build", "test"})
+def reach(p):
+    n, e = p["package"]["name"], p["package"].get("ecosystem")
+    if not scan_ok or (n in imp and e == "npm"): return "imported"
+    return "dev-only" if devonly(p) else "transitive" if e == "npm" else "imported"
 def sev(v, g):
     s = str((v.get("database_specific") or {}).get("severity", "")).lower()
     if s == "medium": s = "moderate"
@@ -130,22 +147,23 @@ def fixed(v):
     return sorted({e["fixed"] for a in v.get("affected", []) for r in a.get("ranges", []) for e in r.get("events", []) if "fixed" in e})
 try: data = json.load(sys.stdin)
 except ValueError: print("FAIL osv-scanner: unparseable output"); sys.exit(1)
-counts, rows = {}, []
+strict = os.environ.get("SUPPLY_CHAIN_STRICT") == "1"
+counts, gate, rows, down = {}, {}, [], 0
 for res in data.get("results") or []:
     for p in res.get("packages") or []:
         maxg = {i: g.get("max_severity") for g in p.get("groups") or [] for i in g.get("ids", [])}
         for v in p.get("vulnerabilities") or []:
-            s, note = sev(v, maxg.get(v.get("id"))), ""
-            if devonly(p):
-                note = " [dev-only" + ("; capped from %s" % s if s in ("high", "critical") else "") + "]"
-                if s in ("high", "critical"): s = "moderate"
+            s, r = sev(v, maxg.get(v.get("id"))), reach(p)
             counts[s] = counts.get(s, 0) + 1
-            rows.append((s, p["package"]["name"], p["package"]["version"], v.get("id"), (",".join(fixed(v)) or "none") + note))
+            if r != "dev-only" or strict: gate[s] = gate.get(s, 0) + 1
+            else: down += 1
+            rows.append((s, p["package"]["name"], p["package"]["version"], v.get("id"), (",".join(fixed(v)) or "none") + ("" if r == "imported" else " (reach: %s)" % r)))
 print("osv-scanner: " + (", ".join("%s=%d" % (s, counts[s]) for s in reversed(order + ["unknown"]) if s in counts) or "no advisories"))
 for s, n, ver, i, f in sorted(rows, key=lambda r: -order.index(r[0]) if r[0] in order else 1):
     print("  %-8s %s@%s %s fixed in: %s" % (s, n, ver, i, f))
+if down: print("  %d dev-only: excluded from the --fail-on gate (SUPPLY_CHAIN_STRICT=1 gates them)" % down)
 t = order.index(sys.argv[1])
-sys.exit(1 if any(s == "unknown" or order.index(s) >= t for s in counts) else 0)
+sys.exit(1 if any(s == "unknown" or order.index(s) >= t for s in gate) else 0)
 ' "$fail_on" "$dir" || rc=1
   fi
 fi
