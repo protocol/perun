@@ -18,20 +18,22 @@
 # Each tool is timeboxed (default 60s). Exit 0 even with findings; 2 on usage/unresolvable base.
 set -euo pipefail
 
-base=origin/main tests=0 hist=0 tmo=60 ran="" missing="" lease=ok leased=0 full=0
+repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" missing="" lease=ok leased=0 full=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base=${2:?--base needs a ref}; case "$base" in -*) echo "review_checks: --base must not start with '-'" >&2; exit 2 ;; esac; shift 2 ;;
     --timeout) tmo=${2:?--timeout needs seconds}; shift 2 ;;
     --tests) tests=1; shift ;;
+    --repo) repo=${2:?--repo needs a dir}; [ -d "$repo" ] || { echo "review_checks: --repo: not a directory: $repo" >&2; exit 2; }; shift 2 ;; # replaces `cd DIR && review_checks.sh` (bash guards block chains)
     --history) hist=1; shift ;;
     --full-history) hist=1 full=1; shift ;;
-    *) echo "usage: review_checks.sh [--base REF] [--tests] [--history] [--timeout SECS]" >&2; exit 2 ;;
+    *) echo "usage: review_checks.sh [--repo DIR] [--base REF] [--tests] [--history] [--timeout SECS]" >&2; exit 2 ;;
   esac
 done
 case "$tmo" in ''|*[!0-9]*) echo "review_checks: --timeout must be an integer" >&2; exit 2 ;; esac
-git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "review_checks: unresolvable base '$base'" >&2; exit 2; }
 here=$(cd "$(dirname "$0")" && pwd)
+cd "$repo"
+git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "review_checks: unresolvable base '$base'" >&2; exit 2; }
 cd "$(git rev-parse --show-toplevel)"
 
 raw=$(mktemp "${TMPDIR:-/tmp}/review-raw.XXXXXX") out=$(mktemp "${TMPDIR:-/tmp}/review-out.XXXXXX") tsv=$(mktemp "${TMPDIR:-/tmp}/review-tsv.XXXXXX")
@@ -298,10 +300,14 @@ fi
 
 lock_files=$(changed '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.sum|Cargo\.lock|poetry\.lock|requirements[^/]*\.txt|composer\.lock)$')
 if [ -z "$lock_files" ]; then :
-elif [ "${REVIEW_OSV:-}" != 1 ]; then skip osv-scanner "REVIEW_OSV not set; osv-scanner queries the OSV API"
+elif [ "${REVIEW_OSV:-}" != 1 ] && [ -z "${REVIEW_OSV_DB_DIR:-}" ]; then skip osv-scanner "REVIEW_OSV not set; osv-scanner queries the OSV API"
+elif [ -n "${REVIEW_OSV_DB_DIR:-}" ] && [ -z "$(find "$REVIEW_OSV_DB_DIR" -type f -name '*.zip' 2>/dev/null | head -n1)" ]; then
+  skip osv-scanner "NOT CHECKED: no pre-seeded DB in REVIEW_OSV_DB_DIR=$REVIEW_OSV_DB_DIR; warm it once: OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$REVIEW_OSV_DB_DIR osv-scanner --offline-vulnerabilities --download-offline-databases ."
 elif have osv-scanner; then
+  # REVIEW_OSV_DB_DIR: pre-seeded DB, offline run (no TLS to api.osv.dev); the cache-dir env is osv-scanner's documented one.
+  osvx=(); [ -z "${REVIEW_OSV_DB_DIR:-}" ] || { export OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$REVIEW_OSV_DB_DIR; osvx=(--offline-vulnerabilities); }
   while IFS= read -r f; do
-    run_one osv-scanner osv-scanner --format json -L "./$f" || continue
+    run_one osv-scanner osv-scanner ${osvx[@]+"${osvx[@]}"} --format json -L "./$f" || continue
     scan_ok osv-scanner 1 || continue # exit 1 = vulnerabilities found
     sjson osv "$out" >"$tsv" || { skip osv-scanner "unparseable output for $f"; continue; }
     while IFS=$'\t' read -r _ l r m; do add osv-scanner "$f" "$l" "$r" "$m"; done <"$tsv"
@@ -323,9 +329,9 @@ elif have semgrep; then
   while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
   # One call per 200 files: typically a single run, but bounded argv and a timeout that is not shared by everything.
   for ((i = 0; i < ${#sg[@]}; i += 200)); do
-    run_one semgrep env HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep "${sgcfg[@]}" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
+    run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep "${sgcfg[@]}" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
     if [ "$rc" != 0 ] && [ ${#sgcfg[@]} -gt 2 ]; then # registry pack unreachable (offline): rerun with the bundled rules alone
-      run_one semgrep env HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep --config "$sgc" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
+      run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep --config "$sgc" --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
     fi
     scan_ok semgrep || continue
     e=0; sjson semgrep "$out" >"$tsv" || e=$?
@@ -341,11 +347,14 @@ fi
 if [ -n "$files" ] && have trivy; then
   tv=(trivy fs --quiet --format json --skip-version-check --skip-db-update --offline-scan --skip-dirs node_modules,.claude/worktrees,vendor,dist,build,.git,.venv,venv,target)
   tk=trivy
+  # REVIEW_TRIVY_CACHE: pre-seeded --cache-dir. A missing DB stays "not run" (never clean) and prints the one-line warm command.
+  [ -z "${REVIEW_TRIVY_CACHE:-}" ] || tv+=(--cache-dir "$REVIEW_TRIVY_CACHE")
+  trivy_hint="warm the DB once: trivy ${REVIEW_TRIVY_CACHE:+--cache-dir $REVIEW_TRIVY_CACHE }image --download-db-only"
   if run_one trivy "${tv[@]}" --scanners vuln,misconfig . && { [ "$rc" = 0 ] || {
-    if grep -Eqi 'dial |no such host|connection (refused|reset)|unreachable|x509|TLS|failed to download|download.*(bundle|check)|(bundle|check).*download' "$out"; then
+    if ! grep -Eqi 'vulnerability db|trivy-db|download.* db( |$)' "$out" && grep -Eqi 'dial |no such host|connection (refused|reset)|unreachable|x509|TLS|failed to download|download.*(bundle|check)|(bundle|check).*download' "$out"; then
       echo "review_checks: trivy: secret-only (misconfig bundle unreachable)" >&2; tk=trivy-secret; ran+=" trivy(secret-only)"
       run_one trivy "${tv[@]}" --skip-check-update --scanners secret .
-    fi; }; } && scan_ok trivy; then
+    fi; }; } && { scan_ok trivy || { grep -qi 'DB' "$out" && echo "review_checks: trivy: NOT CHECKED, $trivy_hint" >&2; false; }; }; then
     if sjson "$tk" "$out" >"$tsv"; then
       while IFS=$'\t' read -r f l r m; do printf '%s\n' "$files" | grep -qxF -- "$f" && add trivy "$f" "$l" "$r" "$m"; done <"$tsv"
     else skip trivy "unparseable output"; fi

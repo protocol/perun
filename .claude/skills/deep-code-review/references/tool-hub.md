@@ -12,6 +12,7 @@ Perun routes; it does not reimplement or vendor these tools. `scripts/review_che
 - Flags status `verified` means the flags below were checked against the tool's official docs on 2026-10-27. `unverified` rows are skipped by default (one `NOT CHECKED` line), never run on a guess.
 - License class `route-only`: never bundled or copied into this repo; run only when the user installed it. No tool is marked `bundle-ok` because licenses were not checked this session.
 - Network: zizmor runs `--offline`; grype runs with `GRYPE_DB_AUTO_UPDATE=false` (no cached DB is a crash, so not-run); checkov runs `--skip-download`; gosec runs with `GOPROXY=off`, because loading `./...` packages may otherwise fetch Go modules (modules missing from the local cache then surface as `Golang errors` and read as not checked). osv-scanner stays behind `REVIEW_OSV=1`.
+- Behind a TLS-breaking proxy, pre-seed the vuln DBs: `REVIEW_OSV_DB_DIR` (osv-scanner offline run; an empty dir prints the exact warm command and stays NOT CHECKED) and `REVIEW_TRIVY_CACHE` (trivy `--cache-dir`; a missing DB stays not-run and prints `trivy --cache-dir DIR image --download-db-only`). `--repo DIR` replaces a `cd DIR &&` chain. In `supply_chain_check.sh`, a package npm marks `dev` (or osv puts in a dev/build/test group) is noted `dev-only` and capped at moderate.
 - Secrets and code snippets in tool output are never read into findings (bandit's `issue_text` is skipped too: its B105 text embeds the secret value).
 
 ## CLI tools (run by `review_checks.sh`)

@@ -84,9 +84,13 @@ if [ "$online" != 1 ]; then
 elif ! have osv-scanner; then skip osv-scanner "not installed"
 elif ! have python3; then skip osv-scanner "python3 needed to summarise"
 else
-  out=$(osv-scanner --format json -r "$dir" 2>/dev/null); osv_rc=$?
+  # REVIEW_OSV_DB_DIR: pre-seeded DB, offline run. Missing DB keeps the CLI failure (never clean) and prints the warm command.
+  osvx=(); [ -z "${REVIEW_OSV_DB_DIR:-}" ] || { export OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$REVIEW_OSV_DB_DIR; osvx=(--offline-vulnerabilities)
+    [ -n "$(find "$REVIEW_OSV_DB_DIR" -type f -name '*.zip' 2>/dev/null | head -n1)" ] || osv_empty=1; }
+  if [ "${osv_empty:-}" = 1 ]; then out=; osv_rc=0
+  else out=$(osv-scanner ${osvx[@]+"${osvx[@]}"} --format json -r "$dir" 2>/dev/null); osv_rc=$?; fi
   # CLI crash (e.g. Go TLS x509 OSStatus -26276 in the macOS sandbox): POST the lockfile packages to the OSV API via curl.
-  if [ "$osv_rc" -gt 1 ] && have curl && fb=$(python3 -I -c "$osv_api" "$dir"); then
+  if [ "$osv_rc" -gt 1 ] && [ -z "${REVIEW_OSV_DB_DIR:-}" ] && have curl && fb=$(python3 -I -c "$osv_api" "$dir"); then
     out=$fb; osv_rc=0; echo "osv: api-fallback (osv-scanner CLI failed)"
     # Lockfiles the fallback cannot read: say so and never report a clean pass.
     unread=$(find "$dir" \( -name .git -o -name node_modules -o -name .venv -o -name venv -o -name vendor \) -prune -o -type f \
@@ -94,11 +98,27 @@ else
     if [ -n "$unread" ]; then echo "partial coverage: ${unread% } not checked"; [ "$allow_skip" = 1 ] || rc=1; fi
   fi
   # osv exit 128 (no package sources) is unconfirmed against osv docs here, so it stays a FAIL.
-  if [ "$osv_rc" -gt 1 ]; then echo "FAIL osv-scanner: exit $osv_rc"; rc=1
+  if [ "${osv_empty:-}" = 1 ]; then
+    echo "FAIL osv-scanner: NOT CHECKED, no pre-seeded DB; warm it once: OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$REVIEW_OSV_DB_DIR osv-scanner --offline-vulnerabilities --download-offline-databases ."; rc=1
+  elif [ "$osv_rc" -gt 1 ]; then echo "FAIL osv-scanner: exit $osv_rc"; rc=1
   else
     printf '%s' "$out" | python3 -I -c '
-import json, sys
+import json, os, sys
 order = ["low", "moderate", "high", "critical"]
+# Reachability downgrade: a package npm marks "dev": true (reachable only via devDependencies), or osv puts in a dev/build/test
+# dependency group, is "dev-only": noted, and capped at moderate so it cannot fail --fail-on high/critical.
+devs, prods = set(), set()
+for d, ds, fs in os.walk(sys.argv[2]):
+    ds[:] = [x for x in ds if x not in (".git", "node_modules", ".venv", "venv", "vendor")]
+    if "package-lock.json" in fs:
+        try:
+            for k, v in (json.load(open(os.path.join(d, "package-lock.json"))).get("packages") or {}).items():
+                if "node_modules/" in k: (devs if v.get("dev") else prods).add(k.rsplit("node_modules/", 1)[1] + "@" + str(v.get("version")))
+        except (OSError, ValueError, AttributeError): pass
+def devonly(p):
+    k = p["package"]["name"] + "@" + str(p["package"]["version"])
+    if p["package"].get("ecosystem") == "npm" and k in devs and k not in prods: return True  # every occurrence is dev
+    return bool({str(g).lower() for g in p.get("dependency_groups") or []} & {"dev", "build", "test"})
 def sev(v, g):
     s = str((v.get("database_specific") or {}).get("severity", "")).lower()
     if s == "medium": s = "moderate"
@@ -115,15 +135,18 @@ for res in data.get("results") or []:
     for p in res.get("packages") or []:
         maxg = {i: g.get("max_severity") for g in p.get("groups") or [] for i in g.get("ids", [])}
         for v in p.get("vulnerabilities") or []:
-            s = sev(v, maxg.get(v.get("id")))
+            s, note = sev(v, maxg.get(v.get("id"))), ""
+            if devonly(p):
+                note = " [dev-only" + ("; capped from %s" % s if s in ("high", "critical") else "") + "]"
+                if s in ("high", "critical"): s = "moderate"
             counts[s] = counts.get(s, 0) + 1
-            rows.append((s, p["package"]["name"], p["package"]["version"], v.get("id"), ",".join(fixed(v)) or "none"))
+            rows.append((s, p["package"]["name"], p["package"]["version"], v.get("id"), (",".join(fixed(v)) or "none") + note))
 print("osv-scanner: " + (", ".join("%s=%d" % (s, counts[s]) for s in reversed(order + ["unknown"]) if s in counts) or "no advisories"))
 for s, n, ver, i, f in sorted(rows, key=lambda r: -order.index(r[0]) if r[0] in order else 1):
     print("  %-8s %s@%s %s fixed in: %s" % (s, n, ver, i, f))
 t = order.index(sys.argv[1])
 sys.exit(1 if any(s == "unknown" or order.index(s) >= t for s in counts) else 0)
-' "$fail_on" || rc=1
+' "$fail_on" "$dir" || rc=1
   fi
 fi
 
@@ -133,7 +156,8 @@ for t in zizmor actionlint; do
   if [ ! -d "$wf" ]; then skip $t "no .github/workflows"
   elif ! have $t; then skip $t "not installed"
   elif [ $t = zizmor ] && ! zizmor "$wf"; then echo "FAIL zizmor"; rc=1
-  elif [ $t = actionlint ] && ! (cd "$dir" && actionlint); then echo "FAIL actionlint"; rc=1
+  elif [ $t = actionlint ] && [ -z "$(find "$wf" -maxdepth 1 -name '*.y*ml' | head -n1)" ]; then skip actionlint "no workflow files"
+  elif [ $t = actionlint ] && ! (cd "$dir" && find .github/workflows -maxdepth 1 -name '*.y*ml' -exec actionlint {} +); then echo "FAIL actionlint"; rc=1
   else echo "ok $t"; fi
 done
 
