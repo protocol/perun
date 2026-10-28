@@ -409,6 +409,24 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     python3 "${wired_check}" "${base_sha}" "${local_sha}" >&2 || true
   fi
 
+  # Freeze (a PERUN_FREEZE / .perun-freeze file): only deletions and Red-Trunk-Fix commits may push; exit 1 refuses.
+  freeze_gate=".claude/skills/agentic-delivery/scripts/freeze_gate.py"
+  if [ -f "${freeze_gate}" ]; then
+    fg_rc=0
+    python3 "${freeze_gate}" "${base_sha}" "${local_sha}" >&2 || fg_rc=$?
+    if [ "${fg_rc}" -ne 0 ]; then
+      printf 'pre-push-verify: FAIL -- freeze gate (lines above).\n' >&2
+      fail=1
+      continue
+    fi
+  fi
+
+  # Warn-only: a flaky-test fix whose test file another open PR already changes (names the holder); never fails the push.
+  flake_holder=".claude/skills/agentic-delivery/scripts/flake_holder.py"
+  if [ -f "${flake_holder}" ]; then
+    python3 "${flake_holder}" "${base_sha}" "${local_sha}" >&2 || true
+  fi
+
   # Tests that read the real clock (red at the next week rollover) or bet on timing under load: findings print
   # as warnings; only exit 1 (a timing bet in a test file ADDED in this push range) blocks. Exit 2 never blocks.
   clock_lint=".claude/skills/agentic-delivery/scripts/clock_lint.py"

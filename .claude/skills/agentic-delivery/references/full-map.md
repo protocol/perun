@@ -246,7 +246,7 @@ paths or generated files; else drain green PRs back-to-back (`train_land.sh`).
   collision*).
 - **A forked lane with a narrower brief than its inherited context** (research-only, "change nothing"): prefer a fresh unit; verify from effects — `references/verification-handback.md` **A context-inheriting fork is not a blank slate**.
 - **Inventory the repo's own scripts before spawning a lane for a repeatable step.** On start, read `scripts/` and the README; if a tick, train, bisect, land, or release script exists, run it instead of having an LLM lane do the step (or hand-resolve a generated-file conflict) by judgment.
-- **New script?** `python3 scripts/wired_check.py <base> HEAD`: a WARN means no caller (own test excluded); wire it.
+- **New script?** `python3 scripts/wired_check.py <base> HEAD`: a WARN means no caller (own test excluded); wire it. A script named only on an orphan/unused allowlist added in the same PR is `merged-not-wired`, never wired.
 - **Hand-back / reruns / drift?** `wired_check.py <base> HEAD --strict --runs <log>` fails a new script with no caller or no observed-run line; `stage_run.py --run-dir <fresh dir> -- CMD` refuses a reused run dir; `python3 .claude/skills/agentic-delivery/scripts/lkg.py verdict <receipt.json>` fails (rerun) when its `sha` is not HEAD; `python3 .claude/skills/agentic-delivery/scripts/vendor_drift.py <target-repo>` exits 1 listing vendored skill files that differ from canonical (sha256).
 - **P0 count inflated / "what next?":** read when many open issues are P0. Don't relabel; rank a top-N in PRIORITIES.md, tag the rest `p0:unranked`; `scripts/queue_guard.py` prints the next pull and flags inflation.
 - Serialize shared-state edits, migrations, generated files, and the
