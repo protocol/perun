@@ -1,5 +1,0 @@
-### Added
-- agentic-ceo, agentic-delivery: a send to a remote peer session has no read receipt, so the conductor verifies pickup from the peer's durable trail after a bounded wait and never re-sends on silence alone (`multi-session-coordination.md`, linked from the agentic-ceo hard rules, scoped to bare sends so the board ACK rule keeps winning for board directives). `incident-response.md` now says to read the subject's last 2 comments or events before relaying an automated alarm. One eval case each; `scripts/test_peer_send_alarm_relay.py` pins the wording.
-size-budget-raise: .claude/skills/agentic-ceo/SKILL.md 7332→7477 one short rule added: bare peer-send pickup check and read-before-relay alarm rule
-size-budget-raise: .claude/skills/agentic-delivery/references/incident-response.md 12693→13056 one short rule added: bare peer-send pickup check and read-before-relay alarm rule
-size-budget-raise: .claude/skills/agentic-delivery/references/multi-session-coordination.md 72883→73901 one short rule added: bare peer-send pickup check and read-before-relay alarm rule

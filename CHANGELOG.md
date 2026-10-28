@@ -3,6 +3,48 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.610.0] — 2026-10-28
+
+### Added
+- agentic-delivery: `stage_run.py --run-dir DIR` refuses (exit 1) a run dir that already exists; `lkg.py verdict FILE` exits 1 with "rerun" unless the receipt is a pass for HEAD with matching runner blob (`run-ci-tests.sh` reads its own receipt back and honors `PERUN_RUN_DIR`); `wired_check.py --strict --runs FILE` (now the CI step) fails a new script with no caller or no exact-name run in the registered tests; new `vendor_drift.py TARGET` lists vendored skill files that differ from canonical (sha256) and exits 1 on drift or zero overlap (`--skills` flags deleted copies; `update-installed.sh` runs it).
+- agentic-delivery: a merge train that parks a PR posts a `perun-train-refused: <head sha>` comment on it; admission skips a PR with that line for its current head, so a dropped PR is not re-ridden until a new push (invariant in `references/merge-queue-worktrees.md`).
+
+size-budget-raise: .claude/skills/agentic-delivery/references/full-map.md 23891→24381 one routing line for the four wave-AE mechanisms
+size-budget-raise: .claude/skills/INDEX.md 14569→14671 generated index row for vendor_drift.py
+size-budget-raise: .claude/skills/agentic-delivery/INDEX-scripts.md 15097→15241 generated index row for vendor_drift.py
+size-budget-raise: .claude/skills/agentic-delivery/references/merge-queue-worktrees.md 43476→44819 one paragraph: head-bound train refusal invariant (author filter, clear, neutralized reason)
+
+### Added
+- agentic-delivery: `scripts/admission_check.py` flags a per-PR admission config that omits a test class the batch runs (e.g. browser/e2e) and a stale or ownerless spec-selection map. `scripts/host_accept.py` is the merge-host acceptance checklist (operator reset without extra IAM, auto-reset on missed heartbeats, per-slice memory caps with sshd/agent reserve). `train_land.sh` runs both (rc != 0 refuses the train) whenever the base branch carries their config. The landing watchdog now surfaces the existing `red_main.py` uncovered/oldest-red alarm, and `flake_ledger.py serial-move` records tests moved to the serial project (never quarantined, failure there is BLOCKING as a real bug).
+
+size-budget-raise: .claude/skills/agentic-delivery/references/red-gate-triage.md 25417→27186 one paragraph: admission completeness and map owner, plus watchdog and serial-move notes
+size-budget-raise: .claude/skills/agentic-delivery/references/fanout-host-sizing.md 48845→49827 one paragraph: merge-host acceptance checklist
+
+### Added
+- agentic-delivery: lane worktrees live outside the watched repo tree. `scripts/lane_worktree.sh <name>` creates `lane/<name>` under `${XDG_CACHE_HOME:-~/.cache}/perun-wt/<repo>` (override `PERUN_WT_ROOT`; `/` refused) and writes a per-lane marker; one host with 129 in-repo lane worktrees (49GB) kept fseventsd at 158% CPU. The `handback_cap.py` SubagentStop hook now removes the stopping lane's worktree with `git worktree remove` (never forced) and deletes its merged branch, only when the marker, repo, agent id (if set) and `lane/` branch match, the tree is strictly under the lane root, HEAD equals its upstream, and the tree is clean including ignored files; any doubt keeps it and reports on stderr (`PERUN_REAP_WORKTREE=0` disables). `perun_doctor.py` gains "lane worktrees in repo" and "lane worktrees out of tree" rows (count and size, `du` capped at 30s, WARN above 20 trees or 20GB). Tests: `scripts/test_lane_worktree_reap.py`. Doc: `worktree-isolation.md`.
+size-budget-raise: .claude/skills/agentic-delivery/references/worktree-isolation.md 14713→16482 documents the out-of-tree lane worktree root and the stop-hook reaper in the one worktree reference
+- `update-installed.sh` skips the vendored-drift report with one stderr note when `vendor_drift.py` is absent (an older checked-out tag), instead of printing "No such file".
+size-budget-raise: .claude/skills/agentic-delivery/references/host-enforcement.md 44866→44913 points the orchestrator-worktree step at lane_worktree.sh
+
+### Added
+- agentic-ceo, agentic-delivery: a send to a remote peer session has no read receipt, so the conductor verifies pickup from the peer's durable trail after a bounded wait and never re-sends on silence alone (`multi-session-coordination.md`, linked from the agentic-ceo hard rules, scoped to bare sends so the board ACK rule keeps winning for board directives). `incident-response.md` now says to read the subject's last 2 comments or events before relaying an automated alarm. One eval case each; `scripts/test_peer_send_alarm_relay.py` pins the wording.
+size-budget-raise: .claude/skills/agentic-ceo/SKILL.md 7332→7477 one short rule added: bare peer-send pickup check and read-before-relay alarm rule
+size-budget-raise: .claude/skills/agentic-delivery/references/incident-response.md 12693→13056 one short rule added: bare peer-send pickup check and read-before-relay alarm rule
+size-budget-raise: .claude/skills/agentic-delivery/references/multi-session-coordination.md 72883→73901 one short rule added: bare peer-send pickup check and read-before-relay alarm rule
+
+### Added
+- idea-critic: `veche.py` returns `default_action` (proceed when `--reversibility easy`, else hold) and a `COUNCIL_BLOCKING_WORK` alarm when a council cannot decide or runs past `--alarm-s`; seats of each round run in parallel with atomic cap accounting and a failed seat is dropped; critique rounds add an anonymized Borda `peer_ranking`; a malformed `--criteria` error shows the `name:weight` format.
+
+size-budget-raise: .claude/skills/idea-critic/references/council.md 6098→8433 timebox and alarm section, peer ranking and parallel seats notes, and a compact gap table versus the fetched open-source councils
+
+### Added
+- agentic-delivery: `scrub_env.sh CMD` now also gives the child an invalid `GH_TOKEN`/`GITHUB_TOKEN`, an empty throwaway `GH_CONFIG_DIR` and a refusing proxy with loopback direct, no ssh agent, no global git config or credential helper (`PERUN_ALLOW_NET=1` drops only the proxy, logged), so a test cannot post to a real PR even when it calls `gh` by absolute path past a PATH stub; `run-ci-tests.sh` runs every ci-test through it and drops `CLAUDE*` session vars.
+- agentic-delivery: `bg_admit.py admit SCRIPT` admits a background or shadow job only if it declares `# disk-cap:`, a `trap ... EXIT` cleanup and a `# disk-stop:` rule backed by a df/disk_usage check (`job_lease.py run --admit -- CMD` admits the script CMD actually runs); `bg_admit.py untrapped` lints shell scripts that call mktemp with no trap against the shrink-only `scripts/mktemp-trap-baseline.tsv`.
+- Promote-by ratchet: `scripts/promote-by.tsv` lists a promote-by date for every shadow-default policy flag (`train_gate`, `lkg_gate`); `scripts/test_promote_by.py` fails when one is overdue or more than 120 days out (keeping a flag in shadow means recording a decision and moving the date).
+
+size-budget-raise: .claude/skills/INDEX.md 14671→14767 generated index row for bg_admit.py
+size-budget-raise: .claude/skills/agentic-delivery/INDEX-scripts.md 15241→15388 generated index row for bg_admit.py
+
 ## [1.609.0] — 2026-10-28
 
 ### Added
