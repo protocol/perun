@@ -59,6 +59,38 @@ python3 scripts/veche.py --cmd "claude -p --strict-mcp-config" \
   `COULD_NOT_DECIDE` and `NOT_CONVENED` with a `reason`, and a record with a `decision` only when it also
   carries `kill_criteria`, `leading_metric` and an ISO `review_date`.
 
+## Timebox, default and blocking alarm
+
+A council must never stall delivery. Any `COULD_NOT_DECIDE` (cap, timeout, too few seats) adds
+`default_action`: `proceed` when `--reversibility easy` (take the reversible default, revisit at the review
+date), else `hold` (one-way door or undeclared: hold only that item; unrelated work continues). The record
+also gets `blocking_alarm: true` and a stderr line `COUNCIL_BLOCKING_WORK ...`; the same alarm fires on a
+decided council slower than `--alarm-s` (300). Bound the wait with `--max-seconds`. The delivery lead acts
+on `default_action` at once; a council verdict is never a reason to pause unrelated trains.
+
+Seats of the first round, and of the critique round, run in parallel (caps are charged atomically, so
+`--max-calls` and `--max-chars` still hold); wall time is about the slowest seat per round plus the serial twin
+call, and the record reports `cost.round1_s`. `--timeout` bounds each seat: a timed-out seat fails the round,
+which yields the `default_action` above. A malformed `--criteria` error states the `name:weight` format.
+
+## Peer ranking and external councils
+
+When the critique round runs, each seat also ranks the other (anonymized, lens names masked) answers best
+first; valid rankings are Borda-aggregated into `peer_ranking` (lens to mean points, informational: the
+verdict still comes from the tally and evidenced attacks). There is no separate adapter: any other council
+can be a seat or the whole panel through the existing `--cmd`, a script that reads the prompt on stdin and
+prints the JSON contract. A seat that fails (cap, timeout, cmd exit) is dropped and lowers confidence; a
+failed critique call or twin keeps the round-1 verdict. Versus the fetched sources (`docs/standards-index.md`):
+
+| | llm-council | Du et al. debate | Mixture-of-Agents | Veche |
+|---|---|---|---|---|
+| Anonymized peer review | yes | no | no | yes, plus Borda `peer_ranking` |
+| Aggregation | README silent | consensus | aggregator LLM | deterministic tally and weighted criteria |
+| Chairman synthesis | yes | no | yes | no (tie-break only, by design) |
+| Evidence rule | no | no | no | verified `path:line` quotes |
+| Timebox and default | no | no | no | `default_action`, `COUNCIL_BLOCKING_WORK` |
+| Parallel seats | not stated | not stated | layered | yes, capped atomically |
+
 ## Kill criterion
 
 Debate-style councils often fail to beat plain self-consistency

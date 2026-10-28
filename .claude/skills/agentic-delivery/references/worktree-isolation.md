@@ -46,7 +46,7 @@ worktree pays a **full dependency install** (never a symlinked shared tree — `
 that creates worktrees per lane and never sweeps the finished ones accumulates disk fast. One observed run: 174
 worktrees against 33 open PRs — roughly 94% orphaned — consuming roughly 400GB with the host at 80% disk.
 
-- **One worktree tool, not ad hoc `git worktree add`/`rm` per lane:** sparse-checkout the artifact directories a
+- **One worktree tool, not ad hoc `git worktree add`/`rm` per lane** (`scripts/lane_worktree.sh`, below): sparse-checkout the artifact directories a
   lane doesn't need in full, and copy-on-write the dependency tree when the target's lockfile already matches a
   sibling's (cheaper than a fresh install, still a real copy — never the symlink the dev-env rule above forbids).
 - **Prune through the existing approval-gated reap path** — merged branch, clean or allowlisted untracked state,
@@ -59,6 +59,23 @@ worktrees against 33 open PRs — roughly 94% orphaned — consuming roughly 400
   worktrees. **Orphaned** worktrees (present, matching none of the above) are a separate count and target
   **≈ 0 after each merge train** — any nonzero orphan count past that point means the prune pass didn't run or
   missed something, not a tolerable steady state.
+
+## Keep lane worktrees outside the watched repo tree, and reap them at stop
+
+Lane worktrees created inside the repo dir get scanned by every file watcher on the host: one host with 129 lane
+worktrees (49GB) under the repo kept fseventsd at 158% CPU, because "reap at hand-back" in a brief is only a request.
+Default root: `${XDG_CACHE_HOME:-~/.cache}/perun-wt/<repo>` (override `PERUN_WT_ROOT`). Create lanes with
+`scripts/lane_worktree.sh <name> [base]` (branch `lane/<name>`, one path segment: no `/` or `..`; prints the path; writes a
+marker `<git-dir>/perun-lane` with branch, repo, path and optional `PERUN_AGENT_ID`). The SubagentStop hook
+`handback_cap.py` then runs `git worktree remove` (never `--force`) and `branch -d` for the stopping lane, but only if
+the marker matches the tree and repo (and the agent, when the marker names one), the tree is strictly under the lane root
+(a root of `/`, `$HOME` or an ancestor of the repo is refused), HEAD is the `lane/` branch and equals its own upstream, the
+tree is clean **including ignored files** (`.env`, local DBs, `node_modules`), and no test or build runs from it. Unmarked
+trees (a parent's, a sibling's, `.claude/worktrees`, hand-made) are never touched; a marked tree it cannot reap, or a stop
+released after repeated blocks, is reported on stderr and left for the approval-gated sweep above (`PERUN_REAP_WORKTREE=0`
+turns the reaper off). Limit: a marker without an agent id proves a lane tree, not which agent owns it; export
+`PERUN_AGENT_ID` when creating it to bind the owner. `perun_doctor.py` has "lane worktrees in repo" and "lane worktrees out of tree" rows (count and size, `du` capped at 30s):
+WARN above 20 trees or 20GB (`PERUN_WT_MAX`, `PERUN_WT_MAX_GB`).
 
 ## Committed UX evidence bloats every checkout — sparse-exclude it, and prune it out of HEAD
 

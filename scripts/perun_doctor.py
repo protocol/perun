@@ -218,7 +218,52 @@ def check(repo, home):
             add("INFO", "orphan dev DBs", "ps unreadable: not checked")
         else:
             add("WARN" if orph else "OK", "orphan dev DBs", (f"{len(orph)} DB server(s) run on a data dir that is gone ({', '.join(f'pid {p} {d}' for p, d in orph[:4])}). Stop them yourself, nothing was killed: kill -TERM {' '.join(str(p) for p, _ in orph)}") if orph else "none")
+    try:
+        mx, mgb = int(os.environ.get("PERUN_WT_MAX", 20)), int(os.environ.get("PERUN_WT_MAX_GB", 20))
+    except ValueError:
+        mx, mgb = 20, 20
+    try:
+        inside, outside = lane_worktrees(repo)
+        for label, paths in (("lane worktrees in repo", inside), ("lane worktrees out of tree", outside)):
+            if not paths:
+                continue
+            kb, full = _du(paths, 0 if os.environ.get("DCR_NO_PROBE") else 30)
+            big = len(paths) > mx or (kb or 0) > mgb * 1048576
+            size = "" if kb is None else f", {'at least ' if not full else ''}{kb / 1048576:.1f} GB"
+            hint = (" (file watchers such as fseventsd scan all of it). Create lanes outside it with .claude/skills/agentic-delivery/scripts/lane_worktree.sh and remove finished ones: git worktree remove <path>" if "in repo" in label else ". Remove finished ones: git worktree remove <path>") if big else ""
+            add("WARN" if big else "OK", label, f"{len(paths)} worktree(s){size}{hint}")
+    except (OSError, subprocess.SubprocessError):
+        add("INFO", "lane worktrees", "git worktree list failed: not checked")
     return rows
+
+
+def lane_worktrees(repo):
+    """([in-repo paths], [out-of-tree paths]) of this repo's linked worktrees. In-repo = inside `repo` (what file watchers
+    scan); out-of-tree = under the lane root (PERUN_WT_ROOT, default ${XDG_CACHE_HOME:-~/.cache}/perun-wt). The main
+    checkout and a bare repo's own entry are skipped by path, not by position."""
+    g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, timeout=30).stdout.strip()
+    common = os.path.realpath(os.path.join(str(repo), g("rev-parse", "--git-common-dir")))
+    main = os.path.dirname(common) if os.path.basename(common) == ".git" else common
+    root = os.path.realpath(os.environ.get("PERUN_WT_ROOT") or os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "perun-wt"))
+    wts = [os.path.realpath(b.splitlines()[0][9:]) for b in g("worktree", "list", "--porcelain").split("\n\n") if b.startswith("worktree ") and "\nbare" not in b]
+    wts = [w for w in wts if w != main]
+    here = os.path.realpath(repo)
+    return [w for w in wts if w.startswith(here + os.sep)], [w for w in wts if w.startswith(root + os.sep)]
+
+
+def _du(paths, budget):
+    """(kilobytes, complete) summed over `du -sk` per path within `budget` seconds in all; (None, False) when budget is 0."""
+    import time
+    end, kb = time.time() + budget, 0
+    for w in paths:
+        left = end - time.time()
+        if left <= 0:
+            return (kb if kb else None), False
+        try:
+            kb += int(subprocess.run(["du", "-sk", w], capture_output=True, text=True, timeout=left).stdout.split()[0])
+        except (OSError, subprocess.SubprocessError, IndexError, ValueError):
+            return (kb if kb else None), False
+    return kb, True
 
 
 def advice(repo, home):

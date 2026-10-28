@@ -3104,6 +3104,40 @@
         "Relays at once if the latest events do not explain it",
         "Names references/incident-response.md"
       ]
+    },
+    {
+      "id": "hermetic-test-children-gh",
+      "prompt": "A stubbed test posted real PR comments three times: the stub was on PATH but a child called gh by absolute path. How do we stop it for every test?",
+      "expected_output": "Scrub the env of the whole test process tree, not only PATH: run each test through scrub_env.sh (invalid GH_TOKEN/GITHUB_TOKEN, an empty throwaway GH_CONFIG_DIR, unroutable proxy, git hook vars and session-prefixed vars dropped; run-ci-tests.sh does this), and pin it with a test that runs a fake gh by absolute path.",
+      "expectations": [
+        "Scrubs env for the whole process tree rather than relying on a PATH stub",
+        "Names invalid GH_TOKEN, empty GH_CONFIG_DIR and no network for children",
+        "Names scrub_env.sh / run-ci-tests.sh",
+        "Adds a pin test that bypasses the PATH stub"
+      ]
+    },
+    {
+      "id": "background-job-admission",
+      "prompt": "A background shadow job filled /tmp with 56 GB. What do we require before another one is allowed to run?",
+      "expected_output": "Admit a background or shadow job only if its script declares a disk cap, cleans up with trap EXIT and has a stop rule under disk pressure (a real df/disk_usage check); bg_admit.py admit refuses otherwise (job_lease.py run --admit). bg_admit.py untrapped lints mktemp without a trap against a shrink-only baseline.",
+      "expectations": [
+        "Requires a declared disk cap",
+        "Requires cleanup on exit via trap EXIT",
+        "Requires a stop rule under disk pressure backed by a real free-space check",
+        "Names bg_admit.py",
+        "Lints mktemp without trap"
+      ]
+    },
+    {
+      "id": "shadow-flag-promote-by",
+      "prompt": "We keep shipping features default-off in shadow mode and never promote them. How do we stop that?",
+      "expected_output": "Every shadow-default flag gets a row in scripts/promote-by.tsv with a promote-by date; scripts/test_promote_by.py fails when a row is overdue with no recorded decision, or a shadow flag has no row. Promote it, or record the decision and move the date.",
+      "expectations": [
+        "Every shadow flag carries a promote-by date",
+        "A test fails when overdue with no recorded decision",
+        "Names scripts/promote-by.tsv",
+        "Allows keeping shadow only with a recorded decision and a new date"
+      ]
     }
   ]
 }

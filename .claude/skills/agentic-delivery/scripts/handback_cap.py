@@ -78,6 +78,11 @@ skipped. Linked worktrees are told from the main checkout, submodules and `--sep
 says to ignore edits that are not the lane's. The main checkout is never reported; a git failure prints COULD_NOT_CHECK
 and passes. A leaked listening process is not checked: `reap_own.sh --report` prints `orphans=COULD_NOT_CHECK` in the
 sandbox (pgrep denied), so it is no usable primitive there.
+REAP OWN WORKTREE (on a passing stop; PERUN_REAP_WORKTREE=0 disables). `git worktree remove` (never --force) of the stopping
+lane's linked worktree, only when lane_worktree.sh made it (marker file, `lane/` branch, matching repo, agent id if the marker
+has one), it sits under the lane root, is clean including ignored files, equals its upstream, and no test/build runs from
+it (a blind scan only reports). Other trees and the main checkout are never touched; any doubt keeps the tree and says so
+on stderr. Full rule list: `_reap_own_worktree`.
 When the scan finds nothing but the handback text itself says the lane is "waiting on" its background tests (WAIT_RE),
 a `systemMessage` flags it in every mode but `off`; never a block (the text is a claim, not evidence).
 
@@ -348,6 +353,59 @@ def _dirty_tree(cwd):
         return None
 
 
+def _git(top, *a):
+    r = subprocess.run(["git", "--no-optional-locks", *a], cwd=top, capture_output=True, text=True, timeout=30)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def _lane_kept(top, why):
+    sys.stderr.write(f"perun: lane worktree {top} left in place ({why}); remove it yourself with git worktree remove once pushed.\n")
+
+
+def _reap_own_worktree(cwd, agent_id="", sure=True):
+    """SubagentStop: `git worktree remove` (never --force) of the stopping lane's linked worktree, only when it is provably a
+    lane tree made by lane_worktree.sh: marker <git-dir>/perun-lane (branch, repo, path, optional agent) matches this tree and
+    repo, the marker agent (if any) is this agent, the tree sits strictly under the lane root (PERUN_WT_ROOT, default
+    ${XDG_CACHE_HOME:-~/.cache}/perun-wt; `/`, $HOME and any ancestor of the repo are refused), HEAD is the `lane/` branch
+    and equals its own upstream, and `status --porcelain --ignored` is empty. `sure` False (a blind bg scan, a released
+    block) only reports. After the remove the merged branch is deleted (`branch -d`). Any doubt or git failure keeps the
+    tree and, for a marked lane tree, says so on stderr. PERUN_REAP_WORKTREE=0 disables. Returns the removed path or None."""
+    try:
+        if os.environ.get("PERUN_REAP_WORKTREE") == "0" or not cwd or not os.path.isdir(cwd):
+            return None
+        top = _linked_top(cwd)
+        gd = _git(top, "rev-parse", "--absolute-git-dir") if top else None
+        if not gd or not os.path.isfile(os.path.join(gd, "perun-lane")):
+            return None
+        with open(os.path.join(gd, "perun-lane")) as fh:
+            mk = dict(l.split("=", 1) for l in fh.read().splitlines() if "=" in l)
+        common = os.path.realpath(os.path.join(gd, _git(top, "rev-parse", "--git-common-dir")))
+        root = os.path.realpath(os.environ.get("PERUN_WT_ROOT") or os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "perun-wt"))
+        repo_dir = os.path.dirname(common) if os.path.basename(common) == ".git" else common
+        branch = _git(top, "symbolic-ref", "-q", "--short", "HEAD") or ""
+        bad = next((m for c, m in (
+            (not sure, "could not check for running work"),
+            (mk.get("repo") != common or mk.get("path") != top, "marker does not match this tree"),
+            (bool(mk.get("agent")) and mk["agent"] != agent_id, "tree belongs to another agent"),
+            (root in ("/", os.path.realpath(os.path.expanduser("~"))) or repo_dir.startswith(root + os.sep), "unsafe lane root"),
+            (not top.startswith(root + os.sep), "outside the lane root"),
+            (branch != mk.get("branch") or not branch.startswith("lane/"), "not on its lane branch"),
+            (_git(top, "status", "--porcelain", "--ignored") != "", "uncommitted, untracked or ignored files"),
+            (_git(top, "rev-parse", "HEAD") != _git(top, "rev-parse", "@{u}"), "HEAD differs from its upstream, or none"),
+        ) if c), "")
+        if bad:
+            _lane_kept(top, bad)
+            return None
+        r = subprocess.run(["git", f"--git-dir={common}", "worktree", "remove", top], cwd="/", capture_output=True, text=True, timeout=120)
+        if r.returncode:
+            _lane_kept(top, "git worktree remove refused")
+            return None
+        subprocess.run(["git", f"--git-dir={common}", "branch", "-d", branch], cwd="/", capture_output=True, timeout=30)
+        return top
+    except Exception:
+        return None
+
+
 # Agent types that only read: a dirty tree is never theirs, so it is not reported against them.
 READONLY_RE = re.compile(r"review|investigat|audit|explore", re.I)
 
@@ -448,11 +506,13 @@ def check(data):
     chars, lines, too_long = _shape(msg)  # fields-only and the 400/8 target never block: audit() logs them
     no_status = _require_status() and not STATUS_RE.search(msg)
     if not (too_long or no_status):
+        _reap_own_worktree(data.get("cwd"), agent_id, sure=bg == [])  # bg None = could not check: report only
         return 0
     os.makedirs(STATE_DIR, exist_ok=True)
     path = _state_path(agent_id)
     blocks = _read_blocks(path)
     if blocks >= MAX_BLOCKS:
+        _reap_own_worktree(data.get("cwd"), agent_id, sure=False)
         return 0
     with open(path, "w") as fh:
         fh.write(str(blocks + 1))

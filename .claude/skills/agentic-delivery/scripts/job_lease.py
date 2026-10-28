@@ -61,10 +61,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("action", choices=["run"])
     ap.add_argument("--name", default="long")
     ap.add_argument("--timeout", type=float, default=1800.0)
+    ap.add_argument("--admit", action="store_true", help="refuse (exit 2) unless the script CMD runs passes bg_admit.py admit")
     try:
         a = ap.parse_args(argv)
     except SystemExit:
         return 2
+    if a.admit:
+        import bg_admit
+        # the admitted file is the one CMD runs: CMD[0], or CMD[1] behind an interpreter; anything else is refused
+        f = cmd[1] if cmd and os.path.basename(cmd[0]) in ("bash", "sh", "zsh", "python3", "python") and len(cmd) > 1 else (cmd[0] if cmd else "")
+        if not os.path.isfile(f) or bg_admit.main(["admit", f]):
+            print(f"job_lease: --admit: cannot admit {f or 'an empty command'}", file=sys.stderr)
+            return 2
     d = lease_dir(a.name)
     if not cmd or d is None:
         print("job_lease: need a command after '--', a safe --name, and a git repo", file=sys.stderr)

@@ -7,11 +7,11 @@ ENV = {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "RUN_CI"
 ENV.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null")
 d = tempfile.mkdtemp(prefix="dcr-runci.")
 g = lambda *a, **k: subprocess.run(["git", "-C", d, "-c", "user.email=t@example.com", "-c", "user.name=T", *a], check=True, capture_output=True, env=ENV)
-for rel in ("scripts/run-ci-tests.sh", "scripts/ci-gates.sh", "scripts/secret_scan.py", "scripts/secret-scan-allow.txt", "scripts/gitleaks-v8.30.1.toml", ".claude/skills/deep-code-review/scripts/fix_class_gate.py"):
+for rel in ("scripts/run-ci-tests.sh", "scripts/ci-gates.sh", "scripts/secret_scan.py", "scripts/secret-scan-allow.txt", "scripts/gitleaks-v8.30.1.toml", ".claude/skills/deep-code-review/scripts/fix_class_gate.py", ".claude/skills/agentic-delivery/scripts/scrub_env.sh"):
     os.makedirs(os.path.dirname(os.path.join(d, rel)), exist_ok=True)
     shutil.copy(os.path.join(ROOT, rel), os.path.join(d, rel))
 os.makedirs(os.path.join(d, "scripts/ci-tests.d"))
-open(os.path.join(d, "scripts/ci-tests.d/ok.sh"), "w").write("true\n")
+open(os.path.join(d, "scripts/ci-tests.d/ok.sh"), "w").write("[ \"$GH_TOKEN\" = invalid ] && [ -z \"${SSH_AUTH_SOCK:-}\" ]\n")
 open(os.path.join(d, ".banlist.txt"), "w").write("# banlist\nPLANTED-BANNED-TOKEN\n")
 g("init", "-q", "-b", "main"); g("add", "-A"); g("commit", "-q", "-m", "base"); g("update-ref", "refs/remotes/origin/main", "HEAD")
 

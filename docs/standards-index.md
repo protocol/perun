@@ -1431,7 +1431,7 @@ fact).
 |---|---|---|
 | Next.js — Mutating Data | https://nextjs.org/docs/app/getting-started/mutating-data | "Invoking Server Functions" note: "The client currently dispatches and awaits them one at a time. This is an implementation detail and may change." Scope is the client, not per page; may change. Fetched + verified 2026-10-11. |
 
-## Verified by direct fetch (2026-10-13) — council (`idea-critic/references/council.md`)
+## Verified by direct fetch (2026-10-13; Du et al. row 2026-10-28) — council (`idea-critic/references/council.md`)
 
 | Standard / source | URL | What was confirmed |
 |---|---|---|
@@ -1439,8 +1439,11 @@ fact).
 | "Should we be going MAD?" | https://arxiv.org/abs/2311.17371 | Multi-agent debate in current form does not reliably beat self-consistency or multi-path ensembling; sensitive to hyperparameters. Basis for the kill criterion. Fetched + verified 2026-10-13. |
 | Wang et al., Mixture-of-Agents | https://arxiv.org/abs/2406.04692 | Layered heterogeneous agents; open-source-only MoA 65.1% vs GPT-4 Omni 57.5% on AlpacaEval 2.0. Motivates mixed-model `--cmd`. Fetched + verified 2026-10-13. |
 | Claude Council (skill) | https://github.com/amgadelgamal/claude-council | Four Claude persona subagents, anonymized peer critique, chairman synthesis; all members Claude, no stated evidence rule. Fetched + verified 2026-10-13. |
+| Du et al., Multiagent Debate | https://arxiv.org/abs/2305.14325 | Several model instances propose and debate over rounds to a shared answer; claimed gains in reasoning and fewer hallucinations. Fetched + verified 2026-10-28. |
 
-By name, not fetched (no URL): Du et al. multi-agent debate (abstract only read); Huang et al. on debate vs self-consistency at equal response count (search summary only).
+Veche vs these (2026-10-28): added anonymized Borda peer ranking, a timebox default and a blocking alarm; chairman synthesis is intentionally absent (deterministic tally instead); external councils plug in via `--cmd`.
+
+By name, not fetched (no URL): Huang et al. on debate vs self-consistency at equal response count (search summary only).
 
 ## Verified by direct fetch (2026-10-15) — rival comparison (`docs/perun-vs-rivals.md`)
 
@@ -1577,7 +1580,7 @@ Every rival in the capability matrix was read on 2026-10-16. GitHub facts (stars
 | microsoft/LLMLingua | https://github.com/microsoft/LLMLingua | README: "LLMLingua Series | Effectively Deliver Information to LLMs via Prompt Compression"; LongLLMLingua; LLMLingua-2 "boasting a 3x-6x speed improvement over LLMLingua"; integrations with Prompt flow, LangChain and LlamaIndex. GitHub API: 6,756 stars, last push 2026-09-10, MIT, not archived. Verified 2026-10-16. |
 | Claude Code cost management | https://code.claude.com/docs/en/costs | Docs page (summarising fetch): `/usage` shows session cost, a prompt-cache line and a plan breakdown attributed to skills, subagents, plugins and MCP servers; `/insights`; workspace spend limits; OpenTelemetry export; `--max-budget-usd`; token-reduction levers (clear between tasks, compaction instructions, model choice, deferred MCP tools, hooks that pre-filter output, effort level). Verified 2026-10-16. |
 | openai/codex-plugin-cc | https://github.com/openai/codex-plugin-cc | README: `/codex:review`, `/codex:adversarial-review` ("a steerable challenge review"), `/codex:rescue`, `/codex:transfer`, `/codex:status`, `/codex:result`, `/codex:cancel`. GitHub API: 34,283 stars, last push 2026-07-08, Apache-2.0, not archived. Verified 2026-10-16. |
-| karpathy/llm-council | https://github.com/karpathy/llm-council | README: three stages (first opinions, anonymized review, a chairman writes the final answer); OpenRouter key; "I'm not going to support it in any way". The API reports no SPDX license. GitHub API: 25,502 stars, last push 2025-11-22, no SPDX license id from the API, not archived. Verified 2026-10-16. |
+| karpathy/llm-council | https://github.com/karpathy/llm-council | README: three stages (first opinions, anonymized review, a chairman writes the final answer); OpenRouter key; "I'm not going to support it in any way". The API reports no SPDX license. GitHub API: 25,502 stars, last push 2025-11-22, no SPDX license id from the API, not archived. Verified 2026-10-16. Re-fetched 2026-10-28: reviewers rank anonymized peers; README is silent on how rankings are aggregated. |
 | amgadelgamal/claude-council | https://github.com/amgadelgamal/claude-council | README: council of Claude subagents with personas (Architect, Skeptic, Pragmatist, Researcher), anonymized peer review and a chairman; zero API keys; caveat that all members are Claude. GitHub API: 25 stars, last push 2026-06-12, MIT, not archived. Verified 2026-10-16. |
 | togethercomputer/MoA | https://github.com/togethercomputer/MoA | README: layered Mixture-of-Agents with proposer layers and an aggregator (`moa.py`, Together API). The repository description reports 65.1% on AlpacaEval with open-source models (vendor-reported). GitHub API: 2,983 stars, last push 2025-01-07, Apache-2.0, not archived. Verified 2026-10-16. |
 | promptfoo/promptfoo | https://github.com/promptfoo/promptfoo | README: "a CLI and library for evaluating and red-teaming LLM-based apps"; `promptfoo eval`; red-teaming docs linked. GitHub API: 26,054 stars, last push 2026-10-16, MIT, not archived. Verified 2026-10-16. |

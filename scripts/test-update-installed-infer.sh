@@ -12,6 +12,8 @@ m="$W/t/.claude/.dcr-install-flags"
 grep -qx -- --with-delivery "$m" && grep -qx -- --with-critic "$m" && [ "$(wc -l <"$m" | tr -d ' ')" = 2 ] \
   && grep -q "inferred flags: --with-delivery --with-critic" <<<"$out" \
   && grep -qx -- --with-delivery "$W/t/.claude/ran-flags" || { echo "FAIL infer: $out"; exit 1; }
+# an older checkout without vendor_drift.py: skipped with one note, never "No such file"
+grep -q "vendor_drift.py absent" <<<"$out" && ! grep -q "No such file" <<<"$out" || { echo "FAIL missing vendor_drift.py: $out"; exit 1; }
 mkdir -p "$W/e/.claude"
 if DCR_NO_PULL=1 bash "$W/h/scripts/update-installed.sh" "$W/e" >/dev/null 2>&1; then echo "FAIL: empty target must error"; exit 1; fi
 echo "ok"

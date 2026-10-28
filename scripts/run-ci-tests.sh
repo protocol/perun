@@ -23,7 +23,9 @@ if [ -f "$gate" ]; then
 fi
 for t in scripts/ci-tests.d/*.sh; do
   echo "== $t"
-  bash -e "$t" || { echo "run-ci-tests: FAIL $t" >&2; exit 1; }
+  # (a ci-test that truly needs the network exports PERUN_ALLOW_NET=1 itself; see scrub_env.sh)
+  # scrubbed child env: no real gh login/token/network, no git hook vars, no CLAUDE* session vars (scrub_env.sh)
+  SCRUB_PREFIXES="${SCRUB_PREFIXES:-CLAUDE}" bash .claude/skills/agentic-delivery/scripts/scrub_env.sh bash -e "$t" || { echo "run-ci-tests: FAIL $t" >&2; exit 1; }
 done
 python3 .claude/skills/agentic-delivery/scripts/lkg.py record >/dev/null || echo "run-ci-tests: lkg record failed (ignored)" >&2
 python3 .claude/skills/agentic-delivery/scripts/lkg.py verdict "$(python3 .claude/skills/agentic-delivery/scripts/lkg.py path)" >/dev/null || echo "run-ci-tests: lkg receipt does not verify against HEAD (ignored)" >&2

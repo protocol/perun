@@ -57,7 +57,7 @@ action (above). The brief names the dodges as out of bounds, own branch
 included: an absolute binary path, a wrapper (`env`, `sh -c`, a script), a subshell — all
 permission-laundering (`multi-session-coordination.md`). The orchestrator audits live processes
 (`pgrep -fl 'git push'`), not only lane reports. Without host isolation, the orchestrator makes each
-worktree (`git worktree add`) and spawns the lane there, confined by the brief; blocked work is
+worktree (`scripts/lane_worktree.sh <name>`, which wraps `git worktree add`) and spawns the lane there, confined by the brief; blocked work is
 re-shipped by a fresh lane in a fresh worktree, never salvaged via git in the blocked tree. Each
 receipt records its isolation mode (host / orchestrator-worktree).
 

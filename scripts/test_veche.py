@@ -79,8 +79,9 @@ class T(unittest.TestCase):
     def test_seats_are_independent_and_decorrelated(self):
         rc, rec, calls, d = self.run_veche(self.seats(*[ans()] * 5), ["--lenses", ",".join(SEATS)])
         self.assertEqual((rc, len(calls), rec["lenses"]), (0, 5, list(SEATS)))
-        for p, s in zip(calls, SEATS):
-            self.assertIn(f"LENS: {s} ", p)  # each seat gets its own lens
+        for s in SEATS:  # first-round calls run in parallel, so their log order is not fixed
+            self.assertEqual(sum(f"LENS: {s} " in p for p in calls), 1)  # each seat gets its own lens
+        for p in calls:
             self.assertNotIn("ANSWER ", p)  # and never another seat's answer before its own is written
             self.assertNotIn("it failed because X", p)
         self.assertEqual(self.valid(rec, d), 0)

@@ -60,7 +60,7 @@ failure copies nothing and is not a refusal. The OK line then ends with
 `; copied .banlist.local.txt from the main checkout <path>`. Claude Code can also
 copy gitignored files at worktree creation through a `.worktreeinclude` file
 (https://code.claude.com/docs/en/worktrees); this copy covers every other host
-and a manual `git worktree add`.
+and a worktree made by hand or with `lane_worktree.sh`.
 
     lane_guard.py --selftest    builds throwaway repos and proves every
                                 refusal fires (and that the OK case passes).

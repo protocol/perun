@@ -57,7 +57,9 @@ update_one() {
   if [[ -f "${mf}" ]]; then while IFS= read -r l; do [[ -n "${l}" ]] && flags+=("${l}"); done < "${mf}"; fi
   bash "${HERE}/install.sh" ${flags[@]+"${flags[@]}"} "${t}" || return 1
   # drift report (warn only: install keeps user-edited files by design): vendored skill files that differ from this source
-  python3 "${HERE}/.claude/skills/agentic-delivery/scripts/vendor_drift.py" "${t}" --src "${HERE}/.claude/skills" >&2 || echo "warning: ${t}: vendored skills drift from canonical (see above)" >&2
+  if [[ -f "${HERE}/.claude/skills/agentic-delivery/scripts/vendor_drift.py" ]]; then
+    python3 "${HERE}/.claude/skills/agentic-delivery/scripts/vendor_drift.py" "${t}" --src "${HERE}/.claude/skills" >&2 || echo "warning: ${t}: vendored skills drift from canonical (see above)" >&2
+  else echo "WARN: vendor_drift.py absent in this checkout (older tag); drift report skipped" >&2; fi
 }
 failed=()
 for t in "$@"; do update_one "$t" || failed+=("$t"); done
