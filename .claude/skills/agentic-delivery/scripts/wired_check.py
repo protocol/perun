@@ -22,6 +22,7 @@ TEST_RE = re.compile(r"(^|/)(test[_-][^/]*|[^/]*_test\.py)$")
 CODE_EXT = (".json", ".yml", ".yaml", ".sh", ".py")
 RUN_RE = re.compile(r"python3?\b|\bbash\b|\bsh\b|\./|\brun\b", re.I)
 SKIP = ("INDEX.md", "CHANGELOG.md", "SHA256SUMS")
+ALLOW_RE = re.compile(r"orphan|unused|allow[-_ ]?list|\bunreferenced\b", re.I)
 
 
 def git(root, *a, ok=(0,)):
@@ -34,7 +35,10 @@ def git(root, *a, ok=(0,)):
 def counts(path, hits):
     """True when `path` is a caller kind that counts and `hits` (its lines naming the script) qualify."""
     base, low = os.path.basename(path), path.lower()
-    if TEST_RE.search(path) or "/evals/" in path or base in SKIP or low.startswith("changelog.d/"):
+    if TEST_RE.search(path) or "/evals/" in path or base in SKIP or low.startswith("changelog.d/") or ALLOW_RE.search(base):
+        return False
+    hits = [h for h in hits if not ALLOW_RE.search(h)]  # a name on an orphan/unused allowlist line is not a caller
+    if not hits:
         return False
     if base == "Makefile" or low.endswith(CODE_EXT):
         return True
@@ -79,8 +83,10 @@ def main(argv):
                 by_file.setdefault(parts[1], []).append(parts[3])
         if not any(counts(f, h) for f, h in by_file.items()):
             unwired += 1
+            listed = any(ALLOW_RE.search(os.path.basename(f)) or any(ALLOW_RE.search(x) for x in h) for f, h in by_file.items())
             print("WARN: %s has no caller (hook/settings, CI, command, package.json, Makefile, script, "
-                  "or a run line in SKILL.md/references)" % s)
+                  "or a run line in SKILL.md/references)" % s + (
+                      "; merged-not-wired: it is only named on an orphan/unused allowlist added with it" if listed else ""))
         if strict and not re.search(r"(?<![\w.-])%s(?![\w.-])" % re.escape(name), ran):
             unrun += 1
             print("FAIL: %s has no observed run record in %s" % (s, ", ".join(runs)))

@@ -63,12 +63,13 @@ fired and didn't?>
 
 ## Action items
 
-| Action | Type (mitigate / prevent / process) | Owner | Bug/issue | Status |
-|---|---|---|---|---|
-| | | | | Open / In progress / Done |
+| Action | Type (mitigate / prevent / process) | Owner | Bug/issue | Done when (verifiable) | Status |
+|---|---|---|---|---|---|
+| | | | | | Open / In progress / Done |
 
-Every action item is owned and tracked to closure — an item with no owner
-or no closing reference is not done. If this root cause has appeared in a
+Every action item is owned and tracked to closure — an item with no owner,
+tracking id or verifiable end state is not done
+(`python3 .claude/skills/agentic-delivery/scripts/prevention_lint.py FILE.md` fails it). If this root cause has appeared in a
 prior postmortem, the missing action item is the finding: name which
 regression test, alert, or gate should have existed and did not.
 
