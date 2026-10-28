@@ -249,6 +249,10 @@ tilt, and escalate the absence rather than silently compensating. **🚩
 tell:** a one-sided board — every recent entry from the same peer — with no
 liveness check before the next post.
 
+## A bare cross-session send is fire-and-forget: verify pickup from the peer's durable trail, never from a receipt
+
+Scope: a send to a remote peer session over a channel with no read receipt and no board (a bare session-to-session message). A DECISION, HANDOFF, BLOCKER or QUESTION posted on the board is not this case: it keeps the token ACK and `peer_ack.py undelivered` rule ("A peer directive needs a read receipt, on the board"), which wins whenever a board exists. For a bare send, asking the peer for an ack adds chatter or a blind wait. After a bounded wait (stated up front, in cycles or minutes), check the peer's own durable trail for evidence it acted: its PR or train comments, its job log, a new commit or ledger row under its own id. Evidence found means picked up. No evidence is one silent window, not a dead peer: do not re-send on the same channel on silence alone, which duplicates the ask. Only the confirmed-silence threshold in the next section licenses backing off and escalating the absence.
+
 ## A one-way status channel with a confirmed-silent reader is not coordination — back off the fixed-timer post and escalate the absence, past a missed-cycle threshold
 
 The *no live peer, no coordination lift* rule above (#709) gates the **one**

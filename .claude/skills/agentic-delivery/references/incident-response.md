@@ -41,6 +41,7 @@ postmortem input.
 2. **Triage.** Assign a severity (below). Name a single incident lead (even a
    solo operator states "I am lead" to separate the role from the panic).
    Start the incident log.
+   Before relaying an automated alarm (watchdog, monitor) to a human or peer, spend one call reading the last 2 comments or events on the thing it names. If they explain the change (a label dropped or a state changed on purpose), do not relay: it is a false alarm. If they do not, relay at once; this read never delays a page for a live customer-facing incident.
 3. **Contain.** Stop the bleeding before understanding it fully — take the
    feature offline, revoke a key, rate-limit, roll back. Containment beats a
    perfect diagnosis while harm accrues. Prefer a reversible containment.
