@@ -33,6 +33,10 @@ audit gate in every train; run the audit on the bare base first and report `BASE
 `scripts/train_land.sh` implements (1) and (3) behind optional `RATCHET_CMD` and `BASE_AUDIT_CMD` (tested in
 `scripts/test-train-scripts.sh`); (2) is the same measurement taken on the merged result.
 
+**Before a flaky-test fix, list the open PRs that touch that test file** (`gh pr list --state open --json number,headRefName,files`) and add the fix to the holder's PR rather than opening a second one; the pre-push hook runs `flake_holder.py`, which warns naming the holder (warn, never refuse).
+
+**Never store a poisoned baseline.** Store a baseline only through `python3 .claude/skills/agentic-delivery/scripts/baseline_guard.py --fails F --rerun 'CMD {id}' --out B.json --normal N`: it re-runs each failure solo (a solo pass is load, dropped), records the 1-minute load at start, and refuses a run with far more failures than normal. **A quarantine entry needs a ticket and an expiry** (`flake_ledger.py quarantine --ticket T`); a full list (`--max`, default 10) exits 1 and `--file-issue` files a P0, it is not a note for a human. **A freeze is a file, not a message**: while `.perun-freeze` (or `<git-common-dir>/PERUN_FREEZE`) exists, `freeze_gate.py BASE HEAD` (run by pre-push) lets through only pure deletions and commits with a `Red-Trunk-Fix:` line.
+
 **Load flakes must not sink a train.** A train that is all-or-nothing under load can merge nothing for hours: failures that
 looked new all passed when re-run alone. With `RERUN_CMD` (and optionally `BASELINE_FAILS`), `train_land.sh` re-runs each
 new `FAIL <id>` from the browser gate alone up to 3 times (`train_flake.sh`); an id is real only when it fails all 3,

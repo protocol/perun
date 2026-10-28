@@ -23,7 +23,11 @@ COMMANDS (state lives in --dir, default .claude/flake-ledger: ledger.jsonl appen
                                  Under flock; a torn (unterminated) last line from a crash is dropped before appending.
                                  Re-recording a log only repeats evidence: counts are per distinct tree, so it is harmless.
   report [--n N]                 per-test table (flake trees, status) plus the quarantine list with expiry state.
-  quarantine [--n N] [--days D]  add FLAKY, non-consistent, unlisted tests. Prints `QUARANTINE id expires=DATE`.
+  quarantine [--n N] [--days D] [--ticket T] [--max M] [--file-issue]
+                                 add FLAKY, non-consistent, unlisted tests, each with an expiry and the tracking ticket T
+                                 (`report` flags an entry without one as NO-TICKET). Prints `QUARANTINE id expires=DATE
+                                 [ticket=T]`. More than M entries (default 10) prints `FULL quarantine list`, exits 1 and, with
+                                 --file-issue, files a P0 issue (`gh issue create --label P0`) instead of leaving a note.
   renew ID (--days D | --expires DATE)   owner review: set a new expiry for a listed id.
   check ID... [--tree T] [--quarantine -]
                                  `QUARANTINED id (expires DATE)` (non-blocking, report it) or `BLOCKING id (reason)`;
@@ -189,6 +193,7 @@ def main(argv=None):
     s = sub.add_parser("serial"); s.add_argument("--n", type=int, default=3)
     s = sub.add_parser("serial-move"); s.add_argument("ids", nargs="+")
     s = sub.add_parser("quarantine"); s.add_argument("--n", type=int, default=3); s.add_argument("--days", type=int, default=14)
+    s.add_argument("--ticket", default=""); s.add_argument("--max", type=int, default=10); s.add_argument("--file-issue", action="store_true")
     s = sub.add_parser("renew"); s.add_argument("id"); g = s.add_mutually_exclusive_group(required=True)
     g.add_argument("--days", type=int); g.add_argument("--expires")
     s = sub.add_parser("check"); s.add_argument("ids", nargs="+"); s.add_argument("--tree"); s.add_argument("--quarantine", choices=["-"])
@@ -234,9 +239,17 @@ def main(argv=None):
             q, moved = load_q(qpath), load_moved(a.dir)
             for t in sorted(stats):
                 if t not in q and t not in moved and flake_trees(stats, t) >= a.n and not consistent(stats, t, latest[t]):
-                    q[t] = {"since": today.isoformat(), "expires": (today + datetime.timedelta(days=a.days)).isoformat()}
-                    print(f"QUARANTINE {t} expires={q[t]['expires']}")
+                    q[t] = {"since": today.isoformat(), "expires": (today + datetime.timedelta(days=a.days)).isoformat(), "ticket": a.ticket}
+                    print(f"QUARANTINE {t} expires={q[t]['expires']}" + (f" ticket={a.ticket}" if a.ticket else ""))
             save_q(a.dir, q)
+        if len(q) > a.max:  # a full list is a P0 to fix or delete tests, not a note for a human to read
+            print(f"FULL quarantine list: {len(q)} > {a.max}")
+            if a.file_issue:
+                r = subprocess.run(["gh", "issue", "create", "--label", "P0", "--title", f"Quarantine list full ({len(q)} > {a.max}): fix or delete flaky tests",
+                                    "--body", "The flake quarantine list is over its cap. Fix or delete tests until it is at or under the cap; each entry needs a ticket and an expiry."],
+                                   capture_output=True, text=True)
+                print(r.stdout.strip() or f"issue not filed: {r.stderr.strip()}")
+            return 1
         return 0
 
     stats, latest = load(a.dir)
@@ -247,7 +260,8 @@ def main(argv=None):
             status = "consistent-fail" if consistent(stats, t, latest[t]) else "FLAKY" if ft >= a.n else "watch" if ft else "ok"
             print(f"{status}\t{t}\tflake_trees={ft}\ttrees={len(stats[t])}")
         for t, e in sorted(q.items()):
-            print(f"{'EXPIRED' if day(e['expires']) < today else 'QUARANTINED'}\t{t}\texpires={e['expires']}")
+            print(f"{'EXPIRED' if day(e['expires']) < today else 'QUARANTINED'}\t{t}\texpires={e['expires']}"
+                  + ("" if e.get("ticket") else "\tNO-TICKET"))
         return 0
     if a.cmd == "serial":
         moved = load_moved(a.dir)
