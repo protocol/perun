@@ -3,6 +3,17 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.609.0] — 2026-10-28
+
+### Added
+- agentic-delivery: hermetic-env lint (`scripts/hermetic_env_lint.py`, frozen baseline of 11 existing offenders) fails a test of a host-reading script that pins no host env, and `scrub_env.sh` now also unsets systemd/session env. `bypass_guard.py` denies a lane writing `.perun/approvals/` (gate overrides are human-only), and the lane preamble says so. Slot floors scale with cores (`slot_floor`), a fan-out waits for its floor instead of shrinking (`fanout_workers`), and `ci-gates.sh` privacy scan uses the core count for `xargs -P`. `lkg.py` records the runner blob and refuses or rejects a receipt from a stale `run-ci-tests.sh`.
+
+size-budget-raise: .claude/skills/agentic-delivery/references/fanout-host-sizing.md 48424→48845 one paragraph: core-scaled fan-out floor, wait not shrink
+size-budget-raise: .claude/skills/agentic-delivery/references/gate-epistemology.md 11398→11800 one paragraph: receipt records its runner blob
+
+### Added
+- agentic-delivery: five gate-hardening mechanisms. (1) `pre-push-verify.sh` probes `nice` first and, when it is denied or broken, runs the gate at normal priority with one notice instead of failing. (2) The `heavy_gate.py` busy message names the lease holders (pid, kind, age, train gate) read from the lease files, with no ps or top. (3) With `DCR_PREPUSH_CMD` unset, the pre-push hook reuses the project's own lint (package.json `lint` script, Makefile `lint:` target, or pyproject `[tool.ruff]`), and an unreadable config fails closed. (4) `perun_doctor.py` reports dev-DB servers (postgres, mysqld, mongod, redis-server) whose data dir is gone and prints a `kill -TERM` line for the owner; it never kills. (5) `scripts/run-ci-tests.sh` also runs the privacy gate and the trigger lint before the tests. Tests: `scripts/test_prepush_lint_nice.py`, `scripts/test_heavy_gate_holders.py`, `scripts/test_doctor_orphan_dbs.py`, `scripts/test_run_ci_gates.py`.
+
 ## [1.608.0] — 2026-10-28
 
 ### Added
