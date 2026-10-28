@@ -67,6 +67,8 @@ applies to code, applied to incident causes: a recurring root cause with
 nothing new added between occurrences means nothing was actually learned the
 first time.
 
+Every finding that is fixed leaves one pin test, and every train runs all pin tests. Before filing a new finding, run the fingerprint duplicate check (`scripts/file_finding.py`) so a recurrence reopens the old finding instead of adding a second one.
+
 ## Cross-reference — the reliability contract this feeds
 
 `role-coverage.md`'s Platform/DevOps/SRE lens (`deep-code-review` skill) owns

@@ -35,7 +35,8 @@ FLAKE_SETUP_CMD='echo seed >"$FLAKE_STORE/s"' RERUN_CMD='[ -n "${FLAKE_STORE:-}"
 ok $? "bisect helper: --one gives a fresh seeded store (a stale shared store would fail)"
 RERUN_CMD='[ -n "${FLAKE_STORE:-}" ]' bash -c 'unset FLAKE_STORE; bash -c "$RERUN_CMD"'; [ $? -ne 0 ]; ok $? "without the helper FLAKE_STORE is unset, so a stale-store re-run fails"
 grep -q 'train_flake.sh" "\$1"' "$SC/train_land.sh"; ok $? "train_land bisect re-runs through train_flake.sh triage (fresh store per run)"
-! grep -nE '\brm\b' "$SC/train_flake.sh"; ok $? "train_flake.sh contains no rm"
+rmlines=$(grep -cE '\brm\b' "$SC/train_flake.sh"); trapok=$(grep -cF "do [ -z \"\$x\" ] || rm -rf -- \"\$x\"; done' EXIT" "$SC/train_flake.sh")
+[ "$rmlines" -eq 1 ] && [ "$trapok" -eq 1 ]; ok $? "train_flake.sh: only rm is the EXIT trap over its own mktemp paths"
 
 # --- timebox kills the whole process group (grandchild included), only its own ---
 python3 -I - "$SC" "$WORK/gc.pid" <<'PY'
