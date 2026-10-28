@@ -232,7 +232,7 @@ def check(repo, home):
             size = "" if kb is None else f", {'at least ' if not full else ''}{kb / 1048576:.1f} GB"
             hint = (" (file watchers such as fseventsd scan all of it). Create lanes outside it with .claude/skills/agentic-delivery/scripts/lane_worktree.sh and remove finished ones: git worktree remove <path>" if "in repo" in label else ". Remove finished ones: git worktree remove <path>") if big else ""
             add("WARN" if big else "OK", label, f"{len(paths)} worktree(s){size}{hint}")
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, TypeError, AttributeError):
         add("INFO", "lane worktrees", "git worktree list failed: not checked")
     return rows
 
