@@ -16,12 +16,14 @@
 # (FLAKE_HOST, default hostname -s) and invocation hash (sha256 of FLAKE_INVOCATION, default BROWSER_CMD) must match, else exit 2:
 # a baseline from another machine or another command line makes failures look new (or hides new ones). Missing header = refused.
 # Fresh store: FLAKE_SETUP_CMD (optional, via bash -c) runs before EVERY isolated re-run with TEST=<id>, FLAKE_RUN=<n> and
-# FLAKE_STORE=<fresh empty dir from mktemp -d under $TMPDIR, left for OS temp cleanup, path printed to stderr>; it must seed that store, and RERUN_CMD sees the same FLAKE_STORE. A re-run that
+# FLAKE_STORE=<fresh empty dir from mktemp -d under $TMPDIR, removed on exit, path printed to stderr>; it must seed that store, and RERUN_CMD sees the same FLAKE_STORE. A re-run that
 # reuses the run's own store fakes real failures. Hook failure exits 2 (fails closed). Retries are per test title, never per file.
 set -uo pipefail
 inv=$(printf %s "${FLAKE_INVOCATION:-${BROWSER_CMD:-}}" | { shasum -a 256 2>/dev/null || sha256sum; } | cut -c1-16)
 host=${FLAKE_HOST:-$(hostname -s)}
 T=${TMPDIR:-/tmp}
+# made: the mktemp paths this script created (stores, out file); the EXIT trap removes only those, skipping empty entries.
+made=(); trap 'for x in ${made[@]+"${made[@]}"}; do [ -z "$x" ] || rm -rf -- "$x"; done' EXIT
 # Ledger env (see the FLAKE_LEDGER_DIR note above): move it into shell variables and unset it so the code under test (RERUN_CMD, FLAKE_SETUP_CMD) never inherits the path.
 led=${FLAKE_LEDGER_DIR:-} qstdin=${FLAKE_QUARANTINE_STDIN:-}; unset FLAKE_LEDGER_DIR FLAKE_QUARANTINE_STDIN FLAKE_QUARANTINE_JSON qjson
 # norm: the ONE id normalizer (strip trailing whitespace incl. CR, nothing else). Every emit and match of a FAIL/REAL id goes through it
@@ -30,7 +32,7 @@ norm() { sed -E 's/[[:space:]]+$//'; }
 [ "${1:-}" != --norm ] || { norm; exit $?; }
 # one_run <id> <n>: fresh store (mktemp -d, FLAKE_STORE), optional FLAKE_SETUP_CMD hook, then RERUN_CMD alone. rc 125 = hook failed.
 one_run() {
-  local d rc=0; d=$(mktemp -d "$T/flake-store.XXXXXX") || return 125; echo "train_flake: store $d (left for OS temp cleanup)" >&2
+  local d rc=0; d=$(mktemp -d "$T/flake-store.XXXXXX") || return 125; made+=("$d"); echo "train_flake: store $d (removed on exit)" >&2
   export TEST=$1 FLAKE_RUN=$2 FLAKE_STORE=$d
   if [ -z "${FLAKE_SETUP_CMD:-}" ] || bash -c "$FLAKE_SETUP_CMD" >/dev/null 2>&1 </dev/null; then python3 "$(dirname "$0")/stage_run.py" --name train-rerun -- bash -c "$RERUN_CMD" >"${RERUN_OUT:-/dev/null}" 2>&1 </dev/null || rc=$?
     # stage_run exit 75 (heavy slot DEFER) or 124 (stage timeout) means the re-run never gave a verdict: infra (125), never a red/real failure.
@@ -44,7 +46,7 @@ if [ "${1:-}" = --one ]; then [ -n "${2:-}" ] && [ -n "${RERUN_CMD:-}" ] || { ec
 # 1 = not pre-existing (RERUN_CMD must print `FAIL <id>` only for tests that actually ran), 125 = fresh store/hook failed or bad bounds (fail closed).
 if [ "${1:-}" = --base ]; then
   [ -n "${2:-}" ] && [ -n "${RERUN_CMD:-}" ] || { echo "usage: RERUN_CMD=... train_flake.sh --base <id>" >&2; exit 2; }
-  runs=${FLAKE_RUNS:-3} need=${FLAKE_REAL_AT:-$runs}; f=0 p=0; o=$(mktemp "$T/flake-out.XXXXXX") || exit 125
+  runs=${FLAKE_RUNS:-3} need=${FLAKE_REAL_AT:-$runs}; f=0 p=0; o=$(mktemp "$T/flake-out.XXXXXX") || exit 125; made+=("$o")
   bid=$(printf %s "$2" | norm)
   case $runs$need in ''|*[!0-9]*) exit 125 ;; esac; [ "$need" -ge 1 ] && [ "$need" -le "$runs" ] || exit 125
   for n in $(seq "$runs"); do
