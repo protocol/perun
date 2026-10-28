@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# review_checks.sh [--base REF] [--tests] [--history] [--timeout SECS] — run local, read-only analyzers over the files
+# review_checks.sh [--base REF] [--tests] [--history] [--full] [--timeout SECS] — run local, read-only analyzers over the files
 # changed since REF (default origin/main, compared as REF...HEAD) and print findings as a JSON array on
 # stdout: [{"file","line","rule","message","text","tool"}]. `text` ("rule: message") is the key
 # scripts/score_review.py matches on. Findings are LEADS: verify each against the code before reporting.
@@ -9,6 +9,8 @@
 # REVIEW_OSV=1 (network); semgrep uses repo rules, else the bundled taint rules plus p/default (never `--config auto`); trivy is offline.
 # Tool hub: zizmor, bandit, gosec, grype, checkov, hadolint (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
+# `--full` scans every tracked file (base = git's empty tree) instead of a diff; gitleaks runs once over the working tree. gitleaks drops
+# fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
 # dirs and .claude/worktrees are never scanned; each heavy scanner takes the heavy lease only when it runs (waits
 # REVIEW_LEASE_WAIT s, default 120, else skipped) and releases it afterwards.
@@ -18,7 +20,7 @@
 # Each tool is timeboxed (default 60s). Exit 0 even with findings; 2 on usage/unresolvable base.
 set -euo pipefail
 
-repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" missing="" lease=ok leased=0 full=0
+repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" missing="" lease=ok leased=0 full=0 wr=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base=${2:?--base needs a ref}; case "$base" in -*) echo "review_checks: --base must not start with '-'" >&2; exit 2 ;; esac; shift 2 ;;
@@ -26,23 +28,25 @@ while [ $# -gt 0 ]; do
     --tests) tests=1; shift ;;
     --repo) repo=${2:?--repo needs a dir}; [ -d "$repo" ] || { echo "review_checks: --repo: not a directory: $repo" >&2; exit 2; }; shift 2 ;; # replaces `cd DIR && review_checks.sh` (bash guards block chains)
     --history) hist=1; shift ;;
+    --full) wr=1 full=1; shift ;;
     --full-history) hist=1 full=1; shift ;;
-    *) echo "usage: review_checks.sh [--repo DIR] [--base REF] [--tests] [--history] [--timeout SECS]" >&2; exit 2 ;;
+    *) echo "usage: review_checks.sh [--repo DIR] [--base REF] [--tests] [--history] [--full] [--timeout SECS]" >&2; exit 2 ;;
   esac
 done
 case "$tmo" in ''|*[!0-9]*) echo "review_checks: --timeout must be an integer" >&2; exit 2 ;; esac
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$repo"
-git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "review_checks: unresolvable base '$base'" >&2; exit 2; }
+if [ "$wr" = 1 ]; then base=$(git hash-object -t tree /dev/null); ref=HEAD # whole repo: every tracked file against the empty tree
+else ref=$base; git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "review_checks: unresolvable base '$base'" >&2; exit 2; }; fi
 cd "$(git rev-parse --show-toplevel)"
 
 raw=$(mktemp "${TMPDIR:-/tmp}/review-raw.XXXXXX") out=$(mktemp "${TMPDIR:-/tmp}/review-out.XXXXXX") tsv=$(mktemp "${TMPDIR:-/tmp}/review-tsv.XXXXXX")
 sgh=$(mktemp -d "${TMPDIR:-/tmp}/review-sg.XXXXXX") # semgrep HOME: the macOS agent sandbox denies writes to ~/.semgrep
-rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX") gla=$(mktemp "${TMPDIR:-/tmp}/review-gla.XXXXXX") # mktemp files are mode 600
-trap 'rm -rf "$raw" "$out" "$tsv" "$sgh" "$rep" "$gla"' EXIT INT TERM HUP
+rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX") gla=$(mktemp "${TMPDIR:-/tmp}/review-gla.XXXXXX") gli=$(mktemp "${TMPDIR:-/tmp}/review-gli.XXXXXX") # mktemp files are mode 600
+trap 'rm -rf "$raw" "$out" "$tsv" "$sgh" "$rep" "$gla" "$gli"' EXIT INT TERM HUP
 # Vendored, build and worktree dirs are never scanned (a changed file under them is dropped here, for every tool).
 XRE='(^|/)(node_modules|\.claude/worktrees|vendor|dist|build|\.git|\.venv|venv|target|__pycache__)/'
-all=$(git diff --name-only --diff-filter=ACMR "$base"...HEAD)
+if [ "$wr" = 1 ]; then all=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$base" HEAD); else all=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$base"...HEAD); fi
 files=$(printf '%s\n' "$all" | grep -Ev "$XRE" || true)
 nex=$(( $(printf '%s\n' "$all" | grep -c .) - $(printf '%s\n' "$files" | grep -c .) ))
 rc=0
@@ -62,7 +66,7 @@ tbox() {
 # concurrent sessions queue instead of piling on; lease_drop frees it after the last one. Waits REVIEW_LEASE_WAIT s
 # (default 120) then reports the scanner as skipped. Fail open: no perun_policy.py (review-only install) or an
 # unexpected exit from it (reported once) means no gate.
-pp="$(dirname "$0")/../../agentic-delivery/scripts/perun_policy.py"
+pp="$here/../../agentic-delivery/scripts/perun_policy.py"
 lease_take() {
   [ "$leased" = 1 ] && return 0
   [ "$lease" = ok ] || return 1
@@ -223,9 +227,14 @@ if kind == "gitleaks":  # Secret/Match fields are deliberately never read
         h = hashlib.sha256(sec.encode()).hexdigest()
         f = (r.get("File") or "").removeprefix("./")
         return any(a[0] == r.get("RuleID") and a[2] == h and rx(a[1]).match(f) for a in al)
-    kept = [r for r in d if not allowed(r)]
+    ign = set()  # .gitleaksignore: one fingerprint per line, "#" comments; unreadable -> keep every finding
+    try:
+        ign = {l.strip().removeprefix("./") for l in open(os.environ.get("GL_IGNORE") or os.devnull, encoding="utf-8") if l.strip() and not l.lstrip().startswith("#")}
+    except (ValueError, OSError):
+        print("review_checks: .gitleaksignore unreadable; all findings kept", file=sys.stderr)
+    kept = [r for r in d if not allowed(r) and (r.get("Fingerprint") or "").removeprefix("./") not in ign]
     if len(kept) < len(d):
-        print(f"review_checks: .gitleaks-allow suppressed {len(d) - len(kept)} finding(s)", file=sys.stderr)
+        print(f"review_checks: .gitleaks-allow/.gitleaksignore suppressed {len(d) - len(kept)} finding(s)", file=sys.stderr)
     rows = [(r.get("File"), r.get("StartLine"), r.get("RuleID"), r.get("Description") or "secret detected") for r in kept]
 elif kind.startswith("trivy"):
     for r in d.get("Results") or []:  # Secrets only in the secret-only fallback, and never the Match (it would leak the value)
@@ -271,22 +280,36 @@ PY
 if have gitleaks; then
   # Content-hash allowlist (templates/gitleaks.toml): trusted only as of BASE, so a change cannot approve its own secret.
   # A missing file or unresolvable base means an empty list; an entry the change adds or edits is itself a finding.
-  export GL_ALLOW=$gla; git show "$base:.gitleaks-allow" >"$gla" 2>/dev/null || : >"$gla"
-  if [ -f .gitleaks-allow ] && ! cmp -s .gitleaks-allow "$gla"; then add gitleaks .gitleaks-allow 0 allowlist-changed "allowlist differs from $base; the change's entries are NOT applied, review them"; fi
+  export GL_ALLOW=$gla; git show "$ref:.gitleaks-allow" >"$gla" 2>/dev/null || : >"$gla"
+  if [ -f .gitleaks-allow ] && ! cmp -s .gitleaks-allow "$gla"; then add gitleaks .gitleaks-allow 0 allowlist-changed "allowlist differs from $ref; the change's entries are NOT applied, review them"; fi
+  # .gitleaksignore (fingerprints) is likewise read as of BASE (HEAD under --full), never from the working tree.
+  export GL_IGNORE=$gli; git show "$ref:.gitleaksignore" >"$gli" 2>/dev/null || : >"$gli"
   glcfg=(); [ -f .gitleaks.toml ] || glcfg=(--config "$here/../templates/gitleaks.toml") # no repo config: use the allowlist template
   if [ ${#glcfg[@]} -gt 0 ]; then # say what the template hides, so a skipped file is never silent
     skipped=$(printf '%s\n' "$files" | grep -cE "$(sed -n "s/^  '''\(.*\)''',\$/\1/p" "$here/../templates/gitleaks.toml" | paste -sd'|' -)" || true)
     [ "${skipped:-0}" -eq 0 ] || echo "review_checks: gitleaks template skipped $skipped changed file(s) under .history/, fixtures/, testdata/ or generated registry JSON" >&2
   fi
-  while IFS= read -r f; do
-    [ -f "$f" ] || continue
-    : >"$rep" # a stale report from the previous file must never be read for this one
-    run_one gitleaks gitleaks detect ${glcfg[@]+"${glcfg[@]}"} --no-git --no-banner --exit-code 0 -f json -r "$rep" -s "./$f" || continue
-    scan_ok gitleaks || continue
-    [ -s "$rep" ] || echo '[]' >"$rep" # gitleaks may leave an empty report for a clean file
-    sjson gitleaks "$rep" >"$tsv" || { skip gitleaks "unparseable report for $f"; continue; }
-    while IFS=$'\t' read -r _ l r m; do add gitleaks "$f" "$l" "$r" "$m"; done <"$tsv"
-  done <<<"$files"
+  if [ "$wr" = 1 ]; then # one batched scan of the working tree; only tracked, non-vendored files are reported
+    : >"$rep"; glw=$(mktemp "${TMPDIR:-/tmp}/review-glw.XXXXXX") # extend the config; skip vendored trees at scan time
+    printf '[extend]\npath = "%s"\n[allowlist]\npaths = [\x27\x27\x27(^|/)(node_modules|vendor|\\.claude/worktrees)/\x27\x27\x27]\n' "${glcfg[1]:-$PWD/.gitleaks.toml}" >"$glw"
+    if run_one gitleaks gitleaks detect --config "$glw" --gitleaks-ignore-path "$gli" --no-git --no-banner --exit-code 0 -f json -r "$rep" -s . && scan_ok gitleaks; then
+      [ -s "$rep" ] || echo '[]' >"$rep"
+      if sjson gitleaks "$rep" >"$tsv"; then
+        while IFS=$'\t' read -r f l r m; do f=${f#./}; printf '%s\n' "$files" | grep -qxF -- "$f" && add gitleaks "$f" "$l" "$r" "$m"; done <"$tsv"
+      else skip gitleaks "unparseable report"; add gitleaks "" 0 not-checked "gitleaks report unparseable; secrets were not scanned"; fi
+    else add gitleaks "" 0 not-checked "gitleaks run failed or timed out; secrets were not scanned"; fi
+    rm -f "$glw"
+  else
+    while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      : >"$rep" # a stale report from the previous file must never be read for this one
+      run_one gitleaks gitleaks detect ${glcfg[@]+"${glcfg[@]}"} --gitleaks-ignore-path "$gli" --no-git --no-banner --exit-code 0 -f json -r "$rep" -s "./$f" || continue
+      scan_ok gitleaks || continue
+      [ -s "$rep" ] || echo '[]' >"$rep" # gitleaks may leave an empty report for a clean file
+      sjson gitleaks "$rep" >"$tsv" || { skip gitleaks "unparseable report for $f"; continue; }
+      while IFS=$'\t' read -r _ l r m; do add gitleaks "$f" "$l" "$r" "$m"; done <"$tsv"
+    done <<<"$files"
+  fi
   if [ "$hist" = 1 ]; then # history: the commits in BASE...HEAD (the file list's range), not just the final file state
     : >"$rep"
     lo=(--log-opts "$base...HEAD"); [ "$full" = 0 ] || lo=() # default: only the commits since BASE
@@ -296,7 +319,7 @@ if have gitleaks; then
       else skip gitleaks-history "unparseable report"; fi
     fi
   fi
-fi
+elif [ -n "$files" ]; then add gitleaks "" 0 not-checked "not installed or heavy lease full; secrets were not scanned"; fi
 
 lock_files=$(changed '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.sum|Cargo\.lock|poetry\.lock|requirements[^/]*\.txt|composer\.lock)$')
 if [ -z "$lock_files" ]; then :
