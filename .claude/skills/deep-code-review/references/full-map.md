@@ -189,7 +189,7 @@ applicable domains. Language footguns:
 | T | Multi-tenancy & isolation | `domain-t.md` (when one deployment serves multiple tenants) |
 | W | Workflows, jobs & scheduling | `domain-w.md` (when the target runs cron, queues, or multi-step workflows) |
 
-Also: `app-pentest.md` (scan running app), `supply-chain-check.md` (advisories, Actions).
+Also: `app-pentest.md` (live app), `supply-chain-check.md` (advisories), `dynamic-probe.md` (probes).
 
 ---
 
