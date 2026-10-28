@@ -17,7 +17,7 @@ def run(ids, *extra):
     rerun.write_text('#!/bin/sh\ncase "$1" in real*) exit 1;; esac\nexit 0\n')
     rerun.chmod(0o755)
     out = os.path.join(d, "base.json")
-    r = subprocess.run([sys.executable, str(SCRIPT), "--fails", f"{d}/fails.txt", "--rerun", f"{rerun} {{id}}", "--out", out, *extra],
+    r = subprocess.run([sys.executable, str(SCRIPT), "--fails", f"{d}/fails.txt", "--rerun", f"{rerun} {{id}}", "--out", out, "--max-load", "1e9", *extra],
                        capture_output=True, text=True, env={**os.environ, "PERUN_GATE_CORES": "4"})
     return r, out
 

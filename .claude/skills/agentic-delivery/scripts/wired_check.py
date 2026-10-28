@@ -22,7 +22,8 @@ TEST_RE = re.compile(r"(^|/)(test[_-][^/]*|[^/]*_test\.py)$")
 CODE_EXT = (".json", ".yml", ".yaml", ".sh", ".py")
 RUN_RE = re.compile(r"python3?\b|\bbash\b|\bsh\b|\./|\brun\b", re.I)
 SKIP = ("INDEX.md", "CHANGELOG.md", "SHA256SUMS")
-ALLOW_RE = re.compile(r"orphan|unused|allow[-_ ]?list|\bunreferenced\b", re.I)
+# explicit names only: ORPHAN_ALLOW(LIST), unused-allowlist, a `# orphan:` marker or an `allowlist:` / `allow_list=` key
+ALLOW_RE = re.compile(r"(?<![A-Za-z])(orphan|unused)[-_ ]?allow(list)?(?![A-Za-z])|#\s*orphan:|(?<![A-Za-z])allow[-_]?list\s*[:=]", re.I)
 
 
 def git(root, *a, ok=(0,)):
