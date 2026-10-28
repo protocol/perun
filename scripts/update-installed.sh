@@ -56,6 +56,8 @@ update_one() {
   # machine-local flags (untracked): the only place the three local-only flags are honored
   if [[ -f "${mf}" ]]; then while IFS= read -r l; do [[ -n "${l}" ]] && flags+=("${l}"); done < "${mf}"; fi
   bash "${HERE}/install.sh" ${flags[@]+"${flags[@]}"} "${t}" || return 1
+  # drift report (warn only: install keeps user-edited files by design): vendored skill files that differ from this source
+  python3 "${HERE}/.claude/skills/agentic-delivery/scripts/vendor_drift.py" "${t}" --src "${HERE}/.claude/skills" >&2 || echo "warning: ${t}: vendored skills drift from canonical (see above)" >&2
 }
 failed=()
 for t in "$@"; do update_one "$t" || failed+=("$t"); done

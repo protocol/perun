@@ -8,8 +8,9 @@ template, package.json), CI workflow (.yml/.yaml), Makefile, command .md, anothe
 SKILL.md / references .md line in a run context (python3, bash, sh, `./`, "run"). The script itself, its own
 tests, generated indexes, changelogs, checksums and evals do not count; a script referenced only from its own
 test is unwired.
-Prints `WARN: <path> has no caller` per unwired script. WARN-ONLY: always exits 0 (exit 2 on usage/git error).
-Limits: matches on the file's basename; a caller built by string concatenation is missed (false WARN).
+Prints `WARN: <path> has no caller` per unwired script. WARN-ONLY unless --strict: exits 0 (exit 2 on usage/git error).
+`--strict --runs FILE [--runs FILE...]` (hand-back/CI mode): exit 1 when any new script is unwired OR its exact basename token appears in none of
+the observed-run record FILEs (CI passes the registered test files, which run the script every build); a missing FILE exits non-zero even with no new script. Limits: matches on the file's basename; a caller built by string concatenation is missed (false WARN).
 """
 import os
 import re
@@ -48,12 +49,25 @@ def main(argv):
         i = argv.index("--root")
         root = argv[i + 1]
         del argv[i:i + 2]
-    if len(argv) != 2:
-        sys.exit("usage: wired_check.py BASE HEAD [--root DIR]")
+    strict = "--strict" in argv
+    argv = [x for x in argv if x != "--strict"]
+    runs = []
+    while "--runs" in argv:
+        i = argv.index("--runs")
+        runs.append(argv[i + 1])
+        del argv[i:i + 2]
+    if len(argv) != 2 or (strict and not runs):
+        sys.exit("usage: wired_check.py BASE HEAD [--root DIR] [--strict --runs FILE ...]")
+    ran = ""
+    for r in runs if strict else ():
+        try:
+            ran += open(r, errors="replace").read() + "\n"
+        except OSError as e:  # fail closed even when no script was added: a missing record is not "nothing ran"
+            sys.exit("wired_check: run record %s unreadable: %s" % (r, e))
     base, head = argv
     added = [f for f in git(root, "diff", "--name-only", "--diff-filter=A", "%s...%s" % (base, head)).split("\n")
              if NEW_RE.search(f) and not TEST_RE.search(f)]
-    unwired = 0
+    unwired = unrun = 0
     for s in added:
         name = os.path.basename(s)
         # -I skips binaries; exit 1 = no match
@@ -67,8 +81,11 @@ def main(argv):
             unwired += 1
             print("WARN: %s has no caller (hook/settings, CI, command, package.json, Makefile, script, "
                   "or a run line in SKILL.md/references)" % s)
-    print("wired_check: %d new script(s), %d unwired (warn-only)" % (len(added), unwired))
-    return 0
+        if strict and not re.search(r"(?<![\w.-])%s(?![\w.-])" % re.escape(name), ran):
+            unrun += 1
+            print("FAIL: %s has no observed run record in %s" % (s, ", ".join(runs)))
+    print("wired_check: %d new script(s), %d unwired%s" % (len(added), unwired, ", %d never run" % unrun if strict else " (warn-only)"))
+    return 1 if strict and (unwired or unrun) else 0
 
 
 if __name__ == "__main__":

@@ -252,13 +252,14 @@ jobs:
 
       # Shipped gate scripts prove they FIRE on planted violations before any
       # result of theirs is trusted (independent oracle per script).
-      # Warn-only: a new script nothing calls was built but never wired (field learning, #1380).
-      - name: New scripts are wired (warn-only)
-        continue-on-error: true
+      # Strict: a new script nothing calls, or that no registered CI test runs, was built but never wired (field learning, #1380).
+      - name: New scripts are wired and run
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python3 .claude/skills/agentic-delivery/scripts/wired_check.py "$BASE_SHA" "$HEAD_SHA"
+        run: |
+          cat scripts/ci-tests.d/*.sh scripts/test_*.py scripts/test-*.sh > "$RUNNER_TEMP/runs.txt"
+          python3 .claude/skills/agentic-delivery/scripts/wired_check.py "$BASE_SHA" "$HEAD_SHA" --strict --runs "$RUNNER_TEMP/runs.txt"
 
       - name: Shipped script self-tests
         run: |

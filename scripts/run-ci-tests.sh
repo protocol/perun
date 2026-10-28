@@ -4,6 +4,8 @@
 # Exit 0 only when all pass; then records the last-known-good pointer (lkg.py record, HEAD). A failure records nothing.
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# PERUN_RUN_DIR (optional): this run's log dir; plain mkdir refuses a dir that already exists, so a rerun never overwrites an earlier run's evidence.
+[ -z "${PERUN_RUN_DIR:-}" ] || mkdir "$PERUN_RUN_DIR" || { echo "run-ci-tests: run dir $PERUN_RUN_DIR already exists; pick a fresh one" >&2; exit 1; }
 # The two cheap CI gates a push is most often rejected on, run first (a missing privacy input or an unresolvable base fails closed).
 echo "== privacy"
 [ -f scripts/ci-gates.sh ] && [ -f .banlist.txt ] || { echo "run-ci-tests: FAIL privacy: scripts/ci-gates.sh or .banlist.txt missing (fail closed)" >&2; exit 1; }
@@ -24,3 +26,4 @@ for t in scripts/ci-tests.d/*.sh; do
   bash -e "$t" || { echo "run-ci-tests: FAIL $t" >&2; exit 1; }
 done
 python3 .claude/skills/agentic-delivery/scripts/lkg.py record >/dev/null || echo "run-ci-tests: lkg record failed (ignored)" >&2
+python3 .claude/skills/agentic-delivery/scripts/lkg.py verdict "$(python3 .claude/skills/agentic-delivery/scripts/lkg.py path)" >/dev/null || echo "run-ci-tests: lkg receipt does not verify against HEAD (ignored)" >&2

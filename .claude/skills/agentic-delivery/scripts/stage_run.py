@@ -121,6 +121,7 @@ def main(argv=None) -> int:
     ap.add_argument("--hook", action="store_true", help="git hook mode: no heavy lease; a timeout reports COULD-NOT-CHECK with the index.lock holder")
     ap.add_argument("--wait", type=float)
     ap.add_argument("--probe", action="store_true", help="only wait for a free heavy slot, then release it and exit 0 (75 = still full); runs no command")
+    ap.add_argument("--run-dir", help="unique run dir: created here, REFUSED (exit 1) when it already exists; exported as PERUN_RUN_DIR")
     ap.add_argument("cmd", nargs=argparse.REMAINDER)
     a = ap.parse_args(argv)
     cmd = a.cmd[1:] if a.cmd[:1] == ["--"] else a.cmd
@@ -140,6 +141,13 @@ def main(argv=None) -> int:
     if not all(math.isfinite(v) and v >= 0 for v in (wait, tmo)):  # nan/inf/negative would disable the cap or the wait
         print(f"stage_run: timeout and wait must be finite and >= 0 (timeout {tmo:g}m, wait {wait:g}s)", file=sys.stderr)
         return 2
+    if a.run_dir:
+        try:
+            os.makedirs(a.run_dir)
+        except FileExistsError:
+            print(f"stage_run: run dir {a.run_dir} already exists; refusing to reuse a run id (pick a fresh one)", file=sys.stderr)
+            return 1
+        os.environ["PERUN_RUN_DIR"] = a.run_dir
     pid, d, t0, ppid0 = os.getpid(), pp.lease_dir(), time.time(), os.getppid()
     leased = not a.hook  # a commit hook is a fast check, not a heavy job: no lease, no slot wait
     cls = "browser" if a.name == "train-browser" else "train" if a.name.startswith("train-") else "heavy"  # train_gate classes

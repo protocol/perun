@@ -360,6 +360,34 @@ class Conflict(Exception):
         self.member, self.files = member, files
 
 
+REFUSED = "perun-train-refused: "  # first line of the PR comment park() posts; the rest of the comment is the reason
+CLEARED = "perun-train-cleared: "  # same line shape, posted later by the operator: lifts the refusal for that head (transient causes need no new push)
+
+
+def _tagged(c, tag, sha):
+    b = c.get("body", "")
+    return b.startswith(tag + sha) and b[len(tag) + len(sha):][:1] in ("", "\n", "\r")
+
+
+def refused(pr, me=None):
+    """True when the latest refusal comment for exactly this head sha is not followed by a clearing one; a new push changes the head, so it re-admits.
+    `me`: only comments by that login count (anyone can comment; None = unknown login, count all, i.e. fail toward refusing)."""
+    live = False
+    for c in pr.get("comments") or []:
+        if me and (c.get("author") or {}).get("login") != me:
+            continue
+        if _tagged(c, REFUSED, pr["headRefOid"]):
+            live = True
+        elif _tagged(c, CLEARED, pr["headRefOid"]):
+            live = False
+    return live
+
+
+def neutral(text):
+    """Reason text safe to post under the operator's account: no @mentions, no markdown links, no control chars, <=200 chars."""
+    return clean(text, 200).replace("@", "@\u200b").replace("](", "] (")
+
+
 def default_runner(args, cwd=None, timeout=3600):
     """Run a command without a shell; return (returncode, stdout, stderr).
 
@@ -594,6 +622,12 @@ class Train:
         """Exclude `member` at its current head from every later plan, persist it, print PARK."""
         self.state.setdefault("parked", {})[str(member["number"])] = {"head": member["head"], "reason": reason}
         self.save()
+        body = f"{REFUSED}{member['head']}\n{neutral(reason)}"
+        for _ in range(2):  # one retry; the local state above still holds if both fail
+            if self.run(["gh", "pr", "comment", str(member["number"]), *self.repo_flag, "--body", body], ok=False, timeout=30)[0] == 0:
+                break
+        else:
+            self.say(f"REFUSAL-NOT-RECORDED #{member['number']}: comment failed twice; only this state file blocks a re-ride")
         self.say(f"PARK #{member['number']} {reason}")
 
     # ---- plan -----------------------------------------------------------
@@ -605,7 +639,7 @@ class Train:
     def eligible(self):
         """Return eligible members [{number, head}] in PR-number order; one line per PR."""
         _, out, _ = self.run(["gh", "pr", "list", *self.repo_flag, "--base", self.a.base, "--state", "open",
-                              "--limit", str(PR_LIMIT), "--json", "number,headRefOid,isDraft,mergeable,isCrossRepository,labels"])
+                              "--limit", str(PR_LIMIT), "--json", "number,headRefOid,isDraft,mergeable,isCrossRepository,labels,comments"])
         prs = json.loads(out or "[]")
         if len(prs) >= PR_LIMIT:
             raise ForgeError(f"pr list hit the {PR_LIMIT} limit; refusing a truncated plan")
@@ -630,12 +664,21 @@ class Train:
         self.say(f"PLAN base={self.a.base} members={names(members) or 'none'}")
         return members
 
+    def _me(self):
+        """Login of the authenticated gh user (cached), or None when unknown; only its refusal comments count."""
+        if not hasattr(self, "_login"):
+            rc, out, _ = self.run(["gh", "api", "user", "-q", ".login"], ok=False, timeout=30)
+            self._login = out.strip() if rc == 0 and out.strip() else None
+        return self._login
+
     def _ineligible(self, pr, parked, waive=()):
         """'' when `pr` may join the train, else the reason it is skipped. `waive`: checks a PARTIAL-PASS receipt left unchecked."""
         if pr.get("isDraft"):
             return "draft"
         if held := self._held(pr):
             return held
+        if any(REFUSED in c.get("body", "") for c in pr.get("comments") or []) and refused(pr, self._me()):  # login looked up only when a refusal comment exists
+            return f"refused at {pr['headRefOid'][:7]} (train dropped it; push a new head to re-ride)"
         if str(pr["number"]) in parked:
             return f"parked ({parked[str(pr['number'])]['reason']})"
         if why := blocker(pr, self.a.allow_forks):  # the shared rule (landing_watchdog.blocker)
