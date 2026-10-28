@@ -213,6 +213,7 @@ def run(a) -> dict:
     t0 = time.time()
 
     lock = threading.Lock()
+    why = []  # Stop reasons of dropped seats
 
     def call(cmd: str, prompt: str) -> str:
         with lock:  # caps are checked and charged atomically: seats of one round run in parallel
@@ -235,10 +236,14 @@ def run(a) -> dict:
         def one(c, p_):
             try:
                 return call(c, p_)
-            except Stop:
+            except Stop as e:
+                why.append(str(e))
                 return None
         with concurrent.futures.ThreadPoolExecutor(len(jobs)) as ex:
-            return [f.result() for f in [ex.submit(one, c, p_) for c, p_ in jobs]]
+            out = [f.result() for f in [ex.submit(one, c, p_) for c, p_ in jobs]]
+        if "cap reached before call" in why:  # a cap hit anywhere fails closed, as in the sequential council
+            raise Stop("cap reached before call")
+        return out
 
     answers = []
     raws = par([(cmd, f"{lens}\n\n{body}{CONTRACT}\n") for cmd, lens in plan])  # first round: no prompt holds another seat's answer
@@ -266,7 +271,7 @@ def run(a) -> dict:
                         "scores": d.get("scores"), "share": states.count("verified") / len(states) if states else 0.0})
     n = len(answers)
     if n < 2:
-        raise Stop(f"only {n} of {len(lenses)} seat answers parseable")
+        raise Stop(why[0] if why else f"only {n} of {len(lenses)} seat answers parseable")
     final = [x["verdict"] for x in answers]
     ranks = []
     if len(set(final)) > 1:

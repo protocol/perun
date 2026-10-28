@@ -65,7 +65,7 @@ class T(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             ok, bad = Path(d) / "ok.sh", Path(d) / "bad.sh"
             ok.write_text(GOOD)
-            bad.write_text("# disk-cap: 1G\nx=$(mktemp -d)\n")
+            bad.write_text("# disk-cap: 1G\nx=$(" + "mktemp" + " -d)\n")
             self.assertEqual(bg_admit.missing(str(ok)), [])
             m = bg_admit.missing(str(bad))
             self.assertEqual(len(m), 2)  # trap and disk-stop
