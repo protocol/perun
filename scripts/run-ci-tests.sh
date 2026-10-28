@@ -1,8 +1,24 @@
 #!/usr/bin/env bash
 # run-ci-tests.sh — local full ci-tests suite (every scripts/ci-tests.d/*.sh, as the CI "Per-PR tests" step runs them).
+# Also runs the privacy gate and the trigger lint (CI's "Prose lessons carry a mechanism") before the tests.
 # Exit 0 only when all pass; then records the last-known-good pointer (lkg.py record, HEAD). A failure records nothing.
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The two cheap CI gates a push is most often rejected on, run first (a missing privacy input or an unresolvable base fails closed).
+echo "== privacy"
+[ -f scripts/ci-gates.sh ] && [ -f .banlist.txt ] || { echo "run-ci-tests: FAIL privacy: scripts/ci-gates.sh or .banlist.txt missing (fail closed)" >&2; exit 1; }
+bash scripts/ci-gates.sh privacy --banlist .banlist.txt . || { echo "run-ci-tests: FAIL privacy" >&2; exit 1; }
+gate=.claude/skills/deep-code-review/scripts/fix_class_gate.py
+if [ -f "$gate" ]; then
+  echo "== trigger lint"
+  base="${RUN_CI_BASE:-$(git merge-base HEAD origin/main 2>/dev/null)}"
+  [ -n "$base" ] || { echo "run-ci-tests: FAIL trigger lint: no base (no origin/main; set RUN_CI_BASE)" >&2; exit 1; }
+  python3 "$gate" --base "$base" --head HEAD \
+    --trigger-glob '.claude/skills/*/references/*.md' --trigger-glob '.claude/skills/*/SKILL.md' \
+    --test-glob '.claude/skills/*/evals/evals.json' --test-glob '.claude/skills/*/scripts/*' \
+    --test-glob 'scripts/test-ci-gates.sh' --test-glob 'scripts/test-*.sh' --test-glob 'scripts/test_*.py' \
+    || { echo "run-ci-tests: FAIL trigger lint" >&2; exit 1; }
+fi
 for t in scripts/ci-tests.d/*.sh; do
   echo "== $t"
   bash -e "$t" || { echo "run-ci-tests: FAIL $t" >&2; exit 1; }

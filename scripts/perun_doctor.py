@@ -92,6 +92,26 @@ def flag_words(repo):
     return out
 
 
+DB_BINS = ("postgres", "postmaster", "mysqld", "mongod", "redis-server")
+DB_DIR = re.compile(r"(?:\s-D\s*|--datadir[= ]|--dbpath[= ]|--dir[= ])(/[^\s]+)")
+
+
+def orphan_dbs(ps_text):
+    """[(pid, data_dir)] for dev-DB servers (postgres, mysqld, mongod, redis-server) whose absolute data dir no longer exists on
+    disk, e.g. its worktree was removed while the server kept running. `ps_text` is `ps -A -o pid=,command=` output. Read-only:
+    nothing is killed or deleted; the caller prints the owner's cleanup command."""
+    out = []
+    for ln in ps_text.splitlines():
+        pid, _, cmd = ln.strip().partition(" ")
+        m = DB_DIR.search(" " + cmd)
+        if pid.isdigit() and m and os.path.basename(cmd.split()[0]) in DB_BINS:
+            rest = (" " + cmd)[m.start(1):]  # the path may hold spaces: gone only if no whitespace-joined prefix exists
+            words = rest.split(" ")
+            if not any(os.path.exists(" ".join(words[:i])) for i in range(1, len(words) + 1)):
+                out.append((int(pid), m.group(1)))
+    return out
+
+
 def check(repo, home):
     rows = []  # (status, check, detail)
     add = lambda s, c, d: rows.append((s, c, d))
@@ -191,6 +211,13 @@ def check(repo, home):
             st, _, rest = line.partition(" ")
             name, _, detail = rest.strip().partition(": ")
             add({"OK": "OK", "SKIP": "INFO"}.get(st, "WARN"), f"sandbox {name}", detail or "works")
+    if not os.environ.get("DCR_NO_PROBE"):
+        try:
+            orph = orphan_dbs(subprocess.run(["ps", "-A", "-o", "pid=,command="], capture_output=True, text=True, timeout=10, check=True).stdout)
+        except (OSError, subprocess.SubprocessError):
+            add("INFO", "orphan dev DBs", "ps unreadable: not checked")
+        else:
+            add("WARN" if orph else "OK", "orphan dev DBs", (f"{len(orph)} DB server(s) run on a data dir that is gone ({', '.join(f'pid {p} {d}' for p, d in orph[:4])}). Stop them yourself, nothing was killed: kill -TERM {' '.join(str(p) for p, _ in orph)}") if orph else "none")
     return rows
 
 

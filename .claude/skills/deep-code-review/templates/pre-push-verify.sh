@@ -114,7 +114,17 @@
 #                                with a warning instead of failing closed.
 #                                Unset, "0", or any other value: fails closed
 #                                (the default — an unconfigured hook must not
-#                                silently pass every push).
+#                                silently pass every push), EXCEPT that an
+#                                unset DCR_PREPUSH_CMD first tries the project's
+#                                own lint command: a non-blank package.json
+#                                "lint" script (`npm run lint`), a Makefile
+#                                `lint:` target (`make lint`) or a pyproject
+#                                [tool.ruff] table (`ruff check .`). The hook
+#                                prints the inferred command before it runs it.
+#                                That executes repo-controlled code (npm
+#                                pre/postlint hooks, the make recipe) at push
+#                                time, so set DCR_PREPUSH_CMD for the full tier.
+#                                An unreadable config file fails closed.
 #   DCR_PREPUSH_DEFAULT_BRANCH   override the remote default branch used to
 #                                compute the base for a brand-new branch
 #                                push. Unset -> resolved from
@@ -251,9 +261,27 @@ find_gate_cache() {
   done
 }
 
+# Prints the project's own lint command (stdout), nothing when it has none; exit 2 when a config file is unreadable/invalid.
+infer_lint_cmd() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 -I - <<'PY'
+import json, os, re, sys
+try:
+    if os.path.isfile("package.json") and str((json.load(open("package.json")).get("scripts") or {}).get("lint") or "").strip():
+        print("npm run lint")
+    elif os.path.isfile("Makefile") and re.search(r"(?m)^lint\s*:(?![=:])", open("Makefile").read()):
+        print("make lint")
+    elif os.path.isfile("pyproject.toml") and re.search(r"(?m)^\[tool\.ruff[\].]", open("pyproject.toml").read()):
+        print("ruff check .")
+except (OSError, ValueError, AttributeError):
+    sys.exit(2)
+PY
+}
+
 print_unset_help() {
   cat >&2 <<EOF
-pre-push-verify: DCR_PREPUSH_CMD is not set (or whitespace-only) -- refusing to push (fail closed).
+pre-push-verify: DCR_PREPUSH_CMD is not set (or whitespace-only) and no project lint command was found
+(package.json "lint" script, Makefile "lint:" target, pyproject [tool.ruff]) -- refusing to push (fail closed).
 Configure the fast tier this hook must run before every push, e.g. in your
 shell profile or a project-local env file your shell sources:
   export DCR_PREPUSH_CMD="make lint test-unit"
@@ -395,6 +423,20 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   if is_blank "${DCR_PREPUSH_CMD:-}"; then
+    # No gate configured: reuse the project's own lint command (package.json "lint" script, Makefile `lint:` target, or
+    # pyproject [tool.ruff]) so the project's flags and config stay its single source. Unreadable input fails closed.
+    infer_rc=0; inferred="$(infer_lint_cmd)" || infer_rc=$?
+    if [ "${infer_rc}" -ne 0 ]; then
+      printf 'pre-push-verify: cannot read the project lint config (package.json/Makefile/pyproject.toml) -- refusing to push (fail closed). Fix the file, or set DCR_PREPUSH_CMD.\n' >&2
+      die "unreadable lint config"
+    fi
+    if [ -n "${inferred}" ]; then
+      printf 'pre-push: inferred lint: %s (set DCR_PREPUSH_CMD for full verify)\n' "${inferred}" >&2
+      DCR_PREPUSH_CMD="${inferred}"
+    fi
+  fi
+
+  if is_blank "${DCR_PREPUSH_CMD:-}"; then
     if [ "${DCR_PREPUSH_ALLOW_UNSET:-0}" = "1" ]; then
       printf 'pre-push-verify: DCR_PREPUSH_CMD is unset -- allowing push through (DCR_PREPUSH_ALLOW_UNSET=1)\n' >&2
       continue
@@ -422,7 +464,13 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   for sr in "$(dirname "$0")/../../agentic-delivery/scripts/stage_run.py" ".claude/skills/agentic-delivery/scripts/stage_run.py"; do
     if [ -f "${sr}" ] && command -v python3 >/dev/null 2>&1; then gate_cmd=(python3 "${sr}" --name pre-push -- "${gate_cmd[@]}"); wrapped=1; break; fi
   done
-  command -v nice >/dev/null 2>&1 && gate_cmd=(nice -n 19 "${gate_cmd[@]}")  # shared host: the gate yields CPU to interactive work
+  # shared host: the gate yields CPU to interactive work. A host that denies or breaks `nice` (sandbox, no binary) degrades to
+  # un-niced with one notice per run: a priority hint must never fail the gate.
+  if nice -n 19 true >/dev/null 2>&1; then
+    gate_cmd=(nice -n 19 "${gate_cmd[@]}")
+  elif [ "${nice_noted:-0}" -eq 0 ]; then
+    nice_noted=1; printf 'pre-push-verify: nice unavailable or denied -- running the gate at normal priority\n' >&2
+  fi
   gate_rc=0
   "${gate_cmd[@]}" </dev/null || gate_rc=$?
   if [ "${gate_rc}" -ne 0 ]; then

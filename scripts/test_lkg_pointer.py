@@ -176,6 +176,8 @@ class Runner(Base):
         shutil.copy(ROOT / "scripts/run-ci-tests.sh", Path(r) / "scripts")
         shutil.copytree(SC, Path(r) / ".claude/skills/agentic-delivery/scripts")
         (Path(r) / "scripts/ci-tests.d/t.sh").write_text(body)
+        (Path(r) / "scripts/ci-gates.sh").write_text("exit 0\n")  # stub privacy gate: the runner fails closed without one
+        (Path(r) / ".banlist.txt").write_text("# none\n")
         rc = subprocess.run(["bash", "scripts/run-ci-tests.sh"], cwd=r, capture_output=True).returncode
         return rc, lkg.read(r)
 

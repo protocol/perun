@@ -215,6 +215,16 @@ def verdict(policy_cpu="efficient") -> tuple:
     return None, load1, cores, ram
 
 
+def holders() -> str:
+    """Who holds the machine-wide heavy slots, read from the lease files (no ps/top): `pid N (kind, Xm)` per live lease plus the
+    exclusive train gate's pid. Empty when none is readable. Read-only."""
+    import perun_policy
+    d, now = perun_policy.lease_dir(), time.time()
+    out = [f"pid {pid} ({(kind or 'heavy').split('@')[0]}, {max(0, int(now - start)) // 60}m)" for pid, start, kind in perun_policy._leases(d, now)]
+    ex = perun_policy.exclusive_holder(d)
+    return ", ".join(([f"train gate pid {ex}"] if ex else []) + out)
+
+
 def wait_clear(first, load1, cores, ram, cpu):
     """Wait inside the hook for a transient HOLD instead of failing the turn: re-read `verdict` with backoff (1s, 2s, 4s ...)
     until it clears or $PERUN_HEAVY_HOOK_WAIT_SECS (default 60, hard cap 120, 0 = never wait) passes; returns the last verdict.
@@ -287,7 +297,11 @@ def main() -> int:
         if not gate:
             _bypass(cmd, str(data.get("cwd") or ""), deny=True)
         ram_s = f"{ram:.0f}% free" if ram is not None else "unknown"
-        msg = (f"machine busy (load {load1:.1f}/{cores} cores, RAM {ram_s}; {reason}): "
+        try:
+            who = holders()
+        except Exception:  # enrichment only: it must never cancel the deny
+            who = ""
+        msg = (f"machine busy (load {load1:.1f}/{cores} cores, RAM {ram_s}; {reason}" + (f"; held by {who}" if who else "") + "): "
                "wait and retry, or run a narrower test (one file or -k filter)")
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                                  "permissionDecision": "deny",
