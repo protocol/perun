@@ -8,7 +8,7 @@ an update applied mid-session takes effect without a restart.
 Hook mode (no args): returns at once. Skips when the policy key `auto_update` is `off` or when the
 per-project stamp under `$XDG_CACHE_HOME/perun/auto-update/` (default `~/.cache`) is younger than 6h;
 otherwise touches the stamp and spawns `--run` detached (new session, stdio to /dev/null), so no
-network wait ever lands on the session start path. Prints nothing (hook stdout would enter context).
+network wait ever lands on the session start path. Also targets `~` when `~/.claude/.perun-install.json` exists (a user-global install). Prints nothing (hook stdout would enter context).
 
 `--run [--target DIR]` (the background worker, also runnable by hand): under one machine-wide
 flock, it reads `.claude/.perun-install.json` (`version`, `remote`), skips when the target has a
@@ -356,7 +356,7 @@ def update_pr(target: Path) -> str:
 
 def pr_step(target: Path) -> None:
     """Run `update_pr` when policy `auto_update_pr` is on; log the outcome; never raises."""
-    if not enabled(target, "auto_update_pr"):
+    if not enabled(target, "auto_update_pr") or target == Path.home().resolve():  # a global install has no PR flow; a dotfiles repo at ~ gets no branch
         return
     try:
         log(target, update_pr(target))
@@ -493,10 +493,18 @@ def main(argv: list) -> int:
         except (OSError, subprocess.TimeoutExpired) as e:
             log(target, f"failed: {type(e).__name__}: {e}")
             return 1
+    targets = [target]
     try:
-        hook(target)
-    except OSError:
-        pass  # a hook must never break session start
+        home = Path.home().resolve()  # resolved like target, so a symlinked home still compares equal
+        if home != target and (home / ".claude/.perun-install.json").is_file() and enabled(target):  # a project opt-out covers ~ too
+            targets.append(home)  # a user-global install is its own target, with its own stamp
+    except (OSError, RuntimeError):
+        pass  # no resolvable home: project target only
+    for t in targets:
+        try:
+            hook(t)
+        except OSError:
+            pass  # a hook must never break session start
     return 0
 
 
