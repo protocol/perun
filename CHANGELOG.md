@@ -3,6 +3,12 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.613.0] — 2026-10-29
+
+### Added
+- `stage_run.py`: every `train-*` stage (`VERIFY_CMD`, `BROWSER_CMD`, each `RERUN_CMD` run) now gets `TRAIN_PORT`, a free loopback port picked per stage by binding port 0, and `PORT` set to the same number when it is unset. Serve on `$TRAIN_PORT` instead of a fixed port so parallel trains and re-runs no longer collide with EADDRINUSE and land nothing. A `TRAIN_PORT` the caller already set is kept; if the OS refuses the bind the stage still runs without one. A caller-set `PORT` that differs from `TRAIN_PORT` is left alone with one stderr warning. An EADDRINUSE the stage prints is not mapped to DEFER (75): `stage_run` does not read stage output.
+- `train_land.sh` and `train_yield.py`: the yield ledger now records the head SHA each PR rode with. A train that ends with no culprit (every PR passed the failing ids alone on the base, or no REAL id existed) is ledgered with outcome `unpinned` (or `flaky`); a culprit, a base red and the "may be an intermittent regression" CANT are never ledgered as either. A PR that rode `TRAIN_SOLO_AFTER` (default 3, 0 = off) such trains at its current head is named by `train_yield.py solo PR:SHA...`. `train_land.sh` lands at most one such PR per train (the first eligible), alone and without a union, only when every check on that exact head passed, with the merge pinned to that SHA (`land_train.sh` accepts `LAND_PRS="<n>:<sha>"`); the other PRs stay in the train and are re-tested on the new base by the next one. A PR whose checks are not all green stays in the train. The exclusive heavy lease is released for the solo landing, and a single PR left over is reported as left (not landed).
+
 ## [1.612.0] — 2026-10-29
 
 ### Added
