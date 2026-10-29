@@ -3,6 +3,12 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.615.0] — 2026-10-29
+
+### Fixed
+- `review_checks.sh`: when the heavy-lease policy exits with an unexpected code (rc=2, for example an unusable lease directory), the scanners now run without a lease instead of every later heavy scanner (semgrep, trivy, osv-scanner, gitleaks, grype, checkov, gosec) being skipped with a false "heavy lease full", including under `--full`. The policy failure is reported once on stderr and no longer adds a bogus not-checked row to the scanner that happened to hit it first. A genuinely full lease still skips, but "full" is now an explicit signal (exit 1 and stdout `FULL`); an exit 1 from a Python traceback is a policy failure, not a full lease.
+- `review_checks.sh`: a tool that is not installed, or whose offline DB is missing (osv-scanner, trivy), is now listed in one closing `review_checks: missing tools: <tool> (<hint>); ...` line on stderr, with an install or warm-the-DB hint for each. New test `scripts/test-review-checks-lease-policy.sh`, registered in `scripts/ci-tests.d/`.
+
 ## [1.614.0] — 2026-10-29
 
 ### Fixed
