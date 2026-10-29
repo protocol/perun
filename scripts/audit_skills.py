@@ -8,6 +8,7 @@ line by line (a trailing backslash joins the next line) for:
   curl-pipe       network fetch run as code: piped to a shell/interpreter, eval/source of a fetch, fetch && sh
   net-host        a fetch/request line naming a host outside the allowlist (default hosts below + --allow-host)
   hidden-unicode  bidi controls, zero-width, soft-hyphen, tag and variation-selector characters in file content or file/directory names
+  control-char    NUL and other C0 control characters (all but tab, LF, CR, FF) in a text file, reported with line, column and codepoint
   b64-exec        base64-decoded text executed, PowerShell encoded commands
   sensitive-write a write to agent settings, MCP config, CLAUDE.md/AGENTS.md, hooks, shell rc or credential files
   rm-broad        `rm -rf` on root, home, a system directory, a glob or a variable-prefixed path
@@ -26,6 +27,11 @@ run it on the next, is not seen); phrase lists are heuristics; ZWJ/ZWNJ between 
 """
 import argparse, json, os, re, sys
 from urllib.parse import urlsplit
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".claude", "skills", "deep-code-review", "scripts"))
+_wb, sys.dont_write_bytecode = sys.dont_write_bytecode, True  # the import must not drop a __pycache__ into the skills tree this tool audits
+from invisible_chars import BINARY_EXT, HIDDEN, control_findings, decode, unflag  # noqa: E402  one home for the bidi/zero-width and NUL/C0 rules; review_checks.sh runs the same code
+sys.dont_write_bytecode = _wb
 
 ALLOW_HOSTS = ("github.com", "githubusercontent.com", "pypi.org", "pythonhosted.org", "npmjs.org", "anthropic.com",
                "claude.com", "example.com", "example.org", "example.net", "localhost", "127.0.0.1")
@@ -71,9 +77,6 @@ RULES = [  # (rule, severity, regex, message)
      "rm -rf on a system directory"),
     ("rm-broad", "medium", re.compile(RM + RMV), "rm -rf on a variable-prefixed path (use ${VAR:?})"),
 ]
-HIDDEN = re.compile(  # bidi, zero-width, soft hyphen, tag and variation-selector smuggling; ZWJ/ZWNJ/VS16 only beside ASCII (emoji, Persian ok)
-    r"[\u061c\u180e\u200b\u200e\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\U000e0000-\U000e007f\U000e0100-\U000e01ef]|"
-    r"(?<!^)\ufeff|(?<=[\x00-\x7f])(?:[\u200c\u200d\ufe00-\ufe0e]|\ufe0f(?!\u20e3))|[\u200c\u200d](?=[\x00-\x7f])")
 SOFTHY = "\u00ad"  # invisible but common in pasted prose, so medium
 MARKER = re.compile(r"audit-skills:\s*ignore\s+([a-z0-9,\- ]+)")
 ALLOW = ALLOW_HOSTS
@@ -90,8 +93,9 @@ def host_ok(url):
 def scan_line(n, line):
     """Apply every rule to one logical line; return [(line_no, severity, rule, message)]. Pure; no I/O."""
     out = [(n, sev, rule, msg) for rule, sev, rx, msg in RULES if rx.search(line)]
-    if HIDDEN.search(line):
-        cps = ",".join(sorted({"U+%04X" % ord(c) for c in HIDDEN.findall(line)}))
+    line_h = unflag(line)  # flag emoji carry tag characters by design
+    if HIDDEN.search(line_h):
+        cps = ",".join(sorted({"U+%04X" % ord(c) for c in HIDDEN.findall(line_h)}))
         out.append((n, "high", "hidden-unicode", "bidi/zero-width/tag character " + cps))
     if SOFTHY in line:
         out.append((n, "medium", "hidden-unicode", "soft hyphen U+00AD"))
@@ -160,15 +164,21 @@ def scan(root, honor_markers=False):
             if os.path.islink(p):
                 add(rel, 0, "medium", "unscanned", "symlink not followed (target is not audited)")
                 continue
+            if os.path.splitext(f)[1].lower() in BINARY_EXT:
+                add(rel, 0, "medium", "unscanned", "binary file (known binary extension) not scanned")
+                continue
             if os.path.getsize(p) > MAX_BYTES:
                 add(rel, 0, "medium", "unscanned", "file over 1 MB not scanned")
                 continue
             with open(p, "rb") as fh:
                 raw = fh.read()
-            if b"\0" in raw:
+            text, binary = decode(raw)
+            for n, msg in control_findings(rel, text, binary):
+                add(rel, n, "high", "control-char", msg)
+            if binary:
                 add(rel, 0, "medium", "unscanned", "binary file (NUL byte) not scanned")
                 continue
-            for n, line in logical_lines(raw.decode("utf-8", "replace")):
+            for n, line in logical_lines(text):
                 skip = set()
                 if honor_markers:
                     m = MARKER.search(line)

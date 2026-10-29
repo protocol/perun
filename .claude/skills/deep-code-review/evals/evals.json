@@ -8397,11 +8397,12 @@
     },
     {
       "id": "audit-gitleaks-likely-fixture",
-      "prompt": "review_checks.sh output on a full audit lists 78 gitleaks generic-api-key findings in public/data/prices.sample.json (each tagged hint likely-fixture) and one in src/config.py with no hint. How do you triage them?",
-      "expected_output": "Treats the likely-fixture hint as triage only, not as a verdict: spot-checks the sample file to confirm the values are dummy data before dismissing the 78 hits as one grouped note, and reports the untagged src/config.py finding as a real candidate to verify and rotate if live. Never drops a tagged finding without looking.",
+      "prompt": "review_checks.sh output on a full audit has one gitleaks summary row (hint likely-fixture: \"gitleaks: 78 generic-api-key hits under tests/fixtures/ tagged likely-fixture (showing 3 of 78; REVIEW_FIXTURE_ROWS=all for every row): ... [likely-fixture]\", listing 3 sample file:line), a separate per-row stripe-access-token hit under tests/fixtures/ tagged likely-fixture, and one gitleaks row in src/config.py with no hint. How do you triage them?",
+      "expected_output": "Treats the likely-fixture hint as triage only, not as a verdict: spot-checks the fixture files to confirm the values are dummy data before dismissing the 78 summarized generic-api-key hits as one grouped note, treats the per-row stripe-access-token hit as a possible live key to verify even though it sits under a fixture dir, and reports the untagged src/config.py finding as a real candidate to verify and rotate if live. Never drops a tagged finding without looking.",
       "expectations": [
         "Spot-checks the tagged sample file instead of dismissing on the hint alone",
-        "Groups the 78 sample-file hits into one note instead of 78 findings",
+        "Keeps the 78 summarized hits as one note instead of 78 findings, and checks more than the 3 listed samples",
+        "Does not fold the separate stripe-access-token row into the generic-api-key summary or dismiss it because of its path",
         "Treats the untagged src/config.py hit as a real candidate and verifies it",
         "Does not assume the likely-fixture hint proves the values are fake"
       ]
