@@ -24,6 +24,11 @@ The timeout is stretched by max(1, load1/cores) (capped 3x) measured when the st
 stage; --hook is never stretched. Timeout minutes: --timeout, else $PERUN_STAGE_TIMEOUT_MIN, else policy key `stage_timeout_min` (default 120); 0 = no limit.
 A malformed policy fails closed (exit 2). Side effects: one lease file under the heavy dir, refreshed every 10 minutes.
 
+Port: a `train-*` stage (VERIFY_CMD, BROWSER_CMD, each RERUN_CMD run) gets TRAIN_PORT in its environment, a free loopback port picked per stage
+by binding port 0, and PORT set to the same number when the caller left it unset. Point the server at $TRAIN_PORT (or $PORT) instead of a
+fixed number so parallel trains and re-runs never collide (EADDRINUSE); a TRAIN_PORT already set by the caller is kept. A PORT the caller set that
+differs from TRAIN_PORT is left alone with one stderr warning. An EADDRINUSE the stage prints is not mapped to DEFER (75): stage_run does not read stage output.
+
 Lease file: `<pid> <start epoch> heavy <pid start time> <child pgid> <child start time> <host>`
 (a lease from another host is ignored: its pids mean nothing here). If stage_run is SIGKILLed its child
 keeps running and the pid may be reused: perun_policy._leases ignores a lease whose recorded pid start time no longer matches,
@@ -37,6 +42,7 @@ import math
 import os
 import re
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -46,6 +52,30 @@ import host_probe  # noqa: E402
 import perun_policy as pp  # noqa: E402
 
 DEFER, TIMEOUT = 75, 124
+
+
+def stage_env(name: str):
+    """Child env for a `train-*` stage: TRAIN_PORT (and PORT when unset) = a free loopback port the OS just handed out (bind 0), so parallel
+    trains and every re-run get their own server port instead of colliding on a fixed one (EADDRINUSE). A TRAIN_PORT the caller set is kept.
+    None (inherit) for any other stage. ponytail: the port is released before the child binds it, so an unrelated process could still
+    grab it in that gap; the child retrying on EADDRINUSE is the upgrade if that is measured. Likewise an EADDRINUSE the stage prints is not
+    mapped to DEFER (75) here: stage_run never reads the child's output; teeing it and matching the error is the upgrade if that is measured.
+    A PORT the caller set that differs from TRAIN_PORT gets one stderr warning: a server bound to it can still collide across trains."""
+    if not name.startswith("train-"):
+        return None
+    env = dict(os.environ)
+    if "TRAIN_PORT" not in env:
+        try:
+            with socket.socket() as s:
+                s.bind(("127.0.0.1", 0))
+                env["TRAIN_PORT"] = str(s.getsockname()[1])
+        except OSError as e:  # fail open: no port beats a stage that never runs (e.g. a sandbox that forbids local binds)
+            print(f"stage_run: no free port for {name} ({e}); TRAIN_PORT left unset", file=sys.stderr)
+            return env
+    if env.setdefault("PORT", env["TRAIN_PORT"]) != env["TRAIN_PORT"]:
+        print(f"stage_run: {name}: PORT={env['PORT']} (set by the caller) differs from TRAIN_PORT={env['TRAIN_PORT']}; "
+              "a server bound to PORT can still collide across parallel trains, use $TRAIN_PORT", file=sys.stderr)
+    return env
 
 
 def kill_group(pgid: int, p: subprocess.Popen | None = None) -> bool:
@@ -209,7 +239,7 @@ def main(argv=None) -> int:
     if leased:
         stamp(d, pid, own, kind=kind)
     try:
-        p = subprocess.Popen(cmd, start_new_session=True)
+        p = subprocess.Popen(cmd, start_new_session=True, env=stage_env(a.name))
         kid[0] = p
         child = pp.pstart(p.pid) or "-"
         if leased:

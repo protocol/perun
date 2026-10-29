@@ -7,7 +7,8 @@
 # "merge-train: #N" (what merge_train.py writes; override the number regex with PR_RE).
 #
 # LAND_PRS="<n> <n>" (set by train_land.sh for members with disjoint paths): no union exists, so skip the union lookup and land
-# each listed PR at its current head back-to-back (pass any <union-sha>, e.g. -); CI on that exact head is the gate.
+# each listed PR at its current head back-to-back (pass any <union-sha>, e.g. -); CI on that exact head is the gate. An entry "<n>:<sha>" pins
+# the merge to that head instead (the PR is skipped as moved when its head differs): train_land.sh's solo landing uses it for the head it checked.
 # Env: UNION_DIRS (required unless LAND_PRS; space-separated worktree paths, or newline-separated when a path contains a space), BASE_BRANCH (default main), REMOTE
 # (default origin), CHANGELOG_DIR (default changelog.d: a PR touching no file under it is appended to
 # BACKFILL_FILE as a backfill list, not skipped), BACKFILL_FILE (default ./changelog_backfill.txt),
@@ -44,7 +45,9 @@ WAIT_TRIES=${WAIT_TRIES:-10} WAIT_SECS=${WAIT_SECS:-8}
 git fetch -q "$REMOTE" "$BASE_BRANCH"
 [ "$(git rev-parse "$REMOTE/$BASE_BRANCH")" = "$(git rev-parse "$BASE")" ] || echo "WARN $BASE_BRANCH moved past $BASE"
 if [ -n "${LAND_PRS:-}" ]; then
-  members=""; for n in $LAND_PRS; do members+="$n $("$GH" pr view "$n" --json headRefOid -q .headRefOid </dev/null)"$'\n'; done; members=${members%$'\n'}
+  members=""; for n in $LAND_PRS; do  # "<n>:<sha>" pins that head (a moved PR is skipped below); a bare <n> lands whatever head it has now
+    if [[ $n == *:* ]]; then members+="${n%%:*} ${n#*:}"$'\n'; else members+="$n $("$GH" pr view "$n" --json headRefOid -q .headRefOid </dev/null)"$'\n'; fi
+  done; members=${members%$'\n'}
 else
   W=""
   while IFS= read -r d; do
