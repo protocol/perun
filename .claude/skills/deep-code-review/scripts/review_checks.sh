@@ -6,7 +6,7 @@
 #
 # Tools (linters, gitleaks, osv-scanner, semgrep, trivy): see references/method-situational.md. Each runs only when
 # installed and only on matching changed files. Secrets are redacted and never printed; osv-scanner needs env
-# REVIEW_OSV=1 (network); semgrep uses repo rules, else the bundled taint rules plus p/default (never `--config auto`); trivy is offline.
+# REVIEW_OSV=1 (network; with no osv-scanner/trivy result it falls back to npm/pnpm/pip-audit, else a not-checked row); semgrep uses repo rules, else the bundled taint rules plus p/default (never `--config auto`); trivy is offline.
 # Tool hub: zizmor, bandit, gosec, grype, checkov, hadolint (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # `--full` scans every tracked file (base = git's empty tree) instead of a diff; gitleaks runs once over the working tree. gitleaks drops
@@ -20,7 +20,7 @@
 # Each tool is timeboxed (default 60s). Exit 0 even with findings; 2 on usage/unresolvable base.
 set -euo pipefail
 
-repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" missing="" gap="" lease=ok leased=0 full=0 wr=0
+repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" missing="" gap="" lease=ok leased=0 full=0 wr=0 cov=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base=${2:?--base needs a ref}; case "$base" in -*) echo "review_checks: --base must not start with '-'" >&2; exit 2 ;; esac; shift 2 ;;
@@ -195,6 +195,9 @@ if kind == "gitleaks":
 elif kind.startswith("trivy"):
     if not isinstance(d, dict):
         sys.exit("sjson: trivy output is not an object")
+elif kind == "audit":  # npm audit (vulnerabilities), pnpm audit (advisories), pip-audit (dependencies)
+    if not isinstance(d, dict) or not any(isinstance(d.get(k), (dict, list)) for k in ("vulnerabilities", "advisories", "dependencies")):
+        sys.exit("sjson: audit output has no vulnerabilities, advisories or dependencies")
 elif kind in ("zizmor", "hadolint"):
     if not isinstance(d, list):
         sys.exit(f"sjson: {kind} output is not a list")
@@ -250,6 +253,11 @@ elif kind.startswith("trivy"):
         if kind == "trivy-secret": rows += [(r["Target"], s.get("StartLine", 0), s.get("RuleID"), s.get("Title", "secret detected")) for s in r.get("Secrets") or []]
         rows += [(r["Target"], 0, v.get("VulnerabilityID"), f"{v.get('PkgName')}@{v.get('InstalledVersion')}: {v.get('Title', '')}") for v in r.get("Vulnerabilities") or []]
         rows += [(r["Target"], (m.get("CauseMetadata") or {}).get("StartLine", 0), m.get("ID"), m.get("Title", "")) for m in r.get("Misconfigurations") or []]
+elif kind == "audit":
+    # "-" placeholders: the caller's `read` collapses empty leading TSV fields; it supplies the lockfile path itself
+    rows += [("-", 0, k, f"{v.get('severity')}: {v.get('name', k)}") for k, v in (d.get("vulnerabilities") or {}).items()]
+    rows += [("-", 0, a.get("github_advisory_id") or k, f"{a.get('severity')}: {a.get('module_name')}: {a.get('title', '')}") for k, a in (d.get("advisories") or {}).items()]
+    rows += [("-", 0, v.get("id"), f"{p.get('name')}@{p.get('version')}") for p in d.get("dependencies") or [] for v in p.get("vulns") or []]
 elif kind == "zizmor":  # row is 0-based in json-v1; fixes and snippets are never read
     for x in d:
         l = ((x.get("locations") or [{}])[0])
@@ -343,7 +351,7 @@ elif have osv-scanner; then
     run_one osv-scanner osv-scanner ${osvx[@]+"${osvx[@]}"} --format json -L "./$f" || continue
     scan_ok osv-scanner 1 || continue # exit 1 = vulnerabilities found
     sjson osv "$out" >"$tsv" || { skip osv-scanner "unparseable output for $f"; continue; }
-    while IFS=$'\t' read -r _ l r m; do add osv-scanner "$f" "$l" "$r" "$m"; done <"$tsv"
+    cov+="$f"$'\n'; while IFS=$'\t' read -r _ l r m; do add osv-scanner "$f" "$l" "$r" "$m"; done <"$tsv"
   done <<<"$lock_files"
 fi
 
@@ -389,9 +397,42 @@ if [ -n "$files" ] && have trivy; then
       run_one trivy "${tv[@]}" --skip-check-update --scanners secret .
     fi; }; } && { scan_ok trivy || { grep -qi 'DB' "$out" && { echo "review_checks: trivy: NOT CHECKED, $trivy_hint" >&2; miss trivy "$trivy_hint"; }; false; }; }; then
     if sjson "$tk" "$out" >"$tsv"; then
+      if [ "$tk" = trivy ]; then # covered = lockfiles trivy reported a Target for (a secret-only run covers none)
+        while IFS= read -r f; do grep -Fq "\"Target\":\"$f\"" "$out" || grep -Fq "\"Target\": \"$f\"" "$out" && cov+="$f"$'\n'; done <<<"$lock_files"
+      fi
       while IFS=$'\t' read -r f l r m; do printf '%s\n' "$files" | grep -qxF -- "$f" && add trivy "$f" "$l" "$r" "$m"; done <"$tsv"
     else skip trivy "unparseable output"; fi
   fi
+fi
+
+# Dependency-scan fallback: per lockfile with no osv-scanner/trivy result (DB unreachable, not installed, lease full) -> the
+# ecosystem's own audit (opt-in like osv: REVIEW_OSV=1 or REVIEW_OSV_DB_DIR; it queries the registry). The audit runs on a
+# copy of the lockfile in an empty temp dir with the public registry and no user/global npmrc, so a repo .npmrc registry or
+# credentials are never read; pip-audit gets --no-deps --disable-pip (no resolver, no venv, no target code). The row names
+# the tool that ran; a lockfile with no dependency scan at all is a not-checked row, never silent clean.
+# ponytail: a temp-dir copy drops workspace context (pnpm-workspace.yaml, -r includes); such audits fail into not-checked.
+if [ -n "$lock_files" ]; then
+  while IFS= read -r f; do
+    ! printf '%s' "$cov" | grep -qxF -- "$f" || continue
+    at=(); case ${f##*/} in
+      package-lock.json) at=(npm audit --package-lock-only --json) ;;
+      pnpm-lock.yaml) at=(pnpm audit --json) ;;
+      requirements*.txt) at=(pip-audit -r "${f##*/}" --no-deps --disable-pip --format json) ;;
+    esac
+    if [ ${#at[@]} -eq 0 ]; then add dep-scan "$f" 0 not-checked "no dependency scan ran for this lockfile (no osv-scanner/trivy result and no fallback for its ecosystem)"
+    elif [ "${REVIEW_OSV:-}" != 1 ] && [ -z "${REVIEW_OSV_DB_DIR:-}" ]; then add dep-scan "$f" 0 not-checked "no dependency scan ran; set REVIEW_OSV=1 to scan (osv-scanner, else ${at[0]})"
+    elif ! command -v "${at[0]}" >/dev/null; then miss "${at[0]}" "install it: dependency-scan fallback for $f"; add dep-scan "$f" 0 not-checked "no dependency scan ran: osv-scanner/trivy gave no result and ${at[0]} is not installed"
+    else
+      ad=$(mktemp -d "${TMPDIR:-/tmp}/review-aud.XXXXXX"); cp "$f" "$ad/"; [ ! -f "$(dirname "$f")/package.json" ] || cp "$(dirname "$f")/package.json" "$ad/"
+      was=$ran ok=0 # stdout only (stderr dropped in the wrapper, so noise cannot break the JSON parse); ran counts only after a good parse
+      if run_one "${at[0]}" bash -c 'cd "$1" && shift && exec env npm_config_userconfig=/dev/null npm_config_globalconfig=/dev/null npm_config_registry=https://registry.npmjs.org/ "$@" 2>/dev/null </dev/null' _ "$ad" "${at[@]}" && scan_ok "${at[0]}" 1 && sjson audit "$out" >"$tsv"; then ok=1; fi
+      rm -rf "$ad"
+      if [ "$ok" = 1 ]; then
+        echo "review_checks: dependency scan: ${at[0]} ran for $f (fallback: osv-scanner/trivy gave no result)" >&2
+        while IFS=$'\t' read -r _ l r m; do add "${at[0]}" "$f" "$l" "$r" "$m"; done <"$tsv"
+      else ran=$was; add dep-scan "$f" 0 not-checked "no dependency scan ran: ${at[0]} failed or was unreachable"; fi
+    fi
+  done <<<"$lock_files"
 fi
 
 # Tool hub registry: name;flags status;mode;match (ERE on changed files);license class;install hint. One row per routed tool.

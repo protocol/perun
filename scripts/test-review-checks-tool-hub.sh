@@ -88,7 +88,7 @@ HUB_JSON='{"check_type":"dockerfile","results":{"failed_checks":[],"parsing_erro
 grep -q "not run: checkov (unparseable" "$T/err" && nck checkov "parsing_errors" || bad "checkov parsing_errors"
 # grype: SBOM only, findings credited to the scanned SBOM; a lockfile alone is never scanned (dir: covers the whole tree)
 : >"$HUB_LOG"; HUB_JSON=$(gjson found grype) run grype
-jq -e 'any(.[]; .tool=="grype" and .file=="sbom.json")' "$T/out" >/dev/null && ! grep -q 'package-lock' "$T/out" && grep -q 'sbom:./sbom.json' "$HUB_LOG" && ! grep -q 'dir:' "$HUB_LOG" && ok "grype credits sbom.json only" || bad "grype credits sbom.json only"
+jq -e 'any(.[]; .tool=="grype" and .file=="sbom.json")' "$T/out" >/dev/null && ! jq -e 'any(.[]; .tool=="grype" and (.file|test("package-lock")))' "$T/out" >/dev/null && grep -q 'sbom:./sbom.json' "$HUB_LOG" && ! grep -q 'dir:' "$HUB_LOG" && ok "grype credits sbom.json only" || bad "grype credits sbom.json only"
 # docs: gosec network caveat and unverified skill license
 H=$ROOT/.claude/skills/deep-code-review/references/tool-hub.md
 grep -q 'GOPROXY=off' "$H" && grep -q 'CC-BY-SA.*unverified' "$H" && ok "tool-hub.md caveats" || bad "tool-hub.md caveats"
