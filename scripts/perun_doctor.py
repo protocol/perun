@@ -31,6 +31,53 @@ def ver(d):
     return f.read_text().strip() if f.is_file() else None
 
 
+def skill_ver(p):
+    """Version string of a SKILL.md from its leading frontmatter `version:` (1-4 dot-separated ints of at most 9 digits); None when
+    the path is not a file, the file does not start with `---`, the field is missing or the value is not that shape. Reads only
+    the first 8 KB, so a huge or hostile file costs nothing."""
+    try:
+        if not Path(p).is_file():  # before open(): a FIFO would block
+            return None
+        with open(p, errors="ignore") as f:
+            text = f.read(8192)
+        head = text.split("---", 2)[1] if text.startswith("---") else ""
+    except (OSError, IndexError):
+        return None
+    m = re.search(r'(?m)^\s*version:\s*["\']?([^"\'\s]+)["\']?\s*$', head)
+    return m.group(1) if m and re.fullmatch(r"\d{1,9}(\.\d{1,9}){0,3}", m.group(1)) else None
+
+
+def _vkey(v):
+    """Comparable key for a skill_ver string: int tuple without trailing zeros, so 1.2 == 1.2.0 and 1.10 > 1.2."""
+    t = [int(x) for x in v.split(".")]
+    while len(t) > 1 and not t[-1]:
+        t.pop()
+    return tuple(t)
+
+
+def shadowed_skills(repo, home):
+    """(status, detail) for the "stale local skills" row. A repo-local .claude/skills/<perun skill>/SKILL.md shadows the global
+    (home/.claude/skills) copy, so an older local one silently wins: WARN naming both versions and paths. Plugin skills are
+    namespaced (`plugin:skill`) and coexist with repo-local ones, so they are not compared. Equal or newer local is OK; a missing
+    side, an unparsable version, repo == home, or a local file that is the global file (symlink) compares nothing (INFO n/a). Read-only."""
+    na = ("INFO", "n/a (no repo-local skill with a distinct global copy to compare)")
+    if repo.resolve() == home.resolve():
+        return na
+    stale, compared = [], 0
+    for d in sorted((SRC / ".claude/skills").glob("*/SKILL.md")):
+        n = d.parent.name
+        lp, gp = repo / ".claude/skills" / n / "SKILL.md", home / ".claude/skills" / n / "SKILL.md"
+        lv, gv = skill_ver(lp), skill_ver(gp)
+        if not (lv and gv) or lp.resolve() == gp.resolve():
+            continue
+        compared += 1
+        if _vkey(gv) > _vkey(lv):
+            stale.append(f"{n}: repo-local {lv} ({lp}) is older than {gv} ({gp})")
+    if stale:
+        return "WARN", f"{len(stale)} repo-local skill(s) shadow a newer copy, so the stale one silently wins: " + "; ".join(stale[:3]) + (" ..." if len(stale) > 3 else "") + ". Fix: remove or update repo-local copy"
+    return ("OK", f"{compared} repo-local skill(s) not older than the global copy") if compared else na
+
+
 def _git_files(root):
     """Tracked + untracked-not-ignored files when root is a git work-tree root, else None."""
     g = ["git", "-C", str(root)]
@@ -130,6 +177,8 @@ def check(repo, home):
         add("WARN", "global copy", f"~/.claude has {g}, checkout has {latest} (stale; auto-update and --fix skip it). Run this yourself (type it with the ! prefix if the permission classifier blocks agents): {cmd}")
     else:
         add("OK", "global copy", g or "none")
+    st, detail = shadowed_skills(repo, home)
+    add(st, "stale local skills", detail)
     if not flags.is_file():
         add("WARN", "install record", ".claude/.dcr-install-flags missing: --fix cannot replay your flags")
     # hooks reference existing files

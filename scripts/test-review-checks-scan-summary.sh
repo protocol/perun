@@ -66,12 +66,12 @@ git add -f . && git -c user.email=t@example.com -c user.name=t commit -q -m vend
 grep -q 'real.txt' "$GL_LOG" && ! grep -Eq 'node_modules|worktrees|vendor' "$GL_LOG" "$SG_LOG" && ok "default excludes" || bad "default excludes"
 grep -q -- '--skip-dirs node_modules,.claude/worktrees,vendor' "$TV_LOG" && ok "trivy skip-dirs" || bad "trivy skip-dirs"
 
-# Heavy lease: with one slot (tokens=off) taken by a live holder, heavy scanners are skipped, not piled on.
+# Heavy lease: with one slot (tokens=off) taken by a live holder, REVIEW_LEASE_FULL=skip skips heavy scanners (default: degraded, see test-review-checks-lease-degraded.sh).
 export PERUN_HEAVY_DIR="$T/heavy" PERUN_POLICY="$T/policy.json" REVIEW_LEASE_WAIT=0
 mkdir "$T/heavy"; echo '{"tokens":"off"}' >"$T/policy.json"
 sleep 30 & holder=$!
 echo "$holder $(date +%s)" >"$T/heavy/$holder"
-: >"$GL_LOG"; run
+: >"$GL_LOG"; REVIEW_LEASE_FULL=skip run
 kill "$holder" 2>/dev/null || true; wait "$holder" 2>/dev/null || true
 grep -q 'not run: gitleaks (heavy lease full)' "$T/err" && [ ! -s "$GL_LOG" ] && ok "heavy lease full skips scanners" || bad "heavy lease full"
 : >"$GL_LOG"; run --history

@@ -37,11 +37,11 @@ r=0; [ "$(grep -c 'not run: lease (policy rc=2)' "$T/err")" = 1 ] || r=1; chk $r
 SK="$T/sk"; mkdir -p "$SK/deep-code-review/scripts" "$SK/agentic-delivery/scripts"
 cp "$RC" "$SK/deep-code-review/scripts/"; cp -R "$(dirname "$RC")/../templates" "$SK/deep-code-review/templates"
 stubrun() { : >"$SG_LOG"; : >"$TV_LOG"; printf '%s\n' "$1" >"$SK/agentic-delivery/scripts/perun_policy.py"
-  PATH="$T/bin:$PATH" REVIEW_LEASE_WAIT=0 bash "$SK/deep-code-review/scripts/review_checks.sh" --base base 2>"$T/err" >"$T/out"; }
+  PATH="$T/bin:$PATH" REVIEW_LEASE_WAIT=0 REVIEW_LEASE_FULL=skip bash "$SK/deep-code-review/scripts/review_checks.sh" --base base 2>"$T/err" >"$T/out"; }
 stubrun 'raise ModuleNotFoundError("boom")'
 r=0; [ -s "$SG_LOG" ] && [ -s "$TV_LOG" ] && ! grep -q 'heavy lease full' "$T/err" || r=1; chk $r "policy traceback (exit 1): scanners run, no 'heavy lease full'"
 stubrun 'import sys; print("FULL"); sys.exit(1)'
-r=0; [ ! -s "$SG_LOG" ] && [ ! -s "$TV_LOG" ] && grep -q 'semgrep: heavy lease full\|semgrep (heavy lease full)' "$T/err" || r=1; chk $r "explicit FULL (exit 1): scanners skipped as 'heavy lease full'"
+r=0; [ ! -s "$SG_LOG" ] && [ ! -s "$TV_LOG" ] && grep -q 'semgrep: heavy lease full\|semgrep (heavy lease full)' "$T/err" || r=1; chk $r "explicit FULL (exit 1), REVIEW_LEASE_FULL=skip: scanners skipped as 'heavy lease full'"
 stubrun 'import os; print(os.getppid())'
 r=0; [ -s "$SG_LOG" ] && [ -s "$TV_LOG" ] || r=1; chk $r "exit 0: scanners run under the lease"
 

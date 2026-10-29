@@ -15,6 +15,7 @@ Run from your deep-code-review checkout (pull it first: "latest" means this chec
 |---|---|
 | installed version | repo copy vs this checkout |
 | global copy | `~/.claude/skills/deep-code-review` vs this checkout (never changed by `--fix`; run `./install.sh ~` yourself) |
+| stale local skills | a repo-local `.claude/skills/<perun skill>/SKILL.md` whose `version:` is older than the global copy (`~/.claude/skills`). The local copy shadows the newer one, so the stale one silently wins. Plugin skills are namespaced (`plugin:skill`) and coexist with repo-local ones, so they are not compared. The WARN names both versions and paths; fix by removing or updating the repo-local copy. A missing copy, unparsable version (1-4 dot-separated numbers; `1.2` equals `1.2.0`), repo equal to home, or a symlinked skills dir shows INFO n/a |
 | hook files exist | every `.py`/`.sh` a hook command names is present |
 | hooks wired | each operating-layer script (`pipe_mask_guard`, `subagent_start_inject`, `handback_cap`) is called by a hook, else "installed but never runs" |
 | manual-only scripts | informational: scripts no hook, workflow, loop or other script calls |

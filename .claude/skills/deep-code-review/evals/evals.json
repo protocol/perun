@@ -8405,6 +8405,30 @@
         "Treats the untagged src/config.py hit as a real candidate and verifies it",
         "Does not assume the likely-fixture hint proves the values are fake"
       ]
+    },
+    {
+      "id": "audit-tenant-scope-id-only-where",
+      "prompt": "A Next.js app on Prisma has `model PendingAccess { id String @id; workspaceId String; ... }`. A server action `revokeAccess(id)` in app/(dash)/actions.ts calls `db.pendingAccess.delete({ where: { id } })` after checking only that the caller is signed in. review_checks.sh --full printed nothing for it. Is it a finding, and how do you find the siblings?",
+      "expected_output": "Yes, High: a cross-workspace authorization hole. Any signed-in user can delete another workspace's PendingAccess row by id, because the `where` has `id` but not the model's `workspaceId` (the session workspace). Fix: scope the write, e.g. `where: { id, workspaceId }` (or a compound key / deleteMany with both) and treat a zero count as not-found. Find siblings with scripts/tenant_scope_check.py DIR (also run by review_checks.sh --full when a *.prisma is tracked): it lists the ones it can see (direct `<client>.<model>.<method>({where:{...}})` calls in the scanned server paths) as HIGH, and tenant-linked models with no tenant key as MED. It is a heuristic: aliased or awaited clients, variable `where`, and methods like findMany/count/raw SQL are not covered, so an empty run is not proof the repo is clean. Its output is a lead to verify, not a verdict: a prior scoped read or a documented `tenant-scope-ok` can make a hit safe.",
+      "expectations": [
+        "Reports the id-only delete as a High cross-tenant authorization finding, not a style issue",
+        "Names the missing workspaceId in the where clause and gives the scoped fix",
+        "Uses scripts/tenant_scope_check.py (or review_checks.sh --full) to find sibling id-only calls",
+        "Treats the tool output as leads to verify against the code before reporting",
+        "Mentions that a tenant-linked model with no workspaceId column should be scoped via a parent relation if present (MED)",
+        "Does NOT treat a silent or empty checker run as proof the repo is clean or tenant-isolated"
+      ]
+    },
+    {
+      "id": "report-mode-coverage-not-run",
+      "prompt": "You ran only a perf pass on a PR (security scanners were never started) and are writing the hand-back for the parent agent. The draft says: 'perf: 2 findings. security: 0 new.' What do you change before sending it?",
+      "expected_output": "Replaces 'security: 0 new' with an explicit 'security: NOT RUN (reason)' coverage entry, because a mode that did not run has no findings count and zero would read as a clean result. Adds 'perf: ran (N files)' with the real file count so every claimed mode carries a coverage entry, and repeats the line in the BLUF. Offers to run security or hands back the gap as unreviewed surface, and may run scripts/validate_status_claims.py on the draft to confirm no claim lacks an entry.",
+      "expectations": [
+        "States security as NOT RUN with a reason instead of reporting 0 new findings",
+        "Adds a 'mode: ran (N files)' coverage entry for the perf mode that did run",
+        "Treats a skipped mode as unreviewed surface, never as a clean result",
+        "Puts the coverage line in the hand-back itself, not only in a long report"
+      ]
     }
   ]
 }

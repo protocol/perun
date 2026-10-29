@@ -16,6 +16,8 @@ Runs in order and stops at the first red step, printing `handback RED: <step>` a
   tests     the commits' `Tests:` lines (BASE..SHA) must all be X/X with total X>0, or carry a `No-Tests-Reason:` trailer (a BLOCKED/WIP head
             subject is exempt). Run last, before any merge. HANDBACK_TESTS_COUNT=enforce exits 4 `UNVERIFIED: no passing test count`;
             default shadow only warns; off skips.
+  mode      each findings claim in --body-file for a review mode (security, perf, ...) has a `mode: ran (N files)` or `mode: NOT RUN (reason)`
+            entry (validate_status_claims.mode_gaps), so a skipped mode never reads as 0 findings; skipped without --body-file or deep-code-review.
   spec      each --spec PATH (a .py run with python3, anything else with bash) runs 3 times in --worktree, each under --timeout; one
             failure or timeout is red (`handback RED: spec PATH`), and so is a worktree that is not clean at SHA. --spec is REQUIRED
             when any BASE..SHA commit subject matches `^fix.*flak(e|y|iness)` (case-insensitive) or the diff changes a file named by
@@ -43,12 +45,26 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GATE_CACHE = os.path.join(HERE, "..", "..", "deep-code-review", "scripts", "gate_cache.py")
+STATUS_CHECK = os.path.join(HERE, "..", "..", "deep-code-review", "scripts", "validate_status_claims.py")
 
 
 def run(argv, **kw):
     """(returncode, stdout) of argv; stderr passes through. Never raises on a nonzero exit."""
     p = subprocess.run(argv, stdout=subprocess.PIPE, text=True, **kw)
     return p.returncode, p.stdout
+
+
+def mode_gaps(path):
+    """Findings claims in the hand-back body PATH for a review mode with no coverage entry; [] when deep-code-review is not installed or PATH is unreadable."""
+    if not os.path.exists(STATUS_CHECK):
+        return []
+    sys.path.insert(0, os.path.dirname(STATUS_CHECK))
+    import validate_status_claims as v  # noqa: E402
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return v.mode_gaps(f.read())
+    except OSError:
+        return []
 
 
 def merge_command(a):
@@ -184,6 +200,10 @@ def main(argv):
         rc, out = run(["git", "diff", "--name-only", "--diff-filter=A", f"{a.base}...{a.sha}", "--", a.fragment_dir], cwd=a.worktree)
         if rc or not out.strip():
             return red(f"fragment: the range adds no file under {a.fragment_dir}/")
+    gaps = mode_gaps(a.body_file) if a.body_file else []
+    if gaps:
+        print("\n".join(gaps))
+        return red("mode coverage: --body-file claims findings for a mode with no ran/NOT RUN entry")
     if not a.spec:
         sys.path.insert(0, HERE)
         import flake_ledger as fl  # noqa: E402

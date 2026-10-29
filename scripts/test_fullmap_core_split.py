@@ -3,7 +3,7 @@ and Definition of done (a) moved verbatim to full-map-principles.md and full-map
 
 Pins: every line of the pre-split map (22122 bytes, sha256 78e77ea257564578c3df601c24d79e7c96390c2f2707fb35df36917051a72f27, parent commit
 465d12f38d6b75b74af4192e311619c97b354b99) survives in the core or a split file (scripts/fullmap-split-lines.txt holds the truncated
-sha256 of each non-blank old line), the three deliberately reworded lines are accounted for, each split file opens with a "Read this
+sha256 of each non-blank old line), the deliberately reworded lines are accounted for, each split file opens with a "Read this
 when" line, and the core and SKILL.md route to both.
 """
 import hashlib
@@ -23,6 +23,8 @@ REWORDED = {  # old line -> file that must hold its replacement start
     '| E | Performance, efficiency & cost | `domain-e.md`, `performance-db-cost.md`, `model-tiering.md`, `billing-correctness.md` (when the target meters, subscribes, or charges), `energy-efficiency.md` (battery, always-on, carbon) |': ('full-map.md', '| E | Performance, efficiency & cost | `domain-e.md`, `performance-db-cost.md`, `performance-latency-depth.md` (caches, async handlers), `model-tiering.md`, `billing-correctness.md` (when the target meters, subscribes, or charges), `energy-efficiency.md` (battery, always-on, carbon) |'),
     '| I | API, contracts, integration | `domain-i.md`, `api-contracts.md`, `compatibility-portability.md` (support matrix, installers) |': ('full-map.md', '| I | API, contracts, integration | `domain-i.md`, `api-contracts.md`, `api-contracts-streaming.md` (WS/SSE/gRPC streams), `compatibility-portability.md` (support matrix, installers) |'),
     "6. **Rank ruthlessly.** Severity rubric below. Never bury a Critical under Nits.":('full-map-principles.md', '6. **Rank ruthlessly.** Severity rubric in `full-map.md`. Never bury a Critical under Nits.'),
+    "| T | Multi-tenancy & isolation | `domain-t.md` (when one deployment serves multiple tenants) |": ('full-map.md', '| T | Multi-tenancy & isolation | `domain-t.md` (multi-tenant; Prisma: `tenant_scope_check`) |'),
+    "`scripts/validate_status_claims.py`.": ('full-map-report.md', '  `scripts/validate_status_claims.py`; every findings claim for a mode (security, perf, a11y, privacy, reliability, correctness, ux) has a `mode: ran (N files)` or `mode: NOT RUN (reason)` entry.'),
 }
 # Narrowed lazy-load triggers: the broad "before any write, fix or fan-out" trigger must not return.
 TRIGGERS = (

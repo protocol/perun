@@ -30,6 +30,7 @@ Reviewer: deep-code-review 1.13.0
 🟡 Needs attention — tenant isolation holds on live routes; two Highs
 (hermetic-test shared writes; webhook signature gap) and one latent Critical
 (SSRF sink behind a dead flag) before enabling the unused egress tool.
+Mode coverage: security: ran (9 files), correctness: ran (14 files)
 
 ## Findings
 
@@ -123,6 +124,8 @@ hatch).
 ## In one line
 🟡 Needs attention — strangers cannot read each other's data today, but tests
 can corrupt shared files and an unsigned webhook can queue forged jobs.
+
+Mode coverage: security: ran (9 files), correctness: ran (14 files)
 
 ## Health at a glance
 | Area | Status | In plain words |
