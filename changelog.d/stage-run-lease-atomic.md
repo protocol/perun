@@ -1,2 +1,0 @@
-### Fixed
-- `stage_run.py`: the lease is now rewritten atomically (temp file beside the lease dir plus rename; `perun_policy.write_lease`, also used by the first lease write in `heavy_acquire`). The old truncate-then-write left an empty lease visible for an instant, so a stage reading the heavy dir, a reap or a slot count could see no lease; this made `test-stage-run-hardening.sh` ("lease carries this host's name") flaky under runner load. New test `scripts/test-stage-run-lease-atomic.sh`; the hardening test now prints `lease.txt` on failure.
