@@ -3,6 +3,11 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.618.0] — 2026-10-29
+
+### Added
+- `review_checks.sh`: gitleaks findings under a `fixture(s)`/`sample(s)`/`example(s)`/`test(s)`/`mock(s)`/`docs` directory segment, or in a file whose name has a `fixture`/`sample`/`example`/`mock`/`test` token (for example `prices.sample.json`, `.env.example`), now carry `"hint": "likely-fixture"` and a `[likely-fixture]` suffix in `text`, so reviewers triage dummy-data hits fast. Directory names that merely start with such a word (`test-runner/`, `sample-service/`) are not matched. Findings are tagged, never dropped; real-path hits and the gate are unchanged. New test `scripts/test-review-checks-gitleaks-fixture-hint.sh`, eval `audit-gitleaks-likely-fixture`.
+
 ## [1.617.0] — 2026-10-29
 
 ### Fixed
