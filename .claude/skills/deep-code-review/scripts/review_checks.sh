@@ -20,7 +20,7 @@
 # Each tool is timeboxed (default 60s). Exit 0 even with findings; 2 on usage/unresolvable base.
 set -euo pipefail
 
-repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" missing="" lease=ok leased=0 full=0 wr=0
+repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" missing="" gap="" lease=ok leased=0 full=0 wr=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base=${2:?--base needs a ref}; case "$base" in -*) echo "review_checks: --base must not start with '-'" >&2; exit 2 ;; esac; shift 2 ;;
@@ -42,8 +42,8 @@ cd "$(git rev-parse --show-toplevel)"
 
 raw=$(mktemp "${TMPDIR:-/tmp}/review-raw.XXXXXX") out=$(mktemp "${TMPDIR:-/tmp}/review-out.XXXXXX") tsv=$(mktemp "${TMPDIR:-/tmp}/review-tsv.XXXXXX")
 sgh=$(mktemp -d "${TMPDIR:-/tmp}/review-sg.XXXXXX") # semgrep HOME: the macOS agent sandbox denies writes to ~/.semgrep
-rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX") gla=$(mktemp "${TMPDIR:-/tmp}/review-gla.XXXXXX") gli=$(mktemp "${TMPDIR:-/tmp}/review-gli.XXXXXX") # mktemp files are mode 600
-trap 'rm -rf "$raw" "$out" "$tsv" "$sgh" "$rep" "$gla" "$gli"' EXIT INT TERM HUP
+lf=$(mktemp "${TMPDIR:-/tmp}/review-lf.XXXXXX") rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX") gla=$(mktemp "${TMPDIR:-/tmp}/review-gla.XXXXXX") gli=$(mktemp "${TMPDIR:-/tmp}/review-gli.XXXXXX") # mktemp files are mode 600
+trap 'rm -rf "$raw" "$out" "$tsv" "$sgh" "$lf" "$rep" "$gla" "$gli"' EXIT INT TERM HUP
 # Vendored, build and worktree dirs are never scanned (a changed file under them is dropped here, for every tool).
 XRE='(^|/)(node_modules|\.claude/worktrees|vendor|dist|build|\.git|\.venv|venv|target|__pycache__)/'
 if [ "$wr" = 1 ]; then all=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$base" HEAD); else all=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$base"...HEAD); fi
@@ -69,21 +69,30 @@ tbox() {
 pp="$here/../../agentic-delivery/scripts/perun_policy.py"
 lease_take() {
   [ "$leased" = 1 ] && return 0
-  [ "$lease" = ok ] || return 1
+  [ "$lease" = none ] && return 0 # policy unusable (reported once): no lease policy, so the scanner runs
+  [ "$lease" = ok ] || return 1 # full: already waited REVIEW_LEASE_WAIT, stay skipped
   [ -f "$pp" ] && command -v python3 >/dev/null || return 0
   local w=${REVIEW_LEASE_WAIT:-120} r
   while :; do
-    r=0; python3 "$pp" heavy-acquire >/dev/null 2>&1 || r=$?
+    # stdout to a file, not $(...): the lease pid is the caller's parent, which must stay this shell. A full lease is
+    # exit 1 AND stdout "FULL"; python also exits 1 on any uncaught exception (traceback, no FULL), which is a policy failure.
+    r=0; python3 "$pp" heavy-acquire >"$lf" 2>/dev/null || r=$?
+    [ "$r" != 1 ] || [ "$(cat "$lf")" = FULL ] || r=70
     case "$r" in
       0) leased=1; return 0 ;;
       1) if [ "$w" -le 0 ]; then lease=full; return 1; fi; sleep 5; w=$((w - 5)) ;;
-      *) skip lease "policy rc=$r"; lease=none; return 0 ;;
+      *) echo "review_checks: not run: lease (policy rc=$r); heavy scanners run without a lease" >&2; lease=none; return 0 ;;
     esac
   done
 }
 lease_drop() { [ "$leased" = 1 ] && { python3 "$pp" heavy-release >/dev/null 2>&1 || true; leased=0; }; true; }
+# miss TOOL HINT: queue a tool that could not run (not installed, or its DB is blocked) for the closing "missing tools" row.
+miss() { gap+="${gap:+; }$1 ($2)"; }
 have() {
-  command -v "$1" >/dev/null || { skip "$1" "not installed"; missing+=" $1"; return 1; }
+  command -v "$1" >/dev/null || {
+    skip "$1" "not installed"; missing+=" $1"
+    case "$1" in semgrep) miss "$1" "install: pipx install semgrep" ;; tsc) miss "$1" "install: npm install -g typescript" ;; *) miss "$1" "install: brew install $1" ;; esac
+    return 1; }
   case "$1" in gitleaks|osv-scanner|semgrep|trivy) lease_take || { skip "$1" "heavy lease full"; return 1; } ;; esac
 }
 # add TOOL FILE LINE RULE MSG -> one TSV row.
@@ -325,6 +334,7 @@ lock_files=$(changed '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.su
 if [ -z "$lock_files" ]; then :
 elif [ "${REVIEW_OSV:-}" != 1 ] && [ -z "${REVIEW_OSV_DB_DIR:-}" ]; then skip osv-scanner "REVIEW_OSV not set; osv-scanner queries the OSV API"
 elif [ -n "${REVIEW_OSV_DB_DIR:-}" ] && [ -z "$(find "$REVIEW_OSV_DB_DIR" -type f -name '*.zip' 2>/dev/null | head -n1)" ]; then
+  miss osv-scanner "warm the DB: osv-scanner --offline-vulnerabilities --download-offline-databases"
   skip osv-scanner "NOT CHECKED: no pre-seeded DB in REVIEW_OSV_DB_DIR=$REVIEW_OSV_DB_DIR; warm it once: OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$REVIEW_OSV_DB_DIR osv-scanner --offline-vulnerabilities --download-offline-databases ."
 elif have osv-scanner; then
   # REVIEW_OSV_DB_DIR: pre-seeded DB, offline run (no TLS to api.osv.dev); the cache-dir env is osv-scanner's documented one.
@@ -377,7 +387,7 @@ if [ -n "$files" ] && have trivy; then
     if ! grep -Eqi 'vulnerability db|trivy-db|download.* db( |$)' "$out" && grep -Eqi 'dial |no such host|connection (refused|reset)|unreachable|x509|TLS|failed to download|download.*(bundle|check)|(bundle|check).*download' "$out"; then
       echo "review_checks: trivy: secret-only (misconfig bundle unreachable)" >&2; tk=trivy-secret; ran+=" trivy(secret-only)"
       run_one trivy "${tv[@]}" --skip-check-update --scanners secret .
-    fi; }; } && { scan_ok trivy || { grep -qi 'DB' "$out" && echo "review_checks: trivy: NOT CHECKED, $trivy_hint" >&2; false; }; }; then
+    fi; }; } && { scan_ok trivy || { grep -qi 'DB' "$out" && { echo "review_checks: trivy: NOT CHECKED, $trivy_hint" >&2; miss trivy "$trivy_hint"; }; false; }; }; then
     if sjson "$tk" "$out" >"$tsv"; then
       while IFS=$'\t' read -r f l r m; do printf '%s\n' "$files" | grep -qxF -- "$f" && add trivy "$f" "$l" "$r" "$m"; done <"$tsv"
     else skip trivy "unparseable output"; fi
@@ -412,8 +422,9 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   hf=$(changed "$hre"); [ -n "$hf" ] || continue
   nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
   if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
-  command -v "$hn" >/dev/null || { nc "install: $hh"; missing+=" $hn"; continue; }
+  command -v "$hn" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
   hubtool=$hn
+  # zizmor, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
   case $hn in grype|checkov|gosec) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
   [ "$hn" != gosec ] || [ -f go.mod ] || { nc "no go.mod at repo root"; continue; }
   targets=()
@@ -453,3 +464,4 @@ print(json.dumps([{"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "ru
 n = sum(len(t) == 5 for t in rows)
 print(f"review_checks: {n} findings; {sys.argv[4]} files excluded; analyzers ran: {', '.join(sys.argv[2].split()) or 'none'}; skipped (not installed): {', '.join(sys.argv[3].split()) or 'none'}", file=sys.stderr)
 PY
+[ -z "$gap" ] || echo "review_checks: missing tools: $gap" >&2
