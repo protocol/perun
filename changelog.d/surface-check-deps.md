@@ -1,4 +1,0 @@
-### Added
-- `surface_check.py deps`: when a lane diff (tracked or untracked) touches `package.json` or a lockfile (npm, yarn, pnpm, bun), a local green is refused unless a `node_modules` exists inside the worktree at or above each touched file and every changed dependency, peer, override or resolution entry resolves inside the worktree (Node otherwise walks up to a parent checkout's stale deps, as in a zod 3 to 4 bump that passed locally and failed CI). Versions are compared only for exact, `^`, `~` and x-range specs (a prerelease never satisfies a plain `^4.0.0`); every other spec is reported as "N unjudged (range/tag), version not compared" and is not a version proof. Detection only; it prints the install command to run and never installs. Yarn Plug'n'Play has no `node_modules` and always fails here.
-
-size-budget-raise: .claude/skills/agentic-delivery/references/verification-handback.md 60826→61170 documents the surface_check deps mode
