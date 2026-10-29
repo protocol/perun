@@ -54,8 +54,10 @@ trap cleanup EXIT
 # unchanged once every other case has run.
 _root_sentinel="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
 
+# sandbox-probe:begin
 pass=0
 fail=0
+skip=0
 GATE_RC=0
 
 # record <0|1> <label>  — 0 == case passed, non-zero == case failed.
@@ -68,6 +70,45 @@ record() {
     fail=$((fail + 1))
   fi
 }
+# Sandbox capability probes (sandbox-probe block; scripts/test-ci-gates-sandbox-skip.sh sources it). A case that needs
+# a capability the agent sandbox denies (ps, pgrep, PyYAML, loopback bind) reports its result through record_sbx. Off CI a
+# failed probe AND a case log carrying a denial signature turn that case's FAIL into `SKIP (sandbox: <cap>)`, counted apart
+# and never failing the run (DCR_NO_SKIP=1 makes any skip fail it); a failed probe with no signature in the log stays a
+# FAIL, and on CI (CI or GITHUB_ACTIONS non-empty) a failed probe is always a FAIL, pass or not (fail closed).
+# Each probe runs once; the cache is initialised here, never taken from the environment.
+_cap_ps= _cap_pgrep= _cap_yaml= _cap_bind=
+_sbx_denied="Operation not permitted|not permitted|PermissionError|ModuleNotFoundError: No module named 'yaml'|EPERM|ps failed|pgrep failed|Cannot get process list"
+_cap() { # _cap <ps|pgrep|yaml|bind>: 0 when the capability works here
+  local v="_cap_$1"
+  if [ -z "${!v:-}" ]; then
+    case "$1" in
+      ps) [ -n "$(ps -o lstart= -p $$ 2>/dev/null)" ] && [ -n "$(ps -o lstart= -p 1 2>/dev/null)" ] ;;
+      pgrep) pgrep -x dcr-nosuchproc >/dev/null 2>&1 || [ $? -eq 1 ] ;; # rc 1 = no match; 3 = process list denied
+      yaml) python3 -c 'import yaml' >/dev/null 2>&1 ;;
+      bind) python3 -c 'import socket; socket.socket().bind(("127.0.0.1", 0))' >/dev/null 2>&1 ;;
+    esac && printf -v "$v" ok || printf -v "$v" no
+  fi
+  [ "${!v}" = ok ]
+}
+record_sbx() { # record_sbx <cap> <0|1> <label> [log...]: a SKIP or FAIL prints each log's tail, as the plain cases do
+  local cap="$1" rc="$2" lbl="$3"
+  shift 3
+  if ! _cap "$cap"; then
+    if [ -n "${CI:-}${GITHUB_ACTIONS:-}" ]; then rc=1; lbl="$lbl (probe failed: $cap)"
+    elif [ "$rc" -ne 0 ] && [ $# -gt 0 ] && grep -qE "$_sbx_denied" "$@" 2>/dev/null; then
+      printf 'SKIP  %s (sandbox%s: %s)\n' "$lbl" "$([ "$cap" = yaml ] && echo /missing)" "$cap"; skip=$((skip + 1))
+      tail -n 8 "$@"; return 0
+    fi
+  fi
+  record "$rc" "$lbl"
+  if [ "$rc" -ne 0 ] && [ $# -gt 0 ]; then tail -n 8 "$@"; fi
+}
+# sbx_summary: the suite's last line. Prints the counts; exit 0 = no fails (and no skips when DCR_NO_SKIP=1).
+sbx_summary() {
+  printf '\n%d pass / %d fail / %d skipped(sandbox)\n' "$pass" "$fail" "$skip"
+  [ "$fail" -eq 0 ] && { [ "${DCR_NO_SKIP:-}" != 1 ] || [ "$skip" -eq 0 ]; }
+}
+# sandbox-probe:end
 
 # gate <cmd...> — run the tested helper through bash, capturing its REAL exit code into
 # GATE_RC without masking it. Output is kept for postcondition inspection.
@@ -2477,9 +2518,9 @@ git -C "$og" commit -q -m 'style(a): reformat'
 # 2) Default run (no flags): neither opt-in gate runs.
 og_run "$WORK/og-default.log"
 if [ "$OG_RC" -eq 0 ] && ! grep -qE 'refix_gate|priority_gate|focus_gate' "$WORK/og-default.log"; then
-  record 0 "dcr-gates opt-in: all three gates are off by default"
+  record_sbx ps 0 "dcr-gates opt-in: all three gates are off by default"
 else
-  record 1 "dcr-gates opt-in: all three gates are off by default"
+  record_sbx ps 1 "dcr-gates opt-in: all three gates are off by default" "$WORK/og-default.log"
 fi
 
 # 3) Planted RED: re-touching a just-fixed file with no test/eval change FIRES.
@@ -2497,9 +2538,9 @@ git -C "$og" add src/a.txt >/dev/null 2>&1
 git -C "$og" commit -q -m 'style(a): align' -m 'Refix-Reason: whitespace only, no behavior change'
 og_run "$WORK/og-refix-ok.log" DCR_REFIX_GATE=1
 if [ "$OG_RC" -eq 0 ] && grep -q 'dcr-gates: refix_gate PASS' "$WORK/og-refix-ok.log"; then
-  record 0 "dcr-gates opt-in: refix_gate passes with a Refix-Reason trailer"
+  record_sbx ps 0 "dcr-gates opt-in: refix_gate passes with a Refix-Reason trailer"
 else
-  record 1 "dcr-gates opt-in: refix_gate passes with a Refix-Reason trailer"
+  record_sbx ps 1 "dcr-gates opt-in: refix_gate passes with a Refix-Reason trailer" "$WORK/og-refix-ok.log"
 fi
 
 # 5) A flag value other than unset/0/1 fails closed.
@@ -2530,9 +2571,9 @@ og_red_rc="$OG_RC"
 og_run "$WORK/og-prio-ok.log" DCR_PRIORITY_GATE=1 DCR_PRIORITY_JSON="$WORK/og-prio-ok.json"
 if [ "$og_red_rc" -ne 0 ] && grep -q 'BLOCKING #3' "$WORK/og-prio-red.log" \
   && [ "$OG_RC" -eq 0 ] && grep -q 'dcr-gates: priority_gate PASS' "$WORK/og-prio-ok.log"; then
-  record 0 "dcr-gates opt-in: priority_gate fires on an inversion, passes once cited (planted RED)"
+  record_sbx ps 0 "dcr-gates opt-in: priority_gate fires on an inversion, passes once cited (planted RED)"
 else
-  record 1 "dcr-gates opt-in: priority_gate fires on an inversion, passes once cited (planted RED)"
+  record_sbx ps 1 "dcr-gates opt-in: priority_gate fires on an inversion, passes once cited (planted RED)" "$WORK/og-prio-red.log" "$WORK/og-prio-ok.log"
 fi
 
 # 8) DCR_FOCUS_GATE=1: when no priority record ever existed the run passes
@@ -2542,9 +2583,9 @@ fi
 og_run "$WORK/og-focus-norecord.log" DCR_FOCUS_GATE=1 DCR_OWNER_EMAIL=jane@example.com
 if [ "$OG_RC" -eq 0 ] && grep -q 'no priority record ever existed' "$WORK/og-focus-norecord.log" \
   && grep -q 'dcr-gates: focus_gate PASS' "$WORK/og-focus-norecord.log"; then
-  record 0 "dcr-gates opt-in: focus_gate with no priority record ever passes with a notice"
+  record_sbx ps 0 "dcr-gates opt-in: focus_gate with no priority record ever passes with a notice"
 else
-  record 1 "dcr-gates opt-in: focus_gate with no priority record ever passes with a notice"
+  record_sbx ps 1 "dcr-gates opt-in: focus_gate with no priority record ever passes with a notice" "$WORK/og-focus-norecord.log"
 fi
 og_focus_record() {  # <acceptance-command> <subject>
   printf 'priority: design-alignment\nscope: src/**\nacceptance: %s\n' "$1" >"$og/.claude/PRIORITY.md"
@@ -2569,9 +2610,9 @@ if [ "$og_red_rc" -ne 0 ] && grep -q 'outside scope: web/app.css' "$WORK/og-focu
   && [ "$og_agent_rc" -ne 0 ] && grep -q 'is not the owner' "$WORK/og-focus-agent.log" \
   && [ "$og_trivial_rc" -ne 0 ] && grep -q 'trivially-true acceptance rejected' "$WORK/og-focus-trivial.log" \
   && [ "$OG_RC" -eq 0 ] && grep -q 'dcr-gates: focus_gate PASS' "$WORK/og-focus-ok.log"; then
-  record 0 "dcr-gates opt-in: focus_gate fires outside an OPEN priority, rejects a non-owner record, passes once DONE (planted RED)"
+  record_sbx ps 0 "dcr-gates opt-in: focus_gate fires outside an OPEN priority, rejects a non-owner record, passes once DONE (planted RED)"
 else
-  record 1 "dcr-gates opt-in: focus_gate fires outside an OPEN priority, rejects a non-owner record, passes once DONE (planted RED)"
+  record_sbx ps 1 "dcr-gates opt-in: focus_gate fires outside an OPEN priority, rejects a non-owner record, passes once DONE (planted RED)" "$WORK/og-focus-red.log" "$WORK/og-focus-agent.log" "$WORK/og-focus-trivial.log" "$WORK/og-focus-ok.log"
 fi
 fi
 if _shard_on 2; then
@@ -3260,9 +3301,9 @@ else
 fi
 rl_run "$WORK/rl-green.log" DCR_REAPER_LINT_PATHS=src
 if [ "$RL_RC" -eq 0 ] && grep -q 'dcr-gates: reaper_lint PASS' "$WORK/rl-green.log"; then
-  record 0 "dcr-gates opt-in: reaper_lint passes a clean relative path"
+  record_sbx ps 0 "dcr-gates opt-in: reaper_lint passes a clean relative path"
 else
-  record 1 "dcr-gates opt-in: reaper_lint passes a clean relative path"
+  record_sbx ps 1 "dcr-gates opt-in: reaper_lint passes a clean relative path" "$WORK/rl-green.log"
 fi
 rl_run "$WORK/rl-blank.log" DCR_REAPER_LINT_PATHS='   '
 if [ "$RL_RC" -ne 0 ] && grep -q 'FAIL reaper_lint (DCR_REAPER_LINT_PATHS names no path)' "$WORK/rl-blank.log"; then
@@ -3480,9 +3521,9 @@ else
 fi
 ssl_run "$WORK/ssl-green.log" DCR_SOURCE_SCAN_LINT_PATHS=src
 if [ "$SSL_RC" -eq 0 ] && grep -q 'dcr-gates: source_scan_tests PASS' "$WORK/ssl-green.log"; then
-  record 0 "dcr-gates opt-in: source_scan_tests passes a clean relative path"
+  record_sbx ps 0 "dcr-gates opt-in: source_scan_tests passes a clean relative path"
 else
-  record 1 "dcr-gates opt-in: source_scan_tests passes a clean relative path"
+  record_sbx ps 1 "dcr-gates opt-in: source_scan_tests passes a clean relative path" "$WORK/ssl-green.log"
 fi
 ssl_run "$WORK/ssl-blank.log" DCR_SOURCE_SCAN_LINT_PATHS='   '
 if [ "$SSL_RC" -ne 0 ] && grep -q 'FAIL source_scan_tests (DCR_SOURCE_SCAN_LINT_PATHS names no path)' "$WORK/ssl-blank.log"; then
@@ -4072,9 +4113,9 @@ fi
 
 # peer pains: own per-feature file (scripts/test-peer-pains-2.sh), one case here.
 if bash "$ROOT/scripts/test-peer-pains-2.sh" >"$WORK/peer-pains-2.log" 2>&1; then
-  record 0 "peer pains: train CANT rule, no unchecked-as-zero status, NOT CHECKED briefs"
+  record_sbx pgrep 0 "peer pains: train CANT rule, no unchecked-as-zero status, NOT CHECKED briefs"
 else
-  record 1 "peer pains: train CANT rule, no unchecked-as-zero status, NOT CHECKED briefs"; tail -8 "$WORK/peer-pains-2.log"
+  record_sbx pgrep 1 "peer pains: train CANT rule, no unchecked-as-zero status, NOT CHECKED briefs" "$WORK/peer-pains-2.log"
 fi
 
 # fleet lessons: own per-feature file (scripts/test-fleet-lessons.sh), one case here.
@@ -4097,9 +4138,9 @@ if _shard_on 1; then
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 # PR-native review workflow template: own per-feature file (scripts/test-pr-review-workflow.sh), one case here.
 if bash "$ROOT/scripts/test-pr-review-workflow.sh" >"$WORK/pr-review-wf.log" 2>&1; then
-  record 0 "perun-review.yml: least-privilege permissions, pull_request only, opt-in"
+  record_sbx yaml 0 "perun-review.yml: least-privilege permissions, pull_request only, opt-in"
 else
-  record 1 "perun-review.yml: least-privilege permissions, pull_request only, opt-in"; tail -8 "$WORK/pr-review-wf.log"
+  record_sbx yaml 1 "perun-review.yml: least-privilege permissions, pull_request only, opt-in" "$WORK/pr-review-wf.log"
 fi
 
 # Repo-access review default: own per-feature file (scripts/test_agentic_review_default.py), one case here.
@@ -4205,9 +4246,9 @@ fi
 
 # tracker hygiene (own per-feature file scripts/test_tracker_hygiene.py): stubbed gh, fake GraphQL server, install block.
 if python3 "$ROOT/scripts/test_tracker_hygiene.py" >"$WORK/tracker-hygiene.log" 2>&1; then
-  record 0 "tracker hygiene: tracker_check/weekly_update/install --tracker-project"
+  record_sbx bind 0 "tracker hygiene: tracker_check/weekly_update/install --tracker-project"
 else
-  record 1 "tracker hygiene: tracker_check/weekly_update/install --tracker-project"; tail -8 "$WORK/tracker-hygiene.log"
+  record_sbx bind 1 "tracker hygiene: tracker_check/weekly_update/install --tracker-project" "$WORK/tracker-hygiene.log"
 fi
 
 # impact_map.py / context_pack.py: own per-feature file (scripts/test_impact_map.py), one case here.
@@ -4529,5 +4570,4 @@ else
   record 1 "hermetic: suite writes nothing outside its run root ($WORK)"
 fi
 
-printf '\n%d passed, %d failed\n' "$pass" "$fail"
-[ "$fail" -eq 0 ]
+sbx_summary

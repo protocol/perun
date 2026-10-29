@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""security_verify.py - triage security findings: verify-or-drop plus a tunable exclusion list.
+"""security_verify.py - verify-or-drop triage of security findings. The exclusion list is tunable.
 
 Usage: security_verify.py [findings.json|-] [override-file]
 Input: JSON list of findings on stdin or a file, or a semgrep `--json` report (an object with a `results` list; each

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gate_cache.py — one PASS cache, shared by every gate stage, keyed by the git tree.
+"""gate_cache.py — one PASS cache for every gate stage, keyed by git tree.
 
 WHY THIS EXISTS
 ---------------

@@ -34,12 +34,11 @@ failure paths that *produce* these signals are section F /
   plus, for batch/pipeline work, *freshness* (time since last successful run) and
   *volume* (records processed vs. expected). Average latency hides the outage;
   use percentiles (p50/p95/p99).
-- **Saturation's alert line is a utilization *target below 100%*, not full.** Many systems
-  degrade in latency/throughput well before a resource reaches 100% utilization, so the useful
-  threshold is a target (often ~70-80%, workload-dependent), not saturation itself — track
-  utilization / saturation / errors for each constrained resource. Alerting only at 100% (or on
-  `load average` alone) misses the whole degradation window. (The target is itself a *cause*
-  alert — pair it with a user-facing *symptom* alert per the bullet below, don't ship it alone.)
+- **Saturation's alert line is a utilization *target below 100%*, not full.** Systems
+  degrade before a resource reaches 100% utilization, so alert on a target (often ~70-80%,
+  workload-dependent), not saturation itself; track utilization / saturation / errors per
+  constrained resource. Alerting only at 100% (or on `load average`) misses the degradation window. (The target
+  is a *cause* alert: pair it with a *symptom* alert, below.)
 - **Alert on the symptom, not only the cause.** "CPU > 80%" without "checkout
   error rate > 1%" or "no successful run in 2× the schedule interval" means a
   frozen job or dependency outage pages nobody. Cause alerts are for diagnosis;
@@ -80,20 +79,21 @@ the send is confirmed, so a failed send suppresses every retry. Mark after a con
 - **Redact by default**: an allow-list of loggable fields beats a deny-list of
   forbidden ones — over-logging is itself a vulnerability (A09). Left-behind
   `print` debugging is its own finding.
+- **Audit a redactor's patterns against the gitleaks default rules**, not the vendors its author
+  remembered; usual gaps: `anthropic-api-key`, `anthropic-admin-api-key` (`sk-ant-` keys),
+  `airtable-personnal-access-token` (sic), `airtable-api-key`. Prove it: log a fake of each shape, grep the sink.
 - Common leaks: whole request/response objects, `Authorization`/`Cookie` headers,
   bodies on 4xx/5xx, DSN-style connection strings in errors, LLM prompts with
   user data, stack traces with locals, query params carrying tokens or emails,
   error-tracker breadcrumbs.
 - **Spans carry the same risk**: span attributes, DB statements with inlined
-  literals, HTTP instrumentation recording full URLs and headers. Sampling does
-  not make a leak safe — a 1%-sampled secret is still leaked, into a third-party
-  store. Log/trace retention counts as personal-data retention
+  literals, HTTP instrumentation recording full URLs and headers. A 1%-sampled
+  secret is still leaked, into a third-party store. Log/trace retention counts as personal-data retention
   (`privacy-compliance.md`).
 - **Head-based trace sampling limits what you can conclude — mind coverage, variance, and
   tail percentiles.** A fixed-rate, *pre-outcome* (**head**) sampler decides keep/drop
-  before it knows the trace errored or ran slow. For a *uniform* sampler the sampled error
-  *proportion* is still an unbiased estimate of the true rate — the real problems are
-  elsewhere: **(a) coverage** — you cannot guarantee a *specific* error trace was kept ("you
+  before it knows the trace errored or ran slow. A *uniform* sampler's error
+  *proportion* is still an unbiased estimate; the real problems: **(a) coverage** — you cannot guarantee a *specific* error trace was kept ("you
   cannot ensure that all traces with an error within them are sampled with head sampling
   alone", OpenTelemetry), so tracing is unreliable for "pull up *this* incident's traces";
   **(b) variance** — at a low sample rate the error/slow counts in a short burn-rate window
@@ -104,8 +104,7 @@ the send is confirmed, so a failed send suppresses every retry. Mark after a con
   all or most of the spans within the trace", OpenTelemetry) with a policy that always keeps
   error / high-latency traces, and compute rate & latency SLIs from **unsampled** counters /
   histograms (the SLO/burn-rate lens in `role-coverage.md`), not the sampled trace set.
-  (Distinct from the privacy point above — a sampled leak is still a leak — and from
-  analytics event-stream reweighting in `data-metrics.md`.)
+  (Distinct from the privacy point above — a sampled leak is still a leak — and from analytics event reweighting in `data-metrics.md`.)
 - **Log injection**: user-controlled strings must be emitted as structured
   fields, never concatenated into a line — embedded `\n`/`\r` lets an attacker
   forge entries and break the parser (CRLF/log-forging, CWE-117 — name only,
@@ -115,26 +114,26 @@ the send is confirmed, so a failed send suppresses every retry. Mark after a con
   correlation id is **not** the same guarantee as an unbroken **distributed trace** —
   every service can stamp the same id on its logs while each still starts a fresh root
   span, so logs reassemble by grep but the trace backend shows N disconnected
-  fragments and you can't see where latency went. Verify separately: follow one
+  fragments, hiding where latency went. Verify separately: follow one
   request's trace id through every hop **in the tracing backend**, and confirm **one**
   trace, not N. The break is almost always at a hop without auto-instrumentation — a
   **queue publish, a cron / background job, an async or thread handoff** — where trace
   context must be injected into the envelope by hand (W3C `traceparent`) instead of
-  riding an instrumented HTTP client; such a boundary that starts a fresh root span
-  silently blinds the trace, and nothing fails until an incident needs it.
+  riding an instrumented HTTP client; a boundary that starts a fresh root span
+  silently blinds the trace until an incident needs it.
 - **Telemetry carries a stable resource identity, or per-cohort analysis silently
   merges.** Every emitted signal (log, metric, span) should stamp *which service,
   version, and instance* produced it and *which environment/tier* it belongs to — the
   OpenTelemetry resource attributes `service.name` / `service.version` /
   `service.instance.id` / `service.namespace` and `deployment.environment.name` (all
-  **Stable**), or an equivalent version+environment dimension. Distinct from the
-  request-identity family above (that is *which request*; this is *which emitter*), and
-  without it two things this skill demands elsewhere quietly break. A **canary's named
+  **Stable**), or an equivalent version+environment dimension. Distinct from request
+  identity above (*which request*; this is *which emitter*); without it two things this
+  skill demands elsewhere quietly break. A **canary's named
   halt metric** (`release-engineering.md`) is uncomputable as canary-vs-baseline unless
   the telemetry is partitioned by `service.version` (or a cohort tag) — you cannot
   regress-check a signal you cannot split from the baseline's. And **multi-window
   burn-rate SLO math** (`role-coverage.md`, SRE lens) corrupts when environments
-  collide in one backend — which is the **default**, not an edge case: the OTel spec
+  collide in one backend (the **default**, not an edge case): the OTel spec
   states `deployment.environment.name` "does not affect the uniqueness constraints
   defined through the `service.namespace`, `service.name` and `service.instance.id`
   resource attributes," so `service.name=frontend` in production and in staging
@@ -147,10 +146,10 @@ the send is confirmed, so a failed send suppresses every retry. Mark after a con
   app that logs, on **every authenticated request**, per-request user PII and the full
   permission-scope list — an authz dump the app itself never writes — to the
   platform's **shared** log store, while the application container logs none of it,
-  so a review scoped to the app's own code misses it entirely. Read the **runtime**
+  so a review scoped to the app's code misses it. Read the **runtime**
   logs as actually emitted (app **and** the injected proxy), flag per-request PII /
-  token material / authz-scope dumps to the platform owner as a log-hygiene issue
-  (drop or redact), and treat a shared platform log store as a data-egress surface
+  token material / authz-scope dumps to the platform owner (drop or
+  redact), and treat a shared platform log store as a data-egress surface
   for user PII.
 
 **Grep leads (tune to language):** `log`/`logger`/`console.log`/`print` followed
@@ -164,7 +163,7 @@ of a request or config struct; `setTag`/`setAttribute` with a raw payload.
 
 - Never use unbounded values as label/tag values: user id, email, request id,
   UUID, full URL path with ids, raw error message, SQL text. Each combination is
-  a new time series — this is how a metrics bill or the backend falls over.
+  a new time series — how a metrics bill or the backend falls over.
 - Bound the label space: templated route (`/users/:id`), error *class* not error
   text, tenant tier not tenant id. Per-entity detail belongs in a log or trace.
 

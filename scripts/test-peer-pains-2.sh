@@ -9,7 +9,8 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-peerpains2.XXXXXX")"
 trap '[ -n "$WORK" ] && rm -r "$WORK" 2>/dev/null' EXIT
 export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null PERUN_HEAVY_DIR="$WORK/hv/heavy" WORK SC
 pass=0 fail=0
-ok() { if [ "$1" -eq 0 ]; then echo "PASS  $2"; pass=$((pass + 1)); else echo "FAIL  $2"; fail=$((fail + 1)); fi; }
+# a FAIL echoes the last captured output (reap_own's own words, e.g. "ps failed") so a caller can tell a denied tool from a bug
+ok() { if [ "$1" -eq 0 ]; then echo "PASS  $2"; pass=$((pass + 1)); else echo "FAIL  $2"; printf '%s\n' "${out:-}" | head -4; fail=$((fail + 1)); fi; }
 
 R="$WORK/clone"; g() { git -C "$R" -c user.email=t@example.com -c user.name=T "$@"; }
 git init -q --bare "$WORK/origin.git" -b main; git clone -q "$WORK/origin.git" "$R" 2>/dev/null
@@ -71,7 +72,7 @@ mkdir "$WORK/fakebin"; printf '#!/bin/sh\nexit 3\n' >"$WORK/fakebin/pgrep"; chmo
 out=$(ROOT="$WORK" PATH="$WORK/fakebin:$PATH" bash "$SC/reap_own.sh" --report 2>/dev/null); rc=$?
 [ $rc -eq 2 ] && grep -q '^orphans=COULD_NOT_CHECK' <<<"$out" && ! grep -q '^orphans=0' <<<"$out"; ok $? "reap_own --report: pgrep failure prints COULD_NOT_CHECK, not orphans=0"
 printf '#!/bin/sh\nexit 1\n' >"$WORK/fakebin/pgrep"
-out=$(ROOT="$WORK" PATH="$WORK/fakebin:$PATH" bash "$SC/reap_own.sh" --report 2>/dev/null)
+out=$(ROOT="$WORK" PATH="$WORK/fakebin:$PATH" bash "$SC/reap_own.sh" --report 2>&1)
 grep -q '^orphans=' <<<"$out" && ! grep -q 'COULD_NOT_CHECK' <<<"$out"; ok $? "reap_own --report: pgrep no-match (rc 1) is a real zero, not an error"
 
 printf '#!/bin/sh\nexit 3\n' >"$WORK/fakebin/pgrep"

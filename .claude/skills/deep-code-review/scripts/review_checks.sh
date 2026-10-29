@@ -9,8 +9,11 @@
 # REVIEW_OSV=1 (network; with no osv-scanner/trivy result it falls back to npm/pnpm/pip-audit, else a not-checked row); semgrep uses repo rules, else the bundled taint rules plus p/default (never `--config auto`); trivy is offline.
 # Tool hub: zizmor, bandit, gosec, grype, checkov, hadolint (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
+# Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
+# rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
 # `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma). gitleaks runs once over the working tree. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
+# gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row per top fixture dir when it has >3 (every other rule, and name-only matches, stay rows); REVIEW_FIXTURE_ROWS=all lists every hit.
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
 # dirs and .claude/worktrees are never scanned; each heavy scanner takes the heavy lease only when it runs (waits
 # REVIEW_LEASE_WAIT s, default 120) and releases it afterwards. If the lease is still full after the wait the scanners
@@ -540,6 +543,19 @@ fi
 
 lease_drop
 
+# Built-in, no tool to install: NUL/C0 control and hidden/bidi characters in the changed text files (invisible_chars.py, the code
+# scripts/audit_skills.py also uses). Cheap, so unleased. Rows: tool invisible-chars, rule control-char|hidden-unicode|not-checked, message has the codepoint and col.
+ic="$here/invisible_chars.py"; cf=$(changed '.' | grep -Ev '(^|/)(third_party|Pods|bower_components)/|\.min\.js$' || true)
+if [ -n "$cf" ]; then
+  if [ ! -f "$ic" ]; then skip invisible-chars "invisible_chars.py missing"; add invisible-chars "" 0 not-checked "invisible_chars.py missing; control and hidden characters were not scanned"
+  else
+    icok=0; run_one invisible-chars python3 "$ic" <<<"$cf" && scan_ok invisible-chars && icok=1
+    # rows are flushed per row, so a timeout still yields the findings made so far (a crash leaves a traceback in $out, not rows)
+    if [ "$icok" = 1 ] || [ "$rc" = 124 ] || [ "$rc" = 142 ]; then while IFS=$'\t' read -r f l r m; do add invisible-chars "$f" "$l" "$r" "$m"; done <"$out"; fi
+    [ "$icok" = 1 ] || add invisible-chars "" 0 not-checked "scan failed or timed out; control and hidden characters were not fully scanned"
+  fi
+fi
+
 if [ "$tests" = 1 ]; then
   if [ -z "${REVIEW_TEST_CMD:-}" ]; then skip tests "REVIEW_TEST_CMD not set"
   elif run_one tests bash -c "$REVIEW_TEST_CMD"; then
@@ -549,20 +565,43 @@ fi
 
 r=; for t in $ran; do case " $failed " in *" ${t%%(*} "*) ;; *) r+=" $t" ;; esac; done; ran=$r
 python3 - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" <<'PY'
-import json, re, sys
+import json, os, re, sys
 rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1], encoding="utf-8", errors="replace")]
 rows = [t for i, t in enumerate(rows) if t[3:4] != ["not-checked"] or t not in rows[:i]]  # a tool failing on N files is one not-checked row
-# Triage hint, never a drop or a gate change: a secret finding under a sample/fixture/test/mock/docs path is usually dummy data.
+# Triage hint, not a verdict (only big generic-api-key fixture groups collapse, below): a secret or hidden-character finding under a sample/fixture/test/mock/docs path is usually dummy data.
 FXD = re.compile(r"(^|/)(fixtures?|samples?|examples?|tests?|__tests__|testdata|mocks?|__mocks__|docs?)/", re.I)  # whole directory segment
 FXB = re.compile(r"(^|[._-])(fixture|sample|example|mock|test)s?([._-]|$)", re.I)  # file name only, so test-runner/ or sample-service/ stay untagged
 def fx(p): return FXD.search(p) or FXB.search(p.rsplit("/", 1)[-1])
 def row(t):
     d = {"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "rule": t[3], "message": t[4], "text": f"{t[3]}: {t[4]}", "tool": t[0]}
-    if t[0] in ("gitleaks", "gitleaks-history") and fx(t[1]):
+    if t[0] in ("gitleaks", "gitleaks-history", "invisible-chars") and fx(t[1]):
         d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
     return d
-print(json.dumps([row(t) for t in rows if len(t) == 5], indent=1))
-n = sum(len(t) == 5 for t in rows)
+# Low-confidence bucket: only generic-api-key (the low-signal rule) hits under a fixture DIRECTORY collapse, and only when a (tool, top fixture dir)
+# group has more than 3; every other rule (stripe, github-pat, openai, anthropic, private-key, ...) and every name-only match stays a per-row finding.
+# REVIEW_FIXTURE_ROWS=all (or ALL, 1, true) keeps every row.
+LOW = {"generic-api-key"}
+opt = os.environ.get("REVIEW_FIXTURE_ROWS", "").lower() in ("all", "1", "true")
+def top(p):
+    s = p.split("/")[:-1]; j = next(i for i, x in enumerate(s) if FXD.search(x + "/"))
+    while j < len(s) and FXD.search(s[j] + "/"): j += 1
+    return "/".join(s[:j]) + "/"
+def summ(k, g):
+    n = len(g); r = sorted((t[1], row(t)["line"]) for t in g)[:3]
+    m = f"{n} generic-api-key hits under {k[1]} tagged likely-fixture (showing 3 of {n}; REVIEW_FIXTURE_ROWS=all for every row): {', '.join(f'{f}:{l}' for f, l in r)}"
+    return {"file": k[1], "line": 0, "rule": "likely-fixture-summary", "message": m, "text": f"{k[0]}: {m} [likely-fixture]", "tool": k[0], "hint": "likely-fixture"}
+data = [t for t in rows if len(t) == 5]
+key = lambda t: not opt and t[0] in ("gitleaks", "gitleaks-history") and t[3] in LOW and FXD.search(t[1]) and (t[0], top(t[1]))
+groups = {}
+for t in data:
+    if key(t): groups.setdefault(key(t), []).append(t)
+out, done = [], set()
+for t in data:
+    k = key(t)
+    if not k or len(groups[k]) <= 3: out.append(row(t))
+    elif k not in done: done.add(k); out.append(summ(k, groups[k]))
+print(json.dumps(out, indent=1))
+n = len(out)
 dg, w1 = sys.argv[5].split(), sys.argv[6].split()  # lease full: "1 worker" only for tools whose single-worker flag ran; "nice 19" only when nice worked
 def lab(t):
     b = t.split("(")[0]
