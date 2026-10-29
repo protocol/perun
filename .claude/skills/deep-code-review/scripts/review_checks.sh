@@ -499,10 +499,18 @@ if [ "$tests" = 1 ]; then
 fi
 
 python3 - "$raw" "$ran" "$missing" "$nex" <<'PY'
-import json, sys
+import json, re, sys
 rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1], encoding="utf-8", errors="replace")]
-print(json.dumps([{"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "rule": t[3], "message": t[4],
-                   "text": f"{t[3]}: {t[4]}", "tool": t[0]} for t in rows if len(t) == 5], indent=1))
+# Triage hint, never a drop or a gate change: a secret finding under a sample/fixture/test/mock/docs path is usually dummy data.
+FXD = re.compile(r"(^|/)(fixtures?|samples?|examples?|tests?|__tests__|testdata|mocks?|__mocks__|docs?)/", re.I)  # whole directory segment
+FXB = re.compile(r"(^|[._-])(fixture|sample|example|mock|test)s?([._-]|$)", re.I)  # file name only, so test-runner/ or sample-service/ stay untagged
+def fx(p): return FXD.search(p) or FXB.search(p.rsplit("/", 1)[-1])
+def row(t):
+    d = {"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "rule": t[3], "message": t[4], "text": f"{t[3]}: {t[4]}", "tool": t[0]}
+    if t[0] in ("gitleaks", "gitleaks-history") and fx(t[1]):
+        d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
+    return d
+print(json.dumps([row(t) for t in rows if len(t) == 5], indent=1))
 n = sum(len(t) == 5 for t in rows)
 print(f"review_checks: {n} findings; {sys.argv[4]} files excluded; analyzers ran: {', '.join(sys.argv[2].split()) or 'none'}; skipped (not installed): {', '.join(sys.argv[3].split()) or 'none'}", file=sys.stderr)
 PY
