@@ -3,6 +3,17 @@
 Read this when the scope is `FULL` (never for `DIFF` or `FILE`). Two steps that make a whole-repo audit both cheaper
 and sharper.
 
+## 0. Run conditions (check before Phase 1)
+
+- **Load the skill from the release checkout** (the repo or worktree you were told to audit with), never a stale global
+  copy under `~/.claude/skills`; a lane that reads an older copy reports gaps already fixed.
+- **No install, no tests.** To run tests without installing, reuse an existing `node_modules` read-only (symlink or
+  `NODE_PATH`); if none exists, report "tests not run" with the reason. Never install on the target's behalf.
+- **Target bans agent commits/pushes** (its `CLAUDE.md`/`AGENTS.md`): stage only, and hand the owner the exact
+  commands; do not commit, push or bypass a hook.
+- **No dependency scan is not clean.** `review_checks.sh` falls back to `npm audit`, `pnpm audit` or `pip-audit` when
+  osv-scanner/trivy cannot reach their DB; if no scan ran, the dependency row reads "not checked", never "clean".
+
 ## 1. Entry-point table
 
 Before reading domain checklists, enumerate every externally triggerable entry point: server actions, HTTP routes,
