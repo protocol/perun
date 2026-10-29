@@ -56,7 +56,7 @@ ok $? "EPERM after the group was signalled (zombie-only group) counts as killed,
 
 # 2. host in the lease: written by stage_run, foreign-host lease ignored, own-host lease counted
 python3 "$SD/stage_run.py" --wait 2 -- bash -c 'cat "$PERUN_HEAVY_DIR"/*' >"$WORK/lease.txt" 2>&1
-grep -q " $HOST\$" "$WORK/lease.txt"; ok $? "lease carries this host's name"
+grep -q " $HOST\$" "$WORK/lease.txt"; r=$?; [ $r -eq 0 ] || { echo "lease.txt (host $HOST):"; cat "$WORK/lease.txt"; }; ok $r "lease carries this host's name"
 sleep 60 & HP=$!
 echo "$HP $(date +%s) heavy - 0 - otherhost.invalid" >"$PERUN_HEAVY_DIR/$HP"
 python3 "$SD/stage_run.py" --wait 2 -- true >/dev/null 2>&1; rc=$?

@@ -4,4 +4,5 @@ bash scripts/test-heavy-gate-wait.sh
 bash scripts/test-stage-rc.sh
 bash scripts/test-commit-hook-cap.sh
 bash scripts/test-stage-run-hardening.sh
+bash scripts/test-stage-run-lease-atomic.sh
 bash scripts/test-stage-run-lifecycle.sh

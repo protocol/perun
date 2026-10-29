@@ -394,6 +394,18 @@ def lease_load(d: Path, now: float | None = None, exclude: int | None = None, ta
     return sum(lane_weight(k, now - s, tree_cpu(table, p) if k is None else None) for p, s, k in rows)
 
 
+def write_lease(d: Path, pid: int, text: str) -> None:
+    """Write `pid`'s lease atomically: a temp file beside the lease dir (never inside it, so no lease reader can parse it) renamed
+    over the lease. A plain write_text truncates first, so a reader caught in that gap saw an empty lease. Raises OSError (temp removed)."""
+    tmp = d.parent / f".{d.name}.{pid}.tmp"
+    try:
+        tmp.write_text(text)
+        os.replace(tmp, d / str(pid))
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def heavy_acquire(d: Path, slots: int, pid: int, kind: str | None = None) -> bool:
     """Take a lease for `pid` unless other live leases already weigh `slots` or more (see lease_load). Declare
     `kind="light"` for a read-only or doc lane so it counts LIGHT_WEIGHT. Re-acquire by the same pid refreshes it.
@@ -417,7 +429,7 @@ def heavy_acquire(d: Path, slots: int, pid: int, kind: str | None = None) -> boo
     if w > 1 and wait.exists():
         wait.unlink(missing_ok=True)
     d.mkdir(parents=True, exist_ok=True)
-    (d / str(pid)).write_text(f"{pid} {int(time.time())}" + (f" {kind}" if kind else ""))
+    write_lease(d, pid, f"{pid} {int(time.time())}" + (f" {kind}" if kind else ""))
     return True
 
 

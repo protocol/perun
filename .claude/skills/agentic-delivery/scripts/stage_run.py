@@ -120,9 +120,10 @@ def lock_holder() -> str:
 
 
 def stamp(d, pid: int, own: str, pgid: int = 0, child: str = "-", kind: str = "heavy") -> None:
-    """(Re)write our lease with the process start times; a write error is ignored (the lease already exists or the dir is unusable)."""
+    """(Re)write our lease with the process start times; a write error is ignored (the lease already exists or the dir is unusable).
+    Atomic (pp.write_lease): a reader never sees a half-written lease."""
     try:
-        (d / str(pid)).write_text(f"{pid} {int(time.time())} {kind} {own} {pgid} {child} {pp.HOST}")
+        pp.write_lease(d, pid, f"{pid} {int(time.time())} {kind} {own} {pgid} {child} {pp.HOST}")
     except OSError:
         pass
 
