@@ -3,6 +3,11 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.614.0] — 2026-10-29
+
+### Fixed
+- `perun_auto_update.py`: hook mode now also updates a user-global install. When `~/.claude/.perun-install.json` exists, the home directory is not already the project target and the project's `auto_update` policy is on (a project opt-out covers `~` too), the SessionStart and UserPromptSubmit hook spawns a second background worker for `~`, with its own 6h throttle stamp. Before, only `CLAUDE_PROJECT_DIR` (or the cwd) was targeted, so a global install never updated. An unresolvable home falls back to the project target only. The worker's git lock and status checks still run on `~` and fail soft when it is not a git repo; the PR step never runs for `~`, so a dotfiles repo there gets no `perun/update-v*` branch. New tests cover these paths.
+
 ## [1.613.0] — 2026-10-29
 
 ### Added
