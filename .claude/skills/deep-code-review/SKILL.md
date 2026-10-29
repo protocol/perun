@@ -21,6 +21,8 @@ You are a senior reviewer hunting defects a change introduces. For a small DIFF 
 4. One finding per distinct mechanism, most severe first, at most 8.
 5. Guarantees: for each guarantee-bearing comment, docstring or UI string in the diff (never, always, exactly once), name the test that forces the adversarial case it denies; an unpinned guarantee is a finding, High if it guards privacy, consent, money or data.
 
+Prisma repo with a workspaceId/orgId/tenantId/teamId model: run `python3 -I scripts/tenant_scope_check.py DIR` (heuristic lead: flags id-only `where` in a fixed set of server paths; silence is NOT proof of tenant isolation; `review_checks.sh --full` runs it); detail: `references/full-map.md` domain T.
+
 Whole-app security audit (not a diff): read only `references/security-review-mode.md`; it routes the rest. Security review of a small DIFF: read only `references/appsec-verify.md` (section 0 first), not full-map.
 
 BUDGET (small DIFF): read `references/small-diff-read-budget.md` first.

@@ -9,7 +9,7 @@
 # REVIEW_OSV=1 (network; with no osv-scanner/trivy result it falls back to npm/pnpm/pip-audit, else a not-checked row); semgrep uses repo rules, else the bundled taint rules plus p/default (never `--config auto`); trivy is offline.
 # Tool hub: zizmor, bandit, gosec, grype, checkov, hadolint (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
-# `--full` scans every tracked file (base = git's empty tree) instead of a diff; gitleaks runs once over the working tree. gitleaks drops
+# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma). gitleaks runs once over the working tree. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
 # dirs and .claude/worktrees are never scanned; each heavy scanner takes the heavy lease only when it runs (waits
@@ -488,6 +488,15 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   done <<<"$([ "$hm" = batch ] && echo x || printf '%s\n' "$hf")"
 done < <(printf '%s\n' "${hub[@]}")
 hubtool=
+
+# Optional, --full only: tenant_scope_check.py (Prisma id-only where in server code); SKIPPED when the tree has no *.prisma.
+if [ "$full" = 1 ]; then
+  if [ -z "$(changed '\.prisma$')" ]; then skip tenant-scope "SKIPPED: no *.prisma"
+  elif have python3 && run_one tenant-scope python3 -I "$here/tenant_scope_check.py" "$PWD" && scan_ok tenant-scope; then
+    echo "tenant-scope: heuristic; scanned $(sed -nE 's/.*"server_files": ([0-9]+).*/\1/p' "$out" | tail -n1) server files; silence is not proof of tenant isolation" >&2
+    while IFS=$'\t' read -r p l r m; do add tenant-scope "$p" "$l" "$r" "$m"; done < <(sed -nE 's/^(.+):([0-9]+): (HIGH|MED): ([^:]+): (.*)$/\1\t\2\t\4\t\5/p' "$out" | awk -F'\t' 'BEGIN{OFS=FS}{gsub(/ /,"-",$3)}1')
+  fi
+fi
 
 lease_drop
 
