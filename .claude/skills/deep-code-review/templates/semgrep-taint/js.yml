@@ -1,5 +1,6 @@
 # Bundled generic taint rules (JavaScript/TypeScript). Sources: req/request query, body, params, cookies, headers.
 # Sinks: classic injection calls on well-known receivers. A guard `if (!ALLOW.has(x)) return|throw` before the sink suppresses it for x.
+# Also hardcoded-credential-compare (a pass/secret/token/api-key name vs a non-empty string literal, WARNING) and hardcoded-basic-auth (a base64-decoded value vs a literal, ERROR); env reads, JWT header fields (alg, typ, kid), scheme/sentinel literals (bearer, none, true, ...), single-character literals and test/fixture paths are skipped. ponytail: template literals are not matched.
 rules:
 - id: perun.js.sqli
   mode: taint
@@ -635,3 +636,59 @@ rules:
       - pattern: res.redirect($ST, $S)
       - pattern: response.redirect($S)
     - focus-metavariable: $S
+- id: perun.js.hardcoded-credential-compare
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A password, secret, token or API key is compared to a non-empty string literal. Compare against a secret read from the environment or a vault, with a constant-time check.
+  patterns:
+  - pattern-either:
+    - pattern: $X === "$L"
+    - pattern: $X == "$L"
+    - pattern: $X !== "$L"
+    - pattern: $X != "$L"
+    - pattern: '"$L" === $X'
+    - pattern: '"$L" == $X'
+    - pattern: '"$L" !== $X'
+    - pattern: '"$L" != $X'
+  - metavariable-regex:
+      metavariable: $L
+      regex: ^(?!(?i:bearer|basic|none|null|undefined|true|false)$)(?:[\W_]*[^\W_]){2}
+  - metavariable-regex:
+      metavariable: $X
+      regex: ^(?:(?:.*[._])?(?i:pass|passwd|password|passcode|secret|token|api_?key)|.*_(?i:pwd)|.*[a-z0-9](?:Pass|Passwd|Pwd|Password|Passcode|Secret|Token|ApiKey|APIKey)|.*(?:\[|\.get\()["'](?:(?:\w*[_-])?(?i:pass|passwd|password|passcode|secret|token|api_?key)|\w+[_-](?i:pwd))["'][\])])(?:\.(?:toLowerCase|toUpperCase|trim|lower|upper|strip|casefold)\(\))*$
+  - metavariable-regex:
+      metavariable: $X
+      regex: ^(?!.*(?:process\.env|import\.meta\.env|Deno\.env)\b)
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.hardcoded-basic-auth
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: A decoded Basic-auth credential is compared to a string literal, so the password is hardcoded. Check it against a hashed secret from the environment or a vault, with a constant-time compare.
+  pattern-sources:
+  - pattern-either:
+    - pattern: Buffer.from(..., "base64")
+    - pattern: Buffer.from(..., "base64").toString(...)
+    - pattern: atob(...)
+    - pattern: window.atob(...)
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $T === "$L"
+      - pattern: $T == "$L"
+      - pattern: $T !== "$L"
+      - pattern: $T != "$L"
+      - pattern: '"$L" === $T'
+      - pattern: '"$L" == $T'
+      - pattern: '"$L" !== $T'
+      - pattern: '"$L" != $T'
+    - metavariable-regex:
+        metavariable: $L
+        regex: ^(?!(?i:bearer|basic|none|null|undefined|true|false)$)(?:[\W_]*[^\W_]){2}
+    - metavariable-regex:
+        metavariable: $T
+        regex: ^(?!.*[.\["'](?:alg|typ|kid)["']?\]?$)
+    - focus-metavariable: $T
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]

@@ -3150,6 +3150,29 @@
         "Says the check only detects and never installs",
         "Says specs outside exact, ^, ~ and x-range are reported unjudged, not proved"
       ]
+    },
+    {
+      "id": "zero-checks-skip-token-head-message",
+      "prompt": "A non-draft PR has been open for an hour with zero check suites and the merge gate requires green checks. It is mergeable and the runners are idle. What do you inspect first, and what is the fix?",
+      "expected_output": "Inspect the PR head commit message: a CI-skip token anywhere in it, body included, makes GitHub skip every push and pull_request workflow for that head, and a bare prose mention is enough (for example a commit that documents the merge-train convention). The tokens are [skip ci], [ci skip], [no ci], [skip actions], [actions skip] and a skip-checks: true trailer (the trailer only as the last line, after two empty lines; matching is case-sensitive as the docs show it). Waiting, re-running and re-merging cannot help because no run is ever dispatched. Fix without a force-push: add one new commit whose message is clean, since only the head commit counts, and never quote the literal token in commit text. surface_check.py checks names the token as the likely cause and returns FAIL instead of the wait-and-recheck COULD_NOT_CHECK; a ref with no CI or path filters also leave zero runs, so if a clean commit still shows zero checks, read the workflow triggers.",
+      "expectations": [
+        "Names the head commit message as the first thing to inspect for a non-draft PR with zero check suites",
+        "States a bare mention in the message body is enough to make GitHub skip the workflows",
+        "Fixes it with one new commit with a clean message, not a re-run or a wait",
+        "Says never to quote the literal skip token in commit text",
+        "Names surface_check.py checks as the mechanism that reports the token as a terminal FAIL"
+      ]
+    },
+    {
+      "id": "banlist-scan-range-after-main-merge",
+      "prompt": "A lane merged main into its branch, then ran the banlist and secret scan over old_tip..HEAD (old_tip = the branch's previous remote tip) chained with the push in one command. It reported hits in files the lane never touched. Why, and what is the right scan scope?",
+      "expected_output": "After the merge, old_tip..HEAD contains every main commit since the branch point, so history that already landed on main trips the gate: false positives. Scope the scan to what the PR actually adds: the commits in origin/main..HEAD plus git diff origin/main...HEAD (the range review_checks.sh scans). review_checks.sh --history scans BASE..HEAD, two dots, because BASE...HEAD would also scan every BASE-only commit when the branch is behind. Run the scan and the push as separate steps: a scan chained to the push has already pushed before the hit is read.",
+      "expectations": [
+        "Explains old_tip..HEAD includes main's history once main was merged in, hence the false positives",
+        "Scopes the scan to origin/main..HEAD commits plus git diff origin/main...HEAD",
+        "Says BASE...HEAD (three dots) is wrong for a commit scan while BASE..HEAD is right",
+        "Runs the scan and the push as separate steps so the hit is read before anything is pushed"
+      ]
     }
   ]
 }

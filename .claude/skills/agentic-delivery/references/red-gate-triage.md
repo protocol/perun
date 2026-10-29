@@ -225,6 +225,10 @@ the checks appear and go green" then polls a PR whose checks will never appear �
   `UNKNOWN`-while-recomputing state `merge-operations.md` bounds to 2–4 tries), then apply
   bounded-wait-then-re-fire to the *check list*. The check list alone cannot split stalled from fresh; the
   mergeability field is what does.
+- **A non-draft PR with zero check suites: inspect the head commit message first.** A bracketed CI-skip token anywhere in
+  it (body included; a bare mention counts), or a final `skip-checks: true` trailer, makes GitHub skip every workflow for that
+  head, and a green-checks gate refuses the PR forever. Waiting and re-running cannot help; push one new commit with a clean
+  message. `surface_check.py checks` names the token as the likely cause (a ref with no CI or path filters also leave zero checks).
 - **Recover by re-triggering, not waiting.** A fresh fetch + merge-of-base + push (or a rebase) recomputes the
   merge ref; if the re-merge is conflict-free, `mergeable` flips and CI fires within seconds — the rebase /
   re-run-CI mechanics are `merge-operations.md`'s, not restated here. A true `dirty` from a real

@@ -72,7 +72,7 @@ app.get("/ok3", async (req, res) => {
 ''')
     env = dict(os.environ, HOME=d, SEMGREP_USER_HOME=d)
     p = subprocess.run(["semgrep", "--config", os.path.join(SK, "templates", "semgrep-taint"), "--metrics=off",
-                        "--json", "--quiet", d], capture_output=True, text=True, env=env)
+                        "--disable-version-check", "--json", "--quiet", d], capture_output=True, text=True, env=env)
     r = json.loads(p.stdout)
     assert not r["errors"], r["errors"]
     hits = sorted((x["path"][-4:], x["start"]["line"]) for x in r["results"])

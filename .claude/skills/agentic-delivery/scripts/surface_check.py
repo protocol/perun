@@ -59,7 +59,11 @@ Modes (stdlib only, no third-party dependency):
       Exit 1 on any FAIL; exit 2 on any PENDING / NO-RUN, no runs at all,
       a page count short of total_count, or a `gh` error; else PASS. Legacy
       commit statuses are not read: a check that reports only as a status
-      shows as NO-RUN under --require (fail closed).
+      shows as NO-RUN under --require (fail closed). When no check ran at all at
+      S (any run at S, even an unrelated one, means checks ran) and S's commit message holds a CI-skip
+      token (a bracketed `[skip ci]`-style token anywhere, or a final `skip-checks: true`
+      trailer; case-sensitive), the verdict is FAIL naming it as the likely cause: push
+      a new commit with a clean message; still no runs means path filters or no CI.
 
       --wait [--interval S] [--min-checks K]
           Poll the same per-name verdicts every S seconds (default 45) until
@@ -211,6 +215,11 @@ PROVES_DEPS = "changed dependency specs resolve inside this worktree, versions c
 PROVES_ATTESTED = "a non-author reviewer lane approved this exact head; not that the review was thorough"
 CHECK_PASS = ("success", "neutral", "skipped")
 REPO_SLUG_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+# Tokens GitHub honors in a head commit message (docs: skipping-workflow-runs, verified 2026-10-29). The docs list them lowercase and
+# do not say whether matching ignores case, so this is case-sensitive. A bracketed token counts anywhere (a bare mention too); a
+# `skip-checks: true` trailer counts only as the message's last line, after two empty lines (the docs' trailer rule).
+SKIP_TOKEN_RE = re.compile(r"(\[(?:skip ci|ci skip|no ci|skip actions|actions skip)\])|\n\n\n(?:[^\n]+\n)*(skip-checks: ?true)\s*\Z")
+NO_CHECKS = "no check ran at this sha"  # NO-RUN detail when the sha has no runs at all (an unrelated run existing changes it)
 # Tests swap this for {} so a local fixture never routes through a proxy.
 _PROXIES = None
 
@@ -726,7 +735,7 @@ def _check_states(slug, expected, required, timeout):
     for name in (required or sorted(by_name)):
         group = by_name.get(name)
         if not group:
-            states[name] = ("NO-RUN", "no run")
+            states[name] = ("NO-RUN", "no run" if by_name else NO_CHECKS)
             continue
         producers = {}
         for r in group:
@@ -742,13 +751,36 @@ def _check_states(slug, expected, required, timeout):
     return states
 
 
+def _skip_token(slug, sha, timeout):
+    """The CI-skip token in the forge's commit message for `sha`, else None. A failed or odd read is None, never a guess."""
+    rc, out, _ = _gh(["gh", "api", f"repos/{slug}/commits/{sha}"], timeout)
+    try:
+        m = SKIP_TOKEN_RE.search(json.loads(out)["commit"]["message"]) if rc == 0 else None
+    except (ValueError, KeyError, TypeError):
+        return None
+    return (m.group(1) or m.group(2)) if m else None
+
+
+def _skipped(tok):
+    return (f"no check ran and the head commit message holds {tok!r}, the likely cause: GitHub skips every push and pull_request "
+            "workflow for such a head, so waiting cannot help. Not certain: a ref with no CI, or workflow path filters, also leave "
+            "zero runs. Push a new commit with a clean message (never quote the token in it) and re-check; if there are still zero "
+            "runs, check the workflow triggers and path filters")
+
+
 def check_checks(slug, sha, required, timeout):
-    """Return (code, summary, reason) for the per-name latest check-run verdict (see `checks`)."""
+    """Return (code, summary, reason) for the per-name latest check-run verdict (see `checks`).
+
+    No check ran at all (no check-runs at the sha, with or without --require) and the head commit message holds a CI-skip token:
+    FAIL naming it as the likely cause. Any run at the sha keeps the plain verdict, an unrelated one included (a required name with
+    no run is then NO-RUN, not FAIL); an unreadable message adds nothing.
+    """
     expected = _sha(sha, "--sha")
     try:
         states = _check_states(slug, expected, required, timeout)
     except CheckError as exc:
-        return COULD_NOT_CHECK, None, str(exc)
+        tok = _skip_token(slug, expected, timeout) if str(exc).startswith("no check-runs") else None
+        return (FAIL, None, _skipped(tok)) if tok else (COULD_NOT_CHECK, None, str(exc))
     tally = {k: sorted(n for n, (st, _) in states.items() if st == k) for k in ("PASS", "FAIL", "PENDING", "NO-RUN")}
     summary = ", ".join(f"{len(v)} {k}" for k, v in tally.items())
     detail = "; ".join(f"{k}: " + ", ".join(f"{n} ({states[n][1]})" if k != "NO-RUN" else n for n in v)
@@ -756,6 +788,9 @@ def check_checks(slug, sha, required, timeout):
     if tally["FAIL"]:
         return FAIL, summary, f"{summary} — {detail}"
     if tally["PENDING"] or tally["NO-RUN"]:
+        tok = _skip_token(slug, expected, timeout) if all(d == NO_CHECKS for _, d in states.values()) else None
+        if tok:
+            return FAIL, summary, f"{summary} — {_skipped(tok)}"
         return COULD_NOT_CHECK, summary, f"{summary} — {detail}: wait or re-dispatch, then re-check"
     return PASS, summary, f"{summary} at {expected[:12]} (latest run per check name)"
 

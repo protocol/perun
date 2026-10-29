@@ -15,6 +15,9 @@ Copied as principles, not as anyone's private playbook:
 2. **Banlist split.** Committed `.banlist.txt` = generic secret shapes.
    Gitignored local file = real identifiers. Fail closed if the committed
    list is missing or malformed. Report `file:line`, never echo the match.
+   Scope a history scan to what the PR adds: `origin/main..HEAD` commits plus
+   `git diff origin/main...HEAD`, never `old_tip..HEAD` (once main is merged in it
+   re-scans main's history: false hits). Scan and push are separate steps.
 3. **A gate can be wrong about why.** Real defect fails closed; a check that could not run is `UNVERIFIED`, and a required one still blocks even when authorization exists (evidence and permission are separate decisions); on a red pipeline find the failing step, rerun a known-flaky check; revert only once the failure reproduces and is tied to the change; re-fetch state when a result surprises you.
 4. **Prove the gate can fail.** Plant, watch red, revert. Required for
    every new gate this project adds.

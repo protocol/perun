@@ -52,7 +52,7 @@ run
 grep -q -- '--config .semgrep.yml' "$SG_LOG" && ! grep -q auto "$SG_LOG" && ok "semgrep default local rules" || bad "semgrep default rules"
 
 run --history
-grep -q -- '--log-opts base\.\.\.HEAD' "$GL_LOG" && ok "gitleaks history from base only" || bad "history from base only"
+grep -q -- '--log-opts base\.\.HEAD' "$GL_LOG" && ok "gitleaks history from base only" || bad "history from base only"
 jq -e 'any(.[]; .tool=="gitleaks-history" and .rule=="hist-rule")' "$T/out" >/dev/null && ok "history finding" || bad "history finding"
 grep -q HISTVALUE "$T/out" "$T/err" && bad "history secret never printed" || ok "history secret never printed"
 : >"$GL_LOG"; run --full-history

@@ -18,6 +18,9 @@ Runs in order and stops at the first red step, printing `handback RED: <step>` a
             default shadow only warns; off skips.
   mode      each findings claim in --body-file for a review mode (security, perf, ...) has a `mode: ran (N files)` or `mode: NOT RUN (reason)`
             entry (validate_status_claims.mode_gaps), so a skipped mode never reads as 0 findings; skipped without --body-file or deep-code-review.
+  claims    a --body-file line that claims a full test pass (`run-ci-tests` / `--affected` / `Tests:` / "N tests", beside pass/passing/green/ok/X/X; "not passed" and "2 of 3 passed" are not claims)
+            needs a lkg.py receipt for SHA's tree with rc 0 whose runner blob and re-derived selection (against merge-base BASE) check out (`run-ci-tests.sh --affected` writes one per run) or SHA being
+            the last-known-good; else `unverified test claim (no receipt for this tree)` (red). No writable receipt location, an unresolvable tree or merge-base: `could not verify` is yellow (exit 3, UNVERIFIED), never red.
   spec      each --spec PATH (a .py run with python3, anything else with bash) runs 3 times in --worktree, each under --timeout; one
             failure or timeout is red (`handback RED: spec PATH`), and so is a worktree that is not clean at SHA. --spec is REQUIRED
             when any BASE..SHA commit subject matches `^fix.*flak(e|y|iness)` (case-insensitive) or the diff changes a file named by
@@ -65,6 +68,61 @@ def mode_gaps(path):
             return v.mode_gaps(f.read())
     except OSError:
         return []
+
+
+_STRONG = re.compile(r"run-ci-tests|--affected|\baffected:|\baffected (?:tests|suites?)\b|\btests?\s*:|\btests?\s+\d+\s*(?:/|of)\s*\d+", re.I)
+_PASS = r"\b(?:pass(?:ed|es|ing)?|green|ok)\b"
+_WEAK = re.compile(r"\b(?:all|\d+)\s+(?:\w+\s+)?(?:tests?|suites?)\b[\s:,(-]*(?:all\s+)?(?:" + _PASS + "|\u2705)", re.I)  # "12 tests passing", but not "added 2 tests; lint ok"
+_NEG = re.compile(r"(?:\bnot|\bnever|\bno|n['\u2019]t)\s+(?:\w+\s+)?" + _PASS, re.I)  # "not passed", "didn't pass", "did not yet pass"
+_RATIO = re.compile(r"(\d+)\s*(?:/|of)\s*(\d+)")
+
+
+def _is_claim(line):
+    """True when `line` names a test run and claims it fully passed: a pass word that no negation cancels ("pass", "passing", "green", "ok", a tick), or any X/X (or "X of X") counts like "Tests: 12/12 pass"
+    ("44/45 pass; rerun 45/45 pass" claims the rerun). A bare "N tests" names a run only when the pass word follows it ("added 2 tests; lint ok" does not).
+    A partial ratio ("2 of 3 passed") or a negated pass ("not passed") is honest prose, not a claim."""
+    line = _NEG.sub("", line)
+    if not (_STRONG.search(line) or _WEAK.search(line)):
+        return False
+    ratios = _RATIO.findall(line)
+    if ratios:
+        return any(a == b for a, b in ratios)
+    return bool(re.search(_PASS + "|\u2705", line, re.I))
+
+
+def test_claim_gaps(path, sha, cwd, base=None):
+    """(red, yellow) message lists, one message per --body-file line (path) claiming a run-ci-tests / affected / "Tests: N/N" pass that no receipt backs.
+    Backed = a passing lkg.py affected receipt for sha's tree (its runner and re-derived selection checked against merge-base(base, sha)), or sha is the last-known-good (full suite).
+    red = `unverified test claim (why)`: refused or no receipt. yellow = could not verify (no receipt location is writable here, the tree or merge-base does not resolve, or the check itself failed): never a false claim.
+    ([], []) without claims; unreadable PATH -> ([], [])."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            hits = [n for n, line in enumerate(f.read().splitlines(), 1) if _is_claim(line)]
+    except OSError:
+        return [], []
+    if not hits:
+        return [], []
+    sys.path.insert(0, HERE)
+    import lkg  # noqa: E402
+    rc, tree = run(["git", "rev-parse", f"{sha}^{{tree}}"], cwd=cwd)
+    tree = tree.strip()
+    mbrc, mb = run(["git", "merge-base", base, sha], cwd=cwd) if base else (1, "")
+    if rc or mbrc or not mb.strip():  # never fall back to the receipt's own base: a forger picks it
+        ok, why = None, "could not verify: cannot resolve the " + ("tree" if rc else f"merge-base of {base} and the head")
+    else:
+        try:
+            ok, why = lkg.affected_check(tree, cwd, mb.strip())
+        except (OSError, RuntimeError, subprocess.SubprocessError) as e:
+            ok, why = None, f"could not verify: {lkg.tilde(e)}"
+    try:
+        ok = lkg.check(sha, cwd)[0] or ok  # the full suite at this exact head backs it too
+    except (OSError, RuntimeError):  # no readable pointer (e.g. ~/.cache denied in the sandbox) just means it does not back the claim
+        pass
+    if ok:
+        return [], []
+    if ok is None:
+        return [], [f"L{n}: test claim could not be verified ({why})" for n in hits]
+    return [f"L{n}: unverified test claim ({why}) tree {tree[:12]}; rerun scripts/run-ci-tests.sh --affected on this tree or drop the claim" for n in hits], []
 
 
 def merge_command(a):
@@ -204,6 +262,12 @@ def main(argv):
     if gaps:
         print("\n".join(gaps))
         return red("mode coverage: --body-file claims findings for a mode with no ran/NOT RUN entry")
+    gaps, unknown = test_claim_gaps(a.body_file, a.sha, a.worktree, a.base) if a.body_file else ([], [])
+    if gaps:
+        print("\n".join(gaps))
+        return red("test claim: --body-file claims a run-ci-tests/affected pass with no passing receipt for this tree")
+    if unknown:
+        print("\n".join(unknown))
     if not a.spec:
         sys.path.insert(0, HERE)
         import flake_ledger as fl  # noqa: E402
@@ -240,6 +304,7 @@ def main(argv):
         failed, unverified = required_checks(a.repo, a.base, a.sha, a.timeout, strict=bool(a.merge_pr))
         if failed:
             return red("checks: a required check run failed")
+    unverified += len(unknown)  # a test claim that could not be verified is yellow, never red
     mode = os.environ.get("HANDBACK_TESTS_COUNT", "shadow")  # shadow (default) warns, enforce => exit 4, off skips
     rc, msgs = (0, "") if mode == "off" else run(["git", "log", "--format=%B", f"{a.base}..{a.sha}"], cwd=a.worktree)
     why = "cannot read commit message" if rc else tests_claim(msgs) if mode != "off" else ""

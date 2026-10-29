@@ -45,14 +45,20 @@ if [ -n "$o" ]; then printf '%s' "$HUB_JSON" >"$o"; else printf '%s\n' "$HUB_JSO
 S
   chmod +x "$T/s-$t/$t"
 done
-# Inert stubs for the older scanners keep the run offline and fast; real ones may sit on PATH.
+# Hermetic PATH: shim dir, stubs and $T/sys (symlinks to only the system binaries review_checks.sh needs), never the host
+# PATH, so a zizmor/bandit/hadolint really installed on the host cannot answer a "missing" case or run un-stubbed.
+mkdir -p "$T/sys"
+for b in bash env git grep sed head tail cat rm mkdir mktemp dirname basename python3 perl timeout gtimeout jq true sort uniq paste tr cut wc awk date cp mv ls find touch tee readlink sleep; do
+  p=$(type -P "$b") || continue; ln -s "$p" "$T/sys/$b" # type -P: path only (builtins skipped); a name this host lacks stays absent
+done
+# Inert stubs for the older scanners keep the run offline and fast.
 mkdir -p "$T/base"
 printf '#!/bin/sh\necho %s\n' "'{\"results\":[],\"errors\":[]}'" >"$T/base/semgrep"
 printf '#!/bin/sh\necho %s\n' "'{\"Results\":[]}'" >"$T/base/trivy"
 printf '#!/bin/sh\nexit 0\n' >"$T/base/gitleaks"
 chmod +x "$T/base/semgrep" "$T/base/trivy" "$T/base/gitleaks"
 nck() { jq -e --arg t "$1" 'any(.[]; .tool==$t and .rule=="not-checked" and .file=="")' "$T/out" >/dev/null && ok "$1 $2: not-checked row in JSON" || bad "$1 $2: not-checked row in JSON"; }
-run() { PATH="$T/s-$1:$T/base:$PATH" bash "$RC" --base base 2>"$T/err" >"$T/out"; }
+run() { PATH="$T/s-$1:$T/base:$T/sys" bash "$RC" --base base 2>"$T/err" >"$T/out"; }
 for t in $TOOLS; do
   rc=0; [ "$t" != zizmor ] || rc=11
   HUB_JSON=$(gjson found $t) HUB_RC=$rc run "$t"
@@ -68,7 +74,7 @@ for t in $TOOLS; do
   grep -q "not run: $t (exit 9)" "$T/err" && ok "$t crash is not clean" || bad "$t crash is not clean"
   nck "$t" crash
   grep -qE "analyzers ran:.*\b$t\b" "$T/err" && bad "$t crash listed as ran" || ok "$t crash not listed as ran"
-  PATH="$T/s-none:$T/base:$PATH" bash "$RC" --base base 2>"$T/err" >"$T/out"
+  run none
   grep -qE "^NOT CHECKED: $t \(install: .+\)" "$T/err" && ok "$t missing -> NOT CHECKED" || bad "$t missing -> NOT CHECKED"
   nck "$t" missing
   HUB_JSON=$(gjson clean $t) run "$t"; grep -qE "analyzers ran:.*\b$t\b" "$T/err" && ok "$t clean listed as ran" || bad "$t clean listed as ran"

@@ -1,0 +1,2 @@
+### Fixed
+- `scripts/test-review-checks-tool-hub.sh`: every case now runs `review_checks.sh` on a hermetic PATH (the shim dir, the inert scanner stubs and a dir of symlinks to only the system binaries it needs) instead of the host PATH. The "missing -> NOT CHECKED" and "not-checked row in JSON" cases failed on any host with a real zizmor, bandit, hadolint, gosec, grype or checkov installed; they now simulate absence, and no host tool runs un-stubbed in the other cases. Verified with the tools installed, with a stripped PATH, and with decoy tools first on PATH.

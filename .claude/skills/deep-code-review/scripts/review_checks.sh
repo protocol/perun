@@ -367,9 +367,9 @@ if have gitleaks; then
       while IFS=$'\t' read -r _ l r m; do add gitleaks "$f" "$l" "$r" "$m"; done <"$tsv"
     done <<<"$files"
   fi
-  if [ "$hist" = 1 ]; then # history: the commits in BASE...HEAD (the file list's range), not just the final file state
+  if [ "$hist" = 1 ]; then # history: the commits BASE..HEAD adds, not just the final file state (never BASE...HEAD: that also scans every BASE-only commit when HEAD is behind)
     : >"$rep"
-    lo=(--log-opts "$base...HEAD"); [ "$full" = 0 ] || lo=() # default: only the commits since BASE
+    lo=(--log-opts "$base..HEAD"); [ "$full" = 0 ] || lo=() # default: only the commits since BASE (default origin/main, never a possibly stale local main)
     if run_one gitleaks-history gitleaks detect --no-banner --exit-code 0 -f json -r "$rep" ${lo[@]+"${lo[@]}"} -s . && scan_ok gitleaks-history; then
       [ -s "$rep" ] || echo '[]' >"$rep"
       if sjson gitleaks "$rep" >"$tsv"; then while IFS=$'\t' read -r f l r m; do [[ $f =~ $XRE ]] || add gitleaks-history "$f" "$l" "$r" "$m"; done <"$tsv"
