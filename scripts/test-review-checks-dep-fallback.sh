@@ -58,6 +58,13 @@ run REVIEW_OSV=1
 r=0; has "$T/out" 'npm failed or was unreachable' || r=1; chk $r "unparseable npm output: not-checked row"
 r=0; ! grep -Eq 'analyzers ran:.* npm(,|;|$)' "$T/err" || r=1; chk $r "failed parse: npm is not listed as ran"
 
+# root-owned ~/.npm cache: the stub npm fails EPERM-style unless npm_config_cache is set and is not the user cache; the fallback points it at a per-run temp dir (npm only; pnpm keeps its own cache-dir)
+stub npm 'if [ -z "${npm_config_cache:-}" ] || [ "$npm_config_cache" = "$HOME/.npm" ]; then echo "npm error EPERM: ~/.npm cache" >&2; exit 1; fi; echo "cache=$npm_config_cache" >>"$LOGDIR/npm-cache"; echo "{\"vulnerabilities\":{\"lodash\":{\"name\":\"lodash\",\"severity\":\"high\"}}}"; exit 1'
+run -u npm_config_cache REVIEW_OSV=1
+r=0; has "$T/err" 'dependency scan: npm ran for web/package-lock.json' && has "$T/out" '"tool": "npm"' && has "$T/out" lodash && [ "$(nrows)" = 0 ] && has "$LOGDIR/npm-cache" 'cache=.*review-aud' || r=1; chk $r "npm_config_cache unset: fallback sets a per-run temp cache, so a root-owned ~/.npm cannot fail the audit"
+run REVIEW_OSV=1 npm_config_cache="$T/mycache"
+r=0; has "$LOGDIR/npm-cache" "cache=$T/mycache\$" || r=1; chk $r "npm_config_cache already exported: left as is"
+
 # osv-scanner succeeds for every lockfile: no fallback
 stub osv-scanner 'echo "{\"results\":[]}"'
 stub npm 'echo "{\"vulnerabilities\":{}}"'

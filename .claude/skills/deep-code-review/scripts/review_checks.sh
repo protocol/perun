@@ -410,6 +410,7 @@ fi
 # copy of the lockfile in an empty temp dir with the public registry and no user/global npmrc, so a repo .npmrc registry or
 # credentials are never read; pip-audit gets --no-deps --disable-pip (no resolver, no venv, no target code). The row names
 # the tool that ran; a lockfile with no dependency scan at all is a not-checked row, never silent clean.
+# npm_config_cache defaults to a per-run dir under that temp dir (a root-owned ~/.npm cache makes npm audit fail EPERM; pnpm keeps its own store/cache-dir, so this covers npm only); an exported value wins.
 # ponytail: a temp-dir copy drops workspace context (pnpm-workspace.yaml, -r includes); such audits fail into not-checked.
 if [ -n "$lock_files" ]; then
   while IFS= read -r f; do
@@ -425,7 +426,7 @@ if [ -n "$lock_files" ]; then
     else
       ad=$(mktemp -d "${TMPDIR:-/tmp}/review-aud.XXXXXX"); cp "$f" "$ad/"; [ ! -f "$(dirname "$f")/package.json" ] || cp "$(dirname "$f")/package.json" "$ad/"
       was=$ran ok=0 # stdout only (stderr dropped in the wrapper, so noise cannot break the JSON parse); ran counts only after a good parse
-      if run_one "${at[0]}" bash -c 'cd "$1" && shift && exec env npm_config_userconfig=/dev/null npm_config_globalconfig=/dev/null npm_config_registry=https://registry.npmjs.org/ "$@" 2>/dev/null </dev/null' _ "$ad" "${at[@]}" && scan_ok "${at[0]}" 1 && sjson audit "$out" >"$tsv"; then ok=1; fi
+      if run_one "${at[0]}" bash -c 'cd "$1" && shift && exec env npm_config_cache="${npm_config_cache:-$PWD/.npm-cache}" npm_config_userconfig=/dev/null npm_config_globalconfig=/dev/null npm_config_registry=https://registry.npmjs.org/ "$@" 2>/dev/null </dev/null' _ "$ad" "${at[@]}" && scan_ok "${at[0]}" 1 && sjson audit "$out" >"$tsv"; then ok=1; fi
       rm -rf "$ad"
       if [ "$ok" = 1 ]; then
         echo "review_checks: dependency scan: ${at[0]} ran for $f (fallback: osv-scanner/trivy gave no result)" >&2

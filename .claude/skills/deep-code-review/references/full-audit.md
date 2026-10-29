@@ -13,6 +13,11 @@ and sharper.
   commands; do not commit, push or bypass a hook.
 - **No dependency scan is not clean.** `review_checks.sh` falls back to `npm audit`, `pnpm audit` or `pip-audit` when
   osv-scanner/trivy cannot reach their DB; if no scan ran, the dependency row reads "not checked", never "clean".
+- **Lockfile-only dependency fix** (no `node_modules` written): `npm audit fix --package-lock-only --ignore-scripts`;
+  for an advisory that needs a range bump, `npm install <pkg>@<range> --package-lock-only --ignore-scripts`; then
+  re-run `npm audit --package-lock-only` to verify.
+- **PR body: claim "CI will run X" only if a workflow in the repo runs X** (grep `.github/workflows`); otherwise ask
+  reviewers to run the exact test command before merge.
 
 ## 1. Entry-point table
 
