@@ -28,7 +28,7 @@ reports are ID + severity + area only.
 - Every status meets the status rule (evidence surface + strongest reading; a
   UI/parity claim names the URL/branch/sha of the tree under review or is
   **invalid**) in `report-format.md`, screened by
-  `scripts/validate_status_claims.py`.
+  `scripts/validate_status_claims.py`; every findings claim for a mode (security, perf, a11y, privacy, reliability, correctness, ux) has a `mode: ran (N files)` or `mode: NOT RUN (reason)` entry.
 - Gate self-test claimed only when run.
 - Coverage ledger reconciled; fan-out units attributed (finder + lead-read);
   incomplete finder = `unverified`.

@@ -44,6 +44,9 @@ Counts: Blocker N · Critical N · High N · Medium N · Low N · Nit N
   planted defect incl. empty/whitespace config where applicable, or
   `unverified`/skipped with reason — skip caps self-test only>
 - Lint/type/scan: <results>
+- Mode coverage: <per review mode the report claims findings for (security, perf, a11y, privacy, reliability, correctness, ux): `security: ran (N files)`, N >= 1, or
+  `security: NOT RUN (reason)`; a NOT RUN tool in `review_checks.sh`'s summary stays NOT RUN. Repeat it in the BLUF and every lane
+  hand-back: a mode with no entry or NOT RUN has no findings count, never "0 new". `scripts/validate_status_claims.py` fails a claim without one>
 - Authz posture: <N entry points · anon probed N · cross-account M · untested: …>
 - Threat model: <sensitive rows N · open threats N · residual lines N, or `no new boundary (evidence: …)`, or N/A> (`threat-modeling.md`)
 - Parity coverage: <N/M screens verified · unverified: …, or N/A> (UI/parity target;

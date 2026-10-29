@@ -75,6 +75,38 @@ Modes (stdlib only, no third-party dependency):
           ALL GREEN; 1 a FAIL is terminal; 2 timed out still PENDING/NO-RUN or
           under --min-checks, or the sha/repo could not be checked at all.
 
+  deps [--repo DIR] [--base origin/main] [--timeout 120]
+      Local green is a proxy when the worktree has no node_modules of its
+      own: Node walks UP the directory tree and quietly resolves a parent
+      checkout's packages, so tsc, lint and tests can pass against a stale
+      major while CI fails (a zod 3 -> 4 bump went green locally that way).
+      When the diff from the merge-base with --base to the working tree
+      (tracked changes plus untracked files) touches a package.json or a
+      lockfile (package-lock.json, npm-shrinkwrap.json, yarn.lock,
+      pnpm-lock.yaml, bun.lock, bun.lockb), FAIL unless a node_modules
+      exists at or above each touched file INSIDE the worktree AND every
+      entry whose spec that diff added or changed (dependencies,
+      devDependencies, optionalDependencies, peerDependencies, and by name
+      overrides, resolutions, pnpm.overrides) resolves, searching up from its
+      package.json's directory, to a node_modules/<pkg>/package.json INSIDE
+      the worktree (symlinks followed). A package name that is not a valid
+      npm name FAILs. Versions are compared only for exact, ^, ~ and x-range
+      specs (^4, ~4.1, 4.x, 4); a prerelease installed version satisfies only
+      a spec naming a prerelease of the same x.y.z. Every other spec (a
+      range such as >=1 or ||, *, a tag, npm:, workspace:, file:, git, a
+      nested override) is counted and printed as "N unjudged (range/tag),
+      version not compared": it is not a version proof. A package absent
+      from node_modules is a FAIL for dependencies and devDependencies but
+      unjudged for the optional, peer and override sections. A package.json
+      whose JSON is not an object of string specs exits 2. A diff touching
+      none of those files is a PASS that says it skipped. Yarn Plug'n'Play
+      (no node_modules) always FAILs here: judge it by hand. The FAIL
+      prints the install command to copy (`npm ci`; the frozen install for
+      a yarn/pnpm/bun lockfile): this mode only reads, it never installs. A
+      lockfile-only change compares no versions (no spec changed): it
+      proves a node_modules exists inside the worktree, not that it matches
+      the lock.
+
   attested --gh-repo OWNER/NAME --pr N --board-issue M --author ID
            [--board-repo OWNER/NAME] [--timeout 30]
       The reviewed-attestation gate for a ready-flip. Read PR N's CURRENT head
@@ -140,7 +172,8 @@ usage). Exit 2 is never a pass: an unverifiable claim stays unverified.
 
 Side effects: `served` performs HTTP GETs (proxy env vars are honoured);
 `ref` runs `git fetch` against the named remote (and `git status` with
---require-clean); `checks` and `attested` run read-only `gh api` calls.
+--require-clean); `checks` and `attested` run read-only `gh api` calls;
+`deps` runs read-only git and reads package files.
 Nothing else is written.
 """
 import argparse
@@ -150,6 +183,7 @@ import io
 import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -158,6 +192,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gh_rest  # noqa: E402  (curl fallback for gh's macOS-sandbox TLS failure)
@@ -172,6 +207,7 @@ HEX_RE = re.compile(r"^[0-9a-f]+$")
 PROVES = "the surface serves this build; not that the feature works"
 PROVES_REF = "the remote branch contains this commit; not that it is deployed or works"
 PROVES_CHECKS = "each named check's latest run at this sha; not that the checks cover the change"
+PROVES_DEPS = "changed dependency specs resolve inside this worktree, versions compared only for exact, ^, ~ and x-range specs (others unjudged); not that node_modules matches the lockfile or that tests ran"
 PROVES_ATTESTED = "a non-author reviewer lane approved this exact head; not that the review was thorough"
 CHECK_PASS = ("success", "neutral", "skipped")
 REPO_SLUG_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -465,6 +501,147 @@ def check_ref(repo, remote, branch, expect, timeout=DEFAULT_GIT_TIMEOUT, require
 # --------------------------------------------------------------------------
 # checks
 # --------------------------------------------------------------------------
+DEP_FILES = ("package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb")
+DEP_SECTIONS = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
+OVERRIDES = ("overrides", "resolutions", "pnpm.overrides")
+SOFT = ("optionalDependencies", "peerDependencies", *OVERRIDES)  # may legitimately be absent from node_modules: reported unjudged, never FAIL
+INSTALL = (("pnpm-lock.yaml", "pnpm install --frozen-lockfile"), ("yarn.lock", "yarn install --frozen-lockfile"),
+           ("bun.lock", "bun install --frozen-lockfile"), ("bun.lockb", "bun install --frozen-lockfile"))
+NAME_RE = re.compile(r"(?:@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*")  # npm name: no "..", no leading "/" or "."
+SPEC_RE = re.compile(r"([\^~]?)v?(\d+)(?:\.(\d+|[xX*])(?:\.(\d+|[xX*]))?)?(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?")
+VER_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?")
+
+
+def _pre(ids):
+    """Sort key for a semver prerelease: numeric ids compare as numbers and sort before alphanumeric ones; a prefix sorts first."""
+    return [(0, int(i), "") if i.isdigit() else (1, 0, i) for i in ids.split(".")]
+
+
+def _satisfies(ver, spec):
+    """True/False for an exact, ^, ~ or x-range (4, 4.x, 4.1) spec; None when the spec is a range, tag or url this does not judge.
+
+    A prerelease version satisfies only a spec naming a prerelease of the same x.y.z (npm's rule), so 4.0.0-rc.1 never satisfies ^4.0.0.
+    """
+    m, v = SPEC_RE.fullmatch(spec.strip()), VER_RE.fullmatch(ver.strip())
+    if not m or not v:
+        return None
+    op, *nums, pre = m.groups()
+    want = []
+    for x in nums:
+        if x is None or x in "xX*":
+            break
+        want.append(int(x))
+    if any(x not in (None, "x", "X", "*") for x in nums[len(want):]) or (pre and len(want) < 3):
+        return None
+    have, hpre = tuple(map(int, v.groups()[:3])), v.group(4)
+    if not op and len(want) == 3:
+        return have == tuple(want) and hpre == pre
+    n = {"^": next((i + 1 for i, x in enumerate(want) if x), len(want)), "~": min(2, len(want)), "": len(want)}[op]
+    full = tuple(want + [0] * (3 - len(want)))
+    if hpre:
+        return bool(pre) and have == full and _pre(hpre) >= _pre(pre)
+    return have[:n] == full[:n] and have >= full
+
+
+def _specs(doc, p):
+    """{(section, key): value} for every dependency-like entry of one parsed package.json; a wrong JSON shape raises CheckError."""
+    if not isinstance(doc, dict):
+        raise CheckError(f"{p} is not a JSON object")
+    pnpm = doc.get("pnpm")
+    if pnpm is not None and not isinstance(pnpm, dict):
+        raise CheckError(f"{p} pnpm is not an object")
+    out = {}
+    for sec in (*DEP_SECTIONS, *OVERRIDES):
+        d = (pnpm or {}).get("overrides") if sec == "pnpm.overrides" else doc.get(sec)
+        if d is not None and not isinstance(d, dict):
+            raise CheckError(f"{p} {sec} is not an object")
+        out.update({(sec, k): v for k, v in (d or {}).items()})
+    return out
+
+
+def check_deps(repo, base, timeout=DEFAULT_GIT_TIMEOUT):
+    """Judge that a lane diff touching dependency files has its deps installed INSIDE the worktree (see `deps` in the module docstring)."""
+    def git(*a):
+        r = _git(repo, *a, timeout=timeout)
+        if r.returncode:
+            raise CheckError(f"git {a[0]} failed: {r.stderr.strip()[:200]}")
+        return r.stdout
+    root = Path(git("rev-parse", "--show-toplevel").strip()).resolve()
+    repo = str(root)  # untracked listing and diff paths are then root-relative whatever --repo was
+    mb = git("merge-base", base, "HEAD").strip()
+    names = git("diff", "-z", "--name-only", "--no-relative", mb).split("\0") + git("ls-files", "-z", "-o", "--exclude-standard").split("\0")
+    touched = sorted({p for p in names if os.path.basename(p) in DEP_FILES})
+    if not touched:
+        return PASS, None, f"skip: diff against {base} touches no package.json or lockfile"
+    fix = next((c for f, c in INSTALL if (root / f).exists()), "npm ci")
+    todo = f"copy-paste: cd {shlex.quote(str(root))} && {fix}"
+
+    def chain(p):  # the file's directory up to and including the worktree root
+        out = [(root / p).parent]
+        while out[-1] != root:
+            out.append(out[-1].parent)
+        return out
+    missing = [p for p in touched if (root / p).is_file() and not any((d / "node_modules").is_dir() for d in chain(p))]
+    if missing:
+        return FAIL, None, f"{', '.join(missing)} changed but the worktree has no node_modules of its own at or above it, so Node resolves a parent checkout's packages; {todo}"
+    bad, ok, unj, n = [], 0, 0, 0
+    for p in touched:
+        if os.path.basename(p) != "package.json" or not (root / p).is_file():
+            continue
+        try:
+            new = _specs(json.loads((root / p).read_text()), p)
+        except (OSError, ValueError) as exc:
+            raise CheckError(f"{p} unreadable: {exc}")
+        old = _git(repo, "show", f"{mb}:{p}", timeout=timeout)
+        try:
+            old = _specs(json.loads(old.stdout), p) if old.returncode == 0 else {}
+        except (ValueError, CheckError):
+            old = {}
+        for (sec, key), spec in new.items():
+            if old.get((sec, key)) == spec:
+                continue
+            n += 1
+            if isinstance(spec, dict) and sec in OVERRIDES:  # nested override: not compared
+                unj += 1
+                continue
+            if not isinstance(spec, str):
+                raise CheckError(f"{p} {sec}.{key} is not a string spec")
+            pkg = re.sub(r"(?<=.)@[^/]*$", "", key) if sec in OVERRIDES else key  # "name@range" override keys: by name
+            if not NAME_RE.fullmatch(pkg):
+                if sec in OVERRIDES:  # a path-like key names no single package
+                    unj += 1
+                else:
+                    bad.append(f"{p} {sec} name {key!r} is not a valid npm package name")
+                continue
+            d = (root / p).parent
+            f = next((q for q in (x / "node_modules" / pkg / "package.json" for x in (d, *d.parents)) if q.is_file()), None)
+            try:
+                ver = json.loads(f.read_text())["version"] if f else None
+            except (OSError, ValueError, KeyError, TypeError):
+                ver = None
+            if not isinstance(ver, str):
+                ver = None
+            if f is None or ver is None:
+                if sec in SOFT:
+                    unj += 1
+                else:
+                    bad.append(f"{pkg} {spec} not installed (or unreadable) from {p}")
+            elif root not in f.resolve().parents:
+                bad.append(f"{pkg} {spec} resolves OUTSIDE the worktree at {f} ({ver})")
+            elif (s := _satisfies(ver, spec)) is False:
+                bad.append(f"{pkg} wants {spec}, installed {ver}")
+            elif s is None:
+                unj += 1
+            else:
+                ok += 1
+    if bad:
+        return FAIL, None, "; ".join(bad) + f"; {todo}"
+    if not n:
+        return PASS, None, f"{', '.join(touched)} changed, worktree has its own node_modules; no dependency spec changed, so no version was compared (a lockfile-only bump is unverified; {todo})"
+    tail = f"; {unj} unjudged (range/tag), version not compared" if unj else ""
+    return PASS, None, f"{ok} changed spec(s) resolve inside the worktree at a version satisfying the spec{tail}"
+
+
 def _gh_default(args, timeout):
     """Run one `gh` call without a shell; return (rc, stdout, stderr). A hang past `timeout` s is rc 124."""
     try:
@@ -773,6 +950,10 @@ def _parser():
     c.add_argument("--interval", type=float, default=45.0, help="--wait: seconds between polls")
     c.add_argument("--min-checks", type=int, default=1,
                    help="--wait: require at least this many checks observed before ALL GREEN")
+    dp = sub.add_parser("deps", parents=[common], help="fail a green when a dependency diff resolves packages outside the worktree")
+    dp.add_argument("--repo", default=".")
+    dp.add_argument("--base", default="origin/main", help="ref the lane branched from")
+    dp.add_argument("--timeout", type=float, default=DEFAULT_GIT_TIMEOUT, help="seconds per git call")
     a = sub.add_parser("attested", parents=[common], help="gate a ready-flip on a non-author REVIEW of the exact head")
     a.add_argument("--gh-repo", required=True, help="OWNER/NAME holding the PR")
     a.add_argument("--pr", type=int, required=True)
@@ -799,6 +980,8 @@ def main(argv=None):
         surface, proves = redact_url(args.url), PROVES
     elif args.mode == "ref":
         surface, proves = f"{redact_url(args.remote)}/{args.branch} in {args.repo}", PROVES_REF
+    elif args.mode == "deps":
+        surface, proves = f"dependencies resolved from {args.repo}", PROVES_DEPS
     elif args.mode == "attested":
         surface, proves = f"PR #{args.pr} of {args.gh_repo} + board #{args.board_issue}", PROVES_ATTESTED
     else:
@@ -811,6 +994,8 @@ def main(argv=None):
         elif args.mode == "ref":
             code, observed, reason = check_ref(args.repo, args.remote, args.branch, args.expect_sha, args.timeout,
                                                args.require_clean)
+        elif args.mode == "deps":
+            code, observed, reason = check_deps(args.repo, args.base, args.timeout)
         elif waiting:
             code, label, reason = wait_for_checks(args.gh_repo, args.sha, args.require, args.interval,
                                                   args.timeout, args.min_checks)

@@ -62,7 +62,7 @@ echo "rules: []" >"$REVIEW_SEMGREP_CONFIG"
 : >"$SG_LOG"; : >"$GL_LOG"; : >"$OSV_LOG"; : >"$TOOL_LOG"
 run() { PATH="$T/stub:$PATH" REVIEW_OSV=1 bash "$RC" --base base "$@" 2>"$T/err" >"$T/out"; }
 errhas() { grep -qF -- "$1" "$T/err"; }
-findings() { jq --arg t "$1" '[.[] | select(.tool==$t)] | length' "$T/out"; }
+findings() { jq --arg t "$1" '[.[] | select(.tool==$t and .rule!="not-checked")] | length' "$T/out"; }  # a skipped tool's not-checked row is not a finding
 
 # Dash filenames: bash -n and jq would read them as options; every tool gets ./ or --.
 run && ok "exit 0" || bad "exit 0"
@@ -93,7 +93,7 @@ rm -f "$T/gl-first"
 
 # semgrep `errors` => partial-scan line, findings still reported.
 SG_OUT='{"results":[{"check_id":"r","path":"a.txt","start":{"line":1},"extra":{"message":"m"}}],"errors":[{"message":"boom"}]}' run
-errhas 'not run: semgrep (partial scan' && [ "$(findings semgrep)" = 1 ] && ok "semgrep errors surfaced" || bad "semgrep errors surfaced"
+errhas 'partial: semgrep ran' && [ "$(findings semgrep)" = 1 ] && ok "semgrep errors surfaced" || bad "semgrep errors surfaced"
 
 # Crash codes surfaced; osv exit 1 (vulnerabilities found) is not a crash.
 SG_EXIT=3 run && ok "crash exit 0" || bad "crash exit 0"

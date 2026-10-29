@@ -3138,6 +3138,18 @@
         "Names scripts/promote-by.tsv",
         "Allows keeping shadow only with a recorded decision and a new date"
       ]
+    },
+    {
+      "id": "worktree-deps-resolve-inside",
+      "prompt": "A lane bumped a dependency in package.json inside a fresh worktree with no node_modules. Local tsc, lint and tests are green but CI fails on lint. Why, and how do we stop the false green?",
+      "expected_output": "Node walks up the directory tree and resolved the parent checkout's older package, so the local run never saw the bump. Run scripts/surface_check.py deps --base origin/main: it fails when a package.json or lockfile diff has no node_modules inside the worktree or a changed package resolves outside it or off an exact, ^, ~ or x-range spec, and prints the npm ci to run; any other spec (a range, tag or workspace: spec) is reported as unjudged, version not compared, so it is not a version proof; the lane runs that install itself, the check never does.",
+      "expectations": [
+        "Names the parent-directory node_modules resolution as the cause",
+        "Uses surface_check.py deps and treats FAIL as no green claim",
+        "Requires an install inside the worktree (npm ci) before re-running",
+        "Says the check only detects and never installs",
+        "Says specs outside exact, ^, ~ and x-range are reported unjudged, not proved"
+      ]
     }
   ]
 }

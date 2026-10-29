@@ -495,7 +495,10 @@ makes the claim checkable, it does not replace the forge run.
   serving process's own build id — none found, a payload timestamp, a redirect, or a non-200 exits 2;
   `ref --branch B --expect-sha S` fetches and checks reachability on the branch the reviewer uses, never a stale
   local tree (`--require-clean`: an edit a rejected hook left uncommitted fails); `checks` reads each check's own
-  latest run, never a rollup (#1066). Its `--json` is the `Verify:` evidence, bounded by its `proves` field
+  latest run, never a rollup (#1066); `deps --base origin/main` refuses a green when a `package.json`/lockfile diff has
+  a changed package resolving outside the worktree (Node walks up to a parent's `node_modules`) or off an exact,
+  `^`, `~` or x-range spec, and prints the `npm ci` to run; any other spec is reported "N unjudged (range/tag),
+  version not compared", not proved. Its `--json` is the `Verify:` evidence, bounded by its `proves` field
   (never "the feature works").
 - **A link handed to a human is probed at the exact URL, on rendered content, never on HTTP status alone.**
   `surface_check.py served` above proves the running build's *id*; it does not prove the *route* a human is

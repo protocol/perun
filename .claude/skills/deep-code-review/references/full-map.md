@@ -186,7 +186,7 @@ applicable domains. Language footguns:
 | Q | Privacy, compliance, licensing | `domain-q.md`, `privacy-compliance.md` (code layer), `privacy-by-design.md` (pre-code product artifacts) |
 | R | i18n, encoding, localization | `domain-r.md`, `i18n-l10n.md` (bidi/RTL, Unicode normalization, CLDR plurals) |
 | S | Branches, merges, open-work triage | `domain-s.md`, `branch-and-merge-hygiene.md`; `merge-operations.md` (landing, acting on triage) |
-| T | Multi-tenancy & isolation | `domain-t.md` (when one deployment serves multiple tenants) |
+| T | Multi-tenancy & isolation | `domain-t.md` (multi-tenant; Prisma: `tenant_scope_check`) |
 | W | Workflows, jobs & scheduling | `domain-w.md` (when the target runs cron, queues, or multi-step workflows) |
 
 Also: `app-pentest.md` (live app), `supply-chain-check.md` (advisories, Actions), `dynamic-probe.md`.

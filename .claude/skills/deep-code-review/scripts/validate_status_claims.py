@@ -34,6 +34,15 @@ coverage fraction — a sample generalized to the whole product. It requires a
 parity-context word (so "all tests pass" is spared) and fires even on a ⚠️-downgraded
 row; the discriminator is the coverage fraction ("1/6", "1 of 6"), not the marker.
 
+A fifth detector flags a findings claim for a review mode ("security 0 new", "perf: 2 findings",
+"no a11y issues", "privacy clean") with no coverage entry for that mode anywhere in the file. An
+entry is exactly `mode: ran (N files)` with N >= 1 or `mode: NOT RUN (reason)` (case-insensitive,
+several joined by `|` or `,`). A mode that did not run has no findings count: a claim beside a
+NOT RUN entry, a bare `ran`, `ran (0 files)` or a reasonless NOT RUN is flagged too, so a skipped
+mode never reads as zero findings. Modes: security, perf (performance), a11y (accessibility),
+privacy, reliability, correctness, ux. The claim match is wording-based, so an unlisted phrasing
+slips past (under-flag); `tests` is not a mode here because "tests: 12/12" is a count, not a review.
+
 It is an aid to human judgement, not a proof. It can over-flag a prose line that
 merely contains both a status word and a conditional; a flagged line is a lead to
 re-check — downgrade to partial/blocked with the condition as the headline, or
@@ -48,7 +57,7 @@ no listed pattern matched. Known false negatives:
     ("no partial coverage") can silence a genuine hedged-green on that line;
   * the token lists are fixed — a completion or hedge word not listed slips past.
 
-Exit 0 = no candidate lines (none of the four detectors fired), 1 = candidate(s)
+Exit 0 = no candidate lines (none of the five detectors fired), 1 = candidate(s)
 found, 2 = usage/unreadable.
 Stdlib only. Reports line numbers + the tokens matched, not full line content.
 """
@@ -138,6 +147,66 @@ def _has_fraction(line: str) -> bool:
     return any(int(m.group(1)) <= int(m.group(2)) for m in _FRACTION_RE.finditer(line))
 
 
+# Mode coverage (fifth detector): a findings claim for a review mode needs a coverage entry for it.
+MODES = ("security", "perf", "performance", "a11y", "accessibility", "privacy", "reliability", "correctness", "ux")
+ALIAS = {"performance": "perf", "accessibility": "a11y"}
+PLACEHOLDER = {"reason", "x", "n/a", "none"}  # a template word is not a reason
+_M = "|".join(MODES)
+_MODE = r"\b(?:" + _M + r")\b(?![\w-])"
+# an entry: `mode: ran (12 files[, 0 findings])` or `mode: NOT RUN (reason)`; a table row `| mode | ran (3 files) |` too
+_COV = re.compile(r"\b(" + _M + r")\s*[:|]\s*(?:ran\s*\(\s*([\d,]+)\s+files?\b[^)]*\)|not run\s*\(([^)]*)\))", re.IGNORECASE)
+_COV_HEAD = re.compile(r"\b(" + _M + r")\s*[:|]\s*(?:ran|not run)\b", re.IGNORECASE)
+# a count or negation word; a bare count that is a file/line total ("12 files") is not a findings count
+_TOK = r"(?:no|nothing|none|zero|clean|ok|pass(?:ed)?|clear|all|\d[\d,]*\b(?![:/-]|\.\d|\s*(?:files?|lines?|%)))"
+_NOUN = r"\s*(?:findings?|issues?|concerns?|gaps?|defects?|vulns?|vulnerabilities|regressions?|problems?|risks?|errors?|bugs?)\b"
+# a claim starts at the line, a bullet, or after `|` `:` `;` `,` `.` (so "we ran no security scan" is prose, not a claim)
+_START = r"(?:^|[|:;,.>])\s*(?:[-+]\s+|\d+[.)]\s+)?"
+_BACK = re.compile(_START + _TOK + r"\b[^|:;,.]{0,12}$", re.IGNORECASE)  # "no new security ...", "0 new security ..."
+_FWD = re.compile(r"\b" + _TOK + r"\b", re.IGNORECASE)
+
+
+def mode_gaps(text: str) -> list[str]:
+    """Messages for findings claims about a review mode that no `ran (N files)` coverage entry backs. [] when none."""
+    fence = False
+    lines = []
+    for line in text.splitlines():  # fenced code is quoted text, not the report's own claim; keep line numbers
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+            line = ""
+        lines.append("" if fence else re.sub(r"[*_]", "", line))
+    cov: dict[str, set[str]] = {}
+    out: list[str] = []
+    for n, line in enumerate(lines, start=1):
+        good = set()
+        for m in _COV.finditer(line):
+            mode = ALIAS.get(m[1].lower(), m[1].lower())
+            if m[2] is not None and int(m[2].replace(",", "") or 0) > 0:
+                cov.setdefault(mode, set()).add("ran"); good.add(m.start())
+            elif m[3] is not None and m[3].strip() and m[3].strip().lower() not in PLACEHOLDER:
+                cov.setdefault(mode, set()).add("not run"); good.add(m.start())
+        for m in _COV_HEAD.finditer(line):
+            if m.start() not in good:
+                out.append(f"L{n}: malformed coverage entry for mode '{m[1].lower()}' - use \"{m[1].lower()}: ran (N files)\" "
+                           f"with N >= 1, or \"{m[1].lower()}: NOT RUN (reason)\" (a real reason, not a placeholder).")
+    for n, line in enumerate(lines, start=1):
+        bare = _COV.sub(" ", line)  # an entry's own reason text is not a claim
+        for m in re.finditer(_MODE, bare, re.IGNORECASE):
+            tail = re.split(_MODE + r"|[.;](?:\s|$)", bare[m.end():], maxsplit=1, flags=re.IGNORECASE)[0]
+            at_start = re.search(_START + r"$", bare[:m.start()])
+            fwd = _FWD.search(tail)  # the token starts within ~28 chars of the mode word
+            back = _BACK.search(bare[:m.start()]) and re.match(_NOUN, tail, re.IGNORECASE)
+            if not ((at_start and fwd and fwd.start() <= 28) or back):
+                continue
+            mode = ALIAS.get(m[0].lower(), m[0].lower())
+            if "not run" in cov.get(mode, ()):
+                out.append(f"L{n}: findings claim for mode '{mode}' but its coverage entry says NOT RUN - a mode that did not run "
+                           "has no findings count; report NOT RUN, never 0.")
+            elif "ran" not in cov.get(mode, ()):
+                out.append(f"L{n}: findings claim for mode '{mode}' with no coverage entry - add \"{mode}: ran (N files)\" or "
+                           f"\"{mode}: NOT RUN (reason)\"; a skipped mode is not zero findings.")
+    return out
+
+
 def die(code: int, msg: str) -> NoReturn:
     print(f"validate_status_claims: {msg}", file=sys.stderr)
     raise SystemExit(code)
@@ -210,7 +279,8 @@ def main(argv: list[str]) -> int:
         if hedge:
             flagged.append((n, pos, hedge))
 
-    if flagged or surfaceless or uninspected or overscoped:
+    modegaps = mode_gaps(text)
+    if flagged or surfaceless or uninspected or overscoped or modegaps:
         for n, pos, hedge in flagged:
             print(
                 f"L{n}: green status {pos} carries a hedge {hedge} — "
@@ -238,11 +308,14 @@ def main(argv: list[str]) -> int:
                 "correspondence table; a claim over the product from a sample is a High "
                 "communication defect (#200)."
             )
-        total = len(flagged) + len(surfaceless) + len(uninspected) + len(overscoped)
+        for msg in modegaps:
+            print(msg)
+        total = len(flagged) + len(surfaceless) + len(uninspected) + len(overscoped) + len(modegaps)
         print(
             f"validate_status_claims: {total} line(s) to re-check "
             f"({len(flagged)} hedged-green, {len(surfaceless)} surfaceless parity, "
-            f"{len(uninspected)} uninspected screenshot, {len(overscoped)} overscoped parity)"
+            f"{len(uninspected)} uninspected screenshot, {len(overscoped)} overscoped parity, "
+            f"{len(modegaps)} mode coverage)"
         )
         return 1
     print("validate_status_claims: ok")
