@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # supply_chain_check.sh [--online] [--fail-on critical|high|moderate|low] [--scorecard owner/repo] [--allow-skip] [DIR]
-# Supply-chain gate that reuses OSS tools; each runs only if installed, else it is reported SKIPPED.
+# Supply-chain gate that reuses OSS tools; each runs only if installed, else it is reported SKIPPED. zizmor/actionlint print "n/a" (never SKIPPED/INCOMPLETE) when DIR has no .github/workflows/*.y*ml.
 #   osv-scanner  lockfile advisories. Opt-in: needs --online (or SUPPLY_CHAIN_ONLINE=1) because it queries
 #                api.osv.dev. Prints counts by severity + fixed versions; fails on >= --fail-on (default high).
 #   zizmor, actionlint  static checks on DIR/.github/workflows (local, no network).
@@ -171,10 +171,9 @@ fi
 # --- CI hardening ---
 wf="$dir/.github/workflows"
 for t in zizmor actionlint; do
-  if [ ! -d "$wf" ]; then skip $t "no .github/workflows"
+  if [ -z "$(find "$wf" -maxdepth 1 -name '*.y*ml' 2>/dev/null | head -n1)" ]; then echo "n/a $t: no workflow files, not applicable"
   elif ! have $t; then skip $t "not installed"
   elif [ $t = zizmor ] && ! zizmor "$wf"; then echo "FAIL zizmor"; rc=1
-  elif [ $t = actionlint ] && [ -z "$(find "$wf" -maxdepth 1 -name '*.y*ml' | head -n1)" ]; then echo "note actionlint: no workflow files, not applicable"
   elif [ $t = actionlint ] && ! (cd "$dir" && find .github/workflows -maxdepth 1 -name '*.y*ml' -exec actionlint {} +); then echo "FAIL actionlint"; rc=1
   else echo "ok $t"; fi
 done

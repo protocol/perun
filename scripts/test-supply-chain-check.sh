@@ -15,7 +15,7 @@ expect() { local n=$1 w=$2 p=$3 o r; shift 4; o=$("$@" 2>&1) && r=0 || r=$?
 mkdir -p "$T/bin" "$T/repo/.github/workflows" "$T/empty" "$T/sys" "$T/nopy" "$T/nowf/.github/workflows"
 : >"$T/repo/.github/workflows/ci.yml"
 for t in cat grep python3 dirname env; do ln -s "$(command -v $t)" "$T/sys/$t"; done # PATH without the fake tools
-for t in cat grep dirname env bash; do ln -s "$(command -v $t)" "$T/nopy/$t"; done       # ... and without python3
+for t in cat grep dirname env bash find; do ln -s "$(command -v $t)" "$T/nopy/$t"; done       # ... and without python3
 for t in zizmor actionlint scorecard; do
   printf '#!/usr/bin/env bash\necho "%s $*" >>"$FAKE_LOG"\n[ "${FAKE_FAIL:-}" = %s ] && exit 1\nexit 0\n' "$t" "$t" >"$T/bin/$t"
 done
@@ -54,8 +54,8 @@ expect "--fail-on without value is usage error" 2 'needs a value' -- env PATH="$
 expect "--scorecard without value is usage error" 2 'needs a value' -- env PATH="$P" bash "$SC" --scorecard
 expect "--scorecard rejects a non owner/repo shape" 2 'bad --scorecard' -- env PATH="$P" bash "$SC" --scorecard 'a b/c;x'
 expect "missing tools reported skipped, exit 3" 3 'SKIPPED actionlint: not installed' -- env PATH="$T/sys" /bin/bash "$SC" --online --scorecard o/r "$T/repo"
-expect "no workflows dir: ci tools skipped" 3 'SKIPPED zizmor: no .github/workflows' -- env PATH="$P" bash "$SC" "$T/empty"
-expect "no workflow files: not-applicable note, no INCOMPLETE" 0 'actionlint: no workflow files, not applicable' -- env PATH="$P" bash "$SC" --allow-skip "$T/nowf"
+expect "no workflows dir: ci tools n/a, not skipped" 3 'n/a zizmor: no workflow files' -- env PATH="$P" bash "$SC" "$T/empty"
+expect "no workflow files: not-applicable note, no INCOMPLETE" 0 'n/a actionlint: no workflow files, not applicable' -- env PATH="$P" bash "$SC" --allow-skip "$T/nowf"
 bash "$SC" "$T/nowf" 2>&1 | grep -q '^INCOMPLETE:.*actionlint' && bad "no workflows counted as skipped" || ok "no workflows not counted as skipped"
 expect "zizmor failure beats INCOMPLETE" 1 'FAIL zizmor' -- env PATH="$P" FAKE_FAIL=zizmor bash "$SC" "$T/repo"
 expect "actionlint failure fails the gate" 1 'FAIL actionlint' -- env PATH="$P" FAKE_FAIL=actionlint bash "$SC" "$T/repo"

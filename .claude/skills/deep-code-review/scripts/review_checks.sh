@@ -16,7 +16,9 @@
 # REVIEW_LEASE_WAIT s, default 120, else skipped) and releases it afterwards.
 # A summary "N findings; N files excluded; analyzers ran: ...; skipped (not installed): ..." goes to stderr. `--tests` also runs the command
 # declared in env REVIEW_TEST_CMD (opt-in; it executes project code). Never installs anything. A missing tool
-# or a timeout prints "review_checks: not run: <tool> (<why>)" on stderr and is not a failure.
+# or a timeout prints "review_checks: not run: <tool> (<why>)" on stderr and is not a failure. A semgrep scan that emitted findings but
+# reported errors prints "review_checks: partial: semgrep ran ..." instead (never "not run"). A semgrep run with errors and zero results is "not run". tsc also resolves the repo-local node_modules/.bin/tsc (cwd or git toplevel only), run only when REVIEW_TEST_CMD is set.
+# All temp files live in one private mktemp -d dir per run, removed on exit.
 # Each tool is timeboxed (default 60s). Exit 0 even with findings; 2 on usage/unresolvable base.
 set -euo pipefail
 
@@ -40,10 +42,11 @@ if [ "$wr" = 1 ]; then base=$(git hash-object -t tree /dev/null); ref=HEAD # who
 else ref=$base; git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "review_checks: unresolvable base '$base'" >&2; exit 2; }; fi
 cd "$(git rev-parse --show-toplevel)"
 
-raw=$(mktemp "${TMPDIR:-/tmp}/review-raw.XXXXXX") out=$(mktemp "${TMPDIR:-/tmp}/review-out.XXXXXX") tsv=$(mktemp "${TMPDIR:-/tmp}/review-tsv.XXXXXX")
-sgh=$(mktemp -d "${TMPDIR:-/tmp}/review-sg.XXXXXX") # semgrep HOME: the macOS agent sandbox denies writes to ~/.semgrep
-lf=$(mktemp "${TMPDIR:-/tmp}/review-lf.XXXXXX") rep=$(mktemp "${TMPDIR:-/tmp}/review-gl.XXXXXX") gla=$(mktemp "${TMPDIR:-/tmp}/review-gla.XXXXXX") gli=$(mktemp "${TMPDIR:-/tmp}/review-gli.XXXXXX") # mktemp files are mode 600
-trap 'rm -rf "$raw" "$out" "$tsv" "$sgh" "$lf" "$rep" "$gla" "$gli"' EXIT INT TERM HUP
+# One private per-run dir (mode 700) holds every temp file, so concurrent runs sharing $TMPDIR never touch each other's files.
+td=$(mktemp -d "${TMPDIR:-/tmp}/review.XXXXXX") && trap 'rm -rf "$td"' EXIT INT TERM HUP || exit 2
+raw=$td/raw out=$td/out tsv=$td/tsv lf=$td/lf rep=$td/rep gla=$td/gla gli=$td/gli
+sgh=$(mktemp -d "$td/sg.XXXXXX") # semgrep HOME: the macOS agent sandbox denies writes to ~/.semgrep
+: >"$raw"; : >"$out"; : >"$tsv"; : >"$lf"; : >"$rep"; : >"$gla"; : >"$gli"
 # Vendored, build and worktree dirs are never scanned (a changed file under them is dropped here, for every tool).
 XRE='(^|/)(node_modules|\.claude/worktrees|vendor|dist|build|\.git|\.venv|venv|target|__pycache__)/'
 if [ "$wr" = 1 ]; then all=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$base" HEAD); else all=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$base"...HEAD); fi
@@ -155,8 +158,18 @@ if [ -n "$js_files" ] && have node; then
   done <<<"$js_files"
 fi
 
-if [ -n "$(changed '\.(ts|tsx)$')" ] && [ -f tsconfig.json ] && have tsc; then
-  if run_one tsc tsc --noEmit -p tsconfig.json && scan_ok tsc 1 2; then
+# tsc: PATH first, else $PWD or the git toplevel's node_modules/.bin/tsc (never a parent above it: that is an unrelated binary).
+# A repo-local tsc is project code (plugins, tsconfig), same class as REVIEW_TEST_CMD: it runs only when REVIEW_TEST_CMD is set.
+tscbin=tsc
+if ! command -v tsc >/dev/null; then
+  top=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null)
+  for d in "$PWD" "$top"; do [ -n "$d" ] && [ -x "$d/node_modules/.bin/tsc" ] && { tscbin=$d/node_modules/.bin/tsc; break; }; done
+  if [ "$tscbin" != tsc ] && [ -z "${REVIEW_TEST_CMD:-}" ] && [ -n "$(changed '\.(ts|tsx)$')" ] && [ -f tsconfig.json ]; then
+    skip tsc "repo-local tsc not run (set REVIEW_TEST_CMD to run it: it executes project code)"; tscbin=
+  fi
+fi
+if [ -n "$(changed '\.(ts|tsx)$')" ] && [ -f tsconfig.json ] && [ -n "$tscbin" ] && have "$tscbin"; then
+  if run_one tsc "$tscbin" --noEmit -p tsconfig.json && scan_ok tsc 1 2; then
     sed -nE 's/^(.*)\(([0-9]+),[0-9]+\): error (TS[0-9]+): (.*)$/\1\t\2\t\3\t\4/p' "$out" |
       while IFS=$'\t' read -r f l r m; do add tsc "$f" "$l" "$r" "$m"; done
   fi
@@ -307,7 +320,7 @@ if have gitleaks; then
     [ "${skipped:-0}" -eq 0 ] || echo "review_checks: gitleaks template skipped $skipped changed file(s) under .history/, fixtures/, testdata/ or generated registry JSON" >&2
   fi
   if [ "$wr" = 1 ]; then # one batched scan of the working tree; only tracked, non-vendored files are reported
-    : >"$rep"; glw=$(mktemp "${TMPDIR:-/tmp}/review-glw.XXXXXX") # extend the config; skip vendored trees at scan time
+    : >"$rep"; glw=$td/glw # extend the config; skip vendored trees at scan time
     printf '[extend]\npath = "%s"\n[allowlist]\npaths = [\x27\x27\x27(^|/)(node_modules|vendor|\\.claude/worktrees)/\x27\x27\x27]\n' "${glcfg[1]:-$PWD/.gitleaks.toml}" >"$glw"
     if run_one gitleaks gitleaks detect --config "$glw" --gitleaks-ignore-path "$gli" --no-git --no-banner --exit-code 0 -f json -r "$rep" -s . && scan_ok gitleaks; then
       [ -s "$rep" ] || echo '[]' >"$rep"
@@ -315,7 +328,6 @@ if have gitleaks; then
         while IFS=$'\t' read -r f l r m; do f=${f#./}; printf '%s\n' "$files" | grep -qxF -- "$f" && add gitleaks "$f" "$l" "$r" "$m"; done <"$tsv"
       else skip gitleaks "unparseable report"; add gitleaks "" 0 not-checked "gitleaks report unparseable; secrets were not scanned"; fi
     else add gitleaks "" 0 not-checked "gitleaks run failed or timed out; secrets were not scanned"; fi
-    rm -f "$glw"
   else
     while IFS= read -r f; do
       [ -f "$f" ] || continue
@@ -366,7 +378,7 @@ if [ ! -e "$sgc" ]; then
   if [ -z "${REVIEW_SEMGREP_CONFIG:-}" ] && [ "$sgc" = "$here/../templates/semgrep-taint" ]; then skip semgrep "bundled rules missing at $sgc (reinstall the skill)"
   else skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"; fi
 elif have semgrep; then
-  sg=()
+  sg=() sgwas=$ran sgok=0
   while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
   # One call per 200 files: typically a single run, but bounded argv and a timeout that is not shared by everything.
   for ((i = 0; i < ${#sg[@]}; i += 200)); do
@@ -376,9 +388,12 @@ elif have semgrep; then
     fi
     scan_ok semgrep || continue
     e=0; sjson semgrep "$out" >"$tsv" || e=$?
-    if [ "$e" = 0 ] || [ "$e" = 3 ]; then
+    if [ "$e" = 3 ] && [ ! -s "$tsv" ]; then # errors and zero results: nothing usable was scanned, not a clean or partial run
+      [ "$sgok" = 1 ] || ran=$sgwas; skip semgrep "scan errored, no findings"
+    elif [ "$e" = 0 ] || [ "$e" = 3 ]; then
+      sgok=1
       while IFS=$'\t' read -r p l r m; do add semgrep "$p" "$l" "$r" "$m"; done <"$tsv"
-      [ "$e" = 0 ] || skip semgrep "partial scan: semgrep reported errors"
+      [ "$e" = 0 ] || echo "review_checks: partial: semgrep ran but reported errors (coverage incomplete; findings above are real)" >&2
     else skip semgrep "unparseable output"; fi
   done
 fi
@@ -424,7 +439,7 @@ if [ -n "$lock_files" ]; then
     elif [ "${REVIEW_OSV:-}" != 1 ] && [ -z "${REVIEW_OSV_DB_DIR:-}" ]; then add dep-scan "$f" 0 not-checked "no dependency scan ran; set REVIEW_OSV=1 to scan (osv-scanner, else ${at[0]})"
     elif ! command -v "${at[0]}" >/dev/null; then miss "${at[0]}" "install it: dependency-scan fallback for $f"; add dep-scan "$f" 0 not-checked "no dependency scan ran: osv-scanner/trivy gave no result and ${at[0]} is not installed"
     else
-      ad=$(mktemp -d "${TMPDIR:-/tmp}/review-aud.XXXXXX"); cp "$f" "$ad/"; [ ! -f "$(dirname "$f")/package.json" ] || cp "$(dirname "$f")/package.json" "$ad/"
+      ad=$(mktemp -d "$td/review-aud.XXXXXX"); cp "$f" "$ad/"; [ ! -f "$(dirname "$f")/package.json" ] || cp "$(dirname "$f")/package.json" "$ad/"
       was=$ran ok=0 # stdout only (stderr dropped in the wrapper, so noise cannot break the JSON parse); ran counts only after a good parse
       if run_one "${at[0]}" bash -c 'cd "$1" && shift && exec env npm_config_cache="${npm_config_cache:-$PWD/.npm-cache}" npm_config_userconfig=/dev/null npm_config_globalconfig=/dev/null npm_config_registry=https://registry.npmjs.org/ "$@" 2>/dev/null </dev/null' _ "$ad" "${at[@]}" && scan_ok "${at[0]}" 1 && sjson audit "$out" >"$tsv"; then ok=1; fi
       rm -rf "$ad"

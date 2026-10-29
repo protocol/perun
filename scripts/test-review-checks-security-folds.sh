@@ -93,7 +93,7 @@ rm -f "$T/gl-first"
 
 # semgrep `errors` => partial-scan line, findings still reported.
 SG_OUT='{"results":[{"check_id":"r","path":"a.txt","start":{"line":1},"extra":{"message":"m"}}],"errors":[{"message":"boom"}]}' run
-errhas 'not run: semgrep (partial scan' && [ "$(findings semgrep)" = 1 ] && ok "semgrep errors surfaced" || bad "semgrep errors surfaced"
+errhas 'partial: semgrep ran' && [ "$(findings semgrep)" = 1 ] && ok "semgrep errors surfaced" || bad "semgrep errors surfaced"
 
 # Crash codes surfaced; osv exit 1 (vulnerabilities found) is not a crash.
 SG_EXIT=3 run && ok "crash exit 0" || bad "crash exit 0"
