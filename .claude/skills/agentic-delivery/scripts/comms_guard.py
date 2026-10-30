@@ -34,11 +34,22 @@ GH = re.compile(r"\bgh\s+(pr|issue|release)\s+(create|edit|comment)\b")
 REST = re.compile(r"(?:\bcurl\b|\bgh\s+api\b)[\s\S]{0,600}?\brepos/[^/\s'\"]+/[^/\s'\"]+/(pulls|issues)((?:/\d+)?(?:/(?:comments|reviews))?)(?=[\s'\"?]|$)")
 HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)(\w+)\1[ \t]*\n(.*?)\n[ \t]*\2[ \t]*(?=\n|\)|\"|'|$)", re.S)
 VALUE = re.compile(r"\"((?:[^\"\\]|\\.)*)\"|'([^']*)'|(\S+)", re.S)
+QUOTED = re.compile(r"\\.|'[^']*'|\"(?:[^\"\\]|\\.)*\"", re.S)  # an escape, or a complete quoted string
+
+
+def _plain(tail, keep=None):
+    """`tail` with each heredoc body and each quoted string blanked to NULs, the same length so offsets line up; `keep(string)` true
+    spares a quoted string. Stray quotes in a heredoc body pair with nothing, and an unclosed quote hides nothing."""
+    plain = list(tail)
+    for h in HEREDOC.finditer(tail):
+        plain[h.start(3):h.end(3)] = "\0" * len(h.group(3))
+    return QUOTED.sub(lambda m: m.group() if m.group()[0] == "\\" or (keep and keep(m.group())) else "\0" * len(m.group()), "".join(plain))
 
 
 def _flags(tail, names):
-    """Yield the raw text after each occurrence of a flag in `names` (regex alternation), `--flag value` or `--flag=value`."""
-    for m in re.finditer(rf"(?:^|\s)(?:{names})(?:=|[ \t]+)", tail):
+    """Yield the raw text after each occurrence of a flag in `names` (regex alternation), `--flag value` or `--flag=value`.
+    A flag-like word inside a quoted string (the title "Add -b flag") or a heredoc body is not a flag."""
+    for m in re.finditer(rf"(?:^|\s)(?:{names})(?:=|[ \t]+)", _plain(tail)):
         yield tail[m.end():]
 
 
@@ -82,21 +93,30 @@ def _gh_body(tail, noun, cwd):
     return None
 
 
-def _rest_body(tail, cwd):
-    for rest in _flags(tail, r"-f|-F|--field|--raw-field"):  # gh api -f body=TEXT, -f 'body=TEXT', -F body=@FILE
-        q = re.match(r"([\"'])body=", rest)
-        if q:
-            return _value(q.group(1) + rest[q.end():], cwd)
-        if rest.startswith("body="):
-            return _file(rest[5:], cwd, tail) if rest[5:].startswith("@") else _value(rest[5:], cwd)
+def _rest_field(tail, cwd, key, literal=False):
+    """The text of one field (`body`, `title`) a REST write sends, or None if it is absent or unreadable. gh sends `-f`/`--raw-field`
+    text as typed (`@jane` is a mention) and reads `-F`/`--field` `@FILE`; `literal` gives an unreadable `@FILE` as typed, not an error."""
+    for names, at_file in ((r"-f|--raw-field", False), (r"-F|--field", True)):  # gh api -f body=TEXT, -f 'body=TEXT', -F body=@FILE
+        for rest in _flags(tail, names):
+            q = re.match(rf"([\"']){key}=", rest)
+            if q or rest.startswith(key + "="):
+                val = _value(q.group(1) + rest[q.end():] if q else rest[len(key) + 1:], cwd)  # one shell word: more arguments may follow
+                if not (at_file and val and val.startswith("@")):
+                    return val
+                try:
+                    return _file(val, cwd, tail)
+                except (OSError, ValueError):
+                    if literal:
+                        return val
+                    raise
     for rest in _flags(tail, r"-d|--data|--data-raw|--data-binary"):  # curl -d '{"body": ...}' or -d @FILE
         raw = _value(rest, cwd)
         raw = _file(raw, cwd, tail) if raw and (raw.startswith("@") or raw == "-") else raw
-        return json.loads(raw).get("body") if raw else None
+        return json.loads(raw).get(key) if raw else None
     for rest in _flags(tail, r"--input"):  # gh api --input FILE
         name = _value(rest, cwd)
         raw = _file(name, cwd, tail) if name else None
-        return json.loads(raw).get("body") if raw else None
+        return json.loads(raw).get(key) if raw else None
     return None
 
 
@@ -116,7 +136,7 @@ def extract(tool_name, tool_input, cwd=""):
             body = _gh_body(cmd[m.start():], noun, cwd)
         elif (m := REST.search(cmd)):
             kind = "pr" if m.group(1) == "pulls" and not m.group(2).endswith(("comments", "reviews")) else "message"
-            body = _rest_body(cmd[m.start():], cwd)
+            body = _rest_field(cmd[m.start():], cwd, "body")
         else:
             return None
     except (OSError, ValueError, AttributeError):  # unreadable file, non-JSON data: nothing to lint

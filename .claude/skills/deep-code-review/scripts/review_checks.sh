@@ -3,6 +3,7 @@
 # changed since REF (default origin/main, compared as REF...HEAD) and print findings as a JSON array on
 # stdout: [{"file","line","rule","message","text","tool"}]. `text` ("rule: message") is the key
 # scripts/score_review.py matches on. Findings are LEADS: verify each against the code before reporting.
+# Diff mode (not --full or --history) adds "new": true|false to every row: its file+line is on a line REF...HEAD adds (rename-aware; line 0 and file-level rows are false). No row is ever dropped.
 #
 # Tools (linters, gitleaks, trufflehog, osv-scanner, semgrep, trivy): see references/method-situational.md. Each runs only when
 # installed and only on matching changed files. Secrets are redacted and never printed; trufflehog runs offline (`--no-verification --no-update`) over the changed files (every tracked file under --full),
@@ -846,7 +847,10 @@ if [ "$tests" = 1 ]; then
 fi
 
 r=; for t in $ran; do case " $failed " in *" ${t%%(*} "*) ;; *) r+=" $t" ;; esac; done; ran=$r
-REVIEW_STATE="$(git rev-parse --git-common-dir)/review-checks-last.json" HERE="$here" python3 - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" "$wired" "$gap" "$wiredx" <<'PY'
+# "new" flags, diff mode only (a --full or --history row may sit on a line no diff added). Flags are pinned so user git config cannot change the parse:
+# --inter-hunk-context=0 and --no-color keep hunk counts and headers exact, the prefixes fix the "+++ b/" name, and -a gives a text file with a NUL byte (invisible-chars rows) hunks instead of "Binary files differ".
+ud=; if [ "$wr" = 0 ] && [ "$hist" = 0 ]; then ud=$td/udiff; git -c core.quotePath=false diff -U0 --inter-hunk-context=0 -M -a --no-color --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/ "$base"...HEAD >"$ud" || ud=; fi
+REVIEW_STATE="$(git rev-parse --git-common-dir)/review-checks-last.json" HERE="$here" python3 - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" "$wired" "$gap" "$wiredx" "$ud" <<'PY'
 import json, os, re, shlex, sys, time
 rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1], encoding="utf-8", errors="replace")]
 rows = [t for i, t in enumerate(rows) if t[3:4] != ["not-checked"] or t not in rows[:i]]  # a tool failing on N files is one not-checked row
@@ -882,6 +886,17 @@ for t in data:
     k = key(t)
     if not k or len(groups[k]) <= 3: out.append(row(t))
     elif k not in done: done.add(k); out.append(summ(k, groups[k]))
+ud = sys.argv[11]  # `git diff -U0` of BASE...HEAD; "" under --full/--history (no "new" key)
+if ud:
+    adds, cur, inh = {}, None, False  # adds: file -> [(first line, count)] of added lines; cur: the file whose hunks are being read; inh: past its first hunk header, where a "+++ " line is content
+    for l in open(ud, encoding="utf-8", errors="replace"):
+        if l.startswith("diff --git "): cur, inh = None, False
+        elif l.startswith("@@ "):
+            inh = True; m = re.match(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@", l)
+            if cur and m: adds[cur].append((int(m[1]), 1 if m[2] is None else int(m[2])))  # "+N" is one line, "+N,0" none
+        elif not inh and l.startswith("+++ b/"): cur = l[6:].rstrip("\n").split("\t")[0]; adds[cur] = []  # git adds a tab after a name with a space; a quoted name or /dev/null leaves cur unset
+    for r in out:  # file-level rows (line 0, no file) are never new; every other path is read relative to the repo root, as the tools print it ("./x", absolute)
+        r["new"] = r["line"] > 0 and r["file"] not in ("", "-") and any(a <= r["line"] < a + c for a, c in adds.get(os.path.relpath(r["file"]), ()))
 print(json.dumps(out, indent=1))
 n = len(out)
 dg, w1 = sys.argv[5].split(), sys.argv[6].split()  # lease full: "1 worker" only for tools whose single-worker flag ran; "nice 19" only when nice worked
@@ -889,6 +904,7 @@ def lab(t):
     b = t.split("(")[0]
     return t + (f" (degraded: lease full{', nice 19' if sys.argv[7] == '1' else ''}{', 1 worker' if b in w1 else ''})" if b in dg else "")
 print(f"review_checks: {n} findings; {sys.argv[4]} files excluded; analyzers ran: {', '.join(lab(t) for t in sys.argv[2].split()) or 'none'}; skipped (not installed): {', '.join(sys.argv[3].split()) or 'none'}", file=sys.stderr)
+if ud: print(f"review_checks: {sum(r['new'] for r in out)} of {n} rows are on lines this diff adds", file=sys.stderr)
 # "ran X / wired Y": wired = scanners with work in this run (their files matched); fixable = wired and either missing or running without a cache a provision warms.
 # argv[10] (shellcheck, ruff/pyflakes, gitleaks-history) is wired too, but provision_tools.sh cannot install it, so it is never fixable.
 wired = sys.argv[8].split()

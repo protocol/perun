@@ -26,6 +26,8 @@
 #   tests-wired --allowlist <file> <root>
 #                                        every scripts/test_*.py and scripts/test-*.sh is run by CI (named in scripts/ci-tests.d/*.sh, .github/workflows/*.yml or a test they run) or listed in <file> with a reason; a stale row FAILS
 #   rails [--audit] <root>               every guard/hook script (name ends _guard/_gate/_cap/_hook, or a hook template wires it) carries `# rail: owner=..., why=..., review=YYYY-MM-DD`; a missing or empty field or a bad date FAILS; --audit lists rails past their review date (never removes one)
+#   guard-registry --registry <file> [--report [--days N]] <root>
+#                                        every hook a shipped template runs or install.sh writes under .githooks/, and every subcommand here, has one row (owner role, reason, review-by date) in <file>; a missing row, an empty reason, a bad date or a row for a guard that is gone FAILS; --report (read-only) lists rows past review-by and guards with no fire in N days, `unknown` where there is no fire log
 #
 set -euo pipefail
 
@@ -83,6 +85,7 @@ Usage:
   ci-gates.sh mustload --config <file> <root>
   ci-gates.sh tests-wired --allowlist <file> <root>
   ci-gates.sh rails [--audit] <root>
+  ci-gates.sh guard-registry --registry <file> [--report [--days N]] <root>
 EOF
 }
 
@@ -1738,6 +1741,130 @@ if audit:
 PY
 }
 
+# ---------------------------------------------------------------------------
+# guard-registry — every installed hook and every gate has one row in one TSV (#1592).
+#
+# <file> (scripts/guard-registry.tsv) holds `<id><TAB><owner role><TAB><reason><TAB><review-by YYYY-MM-DD>[<TAB><fire log>]`; `#` comments and
+# blank lines are ignored. A guard is a hook script a shipped .claude/skills/*/templates/*.settings.json runs (id `hook:<skill>/<script>`),
+# a git hook install.sh writes under .githooks/ (id `hook:.githooks/<name>`), or a subcommand of this file (id `gate:<name>`). The gate FAILS on a
+# guard with no row, an empty reason, an owner that is not a lowercase role slug (so an email, a "First Last" or an @handle is refused; a bare
+# username is not caught), a review-by that is not a real calendar day, a duplicate row, or a row for a guard that no longer exists (delete
+# it), so the table stays exactly the set that ships. A review-by in the past does NOT fail the gate (that would break every PR on one day).
+# `--report [--days N]` is the read-only owner view (default N=30; run it on the machine whose logs matter): rows past review-by, and guards
+# whose fire log (optional 5th column: a path, `~` and $VARs expanded, one `YYYY-MM-DD ...` line per fire) holds no line dated in the last N
+# days. A guard with no fire log, or whose log is missing or holds no dated line, is `unknown`, never "zero fires". It opens the registry and
+# the logs for reading only and never edits or deletes a row; the owner confirms (bumps review-by) or retires.
+# It also FAILS on a `cmd_*` function with no dispatcher line of the shape `name) cmd_x "$@" ;;`, so a new gate cannot dodge the scan.
+# Limit: a script no template wires (a CI-only gate script, a hook the owner wires by hand) is not a guard here; `rails` covers headers.
+# The regression test is scripts/test-guard-registry.sh.
+# ---------------------------------------------------------------------------
+cmd_guard_registry() {
+  local reg="" root="" report=0 days=30
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --registry) [ "$#" -ge 2 ] || die "guard-registry: --registry needs a value"; reg="$2"; shift 2 ;;
+      --report) report=1; shift ;;
+      --days) [ "$#" -ge 2 ] || die "guard-registry: --days needs a value"; days="$2"; shift 2 ;;
+      -*) die "guard-registry: unknown option: $1" ;;
+      *) [ -z "$root" ] || die "guard-registry: unexpected extra argument: $1"; root="$1"; shift ;;
+    esac
+  done
+  [ -n "$reg" ] && [ -n "$root" ] || die "guard-registry: --registry <file> and <root> are required"
+  [[ "$days" =~ ^[1-9][0-9]{0,4}$ ]] || die "guard-registry: --days wants a whole number from 1 to 99999, got: $days"
+  [ -f "$reg" ] || die "guard-registry: registry not found: $reg (fail closed)"
+  [ -d "$root/.claude/skills" ] || die "guard-registry: $root/.claude/skills not found (fail closed)"
+  [ -f "$root/scripts/ci-gates.sh" ] || die "guard-registry: $root/scripts/ci-gates.sh not found (fail closed)"
+  [ -f "$root/install.sh" ] || die "guard-registry: $root/install.sh not found (fail closed)"
+  python3 - "$reg" "$root" "$report" "$days" <<'PY'
+import datetime, glob, json, os, re, sys
+
+reg, root, report, days = sys.argv[1], sys.argv[2], sys.argv[3] == "1", int(sys.argv[4])
+today = datetime.date.today()
+
+
+def day(s):
+    """A real YYYY-MM-DD calendar day as a date, else None."""
+    try:
+        return datetime.date(*map(int, s.split("-"))) if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", s) else None
+    except ValueError:
+        return None
+
+
+skills, wired, guards = root + "/.claude/skills", set(), set()
+pat = glob.escape(skills)  # a root with [ or * in its path must still glob
+for p in glob.glob(pat + "/*/templates/*.settings.json"):  # basenames a shipped hook template runs (the rule `rails` uses)
+    for group in json.load(open(p, encoding="utf-8")).get("hooks", {}).values():
+        for entry in group:
+            for hook in entry.get("hooks", []):
+                wired.update(re.findall(r"[\w.-]+\.(?:py|sh)\b", hook.get("command", "")))
+for name in wired:
+    guards.update(f"hook:{f.split('/')[-3]}/{name}" for f in glob.glob(f"{pat}/*/scripts/{name}"))
+guards.update(f"hook:.githooks/{n}" for n in re.findall(r'write_gate_file\s+"[^"]*"\s+"[^"]*/\.githooks/([\w-]+)"', open(root + "/install.sh", encoding="utf-8").read()))
+gsrc = open(root + "/scripts/ci-gates.sh", encoding="utf-8").read()
+gates = re.findall(r'^\s+([a-z][a-z0-9-]*)\) cmd_\w+ "\$@" ;;\s*$', gsrc, re.M)
+guards.update(f"gate:{n}" for n in gates)
+
+rows, bad = {}, []
+if len(gates) != len(re.findall(r"^cmd_\w+\(\)", gsrc, re.M)):  # a dispatcher line in another shape would let a gate skip its row
+    bad.append('scripts/ci-gates.sh: a cmd_ function has no dispatcher line like `name) cmd_x "$@" ;;` (write it that way so the scan sees it)')
+for no, line in enumerate(open(reg, encoding="utf-8"), 1):
+    if not line.strip() or line.lstrip().startswith("#"):
+        continue
+    f = [c.strip() for c in line.rstrip("\n").split("\t")]
+    if not f[0]:
+        bad.append(f"line {no}: row has no id")
+    elif f[0] in rows:
+        bad.append(f"{f[0]}: duplicate row (line {no})")
+    elif len(f) > 5:
+        bad.append(f"{f[0]}: {len(f)} columns, want id, owner, reason, review-by and an optional fire log")
+    else:
+        gid, owner, why, review, log = (f + [""] * 5)[:5]
+        due = day(review)
+        if not re.fullmatch(r"[a-z][a-z0-9-]*", owner):
+            bad.append(f"{gid}: owner must be a lowercase role slug (a role, never a person), got {owner!a}")
+        if not why:
+            bad.append(f"{gid}: reason must not be empty")
+        if due is None:
+            bad.append(f"{gid}: review-by {review!a} is not a real YYYY-MM-DD date")
+        rows[gid] = (owner, why, due, log)
+bad += [f"{g} is a guard with no row: add `{g}<TAB>owner role<TAB>reason<TAB>review-by` to {reg}" for g in sorted(guards - set(rows))]
+bad += [f"{g}: row names no guard that ships (delete the row)" for g in sorted(set(rows) - guards)]
+if not guards:
+    bad.append("no hook or gate found (fail closed)")
+for b in bad:
+    print("guard-registry: FAIL " + b)
+if bad:
+    sys.exit(1)
+hooks = sum(g.startswith("hook:") for g in guards)
+print(f"guard-registry: ok ({hooks} hooks, {len(guards) - hooks} gates)")
+if report:
+    cutoff = today - datetime.timedelta(days=days)
+
+    def fires(path):
+        """(fires since the cutoff, newest dated line) of a readable log that holds a dated line, else None = unknown (an emptied or rotated log too)."""
+        try:
+            with open(os.path.expanduser(os.path.expandvars(path)), encoding="utf-8", errors="replace") as fh:
+                dated = [d for d in (day(l[:10]) for l in fh.read().splitlines()) if d]
+        except OSError:
+            return None
+        return (sum(d >= cutoff for d in dated), max(dated)) if dated else None
+
+    seen = {g: fires(r[3]) if r[3] else None for g, r in rows.items()}
+    late = [g for g in sorted(rows) if rows[g][2] < today]
+    quiet = [g for g in sorted(rows) if seen[g] is not None and seen[g][0] == 0]
+    print(f"guard-registry: report {today}, fire window {days} days")
+    print(f"guard-registry: {len(late)} of {len(rows)} guards past review-by")
+    for g in late:
+        n = "unknown" if seen[g] is None else f"{seen[g][0]} in {days}d"
+        print(f"  {g}  owner={rows[g][0]}  review-by={rows[g][2]}  fires={n}  why={rows[g][1]}")
+    print(f"guard-registry: {len(quiet)} guards with a fire log fired 0 times in the last {days} days")
+    for g in quiet:
+        print(f"  {g}  owner={rows[g][0]}  log={rows[g][3]}  newest={seen[g][1]}")
+    print(f"guard-registry: fires unknown for {sum(v is None for v in seen.values())} of {len(rows)} guards (no fire log registered, or the log is missing or holds no dated line)")
+    print("  owner: confirm each listed guard (bump review-by) or retire it; this report never deletes or edits a row")
+PY
+}
+
 [ "$#" -gt 0 ] || { usage; exit 2; }
 subcmd="$1"; shift
 case "$subcmd" in
@@ -1754,6 +1881,7 @@ case "$subcmd" in
   rules) cmd_rules "$@" ;;
   tests-wired) cmd_tests_wired "$@" ;;
   rails) cmd_rails "$@" ;;
+  guard-registry) cmd_guard_registry "$@" ;;
   -h|--help) usage; exit 0 ;;
   *) printf 'ci-gates: unknown subcommand: %s\n' "$subcmd" >&2; usage; exit 2 ;;
 esac

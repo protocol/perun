@@ -1,0 +1,51 @@
+# scripts/guard-registry.tsv: one row for every hook a shipped template runs or install.sh writes, and every `scripts/ci-gates.sh` gate (#1592). A script no template wires (a CI-only gate script, a hand-installed hook) has no row; `ci-gates.sh rails` covers its `# rail:` header.
+# `ci-gates.sh guard-registry --registry scripts/guard-registry.tsv .` fails on a guard with no row, a row with an empty owner, reason or date,
+# and a row for a guard that no longer exists: add the row when you add the guard, delete it when you remove the guard.
+# FORMAT: `<id><TAB><owner role><TAB><reason><TAB><review-by YYYY-MM-DD>[<TAB><fire log>]`. Blank lines and lines starting with '#' are ignored.
+#   id: `hook:<skill>/<script>` (a script a shipped templates/*.settings.json runs), `hook:.githooks/<name>` (a git hook install.sh writes) or `gate:<name>` (a ci-gates.sh subcommand).
+#   owner role: a lowercase slug naming a skill or role, never a person. reason: one clause on what the guard stops. review-by: the day the owner next confirms it still earns its friction.
+#   fire log: optional path (`~` and $VARs expanded) of a log holding one `YYYY-MM-DD ...` line per fire; without one, or when the log is missing, emptied or holds no dated line, the report says "unknown", never "zero fires". The reply_cap row names the default location only: REPLY_CAP_LOG or XDG_CACHE_HOME moves the real log, and the report then reads the wrong file.
+# `ci-gates.sh guard-registry --report [--days N] --registry scripts/guard-registry.tsv .` lists the rows past review-by and the logged guards with no fire in N days (default 30).
+# It is read-only: it never edits or deletes a row. To confirm a guard, bump its review-by; to retire one, remove the guard and its row together.
+# The `hook:<skill>/<script>` rows repeat the owner, reason and review date of the script's own `# rail:` header (scripts/test-guard-registry.sh keeps the two equal).
+hook:.githooks/pre-push	deep-code-review	rerun the fast lint and unit tier before every push (opt in with core.hooksPath)	2027-01-30
+hook:agentic-delivery/bypass_guard.py	agentic-delivery	deny a git hook bypass: fix the failing hook instead	2027-01-30
+hook:agentic-delivery/ceo_altitude_guard.py	agentic-delivery	keep the main session delegating instead of hand-editing source	2027-01-30
+hook:agentic-delivery/comms_guard.py	agentic-delivery	warn when a PR or tracker write misses its artifact template	2027-01-30
+hook:agentic-delivery/context_nudge.py	agentic-delivery	nudge a handoff at a huge context since long sessions re-read it every turn	2027-01-30
+hook:agentic-delivery/decision_gate.py	agentic-delivery	ask the owner only after a recorded evil-twin and council pass	2027-01-30
+hook:agentic-delivery/destructive_guard.py	agentic-delivery	deny destructive host commands before they run (best effort; the OS sandbox is the boundary)	2027-01-30
+hook:agentic-delivery/finding_guard.py	agentic-delivery	deny gh issue create when the same finding is already filed	2027-01-30
+hook:agentic-delivery/flow_alarm.py	agentic-delivery	stop starting PRs while ready ones wait unmerged; alarm on a stalled flow	2027-01-30
+hook:agentic-delivery/freeze_hook.py	agentic-delivery	deny git push and gh pr merge while a freeze is on	2027-01-30
+hook:agentic-delivery/handback_cap.py	agentic-delivery	cap a subagent handback and audit each lane's prose	2027-01-30
+hook:agentic-delivery/handoff_inject.py	agentic-delivery	re-inject a short handoff after a compact so the plan survives	2027-01-30
+hook:agentic-delivery/heavy_gate.py	agentic-delivery	defer a heavy local command while the machine is busy	2027-01-30
+hook:agentic-delivery/landing_watchdog.py	agentic-delivery	flag a merge pipeline that landed nothing while green PRs wait	2027-01-30
+hook:agentic-delivery/lane_cap.py	agentic-delivery	tell a lane to checkpoint near its tool-call cap	2027-01-30
+hook:agentic-delivery/lane_resume_nudge.py	agentic-delivery	advise resuming an earlier same-domain lane over a costly new one	2027-01-30
+hook:agentic-delivery/outcome_claim_guard.py	agentic-delivery	no fixed/faster/done claim on a delivery outcome without a measurement	2027-01-30
+hook:agentic-delivery/perun_auto_update.py	agentic-delivery	keep an installed Perun current with no manual step	2027-01-30
+hook:agentic-delivery/pipe_mask_guard.py	agentic-delivery	flag a gate or push piped to tail/head/grep that masks its exit status	2027-01-30
+hook:agentic-delivery/privacy_guard.py	agentic-delivery	deny a GitHub write whose title or body matches the repo banlist except into a sibling repo of the origin owner and deny a write into Perun that names the session repository	2027-01-30
+hook:agentic-delivery/repeat_poll_guard.py	agentic-delivery	nudge when the same command runs more than 3 times in a session	2027-01-30
+hook:agentic-delivery/reply_cap.py	agentic-delivery	owner rule: chat replies max 3 lines and 500 chars	2027-01-30	~/.cache/perun/reply-cap.log
+hook:agentic-delivery/session_brief.py	agentic-delivery	surface at most 3 lines of fleet hygiene at session start	2027-01-30
+hook:agentic-delivery/stall_guard.py	agentic-delivery	nudge when an autonomous turn ends stopped or waiting with work still open	2027-01-30
+hook:agentic-delivery/subagent_brief_lint.py	agentic-delivery	stop a subagent brief that names a tool the lane does not have	2027-01-30
+hook:agentic-delivery/subagent_start_inject.py	agentic-delivery	inject the house standing defaults into every new subagent	2027-01-30
+hook:agentic-delivery/terse_reply_check.py	agentic-delivery	opt-in reply budget stated up front (never forces a rewrite)	2027-01-30
+gate:privacy	deep-code-review	no banned name, identifier or secret pattern in a file the repo ships	2027-01-30
+gate:routing	deep-code-review	every references file is routed from its SKILL.md and no SKILL.md outgrows the byte cap	2027-01-30
+gate:version	deep-code-review	VERSION is exact core semver and the first changelog heading announces it	2027-01-30
+gate:install	deep-code-review	the real installer lands each mode and the vendored docs are real, not placeholders	2027-01-30
+gate:enumeration	deep-code-review	every shipped skill appears in all five hand-maintained lists	2027-01-30
+gate:size	deep-code-review	every shipped SKILL.md and reference stays within its frozen byte budget	2027-01-30
+gate:size-ratchet	deep-code-review	a size budget rises only with a size-budget-raise marker	2027-01-30
+gate:fragments	deep-code-review	a changelog fragment carries the exact size-budget-raise marker and no release heading	2027-01-30
+gate:binaries	deep-code-review	no tracked image, media, archive or build-output file	2027-01-30
+gate:mustload	deep-code-review	the always-paid MUST-LOAD cost per archetype stays within its frozen ceiling	2027-01-30
+gate:rules	deep-code-review	a MUST, NEVER or ALWAYS rule names a mechanism or says advisory, and the unenforced baseline only shrinks	2027-01-30
+gate:tests-wired	agentic-delivery	every test script is run by CI or listed with a reason	2027-01-30
+gate:rails	agentic-delivery	every guard and hook script carries its owner, reason and review date in its header	2027-01-30
+gate:guard-registry	agentic-delivery	every installed hook and every gate has one row with an owner role, a reason and a review-by date	2027-01-30
