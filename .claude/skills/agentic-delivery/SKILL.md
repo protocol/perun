@@ -24,6 +24,7 @@ Gated-delivery **pattern**, not a runtime or standing swarm. Does not replace `d
 | Verify or relay a result; slow pipeline | `verification-handback.md`; `pipeline-optimizer.md` |
 | Long session, compaction, new session, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate, before a context-heavy step, before handback |
 | New machine or fleet | `operating-discipline.md` |
+| Audit a repo's GitHub settings (branch protection, Actions token, deploy keys, webhooks) | run `python3 scripts/repo_settings_audit.py OWNER/NAME... [--repos-file FILE] [--json]`: read-only, a 403 or 404 is `not checked`; admin token for the full set |
 | PR state; hand off; changelog | `scripts/pr_state.py <n>`; `scripts/land_ready.py` (open PRs ready to land, or why not); `scripts/review_status.py --sha S --red N` (post `perun/review`); `scripts/premise_check.py <n>...`; `scripts/ci-gates.sh fragments` |
 | Cost cut, lane cap; "enforced" claim, CI cost | `cost-quality-guardrails.md`; `host-enforcement.md` |
 | Fan-out size, host probe | `fanout-host-sizing.md`, `fast-agentic-delivery.md` |

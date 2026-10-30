@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for ci_cost_advisor.py, the `ci` policy key, `ci_cost_lint.py --advise` and the pre-push re-push notice.
-Offline: the github.com visibility probe is stubbed, every repo is a throwaway temp dir."""
+Offline: the github.com visibility probe is stubbed, every repo is a throwaway temp dir that `tmp()` registers and
+`tearDownModule` removes (NoTempLeak proves a full run leaves none behind)."""
 import contextlib
 import io
 import json
@@ -122,12 +123,26 @@ def git(cwd, *a):
                           capture_output=True, text=True, check=True).stdout
 
 
+_TMP = []
+
+
+def tmp():
+    """A fresh temp dir that tearDownModule removes: every dir this file makes comes from here, none is left to pile up."""
+    _TMP.append(Path(tempfile.mkdtemp(prefix="ci-advisor-test-")))
+    return _TMP[-1]
+
+
+def tearDownModule():
+    for d in _TMP:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def make_repo(files, use_git=False):
     """A temp repo whose .github/workflows holds {name: text}; committed when use_git."""
-    d = Path(tempfile.mkdtemp(prefix="ci-advisor-test-"))
+    d = tmp()
     (d / ".github/workflows").mkdir(parents=True)
     for name, text in files.items():
-        (d / ".github/workflows" / name).write_text(text)
+        (d / ".github/workflows" / name).write_text(text, encoding="utf-8")
     if use_git:
         (d / "README").write_text("x")
         git(d, "init", "-q", "-b", "main")
@@ -231,7 +246,7 @@ class Triggers(unittest.TestCase):
 
     def test_hostile_filter_patterns_cannot_hang_the_matcher(self):
         start = time.time()
-        for pat in ("**a" * 12 + "b", "a+" * 40 + "b", "[a-z]+" * 40 + "!", "*a" * 30 + "b"):  # regex backtracking bait
+        for pat in ("**a" * 12 + "b", "a+" * 40 + "b", "[a-z]+" * 40 + "!", "*a" * 30 + "b", "**/" * 30 + "b"):  # regex backtracking bait
             self.assertFalse(A._glob(pat, "a" * 400), pat)
         self.assertLess(time.time() - start, 2)
         self.assertTrue(A._glob("[a-z]+" * 3, "abcdef"))
@@ -243,6 +258,16 @@ class Triggers(unittest.TestCase):
             self.assertEqual(A._glob(pat, s), want, (pat, s))
         self.assertFalse(A._select(["src/**", "!src/docs/**"], "src/docs/x.md"))
         self.assertTrue(A._select(["src/**", "!src/docs/**", "src/docs/keep.md"], "src/docs/keep.md"))
+
+    def test_a_segment_leading_double_star_slash_also_matches_no_directory(self):  # the cheat sheet: `**/README.md` matches `README.md`
+        for pat, s, want in [("**/Dockerfile", "Dockerfile", True), ("**/Dockerfile", "docker/Dockerfile", True), ("**/Dockerfile", "a/b/Dockerfile", True),
+                             ("**/Dockerfile", "MyDockerfile", False), ("**/Dockerfile", "Dockerfile.dev", False),
+                             ("docs/**/*.md", "docs/README.md", True), ("docs/**/*.md", "docs/a/b/x.md", True), ("docs/**/*.md", "src/README.md", False),
+                             ("**/docs/**", "docs/hello.md", True), ("**/docs/**", "dir/docs/my-file.txt", True), ("**/docs/**", "mydocs/x.md", False),
+                             ("**/*-post.md", "my-post.md", True), ("**/*src/**", "my-src/code/js/app.js", True),
+                             ("a/**/b/**/c", "a/b/c", True), ("a/**/b/**/c", "a/x/b/c", True), ("a/**/b/**/c", "a/b/y/c", True), ("a/**/b/**/c", "a/x/b/y/c", True),
+                             ("a**/b", "ab", False), ("a**/b", "a/b", True)]:  # only a `**/` that starts a segment may vanish
+            self.assertEqual(A._glob(pat, s), want, (pat, s))
 
 
 class Plan(unittest.TestCase):
@@ -389,7 +414,7 @@ class Plan(unittest.TestCase):
     def test_missing_root_exits_2_and_no_workflows_is_a_clean_verdict(self):
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(A.main([os.path.join(tempfile.gettempdir(), "no-such-ci-advisor-root")]), 2)
-        empty = Path(tempfile.mkdtemp())
+        empty = tmp()
         self.assertIn("no workflows", advise(empty, "--visibility", "private")[1])
 
 
@@ -464,7 +489,7 @@ class Decide(unittest.TestCase):
         self.assertIn("unknown", err)
 
     def test_no_workflows_is_cloud(self):
-        self.assertEqual(advise(Path(tempfile.mkdtemp()), "--decide")[1].strip(), "cloud")
+        self.assertEqual(advise(tmp(), "--decide")[1].strip(), "cloud")
 
 
 class Patch(unittest.TestCase):
@@ -535,7 +560,7 @@ class Inputs(unittest.TestCase):
         self.assertEqual(len(prs), 3)  # base, code, and the merge (its feature commit is not a separate PR)
         self.assertIn({"src/b.py", "docs/c.md"}, prs)  # a merge commit shows what the PR changed
         self.assertEqual(sorted(tags), ["v1.0.0", "v1.0.1"])
-        self.assertEqual(A.hist_from_git(str(Path(tempfile.mkdtemp())), "main"), ([], []))
+        self.assertEqual(A.hist_from_git(str(tmp()), "main"), ([], []))
 
     def test_history_feeds_the_pr_count_and_the_report_says_where_it_came_from(self):
         d = make_repo({"ci.yml": UNIT}, use_git=True)
@@ -563,7 +588,7 @@ class Inputs(unittest.TestCase):
         with mock.patch.object(A, "_http_status", return_value=200) as probe:
             self.assertEqual(A.visibility(str(d2), None, "auto")[0], "public")  # the unknown answer was not cached
         self.assertEqual(A.visibility(str(d2), None, "private"), ("private", "--visibility"))
-        self.assertEqual(A.visibility(str(Path(tempfile.mkdtemp())), None, "auto")[0], "unknown")
+        self.assertEqual(A.visibility(str(tmp()), None, "auto")[0], "unknown")
 
     def test_local_gate_detection(self):
         d = make_repo({"ci.yml": UNIT}, use_git=True)
@@ -602,12 +627,12 @@ class LintRoute(unittest.TestCase):
     def test_the_shared_loader_keeps_the_lints_missing_root_contract(self):
         with self.assertRaises(FileNotFoundError):
             L.load_workflows(os.path.join(tempfile.gettempdir(), "no-such-ci-advisor-root"))
-        self.assertEqual(L.load_workflows(str(Path(tempfile.mkdtemp()))), {})
+        self.assertEqual(L.load_workflows(str(tmp())), {})
 
 
 class PolicyCi(unittest.TestCase):
     def setUp(self):
-        self.d = Path(tempfile.mkdtemp())
+        self.d = tmp()
         self.pol = self.d / "policy.json"
         self.env = {k: v for k, v in os.environ.items() if k != "PERUN_GITHUB_ACTIONS"} | {"PERUN_POLICY": str(self.pol)}
 
@@ -685,7 +710,7 @@ class PrePushNotice(unittest.TestCase):
         git(d, "add", "-A")
         git(d, "commit", "-q", "-m", "second")
         head, first = git(d, "rev-parse", "HEAD").strip(), git(d, "rev-parse", "HEAD~1").strip()
-        pol = Path(tempfile.mkdtemp()) / "policy.json"  # outside the repo: the hook refuses a dirty tree
+        pol = tmp() / "policy.json"  # outside the repo: the hook refuses a dirty tree
         pol.write_text(json.dumps({"ci": ci}))
         env = {**os.environ, "PERUN_POLICY": str(pol), "DCR_PREPUSH_CMD": "true", "DCR_PREPUSH_DEFAULT_BRANCH": "main"}
         sha = first if remote == "old" else "0" * 40
@@ -703,6 +728,278 @@ class PrePushNotice(unittest.TestCase):
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertNotIn("one push per PR", first.stderr)
         self.assertNotIn("one push per PR", self.run_hook("local-first", ref="refs/heads/main").stderr)
+
+
+IMAGE = """name: image
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - 'src/**'
+jobs:
+  image:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build and smoke
+        run: |
+          docker build -t app .
+          docker compose -f ci.yml up --wait
+
+          docker compose down
+        env:
+          APP_ENV: ci
+      - run: echo done # not part of the command
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup
+      - run: pytest -q
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/build-push-action@v6
+        with:
+          push: false
+  call:
+    uses: ./.github/workflows/shared.yml
+"""
+BLOCKS = """name: blocks
+on: pull_request
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |  # literal, with a comment after the indicator
+          make one
+            --indented
+      - name: folded
+        run: >-
+          make two
+          three
+        shell: bash
+      - run: make inline
+"""
+CONTINUED = """on: pull_request
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          docker compose \\
+            -f ci.yml \\
+            up --wait
+          echo ok
+"""
+
+
+def wf(on, run="pytest -q"):
+    """A one-job workflow with the given `on:` text (full YAML, ending in a newline)."""
+    return f"name: t\n{on}jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: {run}\n"
+
+
+def diff_repo(workflows, changed):
+    """A repo whose `fix` branch commits `changed` files on top of `main`, which holds `workflows`."""
+    d = make_repo(workflows, use_git=True)
+    git(d, "checkout", "-q", "-b", "fix")
+    for f in changed:
+        (d / f).parent.mkdir(parents=True, exist_ok=True)
+        (d / f).write_text("x")
+    git(d, "add", "-A")
+    git(d, "commit", "-q", "-m", "fix")
+    return d
+
+
+def fired(workflows, changed):
+    """(rc, stdout, stderr) of `--diff main` in a repo whose fix commits `changed`."""
+    return advise(diff_repo(workflows, changed), "--diff", "main")
+
+
+class DiffJobs(unittest.TestCase):
+    def test_a_paths_hit_lists_each_job_with_its_run_lines_and_tags_the_runtime_ones(self):
+        rc, out, err = fired({"image.yml": IMAGE}, ["Dockerfile"])
+        self.assertEqual((rc, err), (0, ""))
+        self.assertIn("1 changed file(s) vs main: 4 pull_request job(s) fire", out)
+        w = ".github/workflows/image.yml: "
+        self.assertIn(w + "image [runtime] (if: github.event.pull_request.draft == false)\n"
+                      "    docker build -t app .\n    docker compose -f ci.yml up --wait\n    docker compose down\n    echo done\n", out)
+        self.assertIn(w + "unit\n    uses: ./.github/actions/setup\n    pytest -q\n", out)  # no [runtime]; a local action shows its uses
+        self.assertIn(w + "publish [runtime]\n    uses: docker/build-push-action@v6\n", out)
+        self.assertIn(w + "call\n    uses: ./.github/workflows/shared.yml\n", out)  # a reusable-workflow call shows its uses
+        self.assertNotIn("APP_ENV", out)  # a step's env is not a run line
+        self.assertNotIn("actions/checkout", out)  # nor is an ordinary action
+
+    def test_paths_filter_hit_and_miss(self):
+        w = {"w.yml": wf("on:\n  pull_request:\n    paths:\n      - Dockerfile\n      - 'src/**'\n")}
+        self.assertIn("1 pull_request job(s) fire", fired(w, ["src/a/b.py"])[1])
+        miss = fired(w, ["README.md", "docs/x.md"])[1]
+        self.assertIn("2 changed file(s) vs main: 0 pull_request job(s) fire", miss)
+        self.assertNotIn("w.yml", miss)
+
+    def test_paths_ignore_skips_only_a_diff_made_entirely_of_ignored_files(self):
+        w = {"w.yml": wf("on:\n  pull_request:\n    paths-ignore:\n      - '**.md'\n      - docs/**\n")}
+        self.assertIn(" 0 pull_request job(s) fire", fired(w, ["README.md", "docs/a/b.txt"])[1])
+        self.assertIn(" 1 pull_request job(s) fire", fired(w, ["README.md", "src/a.py"])[1])
+
+    def test_no_filter_fires_on_any_file(self):
+        self.assertIn(" 1 pull_request job(s) fire", fired({"w.yml": wf("on: pull_request\n")}, ["anything.txt"])[1])
+
+    def test_only_pull_request_triggers_count(self):
+        flows = {
+            "push.yml": wf("on:\n  push:\n    branches: [main]\n", "docker build ."),
+            "cron.yml": wf('on:\n  schedule:\n    - cron: "0 2 * * *"\n  workflow_dispatch:\n', "docker build ."),
+            "reusable.yml": wf("on:\n  workflow_call:\n", "docker build ."),
+            "labeled.yml": wf("on:\n  pull_request:\n    types: [labeled]\n", "docker build ."),
+            "release.yml": wf("on:\n  pull_request:\n    branches: [release]\n", "docker build ."),
+            "ok.yml": wf("on:\n  pull_request:\n    types: [synchronize]\n"),  # the positive control
+        }
+        out = fired(flows, ["src/a.py"])[1]
+        self.assertIn(" 1 pull_request job(s) fire", out)
+        self.assertIn(".github/workflows/ok.yml: a\n    pytest -q\n", out)
+        self.assertEqual([ln.split(":")[0] for ln in out.splitlines() if ln.startswith(W)], [W + "ok.yml"])  # push.yml is only named, on the last line
+
+    def test_list_form_and_pull_request_target_count(self):
+        flows = {"list.yml": wf("on: [push, pull_request]\n"), "target.yml": wf("on:\n  pull_request_target:\n")}
+        self.assertIn(" 2 pull_request job(s) fire", fired(flows, ["src/a.py"])[1])
+
+    def test_block_scalars_keep_their_order_and_a_folded_one_joins_its_lines(self):
+        out = fired({"b.yml": BLOCKS}, ["x"])[1]
+        self.assertIn(".github/workflows/b.yml: a\n    make one\n      --indented\n    make two three\n    make inline\n", out)
+
+    def test_a_backslash_continued_command_is_one_line_and_still_tagged(self):  # `compose` and `up` sit on different physical lines
+        out = fired({"c.yml": CONTINUED}, ["x"])[1]
+        self.assertIn(".github/workflows/c.yml: smoke [runtime]\n    docker compose -f ci.yml up --wait\n    echo ok\n", out)
+
+    def test_a_job_with_services_or_a_container_is_runtime_and_a_folded_command_is_joined(self):
+        w = (
+            "on: pull_request\njobs:\n"
+            "  db:\n    runs-on: ubuntu-latest\n    services:\n      postgres:\n        image: postgres:16\n      cache:\n        image: redis:7\n"
+            "    steps:\n      - run: pytest -q\n"
+            "  boxed:\n    runs-on: ubuntu-latest\n    container:\n      image: node:20\n    steps:\n      - run: npm test\n"
+            "  shorthand:\n    runs-on: ubuntu-latest\n    container: node:20\n    steps:\n      - run: npm test\n"
+            "  folded:\n    runs-on: ubuntu-latest\n    steps:\n      - run: >\n          docker compose -f ci.yml\n          up --wait\n"
+            "  plain:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n")
+        out = fired({"w.yml": w}, ["x"])[1]
+        p = W + "w.yml: "
+        self.assertIn(p + "db [runtime]\n    services: postgres, cache\n    pytest -q\n", out)
+        self.assertIn(p + "boxed [runtime]\n    container: node:20\n    npm test\n", out)
+        self.assertIn(p + "shorthand [runtime]\n    container: node:20\n    npm test\n", out)
+        self.assertIn(p + "folded [runtime]\n    docker compose -f ci.yml up --wait\n", out)  # the two folded lines are one command
+        self.assertIn(p + "plain\n    npm test\n", out)
+
+    def test_a_branches_filter_is_matched_against_the_branch_the_base_names(self):
+        flows = {"dev.yml": wf("on:\n  pull_request:\n    branches: [development]\n"), "main.yml": wf("on:\n  pull_request:\n    branches: [main]\n"),
+                 "rel.yml": wf("on:\n  pull_request:\n    branches: ['release/**']\n"), "ign.yml": wf("on:\n  pull_request:\n    branches-ignore: [main]\n"),
+                 "any.yml": wf("on: pull_request\n")}
+        d = diff_repo(flows, ["src/a.py"])
+        for ref in ("refs/heads/development", "refs/remotes/origin/development", "refs/remotes/origin/main", "refs/remotes/up/release/1.x"):
+            git(d, "update-ref", ref, "main")
+        git(d, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/development")  # what a clone sets: `origin/HEAD` follows its target
+
+        def fires(base):
+            out = advise(d, "--diff", base)[1]
+            self.assertNotIn("unchecked", out)  # a base that names a branch is always checked
+            return sorted(ln.split(":")[0][len(W):] for ln in out.splitlines() if ln.startswith(W))
+
+        for base, want in [("main", ["any.yml", "main.yml"]), ("origin/main", ["any.yml", "main.yml"]),
+                           ("development", ["any.yml", "dev.yml", "ign.yml"]), ("origin/development", ["any.yml", "dev.yml", "ign.yml"]),
+                           ("refs/remotes/origin/development", ["any.yml", "dev.yml", "ign.yml"]), ("origin/HEAD", ["any.yml", "dev.yml", "ign.yml"]),
+                           ("up/release/1.x", ["any.yml", "ign.yml", "rel.yml"])]:
+            self.assertEqual(fires(base), want, base)
+
+    def test_a_base_that_is_no_branch_keeps_each_branch_filtered_job_and_flags_it(self):
+        flows = {"dev.yml": wf("on:\n  pull_request:\n    branches: [development]\n"), "ign.yml": wf("on:\n  pull_request:\n    branches-ignore: [main]\n"),
+                 "any.yml": wf("on: pull_request\n"), "docs.yml": wf("on:\n  pull_request:\n    paths: ['docs/**']\n")}
+        d = diff_repo(flows, ["src/a.py"])
+        git(d, "tag", "v1", "main")
+        git(d, "update-ref", "refs/remotes/up/HEAD", "main")  # a plain ref that happens to be called HEAD
+        for base in (git(d, "rev-parse", "main").strip(), "v1", "main~0", "up/HEAD"):  # a sha, a tag, a revision expression, HEAD of a remote
+            out = advise(d, "--diff", base)[1]
+            self.assertIn(W + "dev.yml: a (branches: unchecked)\n", out, base)
+            self.assertIn(W + "ign.yml: a (branches: unchecked)\n", out, base)
+            self.assertIn(W + "any.yml: a\n", out, base)  # no branch filter, nothing to flag
+            self.assertNotIn("docs.yml", out)  # the paths filter still applies
+
+    def test_a_double_star_slash_path_filter_fires_for_a_root_file(self):
+        w = {"w.yml": wf("on:\n  pull_request:\n    paths:\n      - '**/Dockerfile'\n")}
+        for f in ("Dockerfile", "images/api/Dockerfile"):
+            self.assertIn(" 1 pull_request job(s) fire", fired(w, [f])[1], f)
+        self.assertIn(" 0 pull_request job(s) fire", fired(w, ["Dockerfile.md"])[1])
+
+    def test_a_lone_string_filter_is_one_pattern_not_a_list_of_characters(self):
+        w = {"w.yml": wf("on:\n  pull_request:\n    types: opened\n    branches: main\n    paths: src/**\n")}
+        self.assertIn(" 1 pull_request job(s) fire", fired(w, ["src/a.py"])[1])
+        self.assertIn(" 0 pull_request job(s) fire", fired(w, ["docs/a.md"])[1])
+
+    def test_a_workflow_the_parser_cannot_read_is_listed_only_when_it_names_pull_request(self):
+        bad = "on: pull_request\njobs: &a\n  x: 1\n"
+        out = fired({"bad.yml": bad, "other.yml": bad.replace("pull_request", "push")}, ["x"])[1]
+        self.assertIn("UNPARSED .github/workflows/bad.yml:", out)
+        self.assertNotIn("other.yml", out)
+
+    def test_a_workflow_with_no_readable_on_is_listed_when_it_names_pull_request(self):
+        jobs = "jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n"
+        # a byte-order mark before the first key turns `on` into `\ufeffon`, which parses to no trigger at all
+        out = fired({"bom.yml": "\ufeffon: pull_request\n" + jobs, "quiet.yml": "\ufeffon: push\n" + jobs}, ["x"])[1]
+        self.assertIn(" 0 pull_request job(s) fire", out)
+        self.assertIn("UNPARSED .github/workflows/bom.yml: no readable `on:` trigger; it names pull_request, so check it by hand", out)
+        self.assertNotIn("quiet.yml", out)
+
+    def test_workflows_on_push_merge_group_or_workflow_run_are_named_on_one_last_line(self):
+        flows = {"a-push.yml": wf("on:\n  push:\n    branches: [main]\n"), "b-queue.yml": wf("on:\n  merge_group:\n"),
+                 "c-chain.yml": wf("on:\n  workflow_run:\n    workflows: [a]\n    types: [completed]\n"),
+                 "d-cron.yml": wf('on:\n  schedule:\n    - cron: "0 2 * * *"\n'), "e-both.yml": wf("on: [push, pull_request]\n"),
+                 "f-miss.yml": wf("on:\n  push:\n  pull_request:\n    paths: ['docs/**']\n")}
+        out = fired(flows, ["src/a.py"])[1]
+        self.assertTrue(out.endswith("not listed (they start on push, merge_group or workflow_run; not evaluated): a-push.yml, b-queue.yml, c-chain.yml, f-miss.yml\n"), out)
+        self.assertIn(" 1 pull_request job(s) fire", out)  # e-both.yml is a listed job, so it is not also named
+        self.assertNotIn("not listed", fired({"p.yml": wf("on: pull_request\n")}, ["x"])[1])
+
+    def test_a_renamed_file_counts_under_both_its_paths(self):  # the superset: a job is never missed
+        d = make_repo({"w.yml": wf("on:\n  pull_request:\n    paths: ['old/**']\n")}, use_git=True)
+        (d / "old").mkdir()
+        (d / "old/a.py").write_text("a")
+        git(d, "add", "-A")
+        git(d, "commit", "-q", "-m", "add")
+        git(d, "checkout", "-q", "-b", "fix")
+        (d / "new").mkdir()
+        git(d, "mv", "old/a.py", "new/a.py")
+        git(d, "commit", "-q", "-m", "move")
+        self.assertIn(" 1 pull_request job(s) fire", advise(d, "--diff", "main")[1])
+
+    def test_an_undiffable_base_is_an_error_never_an_empty_answer(self):
+        d = diff_repo({"w.yml": wf("on: pull_request\n")}, ["x"])
+        for base in ("no-such-ref", "--output=leak", ""):  # "": an unset shell variable must not fall back to the cost report
+            rc, out, err = advise(d, f"--diff={base}")
+            self.assertEqual((rc, out), (2, ""))
+            self.assertIn("cannot diff", err)
+        self.assertEqual([p.name for p in d.iterdir() if "leak" in p.name], [])  # a base is never handed to git as an option
+
+    def test_it_is_offline_and_read_only(self):  # the module stubs the visibility probe to raise
+        d = diff_repo({"w.yml": wf("on: pull_request\n")}, ["x"])
+        with mock.patch.object(L, "_lookup_strict", side_effect=AssertionError("gh must not run")):
+            rc, out, err = advise(d, "--diff", "main", "--repo", "acme/widgets")
+        self.assertEqual((rc, err), (0, ""))
+        self.assertIn(" 1 pull_request job(s) fire", out)
+        self.assertEqual(git(d, "status", "--porcelain"), "")
+
+    def test_runtime_pattern(self):
+        for s in ("docker build -t app .", "docker buildx build .", "docker run --rm app", "docker compose up --wait", "docker-compose -f ci.yml up -d",
+                  "docker compose -f a.yml run test", "docker compose build", "uses: docker/build-push-action@v6", "uses: docker/bake-action@v5"):
+            self.assertTrue(A._RUNTIME.search(s), s)
+        for s in ("docker login -u x", "docker compose down", "docker ps", "pytest -q", "make build", "echo docker"):
+            self.assertFalse(A._RUNTIME.search(s), s)
+
+
+class NoTempLeak(unittest.TestCase):
+    @unittest.skipIf(os.environ.get("CI_ADVISOR_LEAK_CHILD"), "the child run of this very check")
+    def test_a_full_run_leaves_no_temp_dir_behind(self):
+        with tempfile.TemporaryDirectory() as sandbox:  # the child's TMPDIR: whatever it leaves is listed here
+            r = subprocess.run([sys.executable, str(Path(__file__).resolve())], capture_output=True, text=True,
+                               env={**os.environ, "TMPDIR": sandbox, "CI_ADVISOR_LEAK_CHILD": "1"})
+            self.assertIn("\nRan ", r.stderr, r.stderr)  # the child ran its whole suite
+            self.assertEqual(os.listdir(sandbox), [])
 
 
 if __name__ == "__main__":

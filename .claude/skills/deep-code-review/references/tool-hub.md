@@ -59,6 +59,12 @@ pinact (`pinact run`) is the fixer for unpinned-action findings; it needs the Gi
 - Exit 0 verdict printed; 1 hyperfine missing (`NOT CHECKED: hyperfine (install: brew install hyperfine)` on stderr, never a clean result) or the run failed (checkout, CMD or an unsupported export); 2 refused usage. The worktree is removed on exit and on HUP, INT or TERM.
 - `heavy_gate.py` holds a run while the machine is busy. Start it on an idle machine and repeat: one verdict is a lead.
 
+## Repo settings (own script, not run by `review_checks.sh`)
+
+| Tool | Covers | Command shape | Flags | Class |
+|---|---|---|---|---|
+| `repo_settings_audit.py` | Default-branch protection and rulesets, Actions token settings, collaborator counts, write deploy keys, insecure webhooks, unprotected environments, secret scanning; a 403 or 404 is `not checked`, never clean | `python3 .claude/skills/agentic-delivery/scripts/repo_settings_audit.py OWNER/NAME... [--repos-file FILE] [--json]` | own script, read-only GETs; fields read from the GitHub docs 2026-10-30. OSS options (READMEs read 2026-10-30, not run): `legitify` (`SCM_TOKEN=... legitify analyze --org ORG`; needs an `admin:org` token, fine-grained tokens unsupported) and OpenSSF Scorecard (some Branch-Protection settings need an admin token; `supply_chain_check.sh --scorecard owner/repo` runs it for a public repo) | own; OSS options route-only |
+
 ## Route-only skills (opt-in, never vendored)
 
 | Skill | License note | Rule |

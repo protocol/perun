@@ -527,6 +527,16 @@ the fan-out's *shape***, reported **once** with a remedy — not one finding per
 - **Keep a documented one-command local full suite,** and require the **labelled full
   run** before merging an app change — the cheap gate speeds iteration without becoming
   the merge bar.
+- **Before a fix lane pushes, list the CI jobs its diff will fire.** Run
+  `python3 .claude/skills/deep-code-review/scripts/ci_cost_advisor.py <repo-dir> --diff <base>`,
+  with `<base>` the branch the PR targets, such as `origin/development`: `branches:` filters are
+  matched against it, and a sha or tag base tags each job such a filter gates
+  `(branches: unchecked)`. Every `pull_request` job the committed diff triggers (path filters
+  applied) prints with its `run:` lines; a job that builds an image, starts containers or has
+  `services:` is tagged `[runtime]`. Workflows on `push`, `merge_group` or `workflow_run` are only
+  named. Run each listed job locally, or name it `left to CI` under the PR body's `How to verify`;
+  a green unit run proves nothing about a `[runtime]` job, so a Dockerfile-only fix can pass every
+  local test and still break the image job.
 - **One canonical path→gate manifest when more than one surface routes by path.** CI `paths:`
   filters, a pre-push/pre-commit hook's file scoping, and the local suite's "which gates for
   which files" each encode the *same* **path→required-gates** map (which globs are gated areas and

@@ -51,6 +51,21 @@ which gates are cheap), `[skip ci]` on doc-only commits only where no required c
 cron, big matrices to weekly or local. The after-numbers re-price the PATCHED workflow text (one model, no second
 formula), then add "push each PR once" and "required checks cost `--cheap-minutes`".
 
+`--diff BASE` asks a different question: which CI jobs will THIS change start? A Dockerfile-only fix can pass every
+unit test and still break an image job (`docker compose up --wait`) that no local check ran. It lists every
+`pull_request` / `pull_request_target` job that the committed diff `BASE...HEAD` fires, with its `run:` lines (a
+backslash-continued command or a folded `run: >` body on one line), and tags `[runtime]` a job that builds an image or
+starts containers (`docker build|buildx|run`, `docker compose up|run|build`, `build-push-action`, `bake-action`, a
+`services:` or `container:` key), which a unit-test run never exercises. The same `types` and `paths`/`paths-ignore`
+filters as the cost model apply. A `branches` filter is matched against the branch BASE names (`dev`, `origin/dev` and
+`refs/remotes/origin/dev` are all `dev`; `--default-branch` is not used). A BASE that is no branch (a sha, a tag)
+cannot be matched, so its jobs are listed, never dropped, and each one a `branches` filter would have gated is tagged
+`(branches: unchecked)`. `push`, `schedule` and manual triggers never start a job here; one last line names the
+workflows on `push`, `merge_group` or `workflow_run` (not evaluated). A job `if:` is shown, not evaluated; a
+reusable-workflow call or a local action (`uses: ./...`) shows its `uses:` (its own steps are not read); a workflow the
+parser cannot read, or that has no readable `on:` (a BOM before it, say), and names `pull_request` is listed UNPARSED,
+never skipped. Offline and read-only.
+
 USAGE
 -----
   ci_cost_advisor.py [ROOT] [--visibility auto|public|private] [--plan free|pro|team|enterprise]
@@ -60,10 +75,13 @@ USAGE
   ci_cost_advisor.py ROOT --decide                prints `local-first` or `cloud` (reason on stderr); the
                                                   `auto` mode of policy key `ci` (perun_policy.py ci)
   ci_cost_lint.py --advise ROOT                   the lint's findings, then this report
+  ci_cost_advisor.py ROOT --diff BASE             the pull_request jobs the committed diff BASE...HEAD fires, with their
+                                                  run lines (ROOT is the repo directory; `--repo` is OWNER/REPO, not a path;
+                                                  BASE is the branch the PR targets, e.g. origin/main)
 
 Visibility `auto` reads the `origin` remote and sends one unauthenticated HEAD to github.com (200 public, 404
 private or missing; cached 24h under the git dir). Anything unresolved is treated as private: the billable case.
-Exit 0; 2 when ROOT does not exist.
+Exit 0; 2 when ROOT does not exist or, with `--diff`, BASE...HEAD cannot be diffed.
 """
 from __future__ import annotations
 
@@ -76,6 +94,7 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 import time
 import urllib.error
 import urllib.request
@@ -102,6 +121,7 @@ ASSUMED_PRS = 20  # used only when git has no history and --prs is absent; alway
 AUTO_LOCAL_FRACTION = 0.5  # `ci: auto` goes local-first at >= this share of the plan's included minutes
 MAX_SKIP_SHARE = 0.5  # never propose a path filter that would have skipped more than this share of recent PRs
 DOC_GLOBS = ("**.md", "docs/**", "LICENSE")
+_PR_OPEN = {"opened", "reopened", "ready_for_review"}  # `pull_request` activity types that start a run on a new PR (a push adds `synchronize`)
 # Grouped per PR number and per run id otherwise: only a superseded PR run is cancelled; push and schedule runs
 # never share a group, so none is replaced while pending (a shared group would drop intermediate main runs).
 CONCURRENCY = "concurrency:\n  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}\n  cancel-in-progress: true\n"
@@ -130,12 +150,15 @@ class Ctx:
 
 @lru_cache(maxsize=512)
 def _tokens(pat: str) -> tuple:
-    """A filter pattern as ((char predicate, repeat), ...), repeat one of "", "?", "+", "*"."""
+    """A filter pattern as ((char predicate, repeat), ...), repeat one of "", "?", "+", "*", or "**/": a never-matching marker
+    placed before a path-segment-leading `**` that is followed by `/`, so that `**` and `/` (the next two tokens) may vanish."""
     toks, i = [], 0
     while i < len(pat):
         c = pat[i]
         if c == "*":
             two = pat.startswith("**", i)
+            if two and pat.startswith("/", i + 2) and (i == 0 or pat[i - 1] == "/"):  # `**/` also matches no directory (the cheat sheet's `**/README.md` matches `README.md`)
+                toks.append((lambda ch: False, "**/"))
             toks.append(((lambda ch: True) if two else (lambda ch: ch != "/"), "*"))
             i += 2 if two else 1
         elif c in "?+" and toks and toks[-1][1] == "":
@@ -155,16 +178,18 @@ def _tokens(pat: str) -> tuple:
 @lru_cache(maxsize=1 << 16)
 def _glob(pat: str, s: str) -> bool:
     """GitHub filter-pattern match of the whole string (the "Filter pattern cheat sheet": `*` no slash, `**` anything,
-    `?`/`+` quantify the previous character, `[..]` a class). An NFA walk, O(pattern x string): a hostile pattern in a
-    scanned repo cannot cause regex backtracking."""
+    a segment-leading `**/` also no directory, `?`/`+` quantify the previous character, `[..]` a class). An NFA walk,
+    O(pattern x string): a hostile pattern in a scanned repo cannot cause regex backtracking."""
     toks = _tokens(pat)
 
-    def close(states):  # skip over optional tokens
-        out = set(states)
-        for i in states:
-            while i < len(toks) and toks[i][1] in ("?", "*"):
-                i += 1
-                out.add(i)
+    def close(states):  # skip over optional tokens; a `**/` marker may also skip the `**` and `/` after it
+        out, todo = set(states), list(states)
+        while todo:
+            i = todo.pop()
+            for j in {"?": (i + 1,), "*": (i + 1,), "**/": (i + 1, i + 3)}.get(toks[i][1] if i < len(toks) else "", ()):
+                if j not in out:
+                    out.add(j)
+                    todo.append(j)
         return out
 
     cur = close({0})
@@ -329,7 +354,7 @@ def monthly_runs(on: dict, ctx: Ctx, pushes: float) -> tuple[dict, list]:
         if ev in ("pull_request", "pull_request_target"):
             if _branch_ok(d, ctx.default_branch):
                 types = set(d.get("types") or [])
-                first = 1 if not types or types & {"opened", "reopened", "ready_for_review"} else 0
+                first = 1 if not types or types & _PR_OPEN else 0
                 more = pushes - 1 if not types or "synchronize" in types else 0
                 runs[ev] = ctx.prs * _share(d, ctx) * (first + more)
         elif ev == "push":
@@ -756,6 +781,129 @@ def report(root: str, texts: dict, ctx: Ctx, vis: tuple, notes: list) -> int:
     return 0
 
 
+# ---- --diff: the pull_request jobs a change starts -----------------------------------------------------------
+
+# A job whose lines build an image or start containers needs a container runtime that a unit-test or lint run never uses
+# (a job with `services:` or `container:` does too; `diff_jobs` checks those keys).
+_RUNTIME = re.compile(r"\bdocker\s+(?:build|buildx|run)\b|\bdocker(?:\s+|-)compose\b.*\b(?:up|run|build)\b|\b(?:build-push|bake)-action\b", re.I)
+_BLOCK = re.compile(r"(\s*(?:-\s+)?)run:\s*([|>])[+\-0-9]*(?:\s+#.*)?\s*$")  # `run: |`, `- run: >-` ...; group 1 = text before the key, 2 = literal or folded
+
+
+def _blocks(text: str) -> tuple[str, dict]:
+    """(text, {token: body}): each `run: |` or `run: >` block body replaced by a one-line token, because the lint's parser drops
+    block bodies and `run:` lines are the point here. The body is every following blank or deeper-indented line; a folded
+    (`>`) body has the lines of a paragraph joined by a space, as YAML folds them."""
+    out, bodies, lines, i = [], {}, text.split("\n"), 0
+    while i < len(lines):
+        m = _BLOCK.match(lines[i])
+        i += 1
+        if not m:
+            out.append(lines[i - 1])
+            continue
+        body = []
+        while i < len(lines) and (not lines[i].strip() or len(lines[i]) - len(lines[i].lstrip()) > len(m.group(1))):
+            body.append(lines[i])
+            i += 1
+        tok = f"RUN-BLOCK-{len(bodies)}"
+        bodies[tok] = textwrap.dedent("\n".join(body))
+        if m.group(2) == ">":
+            bodies[tok] = re.sub(r"(?<=\S)[ \t]*\n(?=\S)", " ", bodies[tok])
+        out.append(f"{m.group(1)}run: {tok}")
+    return "\n".join(out), bodies
+
+
+def _pr_fires(on: dict, files: list, branch: str | None) -> tuple[bool, bool]:
+    """(starts?, its `branches` filter went unchecked) for a PR into `branch` that changes `files`, under this normalized
+    `on:`. Same filters as `monthly_runs`: activity `types` (a push is `synchronize`), `branches`, `paths` / `paths-ignore`.
+    `branch` None (the base is no branch) skips the branch filter instead of guessing: the job is kept and flagged."""
+    for ev in ("pull_request", "pull_request_target"):
+        if ev in on:
+            # a lone string filter (`paths: src/**`) is one pattern; the shared helpers would read it character by character
+            d = {k: [v] if isinstance(v, str) else v for k, v in (on[ev] if isinstance(on[ev], dict) else {}).items()}
+            types = set(d.get("types") or [])
+            if (not types or types & (_PR_OPEN | {"synchronize"})) and _path_triggers(d, files) and (branch is None or _branch_ok(d, branch)):
+                return True, branch is None and bool(d.get("branches") or d.get("branches-ignore"))
+    return False, False
+
+
+def _job_lines(job: dict, bodies: dict) -> list:
+    """The job's run lines in step order (a backslash-continued command joined to one line, so `_RUNTIME` sees all of it), plus
+    any `uses:` that builds an image or is a local action, the job's own reusable-workflow call, and its `container:` image
+    and `services:` names."""
+    out = [f"uses: {job['uses']}"] if "uses" in job else []
+    c = job.get("container")
+    if c:
+        out.append(f"container: {c.get('image') if isinstance(c, dict) else c}")
+    if job.get("services"):
+        out.append("services: " + ", ".join(job["services"] if isinstance(job["services"], dict) else [str(job["services"])]))
+    for s in job.get("steps") or []:
+        if isinstance(s, dict):
+            uses = str(s.get("uses") or "")
+            if uses.startswith("./") or _RUNTIME.search(uses):
+                out.append(f"uses: {uses}")
+            run = str(s.get("run") or "")
+            out += [ln.rstrip() for ln in re.sub(r"\s*\\\r?\n\s*", " ", bodies.get(run, run)).splitlines() if ln.strip()]
+    return out
+
+
+def diff_jobs(texts: dict, files: list, branch: str | None) -> tuple[list, list, list]:
+    """(jobs, unreadable, other): `jobs` is [(workflow path, job id, [lines], runtime?, branches unchecked?, `if:` or None)] for the
+    jobs that a pull_request into `branch` (None: unknown) changing `files` starts. Only `pull_request` / `pull_request_target`
+    start a job (never push, schedule or manual). `unreadable` is [(path, why)]: a workflow that cannot be parsed, or has no
+    readable `on:`, and names `pull_request` is never dropped. `other` is the paths of the workflows that did not start but
+    are on `push`, `merge_group` or `workflow_run`, which this mode does not evaluate."""
+    jobs, bad, other = [], [], []
+    for path, text in texts.items():
+        try:
+            src, bodies = _blocks(text)
+            wf = lint.parse_workflow_yaml(src)
+            on = lint._normalize_on(wf.get("on"))
+            if not on and "pull_request" in text:  # e.g. a BOM turns the key into "\ufeffon"; an unread trigger must not read as "no jobs"
+                raise ValueError("no readable `on:` trigger")
+            fires, unchecked = _pr_fires(on, files, branch)
+            if fires:
+                for jid, job in (wf.get("jobs") or {}).items():
+                    if isinstance(job, dict):
+                        lines = _job_lines(job, bodies)
+                        runtime = bool(job.get("services") or job.get("container")) or any(_RUNTIME.search(ln) for ln in lines)
+                        jobs.append((path, jid, lines, runtime, unchecked, job.get("if")))
+            elif {"push", "merge_group", "workflow_run"} & set(on):
+                other.append(path)
+        except Exception as exc:  # fail closed like `estimate`: a workflow that cannot be read may still run
+            if "pull_request" in text:
+                bad.append((path, str(exc)))
+    return jobs, bad, other
+
+
+def _pr_base(root: str, base: str) -> str | None:
+    """The branch a PR that targets `base` is opened against: `main`, `origin/main` and `refs/remotes/up/main` are all `main`.
+    None when `base` is no branch (a sha, a tag, `HEAD~2`)."""
+    m = re.fullmatch(r"refs/(?:heads|remotes/[^/]+)/((?!HEAD$).+)", (_git(root, "rev-parse", "--symbolic-full-name", base) or "").strip())
+    return m.group(1) if m else None
+
+
+def report_diff(root: str, base: str, texts: dict) -> int:
+    """Print the pull_request jobs the committed diff `base...HEAD` fires, each with its run lines. Exit 2 (nothing on
+    stdout) when the diff cannot be taken: "no jobs" must never be the answer to a bad ref. Offline, read-only."""
+    out = None if not base or base.startswith("-") else _git(root, "diff", "--name-only", "--no-renames", "-z", f"{base}...HEAD")  # `-`: never a git option
+    if out is None:
+        print(f"ci_cost_advisor: cannot diff {base!r}...HEAD in {root} (not a git repo, or no such ref)", file=sys.stderr)
+        return lint.ERROR
+    files = [f for f in out.split("\0") if f]
+    jobs, bad, other = diff_jobs(texts, files, _pr_base(root, base)) if files else ([], [], [])
+    print(f"{len(files)} changed file(s) vs {base}: {len(jobs)} pull_request job(s) fire. Run each locally or name it `left to CI`;"
+          " `[runtime]` builds an image or starts containers (needs Docker).")
+    for path, jid, lines, runtime, unchecked, cond in jobs:
+        print(f"{path}: {jid}" + (" [runtime]" if runtime else "") + (" (branches: unchecked)" if unchecked else "") + (f" (if: {cond})" if cond else ""))
+        for ln in lines:
+            print(f"    {ln}")
+    for path, why in bad:
+        print(f"UNPARSED {path}: {why}; it names pull_request, so check it by hand")
+    if other:
+        print("not listed (they start on push, merge_group or workflow_run; not evaluated): " + ", ".join(os.path.basename(p) for p in other))
+    return 0
+
+
 def main(argv: list | None = None) -> int:
     p = argparse.ArgumentParser(description="Estimate GitHub Actions minutes and dollars and print a local-first plan with a ready patch. Never edits a workflow.")
     p.add_argument("root", nargs="?", default=".", help="repository root (expects .github/workflows/)")
@@ -772,6 +920,7 @@ def main(argv: list | None = None) -> int:
     p.add_argument("--doc-glob", action="append", metavar="GLOB", help="doc-only path pattern (default: **.md, docs/**, LICENSE); repeatable")
     p.add_argument("--decide", action="store_true", help="print local-first or cloud (reason on stderr) for policy `ci: auto`")
     p.add_argument("--patch", action="store_true", help="print only the unified diff")
+    p.add_argument("--diff", metavar="BASE", help="list the pull_request jobs the committed diff BASE...HEAD fires, with their run lines; BASE is the branch the PR targets (its `branches` filters match it; a sha cannot be matched); [runtime] marks image builds and container starts (offline, read-only)")
     a = p.parse_args(argv)
     try:
         texts = lint.load_workflows(a.root)
@@ -782,6 +931,8 @@ def main(argv: list | None = None) -> int:
         top = (_git(a.root, "rev-parse", "--show-toplevel") or "").strip()
         if top and os.path.isdir(os.path.join(top, ".github", "workflows")):
             a.root, texts = top, lint.load_workflows(top)
+    if a.diff is not None:  # before the visibility probe and any gh call: this mode never touches the network (`--diff ""` is an error, not the cost report)
+        return report_diff(a.root, a.diff, texts)
     mins = {"*": 5.0}
     for it in a.job_minutes:
         key, sep, val = it.rpartition("=")
