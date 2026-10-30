@@ -1,0 +1,3 @@
+### Added
+- `references/domain-k.md`: a workflow file is not CI coverage until it runs. Before claiming CI coverage or recommending a CI-only fix, a review confirms workflows fire (`gh api repos/<owner>/<repo>/actions/permissions --jq .enabled`, `gh run list -L 5`). If Actions is off or unknown it says so and aims the fix at the gate that does run, or flags re-enabling Actions as an owner decision. The red-flag line gains "a CI-only fix where Actions is off or no run exists". Eval: `ci-only-fix-where-actions-is-disabled-confirm-workflows-run`.
+- size-budget-raise: .claude/skills/deep-code-review/references/domain-k.md 5188→5674 the liveness rule (one checklist bullet plus one red-flag clause)

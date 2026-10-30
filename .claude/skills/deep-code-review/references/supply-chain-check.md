@@ -17,7 +17,7 @@ silent pass: it prints `SKIPPED <tool>: <reason>` and the run exits 3 (INCOMPLET
 | Dependency advisories on lockfiles | `osv-scanner` | **Opt-in** (`--online`): queries `api.osv.dev` | fails at `--fail-on` (default `high`); prints counts and fixed versions |
 | Workflow security (injection, unpinned or over-permissioned actions) | `zizmor` | none | any finding fails |
 | Workflow syntax and shell | `actionlint` | none | any finding fails |
-| Repo posture (branch protection, pinned deps, review) | `scorecard` (OpenSSF) | queries GitHub; `--scorecard owner/repo`, public repos | informational scores, no threshold |
+| Repo posture (branch protection, pinned deps, review) | `scorecard` (OpenSSF) | none for a git DIR: offline subset on an export of HEAD, the whole repo even for a subdirectory DIR (tracked files only; Vulnerabilities and Fuzzing never run); `--scorecard owner/repo` queries GitHub, public repos | informational scores, no threshold; the offline view is partial, not comparable with a public score |
 
 Pre-deploy: `--online --fail-on high`; block the release on any non-zero exit. osv-scanner exit 128 (no package
 sources found) is reported as a failure, not confirmed as "nothing to scan".

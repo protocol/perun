@@ -16,6 +16,10 @@
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
+# Built-in too: committed_personal_data.py counts the distinct non-reserved email addresses in each changed file (third_party/, Pods/, bower_components/ and *.min.js are skipped, as for invisible-chars), binary data included,
+# and reports a file with 10 or more (tool `committed-data`, rule `email-addresses`; the row carries the count only, never an address). Addresses spread thin are summed over the files that stay below 10: 50 or more
+# distinct give one `email-addresses` row with the path `.`. `not-checked` = unreadable, over the 32 MiB read cap, or, under the threshold, a file in a format whose pages can hide addresses (parquet, arrow, orc, zip, gzip,
+# zstd, xz, 7z, lz4, bzip2, avro, pdf, zlib; the list and its ceilings are in committed_personal_data.py). gitleaks looks for secrets, not for exported personal data.
 # `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma). gitleaks runs once over the working tree. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
 # gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row per top fixture dir when it has >3 (every other rule, and name-only matches, stay rows); REVIEW_FIXTURE_ROWS=all lists every hit.
@@ -634,6 +638,18 @@ if [ -n "$cf" ]; then
     icok=0; run_one invisible-chars python3 "$ic" <<<"$cf" && scan_ok invisible-chars && icok=1
     # rows are flushed per row, so a timeout still yields the findings made so far (a crash leaves a traceback in $out, not rows); the timeout/crash not-checked row comes from skip
     if [ "$icok" = 1 ] || [ "$rc" = 124 ] || [ "$rc" = 142 ]; then while IFS=$'\t' read -r f l r m; do add invisible-chars "$f" "$l" "$r" "$m"; done <"$out"; fi
+  fi
+fi
+
+# Built-in, no tool to install: distinct non-reserved email addresses per changed file, binary data files included (committed_personal_data.py), over the same $cf as invisible-chars (vendored paths skipped). Cheap, so
+# unleased: it reads each file's bytes once (capped at 32 MiB). Rows: tool committed-data, rule email-addresses|not-checked (the row with path `.` is the repository total over files below the file threshold); the message has the count or the container format, never a value. Not tagged likely-fixture: a real address in a fixture is still a leak.
+pd="$here/committed_personal_data.py"
+if [ -n "$cf" ]; then
+  if [ ! -f "$pd" ]; then skip committed-data "committed_personal_data.py missing"
+  else
+    pdok=0; run_one committed-data python3 "$pd" --stdin <<<"$cf" && scan_ok committed-data && pdok=1
+    # flushed per row, as above: a timeout still yields the findings made so far
+    if [ "$pdok" = 1 ] || [ "$rc" = 124 ] || [ "$rc" = 142 ]; then while IFS=$'\t' read -r f l r m; do add committed-data "$f" "$l" "$r" "$m"; done <"$out"; fi
   fi
 fi
 

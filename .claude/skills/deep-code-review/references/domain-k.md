@@ -8,6 +8,12 @@ lifecycle, canary/blue-green claims vs actual config, DORA-or-`UNMEASURED` —
 `references/release-engineering.md`.
 - One-command reproducible build; lockfiles committed and honored; CI gates
   merge on lint + format + type + tests + security/dependency scan.
+- **A workflow file is not coverage until it runs.** Before claiming CI
+  coverage or recommending a CI-only fix, confirm workflows fire:
+  `gh api repos/<owner>/<repo>/actions/permissions --jq .enabled`,
+  `gh run list -L 5` (`method.md` "Read the host CI"). Off or unknown: say so;
+  aim the fix at the gate that does run (a local hook) or flag re-enabling
+  Actions as an owner decision. Never present a CI-only fix as running.
 - **A new or changed gate ships with its measured false-positive rate on HEAD**
   in the PR description (target ≤10%), not only a description of what it
   detects. Sound-looking detection logic can still fire mostly on non-defects
@@ -66,4 +72,5 @@ lifecycle, canary/blue-green claims vs actual config, DORA-or-`UNMEASURED` —
   dependency scan, non-reproducible build, deploy without ownership check, a
   known-vulnerable or **EOL** dependency/runtime/base image shipping, a single
   "update all dependencies" commit with no per-dep test evidence, no update-bot
-  config (`dependabot.yml`/`renovate.json`) beside a long tail of outdated deps.
+  config (`dependabot.yml`/`renovate.json`) beside a long tail of outdated deps,
+  a CI-only fix where Actions is off or no run exists.

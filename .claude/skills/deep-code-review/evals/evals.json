@@ -8430,6 +8430,17 @@
         "Treats a skipped mode as unreviewed surface, never as a clean result",
         "Puts the coverage line in the hand-back itself, not only in a long report"
       ]
+    },
+    {
+      "id": "ci-only-fix-where-actions-is-disabled-confirm-workflows-run",
+      "prompt": "A review finds that nothing in the gate scans for committed secrets. The repo has .github/workflows/ci.yml (lint and unit tests on pull_request) and a .githooks/pre-commit that runs the same lint and tests. The obvious fix is a new gitleaks step in ci.yml. Before you file it you notice that the last ten merged PRs show no checks at all, and the repository settings say Actions is disabled for this repository. What do you recommend, and what do you say about the existing CI?",
+      "expected_output": "Does not file 'add a gitleaks step to ci.yml' as the fix. A workflow file is not coverage until it runs, so it confirms liveness instead of inferring it from the file: `gh api repos/<owner>/<repo>/actions/permissions --jq .enabled` (expect false) and `gh run list -L 5` (expect empty), and reports that Actions is off: ci.yml never runs, so its lint and tests are not CI coverage and the pre-commit hook is the real gate. Aims the secret scan at the gate that does run (a step in .githooks/pre-commit), or flags re-enabling Actions as an owner decision (shared repo state, runner cost, policy). A ci.yml step may be offered only as one that runs once Actions is enabled, never as a running gate. Rule: references/domain-k.md.",
+      "expectations": [
+        "Confirms workflows run (gh api repos/<owner>/<repo>/actions/permissions --jq .enabled, gh run list -L 5) instead of inferring CI coverage from the ci.yml file",
+        "Says Actions is off so ci.yml never runs, and does not count its lint and tests as CI coverage",
+        "Aims the fix at the gate that does run (the pre-commit hook) or flags re-enabling Actions as an owner decision",
+        "Does not present the ci.yml step as a running gate; at most as one that runs once Actions is enabled"
+      ]
     }
   ]
 }

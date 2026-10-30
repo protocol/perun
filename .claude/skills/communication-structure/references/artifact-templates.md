@@ -43,7 +43,7 @@ verified and command. Fenced code does not count toward the budget.
 empty (items, or `None`), or `Not fixed` carries a file:line, route, URL or file path (counts only). A closing footer
 (`---` or `🤖 Generated`, then only blank, `Generated with` and `Co-Authored-By:` lines, any of them in `<sub>`, `<sup>`,
 `<small>`, `*` or `_` markup) is not checked; other text after a `---` is. With `--range BASE..HEAD` it also fails when a changed file is not named under `Changes by area`, by full path
-or by a containing directory with a trailing slash. The guard hook picks this kind when the `gh pr create|edit` title says audit, security
+or by a containing directory with a trailing slash. The 1200-word, 160-line budget counts everything outside `Changes by area`, where an area may be a bullet or a `### <Area>` heading; each `### ` area fails above 200 words and the whole body above 3000 words. The guard hook picks this kind when the `gh pr create|edit` title says audit, security
 or harden, and for `create` passes the diff against `--base` (default `origin/HEAD`).
 
 ## Templates

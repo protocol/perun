@@ -5,6 +5,8 @@ import os, pathlib, pty, subprocess, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GUARD = ROOT / ".claude/skills/agentic-delivery/scripts/destructive_guard.py"
+WAIT = 60  # seconds, a ceiling and never a delay: a healthy run returns as soon as the guard answers (the wall-clock case after its 10 s TIMEOUT).
+# A 20 s ceiling failed once at load average ~13, because process start-up and exit eat the slack; a real hang still fails, at WAIT.
 
 
 def blocked(cmd):
@@ -290,14 +292,14 @@ def test_rows():
 
 
 def test_stdin_does_not_hang():
-    r = subprocess.run([sys.executable, "-I", str(GUARD)], stdin=subprocess.DEVNULL, capture_output=True, timeout=10)
+    r = subprocess.run([sys.executable, "-I", str(GUARD)], stdin=subprocess.DEVNULL, capture_output=True, timeout=WAIT)
     assert r.returncode == 0
     try:
         m, s = pty.openpty()  # stdin is a terminal
     except OSError:
         return print("skip tty half: no pty in this sandbox")
     try:
-        r = subprocess.run([sys.executable, "-I", str(GUARD)], stdin=s, capture_output=True, timeout=10)
+        r = subprocess.run([sys.executable, "-I", str(GUARD)], stdin=s, capture_output=True, timeout=WAIT)
         assert r.returncode == 0
     finally:
         os.close(m), os.close(s)
@@ -307,7 +309,7 @@ def test_wall_clock_cap():
     """stdin that never closes must end in a block after TIMEOUT seconds, not spin or wait forever."""
     p = subprocess.Popen([sys.executable, "-I", str(GUARD)], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
-        assert p.wait(timeout=20) == 2 and b"did not finish" in p.stderr.read()
+        assert p.wait(timeout=WAIT) == 2 and b"did not finish" in p.stderr.read()
     finally:
         p.kill(), p.stdin.close(), p.stderr.close()
 
@@ -317,7 +319,7 @@ def test_regex_spin_is_killed():
     spin = ("import importlib.util as u, re, sys; s = u.spec_from_file_location('g', sys.argv[1]); g = u.module_from_spec(s); "
             "s.loader.exec_module(g); g.TIMEOUT = 2; g.check = lambda c: re.match(r'(a+)+$', 'a' * 64 + 'b'); sys.exit(g.main())")
     r = subprocess.run([sys.executable, "-I", "-c", spin, str(GUARD)], input='{"tool_input":{"command":"ls"}}',
-                       capture_output=True, text=True, timeout=20)
+                       capture_output=True, text=True, timeout=WAIT)
     assert r.returncode == 2 and "did not finish" in r.stderr, (r.returncode, r.stderr)
 
 
@@ -328,7 +330,7 @@ def test_watchdog_failures_block():
     nofork = load + "os.fork = lambda: (_ for _ in ()).throw(OSError(11, 'EAGAIN')); sys.exit(g.main())"
     crash = load + "g.check = lambda c: os.kill(os.getpid(), 9); sys.exit(g.main())"
     for code, cmd, want in ((nofork, "rm -rf /", 2), (nofork, "ls", 0), (crash, "ls", 2)):
-        r = subprocess.run([sys.executable, "-I", "-c", code, str(GUARD)], input=cmd, capture_output=True, text=True, timeout=20)
+        r = subprocess.run([sys.executable, "-I", "-c", code, str(GUARD)], input=cmd, capture_output=True, text=True, timeout=WAIT)
         assert r.returncode == want, (cmd, r.returncode, r.stderr)
 
 

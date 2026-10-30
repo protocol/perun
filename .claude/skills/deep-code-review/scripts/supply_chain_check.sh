@@ -4,13 +4,19 @@
 #   osv-scanner  lockfile advisories. Opt-in: needs --online (or SUPPLY_CHAIN_ONLINE=1) because it queries
 #                api.osv.dev. Prints counts by severity + fixed versions; fails on >= --fail-on (default high).
 #   zizmor, actionlint  static checks on DIR/.github/workflows (local, no network).
-#   scorecard    OpenSSF Scorecard for a PUBLIC repo; only with --scorecard owner/repo (queries GitHub).
+#   scorecard    OpenSSF Scorecard, informational scores, no threshold. --scorecard owner/repo scores a PUBLIC repo remotely
+#                (queries GitHub). Without it, a git DIR is scanned offline from an export of HEAD (tracked files only, so an
+#                untracked node_modules never scores) with the checks that work offline; Vulnerabilities (a false 10 while
+#                api.osv.dev is unreachable) and Fuzzing (errors) never run there. That is a partial view, not comparable with
+#                a public Scorecard score: SAST sees workflow files only, and export-ignore paths are not scored. A subdirectory
+#                DIR scores the whole repo root (the ok line says so). A non-git DIR, or a partial clone missing objects (lazy
+#                fetch stays off, so this never touches the network), is SKIPPED.
 # Severity bands: advisory database_specific.severity, else the CVSS score OSV reports (>=9 critical, >=7 high,
 # >=4 moderate, else low). An advisory with neither (e.g. a CVSS vector string) is "unknown" and counts as at or
 # above ANY threshold (fail closed).
 # osv-scanner CLI crash (rc>1) retries via the OSV API with curl and prints "osv: api-fallback"; python3+curl needed.
 # Exit: 0 every check ran clean; 1 finding at/above threshold or a tool failed; 2 usage;
-#       3 INCOMPLETE: a check was skipped (tool or python3 missing, osv/scorecard not requested), nothing failed.
+#       3 INCOMPLETE: a check was skipped (tool or python3 missing, osv not requested, scorecard with no exportable git HEAD), nothing failed.
 #       Reach: an npm osv row no source file imports prints "(reach: dev-only|transitive)"; only dev-only skips the gate
 #       unless SUPPLY_CHAIN_STRICT=1 (transitive may be reached via a direct dependency); unknown reach is gated.
 #       --allow-skip turns a skip-only run into exit 0. A finding (1) wins over INCOMPLETE (3). Needs python3 for osv.
@@ -178,9 +184,24 @@ for t in zizmor actionlint; do
   else echo "ok $t"; fi
 done
 
-# --- OpenSSF Scorecard (public repos) ---
-if [ -z "$sc_repo" ]; then skip scorecard "pass --scorecard owner/repo (public repos; queries GitHub)"
-elif ! have scorecard; then skip scorecard "not installed"
+# --- OpenSSF Scorecard ---
+# Local mode scans the repo root's HEAD export, like the remote mode scores the whole repo whatever DIR is.
+# ponytail: git archive honors export-ignore, so such paths are not scored; use git checkout-index --prefix if that bites.
+# GIT_NO_LAZY_FETCH=1 stops a partial clone fetching missing blobs (network); a git that ignores it may still do so.
+sc_local() {
+  local top sub=
+  top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || { skip scorecard "DIR is not a git repo (or git is missing); pass --scorecard owner/repo (public repos; queries GitHub)"; return; }
+  [ -n "$(git -C "$dir" rev-parse --show-prefix)" ] && sub=", DIR is a subdirectory so the whole repo is scored"
+  sc_ex=$(mktemp -d "${TMPDIR:-/tmp}/supply-chain-sc.XXXXXX") || { skip scorecard "mktemp failed"; return; }
+  trap 'rm -rf "$sc_ex"' EXIT # also on SIGTERM/SIGHUP/SIGINT: the export is a full copy of the tracked files
+  if ! (set -o pipefail; GIT_NO_LAZY_FETCH=1 git -C "$top" archive HEAD | tar -x -C "$sc_ex"); then skip scorecard "git archive HEAD failed (no commits, or objects missing in a partial clone: lazy fetch is off to stay offline)"
+  elif scorecard --local="$sc_ex" --show-details \
+    --checks=Binary-Artifacts,Dangerous-Workflow,Dependency-Update-Tool,License,Packaging,Pinned-Dependencies,SAST,Security-Policy,Token-Permissions
+  then echo "ok scorecard (local export of HEAD in $top$sub; partial view, not comparable with a public Scorecard score; no pass/fail threshold)"
+  else echo "FAIL scorecard"; rc=1; fi
+}
+if ! have scorecard; then skip scorecard "not installed"
+elif [ -z "$sc_repo" ]; then sc_local
 elif scorecard --repo="github.com/$sc_repo"; then echo "ok scorecard (review scores above; no pass/fail threshold)"
 else echo "FAIL scorecard"; rc=1; fi
 if [ "$rc" = 0 ] && [ -n "$skipped" ] && [ "$allow_skip" != 1 ]; then

@@ -1,0 +1,3 @@
+# Registers the committed_personal_data.py tests: unit (CSV, parquet-like and Arrow-like fixtures flagged only with --include-reserved, count-only output, threshold edge, noreply, git@ and asset-scale names, the repository-total row for addresses spread thin, a not-checked row for every recognised container format with its footer and for real gzip, bzip2, xz, zlib and PDF data, zlib-lookalike text and magic-only text left alone, --strict, --stdin, size and count caps, fail-closed flag ranges, random-byte noise) and the review_checks.sh committed-data step (rows, vendored paths, repository total, diff vs --full, missing script). Offline.
+python3 scripts/test_committed_personal_data.py
+bash scripts/test-review-checks-committed-data.sh
