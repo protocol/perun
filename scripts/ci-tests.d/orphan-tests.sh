@@ -1,5 +1,5 @@
 # Registers per-feature tests that existed but no CI step ran (see the "Per-PR tests" step in ci.yml; #1592 audit).
-# test_auto_update_legacy_marker.py is left out: ~326 s locally; register it once its runtime is cut.
+python3 scripts/test_auto_update_legacy_marker.py
 python3 scripts/test_auto_update_move.py
 python3 scripts/test_auto_update_stale_lock.py
 python3 scripts/test_bench_corpus_90.py

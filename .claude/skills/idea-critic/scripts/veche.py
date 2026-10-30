@@ -20,18 +20,19 @@ A COULD_NOT_DECIDE record also carries default_action (proceed when --reversibil
 dropped with their reasons and the call cost, and a stderr COUNCIL_BLOCKING_WORK alarm (fired while the council
 runs, once --alarm-s has passed), so a stuck council never stalls unrelated work. --cmd can wrap any
 external council (a script reading the prompt on stdin, printing the JSON contract).
-Side effects: spawns the given commands, reads files under --root, writes --json-out (an unwritable path exits 2, also after the
-record was printed). Exit 0 decided.
+Side effects: spawns the given commands, reads files under --root, writes --json-out (a temp file beside it, then os.replace; an unwritable path exits 2,
+also after the record was printed, unless the verdict already exits 3 or 4). Exit 0 decided.
 """
 from __future__ import annotations
 
-import argparse, concurrent.futures, datetime, threading, json, os, random, re, secrets, shlex, subprocess, sys, time
+import argparse, concurrent.futures, contextlib, datetime, threading, json, os, random, re, secrets, shlex, subprocess, sys, time
 from pathlib import Path
 
 VERDICTS = ("HOLD", "REVISE", "PASS_TO_USER")  # most cautious first: ties go left
 HATS = "skeptic,better-way,kill-criteria"
 NAME = re.compile(r"^[a-z][a-z-]{0,30}$")
 TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}")  # an --option name: every seat must echo it exactly as a JSON key
+TOKEN_RULE = f"letters, digits, - or _, starting with a letter or digit, at most 32 chars: {TOKEN.pattern}"
 CAP = "cap reached before call"
 CITE = re.compile(r"^(?P<p>[^\s:][^:]*):(?P<a>\d+)(?:-(?P<b>\d+))?$")
 DO_NOTHING = "do-nothing"
@@ -72,10 +73,11 @@ def norm(t: str) -> str:
 
 def uniq(items: list) -> list:
     """Drop near-duplicate strings, keeping the first wording and the order: case, spacing and punctuation are
-    ignored; digits and comparison operators are not (5% and 6% stay two items, and so do `< 200 ms` and `> 200 ms`)."""
+    ignored; digits and comparison operators are not (5% and 6% stay two items, and so do `< 200 ms` and `> 200 ms`); `≤` and `≥`
+    are the same operators as `<=` and `>=`, so the Unicode and ASCII spellings fold together."""
     seen: dict = {}
     for t in items:
-        seen.setdefault(" ".join(re.findall(r"\w+|[<>≤≥]=?", t.lower())), t)
+        seen.setdefault(" ".join(re.findall(r"\w+|[<>]=?", t.lower().replace("≤", "<=").replace("≥", ">="))), t)
     return list(seen.values())
 
 
@@ -200,7 +202,7 @@ def run(a, st=None) -> dict:
     names = [o.strip() for o in (a.option or []) if o.strip() and o.strip() != DO_NOTHING]
     for o in names:
         if not TOKEN.fullmatch(o):
-            raise Stop(f"bad --option {o!r}: use a short token (letters, digits, - or _, at most 32 chars), e.g. ship; "
+            raise Stop(f"bad --option {o!r}: use a short token ({TOKEN_RULE}), e.g. ship; "
                        "every seat must repeat it exactly as a JSON key")
     options = [DO_NOTHING] + names
     if len(options) > 8 or len(set(options)) != len(options):
@@ -388,6 +390,7 @@ def run(a, st=None) -> dict:
         ["UNVERIFIED: no seat wrote a pre-mortem"]
     kills = uniq([x["kill"] for x in answers if x["kill"]] + ([twin["kill_criterion"]] if isinstance(twin.get("kill_criterion"), str) and twin["kill_criterion"].strip() else []))
     rec["kill_criteria"] = kills or ["UNVERIFIED: no seat stated a measurable tripwire"]
+    rec["kill_criteria_by_lens"] = {x["lens"]: x["kill"] for x in answers if x["kill"]}  # each seat's own wording, before the dedupe
     metrics = {x["lens"]: x["metric"] for x in answers if x["metric"]}
     rec["leading_metric"] = metrics.get(a.chair) or next(iter(metrics.values()), "UNVERIFIED: no seat named a metric")
     rec["minority_report"] = {"twin": twin or None, "dissenting_seats": [x["lens"] for x in dissent]}  # their answers are in `dissent`
@@ -424,7 +427,7 @@ def watch(a, st: dict, t0: float, default: str):
 
 def main(argv=None) -> int:
     """CLI entry. Prints the JSON record (and writes it to --json-out). Exit 0 decided, 2 --json-out unwritable (the record is still
-    printed), 3 COULD_NOT_DECIDE (fail closed), 4 NOT_CONVENED."""
+    printed; a write that fails at the end changes only exit 0, never 3 or 4), 3 COULD_NOT_DECIDE (fail closed), 4 NOT_CONVENED."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--cmd", action="append", required=True)
     ap.add_argument("--claim", required=True)
@@ -433,12 +436,15 @@ def main(argv=None) -> int:
     ap.add_argument("--origin", default="agent-originated", choices=("owner-request", "agent-originated"))
     ap.add_argument("--root", default=".")
     ap.add_argument("--lenses", default=HATS, help="comma list of lens files; seats: cpo,cto,cfo,ciso,user-advocate")
-    ap.add_argument("--option", action="append", help="an option to score: a short token such as ship (repeat; do-nothing is always added; include the claim)")
+    ap.add_argument("--option", action="append", help=f"an option to score, a short token ({TOKEN_RULE}) since every seat repeats it as a JSON key, e.g. ship (repeat the flag; do-nothing is always added; include the claim)")
     ap.add_argument("--criteria", help="name:weight,... fixed before scoring; required with --option")
     ap.add_argument("--chair", help="a lens name: breaks ties in the verdict tally and the option scores")
     ap.add_argument("--twin", action="store_true", help="add the evil twin: pre-mortem and strongest dissent")
-    ap.add_argument("--stakes", choices=("low", "medium", "high"))
-    ap.add_argument("--reversibility", choices=("easy", "hard"))
+    ap.add_argument("--stakes", choices=("low", "medium", "high"),
+                    help="low or medium skips the council (NOT_CONVENED, exit 4, no seat called) only if --reversibility easy is also given; high, or no --reversibility, convenes")
+    ap.add_argument("--reversibility", choices=("easy", "hard"),
+                    help="easy skips the council (NOT_CONVENED, exit 4, no seat called) only if --stakes low or medium is also given; hard, or no --stakes, convenes. "
+                         "easy also makes the default_action of a COULD_NOT_DECIDE record proceed, else hold")
     ap.add_argument("--review-date", help="ISO date to re-check the decision (default: today + --review-days)")
     ap.add_argument("--review-days", type=int, default=30)
     ap.add_argument("--max-calls", type=int, default=12)
@@ -447,15 +453,28 @@ def main(argv=None) -> int:
     ap.add_argument("--timeout", type=int, default=120)
     ap.add_argument("--alarm-s", type=int, default=300, help="print COUNCIL_BLOCKING_WORK to stderr once the council has run this long, while it runs")
     ap.add_argument("--progress-s", type=int, default=30, help="stderr heartbeat every N seconds while the council runs (0 = off)")
-    ap.add_argument("--json-out", help="also write the JSON record to this file (opened before any call, so a bad path fails early)")
+    ap.add_argument("--json-out", help="also write the JSON record to this file on every outcome, via a temp file in the same directory and os.replace; "
+                    "an empty file is written first, before any call, so a bad path fails early. The directory must be writable: a read-only file in it is replaced, "
+                    "while a read-only directory or a bind-mounted file (os.replace cannot replace a mount point) exits 2")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
 
-    def write_out(text):  # an unwritable --json-out is a usage error (exit 2, no traceback), at the start and at the end
+    def write_out(text):  # atomic: a reader sees the old file or the whole new one. ponytail: no fsync, so not durable across power loss
+        real = os.path.realpath(a.json_out)  # a symlinked path keeps pointing at its target
+        tmp = f"{real}.{secrets.token_hex(4)}.tmp"
         try:
-            Path(a.json_out).write_text(text)
-        except OSError as e:
+            if os.path.exists(a.json_out) and not os.path.isfile(a.json_out):  # a device, FIFO or directory: renaming over it would replace the node itself
+                Path(a.json_out).write_text(text)  # (a directory fails here, as before)
+            else:
+                with open(tmp, "x", encoding="utf-8") as f:
+                    f.write(text)
+                with contextlib.suppress(OSError):  # an existing record keeps the mode its owner gave it
+                    os.chmod(tmp, os.stat(real).st_mode & 0o7777)
+                os.replace(tmp, real)
+        except OSError as e:  # an unwritable --json-out is a usage error (exit 2, no traceback), at the start and at the end
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
             ap.error(f"--json-out: cannot write {a.json_out}: {e.strerror}")
 
     if a.json_out:
@@ -487,9 +506,13 @@ def main(argv=None) -> int:
                   f"default_action={rec.get('default_action', 'n/a')}", file=sys.stderr)
     out = json.dumps(rec, indent=2)
     print(out)
+    code = {"COULD_NOT_DECIDE": 3, "NOT_CONVENED": 4}.get(rec["verdict"], 0)
     if a.json_out:
-        write_out(out + "\n")  # the record is already on stdout, so an unwritable path loses nothing
-    return {"COULD_NOT_DECIDE": 3, "NOT_CONVENED": 4}.get(rec["verdict"], 0)
+        try:
+            write_out(out + "\n")  # the record is already on stdout, so an unwritable path loses nothing
+        except SystemExit as e:  # the message is printed; a blocking verdict exit (3, 4) must not be turned into 2
+            code = code or e.code
+    return code
 
 
 if __name__ == "__main__":

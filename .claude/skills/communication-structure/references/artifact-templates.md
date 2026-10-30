@@ -41,8 +41,8 @@ verified and command. Fenced code does not count toward the budget.
 `audit-pr` is the body of an audit, security or hardening PR. `sections` fails, at any length, when a required heading
 (every heading of the template below except `Dependency upgrades`) is missing, `What changes for reviewers and users` is
 empty (items, or `None`), or `Not fixed` carries a file:line, route, URL or file path (counts only). A closing footer
-(`---` or `🤖 Generated`, then only blank, `Generated with` and `Co-Authored-By:` lines) is not checked; other text after
-a `---` is. With `--range BASE..HEAD` it also fails when a changed file is not named under `Changes by area`, by full path
+(`---` or `🤖 Generated`, then only blank, `Generated with` and `Co-Authored-By:` lines, any of them in `<sub>`, `<sup>`,
+`<small>`, `*` or `_` markup) is not checked; other text after a `---` is. With `--range BASE..HEAD` it also fails when a changed file is not named under `Changes by area`, by full path
 or by a containing directory with a trailing slash. The guard hook picks this kind when the `gh pr create|edit` title says audit, security
 or harden, and for `create` passes the diff against `--base` (default `origin/HEAD`).
 

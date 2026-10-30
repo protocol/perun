@@ -20,7 +20,7 @@ HOOK = {"hooks": {"SubagentStart": [{"hooks": [{"type": "command", "command":
 
 
 def sh(*a, **kw):
-    return subprocess.run(list(a), capture_output=True, text=True, **kw)
+    return subprocess.run(list(a), capture_output=True, text=True, env={**os.environ, "DCR_NO_PROBE": "1"}, **kw)  # no sandbox probe: it calls github.com
 
 
 class HouseDefaults(unittest.TestCase):

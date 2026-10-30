@@ -108,10 +108,12 @@ class InstallRemoteFallbackTests(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
         src = tmp / "src"  # a copy with no .git: the tarball/plugin case
-        shutil.copytree(ROOT, src, ignore=shutil.ignore_patterns(".git", "worktrees", "__pycache__"))
+        # docs/bench is ~90k files / ~400 MB (the copy alone took ~5 min); install.sh never reads it
+        skip = lambda d, names: {n for n in names if n in (".git", "worktrees", "__pycache__") or (n == "bench" and Path(d) == ROOT / "docs")}
+        shutil.copytree(ROOT, src, ignore=skip)
         repo = tmp / "repo"
         repo.mkdir()
-        env = {k: v for k, v in os.environ.items() if k != "PERUN_REMOTE"}
+        env = {k: v for k, v in os.environ.items() if k != "PERUN_REMOTE"} | {"DCR_NO_PROBE": "1"}  # no sandbox probe: it calls github.com
         p = subprocess.run(["bash", str(src / "install.sh"), str(repo)], capture_output=True, text=True, env=env)
         self.assertEqual(p.returncode, 0, p.stderr)
         m = json.loads((repo / ".claude/.perun-install.json").read_text())

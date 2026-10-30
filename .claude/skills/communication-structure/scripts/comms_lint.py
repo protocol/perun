@@ -20,8 +20,9 @@ never states, and "recommend"/"root cause" claims it never makes, unless the sam
 AUDIT_SECTIONS heading is present, "What changes for reviewers and users" is not empty (items, or "None"), "Not fixed"
 holds counts only (no file:line, route or URL), and, with --range BASE..HEAD, every file the range changes is named
 under "Changes by area" by its full path or by a containing directory with a trailing slash. A trailing attribution footer
-(a `---` rule or `🤖 Generated` line, then only blank, `---`, `Generated with/by` and `Co-Authored-By:` lines) is not part
-of the last section; any other text after a `---` is still checked.
+(a `---` rule or `🤖 Generated` line, then only blank, `---`, `Generated with/by` and `Co-Authored-By:` lines; those lines
+may sit in `<sub>`, `<sup>`, `<small>`, `*` or `_` markup) is not part of the last section; any other text after a `---` is
+still checked.
 
 Prints `FAIL <rule> L<n>: <problem>. Fix: <exact fix>` per failure and a score line; exit 1 when any non-advisory
 rule fails (below the bar), 0 otherwise, 2 on usage, unreadable input or a --range git cannot resolve (fail closed).
@@ -239,8 +240,10 @@ HEADING = re.compile(r"^ {0,3}(#{1,6})[ \t]+(\S.*)$")  # the name is cleaned by 
 DETAIL = re.compile(r"\.[A-Za-z]\w{0,7}:\d+|#L\d+|\blines?\s+\d+|\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/|"
                     r"(?<![\w/:.-])/[\w.-]+|\bhttps?://|\b[\w.-]{1,100}/[\w./-]{0,200}\.[A-Za-z]\w{0,7}\b")
 # one attribution-footer line, matched whole: a `---` rule or `🤖 Generated ...` (either starts a footer), `Generated with/by ...`,
-# `Co-Authored-By: ...` or nothing. ponytail: a line is judged by its prefix, so detail on a `Generated ...` or `Co-Authored-By:` line goes unchecked; tighten the shapes if that is abused
-FOOTER = re.compile(r"(?:(?P<mark>-{3,}|🤖\s*Generated\b.*)|Generated (?:with|by)\b.*|Co-Authored-By:.*)?", re.I)
+# `Co-Authored-By: ...` or nothing. The `🤖 Generated`, `Generated with/by` and `Co-Authored-By:` shapes may open in <sub>, <sup>, <small>, `*` or `_` markup (the closer is part of the tail).
+# ponytail: a line is judged by its prefix, so detail on a `Generated ...` or `Co-Authored-By:` line goes unchecked; tighten the shapes if that is abused
+_MARKUP = r"(?:</?(?:sub|sup|small)>|[*_]){0,6}"  # bounded: an unbounded repeat would be quadratic on a long run of `*`
+FOOTER = re.compile(r"(?:(?P<mark>-{3,}|" + _MARKUP + r"🤖[\s*_]*Generated\b.*)|" + _MARKUP + r"Generated (?:with|by)\b.*|" + _MARKUP + r"Co-Authored-By:.*)?", re.I)
 
 
 def _name(text):
@@ -265,7 +268,7 @@ def _sections(text):
     runs to the next heading of the same or a higher level (sub-headings stay inside it); the first of a repeated heading
     wins; HTML comments are dropped, so a template hint is not content. A trailing attribution footer is not content either:
     the last section ends at the first `---` rule or `🤖 Generated` line that is followed only by FOOTER-shaped lines (blank,
-    `---`, `Generated with/by ...`, `Co-Authored-By: ...`) to the end; any other text after a rule keeps the rule as content."""
+    `---`, `Generated with/by ...`, `Co-Authored-By: ...`, in markup or not) to the end; any other text after a rule keeps the rule as content."""
     lines = _blank_comments(text).splitlines()
     heads, fence, foot = [], False, len(lines)
     for i, ln in enumerate(lines):

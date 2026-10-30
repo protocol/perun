@@ -36,6 +36,7 @@ printf 'x\n' >app.txt
 git add . && git -c user.email=t@example.com -c user.name=t commit -q -m files
 export PERUN_HEAVY_DIR="$T/heavy0" # never touch the real lease dir
 export DCR_CACHE_ROOT="$T/cache" # empty: a warm semgrep snapshot on the host would swap `--config p/default` for the local file
+unset REVIEW_SEMGREP_REGISTRY # a host that sets it to 0 would drop the `--config p/default` this test expects
 run() { PATH="$T/stub:$PATH" bash "$RC" --base base "$@" 2>"$T/err" >"$T/out"; }
 
 run

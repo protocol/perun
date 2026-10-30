@@ -1,0 +1,40 @@
+# Registers the per-wave guard pins and held-out security-gate pins that no CI step ran (#1592 audit). The 30 s+ corpus
+# re-scores are listed with their runtimes in scripts/ci-test-allowlist.tsv instead. Offline. About 50 s and it leaves the
+# working tree unchanged, so it runs as a background suite (.bg.sh) alongside the gate steps and adds no serial time.
+python3 scripts/test_destructive_guard_stub.py
+python3 scripts/test_destructive_guard_stub_crash.py
+python3 scripts/test_destructive_guard_w20.py
+python3 scripts/test_destructive_guard_w21.py
+python3 scripts/test_security_gates_guard_w10.py
+python3 scripts/test_security_gates_guard_w11.py
+python3 scripts/test_security_gates_guard_w3.py
+python3 scripts/test_security_gates_guard_w4.py
+python3 scripts/test_security_gates_guard_w5.py
+python3 scripts/test_security_gates_guard_w5b.py
+python3 scripts/test_security_gates_guard_w6.py
+python3 scripts/test_security_gates_guard_w7.py
+python3 scripts/test_security_gates_guard_w8.py
+python3 scripts/test_security_gates_guard_w9.py
+python3 scripts/test_security_gates_heldout10.py
+python3 scripts/test_security_gates_heldout10_blind.py
+python3 scripts/test_security_gates_heldout11_blind.py
+python3 scripts/test_security_gates_heldout12_blind.py
+python3 scripts/test_security_gates_heldout13_blind.py
+python3 scripts/test_security_gates_heldout14_blind.py
+python3 scripts/test_security_gates_heldout15_blind.py
+python3 scripts/test_security_gates_heldout17_blind.py
+python3 scripts/test_security_gates_heldout18_blind.py
+python3 scripts/test_security_gates_heldout19_blind.py
+python3 scripts/test_security_gates_heldout4.py
+python3 scripts/test_security_gates_heldout5.py
+python3 scripts/test_security_gates_heldout5_blind.py
+python3 scripts/test_security_gates_heldout6.py
+python3 scripts/test_security_gates_heldout6_blind.py
+python3 scripts/test_security_gates_heldout7.py
+python3 scripts/test_security_gates_heldout7_blind.py
+python3 scripts/test_security_gates_heldout8.py
+python3 scripts/test_security_gates_heldout8_blind.py
+python3 scripts/test_security_gates_heldout9.py
+python3 scripts/test_security_gates_heldout9_blind.py
+python3 scripts/test_security_gates_w18_insample.py
+python3 scripts/test_security_gates_w19_insample.py

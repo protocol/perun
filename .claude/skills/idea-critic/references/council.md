@@ -23,7 +23,7 @@ neither and it convenes (legacy behavior), so declare them.
 | The evil twin argues the strongest dissent | `--twin`: after the decision, one call (`lenses/evil-twin.txt`) writes a pre-mortem and the strongest case against it; kept in `minority_report` with the dissenting seats' names (their answers stay verbatim in `dissent`) |
 | Pre-mortem | every seat answers `premortem`, `kill_criterion`, `leading_metric` (recorded in `premortems`), then the twin's |
 | Deterministic aggregate; the chair breaks ties | decision = highest weighted mean of seat scores (0-5 per option and criterion); a tie goes to `--chair`'s own top option, then to option order (`do-nothing` first). The verdict tally ties go to the chair, else `HOLD` > `REVISE` > `PASS_TO_USER` |
-| Output: decision, kill criteria, metric, review date | record keys `decision`, `kill_criteria`, `leading_metric`, `review_date` (`--review-date`, else today + `--review-days`, default 30). A closer no seat supplied is `UNVERIFIED`, never invented |
+| Output: decision, kill criteria, metric, review date | record keys `decision`, `kill_criteria`, `kill_criteria_by_lens` (`{lens: text}`), `leading_metric`, `review_date` (`--review-date`, else today + `--review-days`, default 30). A closer no seat supplied is `UNVERIFIED`, never invented |
 | Convene only when it matters | the gate above |
 
 ## Run
@@ -36,7 +36,7 @@ python3 scripts/veche.py --cmd "claude -p --strict-mcp-config" \
   --stakes high --reversibility hard
 ```
 
-- `--cmd` reads the prompt on stdin and prints the answer. Without `--lenses` it is solo-3: one cmd, the three hats.
+- `--cmd` reads the prompt on stdin and prints the answer. A custom `--cmd` reply needs a JSON object with a `verdict` (`HOLD|REVISE|PASS_TO_USER`) and string-only `claims` items; prose and stray braces around it are skipped, the first object with a valid `verdict` wins, and with `--option` the `scores` map may sit under `scores` in that object, or in any other object (bare or under `scores`). Without `--lenses` it is solo-3: one cmd, the three hats.
 - `--option` names must be short tokens (letters, digits, `-`, `_`, starting with a letter or digit; at most 32): seats echo them as JSON keys. Others fail before any call.
 - The packet is shown with numbered lines and its path under `--root`, so a model with no file tools
   can still cite `path:line`; keep the packet under `--root`.
@@ -56,7 +56,7 @@ python3 scripts/veche.py --cmd "claude -p --strict-mcp-config" \
   checked before each call. Any cap hit, non-zero exit, timeout or unparseable answer yields
   `COULD_NOT_DECIDE` (exit 3), never a guessed verdict, with `dropped` reasons and `cost`. A timed-out command's grandchildren may outlive
   it, so use a cmd that exits cleanly. `--dry-run` prints planned calls.
-- `--json-out PATH` also writes the record there (a bad path fails before any call). A gate skip prints `NOT_CONVENED` on stderr, noting an ignored `--twin`.
+- `--json-out PATH` also writes the record there (a bad path fails before any call; a write that fails at the end exits 2 only when the verdict would exit 0, so 3 and 4 stay). A gate skip prints `NOT_CONVENED` on stderr, noting an ignored `--twin`.
 - Validate: `scripts/validate_verdict.py --file record.json` accepts the record (it has `tally`),
   `COULD_NOT_DECIDE` and `NOT_CONVENED` with a `reason`, and a record with a `decision` only when it also
   carries `kill_criteria`, `leading_metric` and an ISO `review_date`.
@@ -80,8 +80,8 @@ which yields the `default_action` above. A malformed `--criteria` error states t
 When the critique round runs, each seat also ranks the other (anonymized, lens names masked) answers best
 first; valid rankings are Borda-aggregated into `peer_ranking` (lens to mean points, informational: the
 verdict still comes from the tally and evidenced attacks). There is no separate adapter: any other council
-can be a seat or the whole panel through the existing `--cmd`, a script that reads the prompt on stdin and
-prints the JSON contract. A seat that fails (cap, timeout, cmd exit) is dropped and lowers confidence; a
+can be a seat or the whole panel through the existing `--cmd` (a script; its reply contract is under Run).
+A seat that fails (cap, timeout, cmd exit) is dropped and lowers confidence; a
 failed critique call or twin keeps the round-1 verdict. Versus the fetched sources (`docs/standards-index.md`):
 
 | | llm-council | Du et al. debate | Mixture-of-Agents | Veche |

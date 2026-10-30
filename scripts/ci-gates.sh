@@ -23,6 +23,8 @@
 #   mustload --config <file> <root>      every SKILL.md load-map archetype's MUST-LOAD token-est total is within its frozen mustload-budgets.tsv ceiling; the Phase 0-2 floor equals its pin exactly, and every " when " ref is a pinned phase-conditional row
 #   rules --baseline <file> [--base <ref>] [--list] <root>
 #                                        every MUST/NEVER/ALWAYS (or bold "Never") rule line in a SKILL.md must sit in a paragraph that names a mechanism (scripts/, ci-gates, evals, hook) or says "advisory"; unenforced rules not in the baseline FAIL (ratchet); --base: baseline rows added vs <ref> need a `rule-baseline-raise:` commit marker
+#   tests-wired --allowlist <file> <root>
+#                                        every scripts/test_*.py and scripts/test-*.sh is run by CI (named in scripts/ci-tests.d/*.sh, .github/workflows/*.yml or a test they run) or listed in <file> with a reason; a stale row FAILS
 #
 set -euo pipefail
 
@@ -78,6 +80,7 @@ Usage:
   ci-gates.sh fragments [--config <file>] <dir>
   ci-gates.sh binaries <root>
   ci-gates.sh mustload --config <file> <root>
+  ci-gates.sh tests-wired --allowlist <file> <root>
 EOF
 }
 
@@ -1561,7 +1564,8 @@ cmd_rules() {
   cur="$(rules_scan "$root")"
   if [ "$list" -eq 1 ]; then printf '%s\n' "$cur"; return 0; fi
   [ -n "$baseline" ] && [ -f "$baseline" ] || die "rules: --baseline <file> is required and must exist (fail closed)"
-  new="$(comm -23 <(printf '%s\n' "$cur") <(LC_ALL=C sort -u "$baseline"))"
+  # comm in the C locale like the sorts that feed it: a UTF-8 collation orders these rows differently and comm then sees unsorted input
+  new="$(LC_ALL=C comm -23 <(printf '%s\n' "$cur") <(LC_ALL=C sort -u "$baseline"))"
   if [ -n "$new" ]; then
     printf 'RULE UNENFORCED (new): name a mechanism (scripts/, ci-gates, evals, hook) in the same paragraph or mark it advisory:\n%s\n' "$new" >&2
     die "rules: new hard rule(s) without a named mechanism"
@@ -1572,7 +1576,7 @@ cmd_rules() {
     local rel grown
     rel="$(cd "$(dirname "$baseline")" && pwd)/$(basename "$baseline")"; rel="${rel#"$(cd "$root" && pwd)"/}"
     if git -C "$root" cat-file -e "${base}:${rel}" 2>/dev/null; then
-      grown="$(comm -13 <(git -C "$root" show "${base}:${rel}" | LC_ALL=C sort -u) <(LC_ALL=C sort -u "$baseline"))"
+      grown="$(LC_ALL=C comm -13 <(git -C "$root" show "${base}:${rel}" | LC_ALL=C sort -u) <(LC_ALL=C sort -u "$baseline"))"
       range_log="$(git -C "$root" log --format=%B "${base}..HEAD")"  # capture first: `git log | grep -q` SIGPIPEs under pipefail
       if [ -n "$grown" ] && ! grep -q '^rule-baseline-raise: .\+' <<<"$range_log"; then
         printf '%s\n' "$grown" >&2
@@ -1582,6 +1586,74 @@ cmd_rules() {
   fi
   printf 'rules: ok (%d hard rule(s) without a named mechanism, all baselined; none new)\n' \
     "$(printf '%s\n' "$cur" | grep -c . || true)"
+}
+
+# ---------------------------------------------------------------------------
+# tests-wired — every scripts/test_*.py and scripts/test-*.sh is run by CI.
+#
+# A per-feature test that no CI step runs never fails a build (the #1592 audit found dozens). A test counts as run
+# when its basename is named on a non-comment line of a scripts/ci-tests.d/*.sh registration or a
+# .github/workflows/*.yml, or of a test that is itself run (scripts/test-ci-gates.sh runs many per-feature files one
+# level down); or when <allowlist> has a `<name><TAB><reason>` row for it (reason required; `#` comments and blank
+# lines ignored). A row naming no test, or a test CI already runs, FAILS too, so the list only shrinks.
+# Limit: matches the basename; a name inside a string counts as run, and a path built by string concatenation is
+# missed (a false orphan: name the file whole). The reachability walk is one awk program: the regression
+# test is scripts/test-tests-wired.sh (planted orphan, stale row, missing reason).
+# ---------------------------------------------------------------------------
+cmd_tests_wired() {
+  local allow="" root="" all run allowed orphans stale gone total listed bad=0 name reason
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --allowlist) allow="${2:-}"; shift 2 ;;
+      -*) die "tests-wired: unknown option: $1" ;;
+      *) [ -z "$root" ] || die "tests-wired: unexpected extra argument: $1"; root="$1"; shift ;;
+    esac
+  done
+  [ -n "$allow" ] && [ -n "$root" ] || die "tests-wired: --allowlist <file> and <root> are required"
+  [ -f "$allow" ] || die "tests-wired: allowlist not found: $allow (fail closed)"
+  [ -d "$root/scripts/ci-tests.d" ] || die "tests-wired: $root/scripts/ci-tests.d not found (fail closed)"
+  all="$(cd "$root/scripts" && shopt -s nullglob && printf '%s\n' test_*.py test-*.sh | LC_ALL=C sort -u)"
+  [ -n "$all" ] || die "tests-wired: no scripts/test_*.py or scripts/test-*.sh under $root (fail closed)"
+  # Roots are the registration files and workflows; every other file read is a test, whose named tests join the run set.
+  # shellcheck disable=SC2016  # awk program, not shell
+  run="$(cd "$root" && shopt -s nullglob && awk '
+    { sub(/(^|[ \t])#.*/, "") }
+    { n = split($0, w, "[^A-Za-z0-9_./-]+")
+      for (i = 1; i <= n; i++) {
+        t = w[i]; sub(/.*\//, "", t)
+        if (t !~ /^test[_-].*\.(py|sh)$/) continue
+        b = FILENAME; sub(/.*\//, "", b)
+        if (FILENAME ~ /^(scripts\/ci-tests\.d|\.github\/workflows)\//) b = "."
+        refs[b] = refs[b] " " t } }
+    END { n = split(refs["."], q, " ")
+      for (h = 1; h <= n; h++) {
+        t = q[h]; if (t in seen) continue
+        seen[t] = 1; print t
+        m = split(refs[t], r, " "); for (j = 1; j <= m; j++) q[++n] = r[j] } }
+  ' scripts/ci-tests.d/*.sh .github/workflows/*.yml scripts/test_*.py scripts/test-*.sh /dev/null | LC_ALL=C sort -u)" || die "tests-wired: cannot scan $root (fail closed)"
+  allowed=""
+  while IFS=$'\t' read -r name reason || [ -n "$name" ]; do
+    case "$name" in ''|'#'*) continue ;; esac
+    [ -n "$reason" ] || { printf 'tests-wired: FAIL %s: allowlist row has no reason (name<TAB>reason)\n' "$name"; bad=1; }
+    allowed="$allowed$name"$'\n'
+  done <"$allow"
+  allowed="$(printf '%s' "$allowed" | LC_ALL=C sort -u)"
+  # comm in the C locale like the sorts above: a UTF-8 collation orders `_` and `-` differently and comm then sees unsorted input
+  orphans="$(LC_ALL=C comm -23 <(printf '%s\n' "$all") <(printf '%s\n%s\n' "$run" "$allowed" | LC_ALL=C sort -u))"
+  gone="$(LC_ALL=C comm -13 <(printf '%s\n' "$all") <(printf '%s\n' "$allowed"))"
+  stale="$(LC_ALL=C comm -12 <(printf '%s\n' "$run") <(printf '%s\n' "$allowed"))"
+  while IFS= read -r name; do
+    [ -z "$name" ] || { printf 'tests-wired: FAIL scripts/%s is run by no CI step: name it in scripts/ci-tests.d/<slug>.sh (one command line), or add a `name<TAB>reason` row to %s\n' "$name" "$allow"; bad=1; }
+  done <<<"$orphans"
+  while IFS= read -r name; do
+    [ -z "$name" ] || { printf 'tests-wired: FAIL %s: allowlist row names no scripts/test_*.py or scripts/test-*.sh (delete the row)\n' "$name"; bad=1; }
+  done <<<"$gone"
+  while IFS= read -r name; do
+    [ -z "$name" ] || { printf 'tests-wired: FAIL %s: allowlisted but CI already runs it (delete the row)\n' "$name"; bad=1; }
+  done <<<"$stale"
+  [ "$bad" -eq 0 ] || exit 1
+  total="$(printf '%s\n' "$all" | awk 'END { print NR }')"; listed="$(printf '%s' "$allowed" | awk 'NF { n++ } END { print n + 0 }')"
+  printf 'tests-wired: ok (%d tests: %d run by CI, %d allowlisted)\n' "$total" "$((total - listed))" "$listed"
 }
 
 [ "$#" -gt 0 ] || { usage; exit 2; }
@@ -1598,6 +1670,7 @@ case "$subcmd" in
   binaries) cmd_binaries "$@" ;;
   mustload) cmd_mustload "$@" ;;
   rules) cmd_rules "$@" ;;
+  tests-wired) cmd_tests_wired "$@" ;;
   -h|--help) usage; exit 0 ;;
   *) printf 'ci-gates: unknown subcommand: %s\n' "$subcmd" >&2; usage; exit 2 ;;
 esac

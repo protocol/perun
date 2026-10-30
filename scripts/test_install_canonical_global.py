@@ -13,7 +13,7 @@ SKILL = "deep-code-review"
 
 
 def install(repo, env=None):
-    return subprocess.run(["bash", str(ROOT / "install.sh"), str(repo)], capture_output=True, text=True, env={**os.environ, **(env or {})})
+    return subprocess.run(["bash", str(ROOT / "install.sh"), str(repo)], capture_output=True, text=True, env={**os.environ, "DCR_NO_PROBE": "1", **(env or {})})  # no sandbox probe: it calls github.com
 
 
 def rows(repo, home):
