@@ -1,2 +1,0 @@
-### Fixed
-- `veche.py`: a seat reply is read by scanning for JSON objects, not by cutting from the first `{` to the last `}`. A brace in the prose around the answer (`{as asked}`, a trailing `:{`) no longer makes the whole reply unparseable, and scores sent as a second JSON object (`{"scores": ...}` or the bare options map) are used when the verdict object has none. The first object with a valid `verdict` is the answer; an object without one is still rejected as `bad verdict`. The evil twin's reply is read the same way (#2137).

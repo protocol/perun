@@ -1,3 +1,0 @@
-### Fixed
-- `veche.py`: `--alarm-s` now fires while the council is still running. Before, `COUNCIL_BLOCKING_WORK` was printed only after the run had finished, so a stuck council said nothing for as long as it ran. The line now reads `council still running after Ns (K calls started); default_action=...`, a decided run that already alarmed in flight does not repeat the line, and a run that then fails still prints its own `COULD_NOT_DECIDE` alarm line (#2138).
-- `veche.py --progress-s N` (default 30, 0 = off) prints a `veche: running Ns, K calls started` heartbeat to stderr while the council runs, so a long council is no longer silent.

@@ -1,4 +1,0 @@
-### Fixed
-- `veche.py`: the decision record explains itself (#2140). `verdict_basis` says how the verdict was reached: the tally top and its votes, a tie and whether the cautious order or `--chair` broke it, an `owner-request` council whose `HOLD` became `REVISE`, or a `do-nothing` decision that turned `PASS_TO_USER` into `REVISE`.
-- `veche.py`: a dissenting seat's answer now appears once. `dissent` keeps the verbatim answers (the validator requires the key) and `minority_report` carries the twin plus `dissenting_seats`, the names of those seats, instead of repeating the answers.
-- `veche.py`: near-duplicate kill criteria collapse into one (case, spacing and punctuation are ignored, digits are not, so `5%` and `6%` stay two) and the first wording and the order are kept. `evals.json` for idea-critic describes the new `minority_report` shape.
