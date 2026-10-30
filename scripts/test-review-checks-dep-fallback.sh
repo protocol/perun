@@ -11,7 +11,7 @@ chk() { total=$((total + 1)); if [ "$1" -eq 0 ]; then pass=$((pass + 1)); echo "
 g() { git -c user.email=t@example.com -c user.name=t "$@"; }
 mkdir "$T/bin" "$T/logs" "$T/repo"
 export LOGDIR="$T/logs"
-unset REVIEW_OSV_DB_DIR REVIEW_TRIVY_CACHE # hermetic: the host's offline-DB env must not change which branch runs
+unset REVIEW_OSV_DB_DIR REVIEW_TRIVY_CACHE OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY # hermetic: the host's offline-DB env must not change which branch runs
 # stub NAME BODY: a fake tool that logs its argv to $LOGDIR/NAME, then runs BODY
 stub() { printf '#!/usr/bin/env bash\necho "$*" >>"$LOGDIR/%s"\n%s\n' "$1" "$2" >"$T/bin/$1"; chmod +x "$T/bin/$1"; }
 NOOSV='echo "dial tcp: lookup api.osv.dev: no such host" >&2; exit 127'

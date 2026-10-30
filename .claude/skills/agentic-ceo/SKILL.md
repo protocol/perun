@@ -55,7 +55,7 @@ Read the project stage (`deep-code-review`'s `STAGE` model), the area and the ar
 - **Unattended run: one line per material landing** to the human, no status essays.
 - **Owner-gated actions never self-authorize**: a force-push, rename, delete or shared/external send needs an owner-authored grant (`agentic-delivery`'s **Human gates**).
 - **Every user-facing output clears the no-slop bar** (BLUF, numbers, no filler).
-- Cap tool calls per lane; paste `agentic-delivery`'s `templates/lane-preamble.md` into every lane brief. An OPEN owner priority outranks all other dispatch until DONE or BLOCKED.
+- Paste `agentic-delivery`'s `templates/lane-preamble.md` into every lane brief. An OPEN owner priority outranks all other dispatch until DONE or BLOCKED.
 
 ## Escalate: read this when
 
@@ -63,4 +63,4 @@ Read the project stage (`deep-code-review`'s `STAGE` model), the area and the ar
 - `references/improvement-loop.md`: asked what is most impactful, what to improve next, or for a roadmap (`scripts/roadmap_rank.py`, then `idea-critic` on the top 3).
 - `references/chaos-playbook.md`: the owner floods you with rapid, conflicting asks, or on a routine status or quiet tick; tempted to swarm a small job or trust memory over the ledger.
 - `scripts/context_audit.py`: what always-loaded context costs per turn.
-- `scripts/token_report.py --budget` (with `scripts/token_ratchet.py`): wave end, morning handoff. `scripts/weekly_receipt.py`: weekly card. `scripts/stop_reminder.py`: deferred-question hook.
+- `scripts/token_report.py --budget` (with `scripts/token_ratchet.py`): wave end, morning handoff. `scripts/spend_hub.py`: spend and waste levers. `scripts/weekly_receipt.py`: weekly card. `scripts/stop_reminder.py`: deferred-question hook.

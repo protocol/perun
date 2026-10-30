@@ -9,7 +9,7 @@ fail=0
 ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=1; }
 
-mkdir "$T/stub" "$T/repo"
+mkdir "$T/stub" "$T/repo" "$T/cache"
 cat >"$T/stub/gitleaks" <<'S'
 #!/usr/bin/env bash
 echo "gitleaks $*" >>"$GL_LOG"
@@ -35,6 +35,7 @@ git branch base
 printf 'x\n' >app.txt
 git add . && git -c user.email=t@example.com -c user.name=t commit -q -m files
 export PERUN_HEAVY_DIR="$T/heavy0" # never touch the real lease dir
+export DCR_CACHE_ROOT="$T/cache" # empty: a warm semgrep snapshot on the host would swap `--config p/default` for the local file
 run() { PATH="$T/stub:$PATH" bash "$RC" --base base "$@" 2>"$T/err" >"$T/out"; }
 
 run

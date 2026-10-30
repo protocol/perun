@@ -11,7 +11,7 @@ ENV0.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null")
 
 def repo(files):
     d = tempfile.mkdtemp(prefix="dcr-prepush-lint.")
-    g = lambda *a: subprocess.run(["git", "-C", d, "-c", "user.email=t@example.com", "-c", "user.name=T", *a],
+    g = lambda *a: subprocess.run(["git", "-C", d, "-c", "user.email=t@users.noreply.github.com", "-c", "user.name=T", *a],
                                   check=True, capture_output=True, text=True, env=ENV0).stdout.strip()
     g("init", "-q", "-b", "main")
     g("commit", "-q", "--allow-empty", "-m", "base")

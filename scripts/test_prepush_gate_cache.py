@@ -35,7 +35,7 @@ class Hook(unittest.TestCase):
         self.commit("change")
 
     def git(self, *a):
-        p = subprocess.run(["git", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "user.name=T", "-c", "user.email=t@example.com", *a], cwd=self.repo, env=self.env,
+        p = subprocess.run(["git", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "user.name=T", "-c", "user.email=t@users.noreply.github.com", *a], cwd=self.repo, env=self.env,
                            capture_output=True, text=True)
         self.assertEqual(p.returncode, 0, p.stderr)
         return p.stdout.strip()

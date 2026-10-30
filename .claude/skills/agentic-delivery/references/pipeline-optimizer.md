@@ -2,6 +2,8 @@
 
 Read this when a delivery pipeline is slow (a commit or push hook over about a minute, CI over about ten minutes, a long wait to merge), when someone proposes tuning one stage (faster runners, parallel test workers, caching, affected-test selection), or when you are asked to "make CI faster". `scripts/pipeline_profile.py` is the mechanism; this file is the procedure.
 
+**First read:** `scripts/pipeline_hub.py` prints per-workflow p50/p90, the slowest jobs, jobs that run the same check twice, per-job re-run and flake counts and PR lead time, each recommendation naming its job. It takes the job table from the `gh-workflow-stats` extension when installed and from `gh api` otherwise. Run it first, then use this procedure on the job it names.
+
 ## BLUF
 
 1. **Map first.** `pipeline_profile.py map` draws the suite x stage table (commit, push, precheck, ci, train). Every suite that runs at more than one stage is a duplicate. No stage is tuned before the map exists.

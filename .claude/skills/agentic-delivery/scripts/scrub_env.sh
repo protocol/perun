@@ -16,6 +16,8 @@
 # config (so no credential helper), no askpass or terminal prompt. NOT covered: ~/.netrc, repo .env files and other file-based
 # credentials a child reads by path. PERUN_ALLOW_NET=1 (a ci-test that truly needs the network exports it itself; it is logged to
 # stderr) keeps the proxy vars as inherited but never the GitHub token, config dir or ssh/git-credential closures.
+# Scanner provisioning is host state too: DCR_CACHE_ROOT points at an empty throwaway dir and DCR_USER_BIN is empty, so review_checks.sh sees
+# no warm scanner cache and no ~/.local/bin on any host (a test that needs either sets its own).
 args=()
 for n in $(compgen -e); do
   case "$n" in GIT_*|DATABASE_URL|PG*|MYSQL_*|REDIS_URL|DBUS_*|XDG_RUNTIME_DIR|XDG_SESSION_*|INVOCATION_ID|JOURNAL_STREAM|NOTIFY_SOCKET) args+=(-u "$n"); continue ;; esac
@@ -26,7 +28,7 @@ if [ $# -gt 0 ]; then
   trap 'rm -rf -- "$cfg"' EXIT
   net=(HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 ALL_PROXY=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 all_proxy=http://127.0.0.1:9 NO_PROXY=127.0.0.1,localhost,::1 no_proxy=127.0.0.1,localhost,::1)
   [ -z "${PERUN_ALLOW_NET:-}" ] || { net=(); echo "scrub_env: PERUN_ALLOW_NET set: proxy isolation off" >&2; }
-  env ${args[@]+"${args[@]}"} -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN -u SSH_AUTH_SOCK GIT_SSH_COMMAND=false GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_ASKPASS=false GIT_TERMINAL_PROMPT=0 GH_TOKEN=invalid GITHUB_TOKEN=invalid GH_CONFIG_DIR="$cfg" GH_PROMPT_DISABLED=1 GH_NO_UPDATE_NOTIFIER=1 ${net[@]+"${net[@]}"} "$@"
+  env ${args[@]+"${args[@]}"} -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN -u SSH_AUTH_SOCK GIT_SSH_COMMAND=false GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_ASKPASS=false GIT_TERMINAL_PROMPT=0 GH_TOKEN=invalid GITHUB_TOKEN=invalid DCR_CACHE_ROOT="$cfg/cache" DCR_USER_BIN= GH_CONFIG_DIR="$cfg" GH_PROMPT_DISABLED=1 GH_NO_UPDATE_NOTIFIER=1 ${net[@]+"${net[@]}"} "$@"
   exit $?
 fi
 echo ${args[@]+"${args[@]}"}

@@ -1,0 +1,2 @@
+### Fixed
+- `scripts/test-prepush-ci-parity.sh`: the fixture committed as `t@example.com`, which the pre-push commit identity check refuses, so "privacy ignores a deleted file" and "privacy skips a dangling symlink" failed (4/6). The fixture now commits as `t@users.noreply.github.com`, as the sibling pre-push tests do (6/6). `scripts/test-stage-run-lifecycle.sh` also commits as `t@example.com` but passes unchanged (16/16): its pre-push case pushes a HEAD already pinned as `origin/main`, so the identity check has no added commit to refuse.

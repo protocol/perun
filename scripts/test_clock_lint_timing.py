@@ -93,7 +93,7 @@ class TimingBet(unittest.TestCase):
             cl.timing = real
 
     def repo(self):
-        g = lambda *a, cwd=self.d: subprocess.run(["git", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "user.name=t", "-c", "user.email=t@example.com", *a],
+        g = lambda *a, cwd=self.d: subprocess.run(["git", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "user.name=t", "-c", "user.email=t@users.noreply.github.com", *a],
                                                   cwd=cwd, check=True, capture_output=True, text=True)
         g("init", "-q", "-b", "main")
         self.put("tests/test_old.py", "def test_a():\n    subprocess.run(c, timeout=1)\n")

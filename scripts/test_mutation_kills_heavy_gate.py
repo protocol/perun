@@ -28,7 +28,7 @@ LIGHT = [
     "pytest a.py", "pytest a.py::test_x", "pytest a.py::test_x[p1]", "pytest tests/a.py -k 'x y'", "pytest -q a.py b.py", "pytest -x a.py", "pytest -vv a.py", "pytest -n4 a.py",
     "pytest -rA a.py", "pytest --tb=short a.py", "pytest --tb short a.py", "pytest --lf a.py", "pytest --maxfail=2 a.py", "pytest -k foo a.py", "pytest -kfoo a.py",
     "pytest -m slow a.py", "pytest -p no:cacheprovider a.py", "pytest --cov=x a.py", "python -m pytest a.py", "uv run pytest a.py", "cd x && pytest a.py",
-    "playwright install", "playwright install chromium", "npm install", "npm run lint", "cargo build", "cat <<EOF\npytest\nEOF", "pytest 'unclosed", "bash -c 'echo hi'",
+    "playwright install", "playwright install chromium", "npm run lint", "cargo build", "cat <<EOF\npytest\nEOF", "pytest 'unclosed", "bash -c 'echo hi'",
     "bash -c 'git commit -m pytest'", "bash script.sh", "bash -c 'pytest --version'", "time ls", "FOO=pytest ls", "vitest --help", "go test --help",
     "npm test --help", "tsc --version", "pytest a.py b.py", "pytest tests/a.py::T::t", "pytest --durations 5 a.py", "pytest --rootdir . a.py", "pytest -o x=1 a.py", "pytest -W ignore a.py",
 ]
@@ -112,6 +112,8 @@ def test_strip_wrappers_exact():
     assert s(["poetry", "run", "pytest"]) == ["pytest"]
     assert s(["pnpm", "exec", "vitest"]) == ["vitest"]
     assert s(["command", "pytest"]) == ["pytest"]
+    assert s(["command", "-v", "grype"]) == [] and s(["command", "-V", "grype"]) == [] and s(["nice", "command", "-v", "x"]) == []  # presence check
+    assert s(["uvx", "--from", "x", "pytest"]) == ["pytest"] and s(["bunx", "jest"]) == ["jest"] and s(["pnpm", "dlx", "vitest"]) == ["vitest"]
     assert s(["python", "x.py"]) == ["python", "x.py"]
     assert s(["uv"]) == ["uv"]
     assert s(["FOO=1"]) == []
@@ -274,7 +276,7 @@ def test_main_contract():
             o = json.loads(out)["hookSpecificOutput"]
             assert o["hookEventName"] == "PreToolUse" and o["permissionDecision"] == "deny"
             assert o["permissionDecisionReason"] == ("machine busy (load 99.0/2 cores, RAM 60% free; HOLD load-high): "
-                                                     "wait and retry, or run a narrower test (one file or -k filter)")
+                                                     "wait and retry, or narrow the command (one test file, a -k filter, a smaller scan path)")
             assert hook("pytest -q")[1] and hook("pytest -q")[1]  # denies 2 and 3
             rc, out = hook("pytest -q")  # the 4th attempt is allowed with a WARN
             o = json.loads(out)["hookSpecificOutput"]

@@ -20,12 +20,18 @@ Also (py/js, any file, test or not): `file:line: date literal compared with real
 date (`SUNSET = date(2026, 10, 14)`, `"2026-10-14"`) compared with a real-clock read on its line or via the constant it is
 assigned to; within 30 days of `--today` (default: real today) it is tagged `(URGENT: Nd)`, past it `(EXPIRED)`. These
 count toward the exit code only with `--strict`; a pinned fake clock anywhere in the file or the allow escape exempts.
-Also (py test files only, AST): `file:line: timing bet under load; ...` inside a `test_*` function (any function in a file
+Also (py test files, AST): `file:line: timing bet under load; ...` inside a `test_*` function (any function in a file
 under `tests/` of the repo-relative path) for `time.sleep(<number > 0>)` (also `from time import sleep`) followed later by an
 assert that is not in a sibling if/else branch, a run/call/check_call/check_output/communicate/wait/get call with
 `timeout=<number <= 5>`, or `assert <X> < (or <=) <number>` where X is a name/attribute/call matching
 elapsed|duration|latency|took|runtime|wall or an arithmetic expression using time/monotonic/perf_counter: wall-clock
-bets that flake on a busy runner. Same `clock-lint: allow` escape (on any line of a multi-line call). `--block-added`
+bets that flake on a busy runner. js/ts test files get the same three bets from regexes over each call's text (no AST):
+a delay > 0 in `sleep|delay|wait|waitForTimeout(N)`, or in `setTimeout(.., N)` inside `new Promise(..)` or around an assert,
+followed later in the same it/test/describe block by `expect(`/`assert`/`.should`; `{ timeout: N }` (0 < N <= 5000 ms) in the
+options of a run/get/wait*/exec*/spawn*/poll/findBy*/to<Matcher> call; `expect(<elapsed-like, or a clock read minus x>)
+.toBeLessThan(OrEqual)(N)` (chai `.below/.lessThan/.at.most`) or `assert(<elapsed-like> < N)` (also `assert.ok`). A fake
+timer or clock marker (`useFakeTimers`, `setSystemTime`, MockDate) anywhere in a js/ts file exempts it from this rule.
+Same `clock-lint: allow` escape (on any line of a multi-line call). `--block-added`
 (needs `--base`) makes ONLY a timing bet in a file ADDED in base...head count toward exit 1; every other finding still
 prints but is a warning (exit 0), so one hook call blocks new files and only warns for old ones. A crash in this rule
 is COULD_NOT_CHECK (exit 2), never a finding.
@@ -82,6 +88,14 @@ RMSG = "advisory: day/week-relative text asserted with no fixed clock; pin it (p
 ELAPSED = re.compile(r"elapsed|duration|latency|took|runtime|wall", re.I)
 WAITS = {"run", "call", "check_call", "check_output", "communicate", "wait", "get"}
 CLOCKS = {"time", "time_ns", "monotonic", "monotonic_ns", "perf_counter", "perf_counter_ns"}
+JSNUM = r"\d[\d_]*(?:\.\d+)?(?:e\d+)?"  # a plain numeric literal
+JSBRACKET = re.compile(r"(?<!\\)[(\[{)\]},]")  # an escaped bracket (a regex literal's \( ) never counts
+JSSLEEP = re.compile(r"setTimeout|sleep|delay|wait|waitForTimeout")
+JSWAITS = re.compile(r"run|get|wait\w*|exec\w*|spawn\w*|poll|find(?:All)?By\w+|to[A-Z]\w*")
+JSTIMEOUT = re.compile(r"\btimeout\s*:\s*(%s)\s*(?=[,}])" % JSNUM)
+JSLESS = re.compile(r"\s*\.\s*(?:(?:to|be|at)\s*\.\s*)*(?:toBeLessThan(?:OrEqual)?|below|lessThan|lte?|most)\s*\(\s*%s\s*\)" % JSNUM)
+JSASSERT = re.compile(r"\b(?:expect|assert)\w*\s*[(.]|\.should\b")
+JSCLOCK = re.compile(r"\b(?:Date\.now|performance\.now|hrtime|getTime)\b")
 
 
 def code(lang, line, st):
@@ -247,6 +261,81 @@ def timing(path, text):
                   and not (a > 1 and ALLOW in lines[a - 2] and COMMENT.match(lines[a - 2])))
 
 
+def jscalls(s):
+    """[(name, start, end, [top-level argument text])] of every `name(...)` call in `s`, strings and comments blanked."""
+    out = []
+    for m in re.finditer(r"([\w$]+)\s*\(", s):
+        depth, a, args = 0, m.end(), []
+        for t in JSBRACKET.finditer(s, m.end()):
+            c = t.group()
+            if c == "," and not depth:
+                args.append(s[a:t.start()].strip())
+                a = t.end()
+            elif c in "([{":
+                depth += 1
+            elif c != ",":
+                if not depth:
+                    out.append((m.group(1), m.start(), t.start(), args + [s[a:t.start()].strip()]))
+                    break
+                depth -= 1
+    return out
+
+
+def _jsnum(x):
+    """The value of a plain numeric literal (500, 1_500, 0.5, 2e3), else None."""
+    return float(x.replace("_", "")) if re.fullmatch(JSNUM, x) else None
+
+
+def _jselapsed(x):
+    """True when the expect()/assert operand `x` names an elapsed time (a name/member/call chain) or subtracts a clock read."""
+    return bool(ELAPSED.search(x) and re.fullmatch(r"[\w$.\s]*(?:\([^()]*\))?", x)) or bool(JSCLOCK.search(x) and "-" in x)
+
+
+def jstiming(path, text):
+    """[line_no] of timing bets in js/ts test text (see the module docstring); `path` is unused, kept so run() calls either rule alike."""
+    lines, st = text.split("\n"), [False]
+    cl = ["" if COMMENT.match(l) else code("js", re.sub(r"`(?:\\.|[^`\\])*`", "''", l), st) for l in lines]
+    if any(FAKE.search(c) and not IMPORT.match(l) for c, l in zip(cl, lines)):
+        return []  # fake timers or a pinned clock in the file: its timers and elapsed times are not wall-clock
+    s, offs = "\n".join(cl), [0]
+    calls = jscalls(s)
+    proms = [(a, b) for n, a, b, _ in calls if n == "Promise"]
+    starts = [i for i, l in enumerate(lines) if re.search(BLOCK["js"], l)] + [len(lines)]  # the sentinel ends the last block
+    for c in cl:
+        offs.append(offs[-1] + len(c) + 1)
+    ln = lambda p: s.count("\n", 0, p)
+
+    def bet(name, a, b, args):
+        """End offset of the timing bet this call is, else None."""
+        v = _jsnum(args[-1])
+        if JSSLEEP.fullmatch(name) and (v or 0) > 0 and (name != "setTimeout" or any(p < a < q for p, q in proms) or JSASSERT.search(s, a, b)) \
+                and JSASSERT.search(s, a, offs[next(i for i in starts if i > ln(a))]):  # a sleep, then an assert in the same block
+            return b
+        if JSWAITS.fullmatch(name):
+            for x in args:
+                m = x.startswith("{") and JSTIMEOUT.search(x)
+                if m and 0 < _jsnum(m.group(1)) <= 5000:
+                    return b
+        if name == "expect":
+            m = JSLESS.match(s, b + 1)
+            if m and _jselapsed(args[0]):
+                return m.end()
+        if name in ("assert", "ok"):
+            m = re.fullmatch(r"(.+?)\s*<=?\s*%s" % JSNUM, args[0])
+            if m and _jselapsed(m.group(1)):
+                return b
+
+    hits = set()
+    for name, a, b, args in calls:
+        e = bet(name, a, b, args)
+        if e is None:
+            continue
+        lo, hi = ln(a), ln(e)
+        if not any(ALLOW in lines[j] for j in range(lo, hi + 1)) and not (lo and ALLOW in lines[lo - 1] and COMMENT.match(lines[lo - 1])):
+            hits.add(lo + 1)
+    return sorted(hits)
+
+
 def files(root, base, head, args, filt="AM"):
     if args:
         return args
@@ -304,9 +393,10 @@ def run(root, base, args, head="HEAD", deadline=None, today=None, strict=False, 
             except Exception as e:
                 print("COULD_NOT_CHECK %s: %s" % (rel, e))
                 cant += 1
-        if f.endswith(".py"):
+        rule = timing if f.endswith(".py") else jstiming if EXT[f.rsplit(".", 1)[-1]] == "js" else None
+        if rule:
             try:  # fail open: a crash here is COULD_NOT_CHECK, never a finding that blocks a push
-                tb = timing(os.path.relpath(os.path.realpath(f), os.path.realpath(root)), text)
+                tb = rule(os.path.relpath(os.path.realpath(f), os.path.realpath(root)), text)
             except Exception as e:
                 print("COULD_NOT_CHECK %s: %s" % (rel, e))
                 cant += 1
@@ -407,6 +497,21 @@ def selftest():
     ]
     for name, src, want in tm:
         assert timing(name, src) == want, (name, src, timing(name, src), want)
+    js = [
+        ("a.test.ts", "it('a', async () => {\n  await sleep(500);\n  expect(ok()).toBe(true);\n});\n", [2]),
+        ("a.test.ts", "it('a', async () => {\n  await new Promise((r) => setTimeout(r, 500));\n  expect(ok()).toBe(true);\n});\n", [2]),
+        ("a.test.ts", "it('a', async () => {\n  expect(ok()).toBe(true);\n  await sleep(500);\n});\n", []),  # no assert after the sleep
+        ("a.test.ts", "it('a', async () => {\n  await sleep(500);\n});\nit('b', () => {\n  expect(1).toBe(1);\n});\n", []),  # assert is in the next block
+        ("a.test.ts", "it('a', () => {\n  setTimeout(emit, 10);\n  expect(ok()).toBe(true);\n});\n", []),  # a scheduled producer, not a sleep
+        ("a.test.ts", "it('a', async () => {\n  await waitFor(() => ok(), {\n    timeout: 1000,\n  });\n});\n", [2]),
+        ("a.test.ts", "it('a', async () => {\n  await waitFor(() => ok(), { timeout: 30000 });\n  await p.wait({ timeout: 0 });\n});\n", []),
+        ("a.test.ts", "it('a', () => {\n  expect(elapsed).toBeLessThan(2000);\n  expect(Date.now() - t0).toBeLessThanOrEqual(100);\n"
+                      "  assert(took < 5);\n  expect(elapsed).not.toBeLessThan(2000);\n  expect(count).toBeLessThan(2);\n});\n", [2, 3, 4]),
+        ("a.test.ts", "it('a', async () => {\n  // clock-lint: allow\n  await sleep(500);\n  await sleep(500); // clock-lint: allow\n  expect(ok()).toBe(true);\n});\n", []),
+        ("a.test.ts", "beforeEach(() => { jest.useFakeTimers(); });\nit('a', () => {\n  setTimeout(f, 10);\n  expect(elapsed).toBeLessThan(2000);\n});\n", []),
+    ]
+    for name, src, want in js:
+        assert jstiming(name, src) == want, (name, src, jstiming(name, src), want)
     print("clock_lint selftest ok")
 
 

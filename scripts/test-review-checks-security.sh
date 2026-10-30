@@ -7,7 +7,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RC="$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh"
 T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-rcsec.XXXXXX"); trap 'rm -rf "$T"' EXIT
-export PERUN_HEAVY_DIR="$T/heavy" REVIEW_LEASE_WAIT=0 # isolate from the real machine-wide lease dir
+export PERUN_HEAVY_DIR="$T/heavy" REVIEW_LEASE_WAIT=0 DCR_CACHE_ROOT="$T/nocache" DCR_USER_BIN= # isolate from the real machine-wide lease dir, a provisioned host osv cache and ~/.local/bin
+unset OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY # hermetic: an exported seeded DB dir would turn osv on without REVIEW_OSV
 fail=0
 ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=1; }

@@ -205,6 +205,7 @@ REASON = {
     "deep-code-review/references/security-agent-skills.md": "the skill-security checklist that describes these attacks",
     "agentic-delivery/scripts/subagent_brief_lint.py": "advisory hook; its docstring and stamp writer name the per-user cache dir where it records briefs it already flagged",
     "agentic-ceo/scripts/context_audit.py": "docstring listing the instruction files the read-only audit measures; the script never writes",
+    "deep-code-review/scripts/provision_tools.sh": "prints, never runs, the owner line that downloads the semgrep p/default snapshot from semgrep.dev; the owner pastes it outside the sandbox",
 }
 
 def fingerprints(root):
@@ -252,6 +253,7 @@ COUNTS = {
     ('deep-code-review/references/security-agent-skills.md', 'curl-pipe', 'd9e3e485'): 1,
     ('deep-code-review/references/security-agent-skills.md', 'prompt-inject', '6a0a08e0'): 1,
     ('deep-code-review/references/security-ai-agents.md', 'prompt-inject', '4f0b70e5'): 1,
+    ('deep-code-review/scripts/provision_tools.sh', 'net-host', '066b3807'): 1,
 }
 
 

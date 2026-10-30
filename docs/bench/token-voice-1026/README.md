@@ -5,10 +5,11 @@ cut median output tokens per task from 995 (none) and 976 (caveman ultra) to 667
 pass-rate loss; all three paired 95% CIs on the token difference exclude zero. Versus ponytail (1647) it is -59%, but
 that is not a voice win (see caveats).
 
-What the Perun arm is: the text of the opt-in `install.sh --with-terse-replies` (reply budget of 3 lines / 500 chars,
-fenced code blocks and `! ` command lines exempt, plus the zero-chat rule). The default install applies no cap, so
-**default Perun is not measured here**. The win is prose removal under a length cap with code exempt, not a general
-voice or reasoning improvement.
+What the Perun arm is: the reply budget of the opt-in `install.sh --with-terse-replies` (3 lines / 500 chars, fenced code
+blocks and `! ` command lines exempt) plus the "Zero chat between tool calls" rule of the lane preamble
+(`.claude/skills/agentic-delivery/templates/lane-preamble.md`), which is the lane default. The default install applies no
+cap, so **default Perun is not measured here**. The win is prose removal under a length cap with code exempt, not a
+general voice or reasoning improvement.
 
 | arm | median output tokens / task | mean | pass rate (95% CI) | total output tokens | total cost |
 |---|---|---|---|---|---|

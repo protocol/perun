@@ -118,7 +118,7 @@ MD_IS_THE_PRODUCT = [frozenset({"skills/a.md"})] * 9 + [frozenset({"src/x.py"})]
 
 
 def git(cwd, *a):
-    return subprocess.run(["git", "-C", str(cwd), "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "user.email=t@example.com", "-c", "user.name=T", *a],
+    return subprocess.run(["git", "-C", str(cwd), "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "user.email=t@users.noreply.github.com", "-c", "user.name=T", *a],
                           capture_output=True, text=True, check=True).stdout
 
 

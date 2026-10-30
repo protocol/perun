@@ -136,7 +136,7 @@ Principles 4-6, 10 and 11 (do no harm, respect the existing design, rank, outcom
 Work phases in order. Skip only when it provably does not apply, and say so.
 **Full procedure:** `method.md` — **read it when** executing a
 review after the first-response block.
-Lazy phase files, on trigger: `method-diff.md` on `DIFF`/`FILE`; `method-lenses.md` when a call site may bypass or re-derive a shared helper or predicate, or a changed unit lacks a covering test.
+Lazy phase files: `method-diff.md` on `DIFF`/`FILE`; `method-lenses.md` when a call site may bypass or re-derive a shared helper or predicate, or a changed unit lacks a covering test.
 
 | Phase | Does | Load |
 |---|---|---|
@@ -148,7 +148,7 @@ Lazy phase files, on trigger: `method-diff.md` on `DIFF`/`FILE`; `method-lenses.
 | 5 Report | Chat BLUF ≤30 lines + full table out-of-tree; in-repo `code-review/` only on confirmation | `method-report.md`, `report-format.md`, `example-review-report.md` |
 | 6 Imprint | Opt-in `AGENTS.md` + gates; detect-and-stop if present; pair each standard with a gate | `docs-and-dx.md` |
 
-Scanners, hub: `tool-hub.md`.
+Scanners: `tool-hub.md`; NOT RUN: `scripts/provision_tools.sh`.
 
 Phase 6 imprints **this project's review bar**, never delivery (an overlay
 below, on the owner's yes).
@@ -217,13 +217,13 @@ Google eng-practices: approve once the change **definitely improves overall
 code health** — never wave a Blocker/Critical, never approve a regression on
 another axis (principle 4).
 
-Findings report templates (`report-format.md`, `machine-report.md`, `example-review-report.md`): `full-map-report.md` — **read** when writing Phase 5.
+Report templates (`report-format.md`, `machine-report.md`, `example-review-report.md`): `full-map-report.md` — **read** at Phase 5.
 
 ---
 
 ## Project stage (calibrates urgency, not severity)
 
-Stage never relaxes the next rule. Model, table and guardrails 1 and 3: `full-map-principles.md` — **read it when** setting or reading `STAGE`.
+Stage never relaxes the next rule. Model, table and guardrails 1 and 3: `full-map-principles.md` — **read** when setting or reading `STAGE`.
 
 2. **Security, secret-exposure, and data-loss/integrity findings never relax** (nor safety) — a
    `prototype` with an exposed credential is still Critical. These have no "relax"

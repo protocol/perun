@@ -5,9 +5,14 @@
 # scripts/score_review.py matches on. Findings are LEADS: verify each against the code before reporting.
 #
 # Tools (linters, gitleaks, osv-scanner, semgrep, trivy): see references/method-situational.md. Each runs only when
-# installed and only on matching changed files. Secrets are redacted and never printed; osv-scanner needs env
-# REVIEW_OSV=1 (network; with no osv-scanner/trivy result it falls back to npm/pnpm/pip-audit, else a not-checked row); semgrep uses repo rules, else the bundled taint rules plus p/default (never `--config auto`); trivy is offline.
-# Tool hub: zizmor, bandit, gosec, grype, checkov, hadolint (snyk-agent-scan is unverified, skipped) run from one registry
+# installed and only on matching changed files. Secrets are redacted and never printed; osv-scanner runs offline on a warm DB (env REVIEW_OSV_DB_DIR, an exported OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY that already holds a seeded database,
+# else the cache provision_tools.sh --print warms; no flag needed), or against the OSV API with env REVIEW_OSV=1 (network), and is not run with neither;
+# a lockfile with no osv-scanner/trivy result falls back to npm/pnpm/pip-audit (opt-in: REVIEW_OSV=1 or REVIEW_OSV_DB_DIR; it queries the registry), else a not-checked row; trivy is offline.
+# semgrep uses repo rules, else the bundled taint rules plus the p/default pack (never `--config auto`; the local snapshot provision_tools.sh --print warms stands in for the registry pack when present).
+# If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
+# full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
+# snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
+# Tool hub: zizmor, actionlint, bandit, gosec, grype, checkov, hadolint (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -23,12 +28,21 @@
 # that timed out, crashed or (REVIEW_LEASE_FULL=skip) lost the lease is listed there (once, with a not-checked row on stdout) and never under "ran", so it cannot read as zero findings; a tool that is merely not installed stays under "skipped (not installed)". `--tests` also runs the command
 # declared in env REVIEW_TEST_CMD (opt-in; it executes project code). Never installs anything. A missing tool
 # or a timeout prints "review_checks: not run: <tool> (<why>)" on stderr and is not a failure. A semgrep scan that emitted findings but
-# reported errors prints "review_checks: partial: semgrep ran ..." instead (never "not run"). A semgrep run with errors and zero results is "not run". tsc also resolves the repo-local node_modules/.bin/tsc (cwd or git toplevel only), run only when REVIEW_TEST_CMD is set.
+# reported errors prints "review_checks: partial: semgrep ran ..." instead (never "not run"). A semgrep chunk with errors and zero results is "partial" when some scanned file raised no error (the unscanned part is a not-checked row), and "not run" only when every scanned file errored. A hub tool that reports a file outside its scanned list is "not run" (paths do not line up), never a clean. tsc also resolves the repo-local node_modules/.bin/tsc (cwd or git toplevel only), run only when REVIEW_TEST_CMD is set.
+# Offline caches that scripts/provision_tools.sh --print warms once, outside the sandbox, are used when present: the osv-scanner offline DB
+# (unless REVIEW_OSV_DB_DIR or REVIEW_OSV=1 choose a mode), the trivy DB (trivy always runs offline) and a local semgrep p/default snapshot.
+# A closing "ran X / wired Y scanners" stderr line names the scanners that had work this run, those that did not run, those that ran with a partial
+# scope (trivy secret-only, semgrep with errors or bundled-only) and which a provision fixes (a missing tool, a cold cache, semgrep bundled-only); wired also counts shellcheck, ruff/pyflakes and (with --history) gitleaks-history,
+# which provision_tools.sh cannot install, so they can be "not run" but never "fixable". The same summary is recorded best-effort in
+# <git-common-dir>/review-checks-last.json for perun_doctor.py.
 # All temp files live in one private mktemp -d dir per run, removed on exit.
-# Each tool is timeboxed (default 60s). Exit 0 even with findings; 2 on usage/unresolvable base.
+# Each tool run is timeboxed (default 60s); a semgrep chunk whose p/default pack hangs spends a second timebox on the bundled-rules rerun. Exit 0 even with findings; 2 on usage/unresolvable base.
 set -euo pipefail
+# pipx and `uv tool` install into ~/.local/bin, which a sandboxed shell's PATH may lack: append it so provisioned scanners are found (DCR_USER_BIN overrides; empty disables)
+lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin}
+case ":$PATH:" in *":$lb:"*) ;; *) [ -z "$lb" ] || [ ! -d "$lb" ] || PATH=$PATH:$lb ;; esac
 
-repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" nr="" failed="" missing="" gap="" dg="" w1="" nice19=0 lease=ok leased=0 full=0 wr=0 cov=""
+repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" nr="" failed="" missing="" gap="" dg="" w1="" nice19=0 lease=ok leased=0 full=0 wr=0 cov="" wired="" wiredx=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base=${2:?--base needs a ref}; case "$base" in -*) echo "review_checks: --base must not start with '-'" >&2; exit 2 ;; esac; shift 2 ;;
@@ -57,8 +71,15 @@ sgh=$(mktemp -d "$td/review-sg.XXXXXX") # semgrep HOME: the macOS agent sandbox 
 XRE='(^|/)(node_modules|\.claude/worktrees|vendor|dist|build|\.git|\.venv|venv|target|__pycache__)/'
 if [ "$wr" = 1 ]; then all=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$base" HEAD); else all=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$base"...HEAD); fi
 files=$(printf '%s\n' "$all" | grep -Ev "$XRE" || true)
-nex=$(( $(printf '%s\n' "$all" | grep -c .) - $(printf '%s\n' "$files" | grep -c .) ))
+# One-per-line copy of $files for exact-line membership tests: grep reads this file, never a pipe (a `printf | grep -q` that matches early
+# SIGPIPEs the writer, and pipefail then drops the match once the list outgrows the pipe buffer).
+printf '%s\n' "$files" >"$td/files"
+nex=$(( $(printf '%s\n' "$all" | grep -c . || true) - $(printf '%s\n' "$files" | grep -c . || true) )) # grep -c exits 1 at a count of 0, which set -e would turn into a silent exit
+[ -n "$files" ] || echo "review_checks: 0 files in diff (empty, or only excluded paths); nothing to scan" >&2
 rc=0
+[ -z "$files" ] || wired+=" gitleaks semgrep trivy" # scanners with work this run (any changed file); osv-scanner and the hub add theirs below
+# wiredx: scanners that count toward "wired" but that provision_tools.sh cannot install, so they are never "fixable": shellcheck, ruff/pyflakes, gitleaks-history
+[ "$hist" = 0 ] || wiredx+=" gitleaks-history"
 
 # Existing changed files matching extended regex $1, one per line.
 changed() { { printf '%s\n' "$files" | grep -E "$1" || true; } | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done; true; }
@@ -120,7 +141,7 @@ have() {
 }
 # add TOOL FILE LINE RULE MSG -> one TSV row.
 add() { printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" >>"$raw"; }
-# run_one TOOL CMD... : sets rc; returns 1 (with a not-run line) on timeout.
+# run_one TOOL CMD... : sets rc; returns 1 on timeout, with a not-run line unless it is semgrep with the p/default pack in its config (sgreg=1: the caller reruns with the bundled rules and reports that).
 run_one() {
   local tool=$1 nz=(); shift; rc=0
   # lease full: heavy scanners run at lowest priority and are named in the summary (never take the lease while degraded)
@@ -133,7 +154,8 @@ run_one() {
     local a=(); while [ $# -gt 0 ]; do case "$1 ${2:-}" in "--jobs 1"|"--parallel 1") shift 2 ;; "-- "*) a+=("$@"); break ;; *) a+=("$1"); shift ;; esac; done
     rc=0; tbox ${nz[@]+"${nz[@]}"} "${a[@]}" || rc=$?
     [ "$rc" != 0 ] || w1=${w1/ $tool/} ;; esac ;; esac
-  case "$rc" in 124|142) skip "$tool" "timeout ${tmo}s"; return 1 ;; esac
+  # a timed-out semgrep that still carries the registry pack is not "not run": the caller reruns with the bundled rules alone
+  case "$rc" in 124|142) [ "$tool ${sgreg:-0}" = "semgrep 1" ] || skip "$tool" "timeout ${tmo}s"; return 1 ;; esac
   return 0
 }
 # scan_ok TOOL [OKRC...]: false (with a not-run line) when the last run_one exit code is not 0 or an OKRC (findings), i.e. a crash.
@@ -141,6 +163,7 @@ scan_ok() { local t=$1 c; shift; for c in 0 "$@"; do [ "$rc" = "$c" ] && return 
 # Findings parsed from $out by a sed script (TSV columns) land via `add`.
 sh_files=$(changed '\.(sh|bash)$')
 if [ -n "$sh_files" ]; then
+  wiredx+=" shellcheck"
   if have shellcheck; then
     while IFS= read -r f; do
       run_one shellcheck shellcheck -f gcc "./$f" || continue
@@ -168,6 +191,7 @@ if [ -n "$py_files" ]; then
   elif command -v pyflakes >/dev/null; then lint=(pyflakes) ln=pyflakes
   elif python3 -m pyflakes --version >/dev/null 2>&1; then lint=(python3 -m pyflakes) ln=pyflakes
   else skip "ruff/pyflakes" "not installed"; ln=; fi
+  wiredx+=" ${ln:-ruff/pyflakes}"
   if [ -n "$ln" ]; then
     while IFS= read -r f; do
       run_one "$ln" "${lint[@]}" "./$f" || continue
@@ -222,8 +246,10 @@ fi
 # Fails closed: missing, empty or malformed JSON exits non-zero instead of reading as "no findings".
 sjson() {
   python3 - "$1" "$2" <<'PY'
-import hashlib, json, os, re, sys
+import hashlib, json, os, pathlib, re, sys
 kind = sys.argv[1]
+def nf(f):  # scanners echo the path they were given ("./.github/..."); rows must carry the changed-file form
+    return os.path.normpath(f) if f else f
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 i = min([x for x in (t.find("{"), t.find("[")) if x >= 0], default=-1)
 if i < 0:
@@ -239,7 +265,7 @@ elif kind.startswith("trivy"):
 elif kind == "audit":  # npm audit (vulnerabilities), pnpm audit (advisories), pip-audit (dependencies)
     if not isinstance(d, dict) or not any(isinstance(d.get(k), (dict, list)) for k in ("vulnerabilities", "advisories", "dependencies")):
         sys.exit("sjson: audit output has no vulnerabilities, advisories or dependencies")
-elif kind in ("zizmor", "hadolint"):
+elif kind in ("zizmor", "hadolint", "actionlint"):
     if not isinstance(d, list):
         sys.exit(f"sjson: {kind} output is not a list")
 elif kind in ("gosec", "grype"):
@@ -250,6 +276,8 @@ elif kind in ("gosec", "grype"):
         sys.exit("sjson: gosec reported Golang errors")
 elif kind == "checkov":
     ds = d if isinstance(d, list) else [d]
+    # Nothing applicable to check (empty or variables-only .tf): checkov prints a flat summary with no "results", which is a clean file, not unparseable output.
+    ds = [{"results": {}} if isinstance(x, dict) and "results" not in x and x.get("parsing_errors") == 0 and x.get("failed") == 0 else x for x in ds]
     if not ds or not all(isinstance(x, dict) and isinstance(x.get("results"), dict) for x in ds):
         sys.exit("sjson: checkov output has no results object")
     if any(x["results"].get("parsing_errors") for x in ds):  # an unparsed file must not read as clean
@@ -304,25 +332,40 @@ elif kind == "zizmor":  # row is 0-based in json-v1; fixes and snippets are neve
         l = ((x.get("locations") or [{}])[0])
         f = (((l.get("symbolic") or {}).get("key") or {}).get("Local") or {}).get("verbatim_path")
         r = (((l.get("concrete") or {}).get("location") or {}).get("start_point") or {}).get("row", -1)
-        rows.append((f, r + 1, x.get("ident"), x.get("desc", "")))
+        rows.append((nf(f), r + 1, x.get("ident"), x.get("desc", "")))
 elif kind == "bandit":  # issue_text (B105 embeds the secret) and code are never read
     rows = [(os.path.relpath(r["filename"]), r.get("line_number", 0), r.get("test_id"), "potential issue (see the bandit docs for this test id)") for r in d["results"]]
 elif kind == "gosec":
     for r in d["Issues"] or []:
         ln = str(r.get("line", "0")).split("-")[0]
         rows.append((os.path.relpath(r["file"]), int(ln) if ln.isdigit() else 0, r.get("rule_id"), r.get("details", "")))
-elif kind == "grype":  # file comes from the caller (it scanned one target)
+elif kind == "grype":  # file comes from the caller (it scanned one target); "-" placeholder: the caller's `read` collapses an empty leading field
     for m in d["matches"]:
         v, a = m.get("vulnerability") or {}, m.get("artifact") or {}
-        rows.append(("", 0, v.get("id"), f"{a.get('name')}@{a.get('version')}: {(v.get('description') or '')[:200]}"))
-elif kind == "checkov":  # code_block is never read
+        rows.append(("-", 0, v.get("id"), f"{a.get('name')}@{a.get('version')}: {(v.get('description') or '')[:200]}"))
+elif kind == "checkov":  # code_block is never read; "-" placeholder as for grype
     for x in ds:
         for c in x["results"].get("failed_checks") or []:
-            rows.append(("", (c.get("file_line_range") or [0])[0], c.get("check_id"), c.get("check_name", "")))
+            rows.append(("-", (c.get("file_line_range") or [0])[0], c.get("check_id"), c.get("check_name", "")))
 elif kind == "hadolint":
     rows = [(r.get("file"), r.get("line", 0), r.get("code"), r.get("message", "")) for r in d]
+elif kind == "actionlint":  # snippet is never read; the rule is actionlint's error kind
+    rows = [(nf(r.get("filepath")), r.get("line", 0), r.get("kind"), r.get("message", "")) for r in d]
 elif kind == "semgrep":
-    rows = [(r["path"], r["start"]["line"], r.get("check_id"), (r.get("extra") or {}).get("message", "")) for r in d["results"]]
+    # semgrep prefixes every rule id with the dotted directory of the config file that defines it, which leaks the local path into reports: strip it.
+    # pfx mirrors semgrep's own convert_config_id_to_prefix; ids with no such prefix (registry rules) never match, so nothing is cut.
+    def pfx(f):
+        p = pathlib.Path(f)
+        try: p = p.relative_to(pathlib.Path.cwd())
+        except ValueError: pass
+        s = ".".join(p.parts[:-1]).lstrip("./").lstrip(".")
+        return re.sub(r"[^a-zA-Z0-9._-]", "", s + "." if s else "")
+    fs = []
+    for c in filter(None, os.environ.get("SG_CFG", "").split("\n")):
+        fs += [os.path.join(a, "x") for a, _, _ in os.walk(c)] if os.path.isdir(c) else [c]
+    ps = sorted({pfx(f) for f in fs} - {""}, key=len, reverse=True)
+    cid = lambda i: next((i[len(q):] for q in ps if isinstance(i, str) and i.startswith(q)), i)
+    rows = [(r["path"], r["start"]["line"], cid(r.get("check_id")), (r.get("extra") or {}).get("message", "")) for r in d["results"]]
 else:
     for r in d["results"]:
         for p in r.get("packages") or []:
@@ -331,7 +374,11 @@ else:
                      for v in p.get("vulnerabilities") or []]
 for row in rows:
     print("\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in row))
-sys.exit(3 if kind == "semgrep" and d.get("errors") else 0)  # 3 = rows printed, but the scan was partial
+err = kind == "semgrep" and d.get("errors")
+if err and not rows:  # errors and no findings: partial when some scanned file raised no error, else exit 4 (nothing usable was scanned)
+    bad = {e.get("path") if isinstance(e, dict) else None for e in err}
+    sys.exit(3 if None not in bad and len(set((d.get("paths") or {}).get("scanned") or [])) > len(bad) else 4)
+sys.exit(3 if err else 0)  # 3 = the scan was partial (rows may be empty); 4 = errors on every scanned file and no rows
 PY
 }
 
@@ -353,7 +400,7 @@ if have gitleaks; then
     if run_one gitleaks gitleaks detect --config "$glw" --gitleaks-ignore-path "$gli" --no-git --no-banner --exit-code 0 -f json -r "$rep" -s . && scan_ok gitleaks; then
       [ -s "$rep" ] || echo '[]' >"$rep"
       if sjson gitleaks "$rep" >"$tsv"; then
-        while IFS=$'\t' read -r f l r m; do f=${f#./}; printf '%s\n' "$files" | grep -qxF -- "$f" && add gitleaks "$f" "$l" "$r" "$m"; done <"$tsv"
+        while IFS=$'\t' read -r f l r m; do f=${f#./}; grep -qxF -- "$f" "$td/files" && add gitleaks "$f" "$l" "$r" "$m"; done <"$tsv"
       else skip gitleaks "unparseable report; secrets were not scanned"; fi
     fi
   else
@@ -379,16 +426,22 @@ if have gitleaks; then
 elif [ -n "$files" ]; then add gitleaks "" 0 not-checked "not installed or heavy lease full; secrets were not scanned"; fi
 
 lock_files=$(changed '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.sum|Cargo\.lock|poetry\.lock|requirements[^/]*\.txt|composer\.lock)$')
+[ -z "$lock_files" ] || wired+=" osv-scanner"
+# osvdb: REVIEW_OSV_DB_DIR, else (unless REVIEW_OSV=1 picked the online API) the provisioned osv-scanner cache once it holds a DB (provision_tools.sh --cache osv also honours an exported OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY). A cache without a DB is never used: osv-scanner then prints empty results, not an error, which would read as clean. Only this block reads it, so the registry-audit fallback below stays opt-in.
+osvdb=${REVIEW_OSV_DB_DIR:-} osvcold=
+if [ -n "$osvdb" ]; then [ -n "$(find "$osvdb" -type f -name '*.zip' 2>/dev/null | head -n1)" ] || osvcold=1
+elif [ "${REVIEW_OSV:-}" != 1 ]; then osvdb=$(bash "$here/provision_tools.sh" --cache osv 2>/dev/null) || osvdb=; fi
 if [ -z "$lock_files" ]; then :
-elif [ "${REVIEW_OSV:-}" != 1 ] && [ -z "${REVIEW_OSV_DB_DIR:-}" ]; then skip osv-scanner "REVIEW_OSV not set; osv-scanner queries the OSV API"
-elif [ -n "${REVIEW_OSV_DB_DIR:-}" ] && [ -z "$(find "$REVIEW_OSV_DB_DIR" -type f -name '*.zip' 2>/dev/null | head -n1)" ]; then
+elif [ "${REVIEW_OSV:-}" != 1 ] && [ -z "$osvdb" ]; then miss osv-scanner "warm the offline DB: provision_tools.sh --print"; skip osv-scanner "REVIEW_OSV not set; osv-scanner queries the OSV API"
+elif [ -n "$osvcold" ]; then
   miss osv-scanner "warm the DB: osv-scanner --offline-vulnerabilities --download-offline-databases"
-  skip osv-scanner "NOT CHECKED: no pre-seeded DB in REVIEW_OSV_DB_DIR=$REVIEW_OSV_DB_DIR; warm it once: OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$REVIEW_OSV_DB_DIR osv-scanner --offline-vulnerabilities --download-offline-databases ."
+  skip osv-scanner "NOT CHECKED: no pre-seeded DB in REVIEW_OSV_DB_DIR=$osvdb; warm it once: OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$osvdb osv-scanner --offline-vulnerabilities --download-offline-databases ."
 elif have osv-scanner; then
-  # REVIEW_OSV_DB_DIR: pre-seeded DB, offline run (no TLS to api.osv.dev); the cache-dir env is osv-scanner's documented one.
-  osvx=(); [ -z "${REVIEW_OSV_DB_DIR:-}" ] || { export OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$REVIEW_OSV_DB_DIR; osvx=(--offline-vulnerabilities); }
+  # osvdb: pre-seeded DB, offline run (no TLS to api.osv.dev); the cache-dir env is osv-scanner's documented one.
+  osvx=(); [ -z "$osvdb" ] || { export OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$osvdb; osvx=(--offline-vulnerabilities); }
   while IFS= read -r f; do
     run_one osv-scanner osv-scanner ${osvx[@]+"${osvx[@]}"} --format json -L "./$f" || continue
+    if [ "$rc" = 127 ] && grep -q 'no offline version' "$out"; then case "$gap" in *"osv-scanner ("*) ;; *) miss osv-scanner "no offline DB for the ecosystem of $f: run bash $here/provision_tools.sh --print $PWD" ;; esac; fi
     scan_ok osv-scanner 1 || continue # exit 1 = vulnerabilities found
     sjson osv "$out" >"$tsv" || { skip osv-scanner "unparseable output for $f"; continue; }
     cov+="$f"$'\n'; while IFS=$'\t' read -r _ l r m; do add osv-scanner "$f" "$l" "$r" "$m"; done <"$tsv"
@@ -397,33 +450,50 @@ fi
 
 sgc=${REVIEW_SEMGREP_CONFIG:-}
 [ -n "$sgc" ] || for c in .semgrep.yml .semgrep; do [ -e "$c" ] && { sgc=$c; break; }; done
-sgcfg=(--config "$sgc")
+sgcfg=(--config "$sgc") sgsnap=
 if [ -z "$sgc" ]; then # no repo rules: bundled taint rules, plus the p/default registry pack unless REVIEW_SEMGREP_REGISTRY=0 (never --config auto)
   sgc=$here/../templates/semgrep-taint; sgcfg=(--config "$sgc")
-  [ "${REVIEW_SEMGREP_REGISTRY:-1}" = 0 ] || sgcfg+=(--config p/default)
+  # the provisioned snapshot (a local file) stands in for p/default when present, so it loads without the network
+  [ "${REVIEW_SEMGREP_REGISTRY:-1}" = 0 ] || { sgsnap=$(bash "$here/provision_tools.sh" --cache semgrep 2>/dev/null || echo p/default); sgcfg+=(--config "$sgsnap"); }
 fi
+sgnorm=$sgc; [ ! -f "$sgsnap" ] || sgnorm+=$'\n'$sgsnap # semgrep prefixes rule ids with each local config's directory (the bundled rules, a warm snapshot): sjson strips every one listed
 if [ ! -e "$sgc" ]; then
   if [ -z "${REVIEW_SEMGREP_CONFIG:-}" ] && [ "$sgc" = "$here/../templates/semgrep-taint" ]; then skip semgrep "bundled rules missing at $sgc (reinstall the skill)"
   else skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"; fi
 elif have semgrep; then
-  sg=() sgwas=$ran sgok=0 sgj=(); [ "$lease" != degraded ] || { sgj=(--jobs 1); w1+=" semgrep"; }
+  sg=() sgwas=$ran sgok=0 sgerr=0 sgj=() sgb=0 sgrx=0 sgbun=(--config "$sgc"); [ "$lease" != degraded ] || { sgj=(--jobs 1); w1+=" semgrep"; }
   while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
+  # sgrun CONFIG...: scan one chunk. sgreg=1 (seen by run_one) while the p/default pack (registry or snapshot) is in CONFIG (4 args, not 2), so its timeout is soft: the loop reruns with the bundled rules.
+  sgrun() { local sgreg=0; [ $# -le 2 ] || sgreg=1; run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep "$@" ${sgj[@]+"${sgj[@]}"} --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}"; }
   # One call per 200 files: typically a single run, but bounded argv and a timeout that is not shared by everything.
   for ((i = 0; i < ${#sg[@]}; i += 200)); do
-    run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep "${sgcfg[@]}" ${sgj[@]+"${sgj[@]}"} --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
-    if [ "$rc" != 0 ] && [ ${#sgcfg[@]} -gt 2 ]; then # registry pack unreachable (offline): rerun with the bundled rules alone
-      run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep --config "$sgc" ${sgj[@]+"${sgj[@]}"} --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}" || continue
+    sgr=0; [ ${#sgcfg[@]} -le 2 ] || sgr=1 # the p/default pack (the registry, or the provisioned snapshot standing in for it) is still in this chunk's config
+    sgrun "${sgcfg[@]}" || [ "$sgr" = 1 ] || continue
+    if [ "$sgr" = 1 ] && [ "$rc" = 0 ]; then sgrx=1
+    elif [ "$sgr" = 1 ]; then # pack not loaded (error, offline, a bad snapshot, or a proxy that hangs to the timeout): the one report of the gap, then rerun this chunk with the bundled rules alone
+      case $rc in 124|142) sgwhy="timeout ${tmo}s" ;; *) sgwhy="exit $rc" ;; esac
+      sgfix="warm a local snapshot: bash $here/provision_tools.sh --print"
+      echo "review_checks: not run: semgrep p/default pack ($sgwhy); bundled rules only ($sgfix)" >&2
+      add semgrep "" 0 not-checked "p/default registry pack not run ($sgwhy); bundled rules only for the affected files ($sgfix)"
+      case ", $nr, " in *", semgrep p/default pack ($sgwhy), "*) ;; *) nr+="${nr:+, }semgrep p/default pack ($sgwhy)" ;; esac
+      sgb=1; [ "$sgrx" = 1 ] || sgcfg=("${sgbun[@]}") # later chunks skip the pack only while no pack run has succeeded
+      sgrun "${sgbun[@]}" || continue
     fi
     scan_ok semgrep || continue
-    e=0; sjson semgrep "$out" >"$tsv" || e=$?
-    if [ "$e" = 3 ] && [ ! -s "$tsv" ]; then # errors and zero results: nothing usable was scanned, not a clean or partial run
-      [ "$sgok" = 1 ] || ran=$sgwas; skip semgrep "scan errored, no findings"
+    [ "$sgb" = 0 ] || case " $ran " in *" semgrep(bundled-only) "*) ;; *) ran+=" semgrep(bundled-only)" ;; esac
+    e=0; SG_CFG=$sgnorm sjson semgrep "$out" >"$tsv" || e=$?
+    if [ "$e" = 4 ]; then sgerr=$((sgerr + 1)) # errors on every scanned file and no results: nothing usable from this chunk; judged after the loop
     elif [ "$e" = 0 ] || [ "$e" = 3 ]; then
       sgok=1
       while IFS=$'\t' read -r p l r m; do add semgrep "$p" "$l" "$r" "$m"; done <"$tsv"
-      [ "$e" = 0 ] || echo "review_checks: partial: semgrep ran but reported errors (coverage incomplete; findings above are real)" >&2
+      # a "(note)" token in ran is a partial scope: the closing line and the record list it apart from a full run
+      [ "$e" = 0 ] || { echo "review_checks: partial: semgrep ran but reported errors (coverage incomplete; findings above are real)" >&2; case " $ran " in *" semgrep(errors) "*) ;; *) ran+=" semgrep(errors)" ;; esac; }
     else skip semgrep "unparseable output"; fi
   done
+  if [ "$sgerr" -gt 0 ] && [ "$sgok" = 1 ]; then # other chunks scanned fine: partial coverage, not a voided tool
+    echo "review_checks: partial: semgrep errored with no findings on $sgerr chunk(s) of up to 200 files (those files were not scanned)" >&2
+    add semgrep "" 0 not-checked "semgrep errored on $sgerr chunk(s) of up to 200 files; those files were not scanned"
+  elif [ "$sgerr" -gt 0 ]; then ran=$sgwas; skip semgrep "scan errored, no findings"; fi
 fi
 
 # trivy: offline against the cached DB (no download); no DB or any crash reads as not-run, never as clean.
@@ -432,8 +502,10 @@ if [ -n "$files" ] && have trivy; then
   tv=(trivy fs --quiet --format json --skip-version-check --skip-db-update --offline-scan --skip-dirs node_modules,.claude/worktrees,vendor,dist,build,.git,.venv,venv,target)
   tk=trivy; [ "$lease" != degraded ] || { tv+=(--parallel 1); w1+=" trivy"; }
   # REVIEW_TRIVY_CACHE: pre-seeded --cache-dir. A missing DB stays "not run" (never clean) and prints the one-line warm command.
-  [ -z "${REVIEW_TRIVY_CACHE:-}" ] || tv+=(--cache-dir "$REVIEW_TRIVY_CACHE")
-  trivy_hint="warm the DB once: trivy ${REVIEW_TRIVY_CACHE:+--cache-dir $REVIEW_TRIVY_CACHE }image --download-db-only"
+  # Else the cache provision_tools.sh --print warms, once it holds a DB (DCR_CACHE_ROOT moves it off trivy's own default dir, so it must be passed).
+  if [ -n "${REVIEW_TRIVY_CACHE:-}" ]; then tv+=(--cache-dir "$REVIEW_TRIVY_CACHE")
+  elif tvc=$(bash "$here/provision_tools.sh" --cache trivy 2>/dev/null); then tv+=(--cache-dir "$tvc"); fi
+  trivy_hint="warm the DB once: trivy ${REVIEW_TRIVY_CACHE:+--cache-dir $REVIEW_TRIVY_CACHE }image --download-db-only (or bash $here/provision_tools.sh --print)"
   if run_one trivy "${tv[@]}" --scanners vuln,misconfig . && { [ "$rc" = 0 ] || {
     if ! grep -Eqi 'vulnerability db|trivy-db|download.* db( |$)' "$out" && grep -Eqi 'dial |no such host|connection (refused|reset)|unreachable|x509|TLS|failed to download|download.*(bundle|check)|(bundle|check).*download' "$out"; then
       echo "review_checks: trivy: secret-only (misconfig bundle unreachable)" >&2; tk=trivy-secret; ran+=" trivy(secret-only)"
@@ -443,7 +515,7 @@ if [ -n "$files" ] && have trivy; then
       if [ "$tk" = trivy ]; then # covered = lockfiles trivy reported a Target for (a secret-only run covers none)
         while IFS= read -r f; do grep -Fq "\"Target\":\"$f\"" "$out" || grep -Fq "\"Target\": \"$f\"" "$out" && cov+="$f"$'\n'; done <<<"$lock_files"
       fi
-      while IFS=$'\t' read -r f l r m; do printf '%s\n' "$files" | grep -qxF -- "$f" && add trivy "$f" "$l" "$r" "$m"; done <"$tsv"
+      while IFS=$'\t' read -r f l r m; do grep -qxF -- "$f" "$td/files" && add trivy "$f" "$l" "$r" "$m"; done <"$tsv"
     else skip trivy "unparseable output"; fi
   fi
 fi
@@ -484,10 +556,11 @@ fi
 # route-only = never bundled, only run when the user installed it (licenses unchecked, so nothing is bundle-ok yet).
 hub=(
   'zizmor;verified;batch;^\.github/workflows/[^/]+\.ya?ml$;route-only;pipx install zizmor'
+  'actionlint;verified;batch;^\.github/workflows/[^/]+\.ya?ml$;route-only;brew install actionlint'
   'bandit;verified;batch;\.py$;route-only;pipx install bandit'
   'gosec;verified;batch;\.go$;route-only;go install github.com/securego/gosec/v2/cmd/gosec@latest'
-  'grype;verified;each;(^|/)[^/]*(sbom|bom)[^/]*\.json$;route-only;brew install grype'
-  'checkov;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.tf|docker-compose[^/]*\.ya?ml)$;route-only;pipx install checkov'
+  'grype;verified;each;(^|/)([^/]*[-_.])?(sbom|bom|cdx|spdx)([-_.][^/]*)?\.json$;route-only;brew install grype'
+  'checkov;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.tf)$;route-only;pipx install checkov'
   'hadolint;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.dockerfile)$;route-only;brew install hadolint'
   'snyk-agent-scan;unverified;each;(^|/)(\.mcp\.json|mcp[^/]*\.json|SKILL\.md)$;route-only;uvx snyk-agent-scan'
 )
@@ -496,6 +569,7 @@ hubcmd() {
   local t=$1; shift; jf=$out okrc=""
   case $t in
     zizmor) cmd=(zizmor --format=json --offline "$@"); okrc="11 12 13 14" ;; # 11-14 = findings (docs.zizmor.sh/usage)
+    actionlint) cmd=(actionlint -format '{{json .}}' "$@"); okrc="1" ;; # exit 1 = findings, 2 = bad flag, 3 = fatal (actionlint -h; checked against a real run)
     bandit) cmd=(bandit -q -f json --exit-zero "$@") ;;
     gosec) jf=$rep; : >"$rep"; cmd=(env GOPROXY=off gosec -fmt=json -no-fail -out "$rep" ./...) ;;
     grype) cmd=(env GRYPE_DB_AUTO_UPDATE=false grype "sbom:$1" -o json) ;; # SBOM only: dir: scans the whole tree (unverified for lockfiles)
@@ -505,11 +579,12 @@ hubcmd() {
 }
 while IFS=';' read -r hn hs hm hre _ hh; do
   hf=$(changed "$hre"); [ -n "$hf" ] || continue
+  [ "$hs" != verified ] || wired+=" $hn"
   nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
   if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
   command -v "$hn" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
   hubtool=$hn
-  # zizmor, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
+  # zizmor, actionlint, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
   case $hn in grype|checkov|gosec) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
   [ "$hn" != gosec ] || [ -f go.mod ] || { nc "no go.mod at repo root"; continue; }
   targets=()
@@ -524,7 +599,14 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     if sjson "$hn" "$jf" >"$tsv"; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
-        while IFS=$'\t' read -r p l r m; do printf '%s\n' "$hf" | grep -qxF -- "$p" && add "$hn" "$p" "$l" "$r" "$m"; done <"$tsv"
+        printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0
+        while IFS=$'\t' read -r p l r m; do
+          nraw=$((nraw + 1)); grep -qxF -- "$p" "$td/hf" || continue
+          nout=$((nout + 1)); add "$hn" "$p" "$l" "$r" "$m"
+        done <"$tsv"
+        # A tool given explicit files reports only those, so a row for any other file means the paths do not line up and findings may be lost:
+        # name it instead of reading as clean. gosec scans ./... and legitimately reports files outside the changed list.
+        [ "$hn" = gosec ] || [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing"
       else while IFS=$'\t' read -r _ l r m; do add "$hn" "$f" "$l" "$r" "$m"; done <"$tsv"; fi
     else skip "$hn" "unparseable output"; fi
     [ "$hm" != batch ] || break
@@ -563,8 +645,8 @@ if [ "$tests" = 1 ]; then
 fi
 
 r=; for t in $ran; do case " $failed " in *" ${t%%(*} "*) ;; *) r+=" $t" ;; esac; done; ran=$r
-python3 - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" <<'PY'
-import json, os, re, sys
+REVIEW_STATE="$(git rev-parse --git-common-dir)/review-checks-last.json" HERE="$here" python3 - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" "$wired" "$gap" "$wiredx" <<'PY'
+import json, os, re, shlex, sys, time
 rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1], encoding="utf-8", errors="replace")]
 rows = [t for i, t in enumerate(rows) if t[3:4] != ["not-checked"] or t not in rows[:i]]  # a tool failing on N files is one not-checked row
 # Triage hint, not a verdict (only big generic-api-key fixture groups collapse, below): a secret or hidden-character finding under a sample/fixture/test/mock/docs path is usually dummy data.
@@ -606,6 +688,25 @@ def lab(t):
     b = t.split("(")[0]
     return t + (f" (degraded: lease full{', nice 19' if sys.argv[7] == '1' else ''}{', 1 worker' if b in w1 else ''})" if b in dg else "")
 print(f"review_checks: {n} findings; {sys.argv[4]} files excluded; analyzers ran: {', '.join(lab(t) for t in sys.argv[2].split()) or 'none'}; skipped (not installed): {', '.join(sys.argv[3].split()) or 'none'}", file=sys.stderr)
+# "ran X / wired Y": wired = scanners with work in this run (their files matched); fixable = wired and either missing or running without a cache a provision warms.
+# argv[10] (shellcheck, ruff/pyflakes, gitleaks-history) is wired too, but provision_tools.sh cannot install it, so it is never fixable.
+wired = sys.argv[8].split()
+allw = wired + sys.argv[10].split()
+ranned = {t.split("(")[0] for t in sys.argv[2].split()}
+notrun = [t for t in allw if t not in ranned]
+partial = list(dict.fromkeys(t for t in sys.argv[2].split() if "(" in t))  # ran with a narrower scope: "trivy(secret-only)", "semgrep(errors)"
+fixset = set(sys.argv[3].split()) | {g.split(" (")[0] for g in sys.argv[9].split("; ")}
+if "semgrep(bundled-only)" in partial: fixset.add("semgrep")  # the p/default pack did not load (already reported under NOT RUN): a provisioned snapshot fixes it
+fixable = [t for t in wired if t in fixset]
+# a DIR makes the provision re-download the osv DB for this repo's ecosystems: a bare --print sees any one ecosystem's zip as warm and may emit nothing
+prov = f"bash {os.environ['HERE']}/provision_tools.sh --print" + (f" {shlex.quote(os.getcwd())}" if "osv-scanner" in fixable else "")
+print(f"review_checks: ran {len(allw) - len(notrun)} / wired {len(allw)} scanners" + (f"; not run: {', '.join(notrun)}" if notrun else "")
+      + (f"; partial: {', '.join(partial)}" if partial else "") + (f"; fixable: {', '.join(fixable)} (run: {prov})" if fixable else ""), file=sys.stderr)
+try:  # best effort: the sandbox may deny the write; perun_doctor.py reads this record
+    with open(os.environ["REVIEW_STATE"], "w") as f:
+        json.dump({"ts": int(time.time()), "wired": allw, "not_run": notrun, "fixable": fixable, "partial": partial}, f)
+except OSError:
+    pass
 PY
 echo "review_checks: NOT RUN: ${nr:-none}" >&2
 [ -z "$gap" ] || echo "review_checks: missing tools: $gap" >&2

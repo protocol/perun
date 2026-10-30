@@ -2766,7 +2766,7 @@ ppvroot="$WORK/ppv-fixture"
 mkdir -p "$ppvroot"
 git init -q --bare "$ppvroot/remote.git"
 git init -q -b main "$ppvroot/local"
-git -C "$ppvroot/local" config user.email "test@example.com"
+git -C "$ppvroot/local" config user.email "1+test@users.noreply.github.com"
 git -C "$ppvroot/local" config user.name "Test"
 printf 'a\n' >"$ppvroot/local/f.txt"
 git -C "$ppvroot/local" add f.txt >/dev/null 2>&1

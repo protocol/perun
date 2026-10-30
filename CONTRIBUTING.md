@@ -55,7 +55,7 @@ Parallel lanes must not bump the version: each one claims "main + 1" and all but
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) is the one blocking run of the full suite
 (`scripts/test-ci-gates.sh`: 10m27s of a 12m46s CI run, measured in
 [`docs/bench/pipeline-1016/`](docs/bench/pipeline-1016/README.md)). Run the quick tier below before you push; the
-push hook only checks conflict markers, the privacy scan of changed files, and your configured tier. Repeating the full suite locally buys no extra safety and costs more
+push hook only checks conflict markers, the privacy scan of changed files, that every commit email is a noreply form (`git config user.email <id>+<user>@users.noreply.github.com`), and your configured tier. Repeating the full suite locally buys no extra safety and costs more
 than the CI run it could save, so run it yourself only when you change `scripts/ci-gates.sh`,
 `scripts/test-ci-gates.sh` or `dcr-gates.sh`.
 

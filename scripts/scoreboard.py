@@ -5,7 +5,8 @@
   scoreboard.py --check   exit 1 unless docs/scoreboard.md equals the regenerated page (CI gate)
 
 Sources, all committed: the head-to-head table, outcome checks, H8 and H14 in docs/perun-vs-rivals.md,
-docs/review-cost-per-recall.tsv, and every rival row of docs/capability-matrix.md.
+docs/review-cost-per-recall.tsv, the token-voice bench (docs/bench/token-voice-1026), and every rival row of
+docs/capability-matrix.md.
 
 Verdicts are computed from a published interval, never read from prose. Win rates test against 0.5, paired
 differences against 0: lower bound above the null = win, upper bound below = loss, interval inside null +/- 0.10 =
@@ -20,6 +21,7 @@ recomputation.
 """
 import csv
 import functools
+import json
 import re
 import sys
 from pathlib import Path
@@ -36,10 +38,11 @@ HEAD = {"growth-analytics": ("Round 4 edit", "growth-r4-1018")}  # newest shippe
 # Capability-matrix rows whose measurement is a newer, fuller row elsewhere on this page.
 SUPERSEDED = {("1", "pr-review-toolkit"), ("1", "/code-review"), ("1", "obra"), ("2", "phuryn"), ("3", "obra"),
               ("7", "gstack"), ("9", "promptfoo"), ("9", "humanizer"), ("16", "marketingskills"),
-              ("16", "deanpeters"), ("17", "cc-safety-net"), ("17", "hooks-mastery")}
+              ("16", "deanpeters"), ("17", "cc-safety-net"), ("17", "hooks-mastery"), ("5", "caveman"), ("5", "ponytail")}
 REVIEW_RIVALS = {"Anthropic toolkit code-reviewer": "Anthropic pr-review-toolkit", "/code-review": "Claude Code /code-review",
                  "obra requesting-code-review": "obra/superpowers (requesting-code-review)",
                  "wshobson code-reviewer": "wshobson code-reviewer"}
+TV = "docs/bench/token-voice-1026"
 EQ = "equal point estimate, no CI"
 NV = "measured, no verdict rule"
 # Verdicts that are not clean wins: counted apart, never in a win total.
@@ -283,6 +286,49 @@ def h14_rows():
     return out
 
 
+# (anchor in the bench README, caveat shown on the rows): a caveat the README drops fails generation.
+TV_CAVEATS = (
+    ("default Perun is not measured here", "the opt-in `--with-terse-replies` reply budget plus the zero-chat rule of the lane preamble (the lane default); the default install applies no cap, so default Perun is not measured"),
+    ("it is a hard length cap, so a token win against uncapped arms is expected", "a hard length cap, so a token win against uncapped arms is expected, not a general voice or reasoning improvement"),
+    ("One model (Haiku 5.5, thinking disabled), one task family (small Python bug fixes, no tools)", "one model (Haiku 5.5, thinking disabled), one task family (small Python bug fixes, no tools), no claim about agentic sessions, other models or long outputs"),
+    ("No multiplicity correction across the five pairs", "no multiplicity correction across the five pairs; non-inferior at the -0.05 margin, not proven equal"),
+    ("pass rates are near 100%", "pass rates near 100%, so little power to see small regressions"),
+    ("Cost is the CLI-reported list cost", "cost is the CLI-reported list cost and includes input tokens"),
+    ("Deviation from the preregistration: the frozen run targeted a free PCSS model; budget exhausted (HTTP 429)",
+     "deviation from the preregistration: the free model of the frozen run hit HTTP 429, so the arms ran on Haiku 5.5 via the claude CLI (disclosed in ledger.jsonl)"))
+
+
+def token_voice_rows():
+    """The Perun arm (opt-in reply budget plus the lane-default zero-chat rule) against the caveman and ponytail texts on bug-fix tasks. Quality is the paired pass-rate
+    interval against 0 (like H14); the per-task median token ratio and the list-cost ratio go in their columns."""
+    text = (REPO / TV / "README.md").read_text()
+    flat = " ".join(text.split())
+    t = {c[0]: c for c in (cells(l) for l in text.split("\n") if l.startswith("|"))}
+    cost = json.loads((REPO / TV / "cost.json").read_text())
+    when = date((REPO / TV / "ledger.jsonl").read_text(), "token-voice-1026")
+    n = re.search(r"(\d+) hidden-test bug-fix tasks x (\d+) samples", flat)
+    pony = re.search(r"Ponytail: (\d+) of its (\d+) replies add `test_`/`assert` code the task did not ask for \(0 of (\d+) in every other arm\)", flat)
+    assert n and pony, "caveat source moved: token-voice README"
+    cav = "; ".join(note(flat, a, d) for a, d in TV_CAVEATS)
+    out = []
+    for arm, rival in (("caveman (ultra)", "JuliusBrussee/caveman (ultra level)"), ("ponytail", "DietrichGebert/ponytail")):
+        key = arm.split()[0]
+        _, td, tr, pd, keep = t[f"perun vs {key}"]
+        tm, pm = re.fullmatch(r"([+-]?\d+) \(([+-]?\d+) to ([+-]?\d+)\)", td), re.fullmatch(r"([+-]?[\d.]+) \(([+-]?[\d.]+) to ([+-]?[\d.]+)\)", pd)
+        assert (float(tm[3]) < 0 and float(pm[2]) > -0.05) == (keep == "win"), f"{key}: published keep rule disagrees with its intervals"
+        dec = [x.lstrip("+-") for x in (*pm.groups(), tr)]
+        own = f"{pony[1]} of its {pony[2]} replies add test_/assert code the task did not ask for (0 of {pony[3]} in every other arm), which inflates its tokens, so this is not a voice win; " if key == "ponytail" else ""
+        out.append(row("Compressed-prose and minimal-code modes (opt-in reply budget plus zero-chat rule, bug-fix tasks)", rival, "outcome", verdict(float(pm[2]), float(pm[3]), 0),
+                       f"hidden-test pass rate, Perun minus rival {pm[1]} [{pm[2]}, {pm[3]}], paired over {n[1]} tasks x {n[2]} samples; output tokens per task: "
+                       f"median {t['perun'][1]} vs {t[arm][1]}, paired median diff {tm[1]} [{tm[2]}, {tm[3]}], per-task median ratio {tr} (95% CIs); "
+                       f"the bench's frozen keep rule (token CI upper bound below 0, pass CI lower bound above -0.05) returns {keep}",
+                       cost=ratio(cost["perun"]["cost_usd"], cost[key]["cost_usd"]), tok=f"{tr}x", date=when, caveat=own + cav,
+                       proofs=[(f"{TV}/README.md", [x.lstrip("+-") for x in (*tm.groups(), *pm.groups(), tr, t["perun"][1], t[arm][1], n[1])]),
+                               (f"{TV}/results.json", dec), (f"{TV}/cost.json", [str(cost["perun"]["cost_usd"]), str(cost[key]["cost_usd"])]),
+                               (f"{TV}/ledger.jsonl", [when])]))
+    return out
+
+
 def matrix_rows():
     text, out, sec = (DOCS / "capability-matrix.md").read_text(), [], None
     for l in text.split("\n"):
@@ -304,7 +350,7 @@ def matrix_rows():
 
 def build():
     h2h = h2h_rows()
-    rows = h2h + outcome_rows(h2h) + review_rows() + h14_rows() + h8_rows() + matrix_rows()
+    rows = h2h + outcome_rows(h2h) + review_rows() + h14_rows() + token_voice_rows() + h8_rows() + matrix_rows()
     verify(rows)
     c = {}
     for r in rows:

@@ -48,11 +48,25 @@
 # installed: skipping is intended there) or DCR_PREPUSH_ALLOW_SKIP_CI=1
 # disables the check.
 #
+# COMMIT IDENTITY CHECK: a push publishes every commit's author and committer
+# email for good, so a machine whose git user.email is a personal address leaks
+# it through each branch it pushes. scripts/identity_gate.py (this skill's one
+# implementation; its header owns the rules) fails the push unless every
+# author/committer email in the commits the push adds (those neither the remote
+# sha nor any remote-tracking ref has, so a branch rebased onto a newer main is
+# not blamed for main's commits) is a noreply form
+# (*@users.noreply.github.com, noreply@*) or listed in the gitignored
+# .identity-allow.local.txt, masks the address in its output, and prints the fix
+# (`git config user.email <noreply>`, `git commit --amend --reset-author`). It
+# runs before the verdict cache and the DCR_PREPUSH_CMD-unset handling, so
+# neither DCR_PREPUSH_ALLOW_UNSET nor a cached PASS skips it. With no python3 or
+# no identity_gate.py it prints one notice and the push goes on.
+#
 # NO CI RE-RUNS: this hook deliberately does not re-run CI steps (fix-class,
 # mechanism, size-ratchet, bench-check, mustload, evals, INDEX/SHA256SUMS,
 # changelog). CI on the exact pushed sha is the single blocking gate for those;
 # a local copy only made agents wait. Kept here: conflict markers, skip-token, privacy,
-# the cache-backed DCR_PREPUSH_CMD (affected tests, lint), and warn-only lints.
+# commit identity, the cache-backed DCR_PREPUSH_CMD (affected tests, lint), and warn-only lints.
 #
 # VERDICT CACHE (issue #1153; shared and tree-keyed since the gate-cache
 # change): under heavy concurrent load (many agent lanes committing and
@@ -251,13 +265,14 @@ resolve_default_branch() {
   printf 'main'
 }
 
-# find_gate_cache — print the path of gate_cache.py (next to this template's
-# own scripts/ dir when run from the skill tree, else the installed skill
-# path under the repo root), or nothing when python3 or the script is absent.
-find_gate_cache() {
+# find_script <name> — print the path of this skill's scripts/<name> (next to
+# this template's own scripts/ dir when run from the skill tree, else the
+# installed skill path under the repo root), or nothing when python3 or the
+# script is absent.
+find_script() {
   command -v python3 >/dev/null 2>&1 || return 0
-  for gc_try in "$(dirname "$0")/../scripts/gate_cache.py" ".claude/skills/deep-code-review/scripts/gate_cache.py"; do
-    if [ -f "${gc_try}" ]; then printf '%s' "${gc_try}"; return 0; fi
+  for fs_try in "$(dirname "$0")/../scripts/$1" ".claude/skills/deep-code-review/scripts/$1"; do
+    if [ -f "${fs_try}" ]; then printf '%s' "${fs_try}"; return 0; fi
   done
 }
 
@@ -397,6 +412,19 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     fi
   fi
 
+  # Commit identity: see COMMIT IDENTITY CHECK in the header. An existing remote branch passes its remote sha as --base;
+  # a new branch passes none. The gate checks only the commits that sha and the remote-tracking refs do not already have.
+  id_base=""
+  is_zero_sha "${remote_sha}" || id_base="${remote_sha}"
+  id_gate="$(find_script identity_gate.py)"
+  if [ -z "${id_gate}" ]; then
+    printf 'pre-push-verify: commit identity not checked (python3 or identity_gate.py is missing)\n' >&2
+  elif ! python3 -I "${id_gate}" --head "${local_sha}" --remote "${remote_name}" ${id_base:+--base "${id_base}"} >&2; then
+    printf 'pre-push-verify: FAIL -- commit identity (lines above).\n' >&2
+    fail=1
+    continue
+  fi
+
   # Warn-only scope-creep report (new files/deps/single-impl types); never fails the push.
   scope_check=".claude/skills/agentic-delivery/scripts/scope_creep_check.py"
   if [ -f "${scope_check}" ]; then
@@ -464,7 +492,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   run_msg="$(printf 'pre-push-verify: %s (%s..%s): running: %s' "${local_ref}" "${base_sha}" "${local_sha}" "${DCR_PREPUSH_CMD}")"
-  gate_cache="$(find_gate_cache)"
+  gate_cache="$(find_script gate_cache.py)"
   if [ -n "${gate_cache}" ]; then
     gc_args=(run --stage pre-push --tree "${local_sha}" --key "${DCR_PREPUSH_CACHE_KEY:-}" --say "${run_msg}")
     [ "${DCR_PREPUSH_TREE_PURE:-0}" = "1" ] || gc_args+=(--base "${base_sha}" --head "${local_sha}")

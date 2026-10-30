@@ -6,7 +6,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 S="$ROOT/.claude/skills/deep-code-review/scripts"
 T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-offdb.XXXXXX"); trap 'rm -rf "$T"' EXIT
-export PERUN_HEAVY_DIR="$T/heavy" REVIEW_LEASE_WAIT=0 LOG="$T/log"; : >"$LOG"
+export PERUN_HEAVY_DIR="$T/heavy" REVIEW_LEASE_WAIT=0 LOG="$T/log" DCR_CACHE_ROOT="$T/nocache" DCR_USER_BIN= # a provisioned host cache or ~/.local/bin must not change the cold defaults asserted here
+: >"$LOG"
+unset OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY # hermetic: an exported seeded DB dir would turn osv on without REVIEW_OSV
 fail=0
 ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=1; }

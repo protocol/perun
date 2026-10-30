@@ -19,8 +19,8 @@ neither and it convenes (legacy behavior), so declare them.
 |---|---|
 | Independent first round: every seat answers before seeing any other | each first-round prompt holds only its own lens, the claim and the packet; the critique round shows others' answers only after, anonymized |
 | Decorrelated seats | `--lenses cpo,cto,cfo,ciso,user-advocate` (files in `scripts/lenses/`, editable); repeat `--cmd` so seat *i* runs on cmd *i* mod N (different models); default is the three hats |
-| Criteria and weights fixed before scoring | `--criteria impact:3,cost:2`, `--option <name>` (repeat; include the claim; `do-nothing` is always added). Weights are normalized and printed to every seat; seats cannot change them |
-| The evil twin argues the strongest dissent | `--twin`: after the decision, one call (`lenses/evil-twin.txt`) writes a pre-mortem and the strongest case against it; kept in `minority_report` with the dissenting seats' answers verbatim |
+| Criteria and weights fixed before scoring | `--criteria impact:3,cost:2`, `--option <token>` (repeat; include the claim; `do-nothing` is always added). Weights are normalized and printed to every seat; seats cannot change them |
+| The evil twin argues the strongest dissent | `--twin`: after the decision, one call (`lenses/evil-twin.txt`) writes a pre-mortem and the strongest case against it; kept in `minority_report` with the dissenting seats' names (their answers stay verbatim in `dissent`) |
 | Pre-mortem | every seat answers `premortem`, `kill_criterion`, `leading_metric` (recorded in `premortems`), then the twin's |
 | Deterministic aggregate; the chair breaks ties | decision = highest weighted mean of seat scores (0-5 per option and criterion); a tie goes to `--chair`'s own top option, then to option order (`do-nothing` first). The verdict tally ties go to the chair, else `HOLD` > `REVISE` > `PASS_TO_USER` |
 | Output: decision, kill criteria, metric, review date | record keys `decision`, `kill_criteria`, `leading_metric`, `review_date` (`--review-date`, else today + `--review-days`, default 30). A closer no seat supplied is `UNVERIFIED`, never invented |
@@ -31,12 +31,13 @@ neither and it convenes (legacy behavior), so declare them.
 ```text
 python3 scripts/veche.py --cmd "claude -p --strict-mcp-config" \
   --claim "<one sentence>" --steelman "<best version>" --packet evidence.txt --root . \
-  --lenses cpo,cto,cfo,ciso,user-advocate --option "<the claim>" --option "<alternative>" \
+  --lenses cpo,cto,cfo,ciso,user-advocate --option ship --option wait \
   --criteria impact:3,cost:2,risk:3,reversibility:2 --chair cpo --twin \
   --stakes high --reversibility hard
 ```
 
 - `--cmd` reads the prompt on stdin and prints the answer. Without `--lenses` it is solo-3: one cmd, the three hats.
+- `--option` names must be short tokens (letters, digits, `-`, `_`, starting with a letter or digit; at most 32): seats echo them as JSON keys. Others fail before any call.
 - The packet is shown with numbered lines and its path under `--root`, so a model with no file tools
   can still cite `path:line`; keep the packet under `--root`.
 - Seats answer independently. The critique round runs only when verdicts differ, with answers shuffled
@@ -49,12 +50,13 @@ python3 scripts/veche.py --cmd "claude -p --strict-mcp-config" \
   marked as data. With `--option`, a seat whose scores are missing or outside 0-5 is dropped like an
   unparseable one (listed in `dropped`, lowers confidence); fewer than 2 usable seats is `COULD_NOT_DECIDE`.
 - `verdict` gates the claim (`owner-request` + `HOLD` becomes `REVISE`); a `do-nothing` decision turns
-  `PASS_TO_USER` into `REVISE` (the claim lost to the status quo). `confidence` = (top votes / n) x (mean
+  `PASS_TO_USER` into `REVISE` (the claim lost to the status quo); `verdict_basis` explains the verdict (majority, tie rule, downgrade). `confidence` = (top votes / n) x (mean
   verified-claim share) x (n / seats), never self-reported.
 - `--max-calls` (12), `--max-chars` (200000), `--max-seconds` (600 total) and `--timeout` (120s per call) are
   checked before each call. Any cap hit, non-zero exit, timeout or unparseable answer yields
-  `COULD_NOT_DECIDE` (exit 3), never a guessed verdict. A timed-out command's grandchildren may outlive
+  `COULD_NOT_DECIDE` (exit 3), never a guessed verdict, with `dropped` reasons and `cost`. A timed-out command's grandchildren may outlive
   it, so use a cmd that exits cleanly. `--dry-run` prints planned calls.
+- `--json-out PATH` also writes the record there (a bad path fails before any call). A gate skip prints `NOT_CONVENED` on stderr, noting an ignored `--twin`.
 - Validate: `scripts/validate_verdict.py --file record.json` accepts the record (it has `tally`),
   `COULD_NOT_DECIDE` and `NOT_CONVENED` with a `reason`, and a record with a `decision` only when it also
   carries `kill_criteria`, `leading_metric` and an ISO `review_date`.
@@ -64,8 +66,8 @@ python3 scripts/veche.py --cmd "claude -p --strict-mcp-config" \
 A council must never stall delivery. Any `COULD_NOT_DECIDE` (cap, timeout, too few seats) adds
 `default_action`: `proceed` when `--reversibility easy` (take the reversible default, revisit at the review
 date), else `hold` (one-way door or undeclared: hold only that item; unrelated work continues). The record
-also gets `blocking_alarm: true` and a stderr line `COUNCIL_BLOCKING_WORK ...`; the same alarm fires on a
-decided council slower than `--alarm-s` (300). Bound the wait with `--max-seconds`. The delivery lead acts
+also gets `blocking_alarm: true` and a stderr line `COUNCIL_BLOCKING_WORK ...`; the same alarm fires while a
+council is still running past `--alarm-s` (300); `--progress-s` (30, 0 = off) adds a heartbeat. Bound the wait with `--max-seconds`. The delivery lead acts
 on `default_action` at once; a council verdict is never a reason to pause unrelated trains.
 
 Seats of the first round, and of the critique round, run in parallel (caps are charged atomically, so
@@ -105,4 +107,5 @@ cannot separate them; the council cost about twice self-consistency-3 (critique 
 advantage is shown. It stays opt-in: use it for the audit trail (verified citations, kept dissent, the
 fixed criteria and the minority report) or mixed models, not for accuracy, until a harder set says
 otherwise. The seats, scoring, twin and convene gate are unit-tested (`scripts/test_veche.py`), not measured
-for accuracy; the tool-less path is untested for accuracy.
+for accuracy; the tool-less path is untested for accuracy. `scripts/council_bench.py` scores a council's
+verdicts on the evil-twin corpus, offline and replayable; no live result is committed yet.

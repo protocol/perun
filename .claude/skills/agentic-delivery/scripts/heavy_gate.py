@@ -5,12 +5,16 @@ WHY: host_probe.py and the heavy-lease primitive in perun_policy.py existed but 
 them, so fleets ran 10+ test runners at once (load1 > 3x cores, swap climbing, OOM kills). This
 hook runs on every Bash call, so the admission check happens without anyone remembering it.
 
-What it does: if the command starts a test runner or a build (DEFAULT_PATTERNS, or the
-newline-separated regexes in $PERUN_HEAVY_PATTERNS, each matched at the start of a shell segment, after runner wrappers are stripped),
-it denies the call when host_probe.decide(lane_type="heavy") says HOLD (load1 > cores or low free
+What it does: if the command starts a test runner, a build, a whole-repo security scanner (semgrep scan|ci|--config, trivy
+fs|repo|image|config|rootfs, osv-scanner, grype, checkov, gitleaks detect|git|dir, trufflehog git|filesystem|github), a JS dependency
+install (npm|pnpm|yarn|bun ci|i|install) or a Perun scan/CI entrypoint (review_checks.sh, run-ci-tests.sh, app_pentest.sh, run as `bash PATH`
+or directly) (DEFAULT_PATTERNS, or the newline-separated regexes in $PERUN_HEAVY_PATTERNS, each matched at the start of a shell segment,
+after runner wrappers are stripped), it denies the call when host_probe.decide(lane_type="heavy") says HOLD (load1 > cores or low free
 RAM; swap is not read, one sample shows no trend) or when the machine-wide heavy leases already fill the
 slot count (perun_policy.heavy_slots; local_cpu=maximize raises it to every core). Otherwise it
 prints nothing and the call proceeds. While a train gate holds the EXCLUSIVE lease (perun_policy.py heavy-exclusive) every heavy command is denied with "gate running: wait" and that deny is never bypassed or counted. It never takes a lease and never stops or deletes anything.
+Light forms are never held: --version/--help, `command -v TOOL`, --download-db-only, --package-lock-only (not on `npm ci`, which wipes node_modules), a scanner with no
+argument (a bare `grype` fed by a pipe or `<` reads an SBOM from stdin and is held), `grype db|version|help` (a target such as `db:latest` or `help.json` is not one).
 
 Bypass: the hook keeps a small ledger (`heavy-denies.json`, next to the lease dir). After MAX_DENIES (3) denies of the same command (whitespace-normalized) in the same cwd within WINDOW (30 min) the 4th attempt is allowed with a WARN `additionalContext` (it matches the lane preamble's "retry at most 3 times, then proceed"); the ledger entry resets.
 
@@ -36,9 +40,24 @@ DEFAULT_PATTERNS = (
     r"(python3? -m )?pytest\b", r"(npx |pnpm |yarn )?(jest|vitest|playwright)\b",
     r"(npm|pnpm|yarn|bun) (run )?test\b", r"cargo (test|nextest)\b", r"go test\b",
     r"(npx )?next build\b", r"(npm|pnpm|yarn|bun) run build\b", r"(npx )?tsc -b\b",
+    # Whole-repo scanners (a global flag may precede the subcommand: `trivy --cache-dir D image`), installs, and Perun's scan/CI entrypoints.
+    # osv-scanner, grype and checkov count only with an argument; grype's db|version|help are subcommands, not targets (a word that merely
+    # starts with one, `db:latest` or `help.json`, is a target; osv-scanner takes directories, so its `db` can be one). A bare grype fed by a
+    # pipe or `<` reads an SBOM from stdin, so _heavy reads it as `grype -`. Light, matching nothing: zizmor, actionlint, shellcheck, hadolint, bandit and ruff.
+    # ponytail: a fixed tool list with the known-launcher ceiling of VALUE_WRAP, so a scanner behind docker, `bash -x PATH` or an unquoted
+    # `$DIR/x.sh` path (the tokenizer splits at `$`) still passes light; add the launcher or tool when one shows up.
+    r"semgrep( .*)? (scan|ci|--config)\b", r"trivy( .*)? (fs|repo|image|config|rootfs)\b", r"(osv-scanner|checkov) \S",
+    r"grype (?!(db|version|help)(\s|$))\S",
+    r"gitleaks( .*)? (detect|git|dir)\b", r"trufflehog( .*)? (git|filesystem|github)\b", r"(npm|pnpm|yarn|bun) (ci|i|install)\b",
+    r"((ba|z)?sh )?(\S*/)?(review_checks|run-ci-tests|app_pentest)\.sh\b",
 )
 PUNCT = ";()<>|&\n"
-WRAP = re.compile(r"(\w+=\S*|command|npx|uv run|poetry run|pipx run|pnpm exec|python[\d.]* -m)$")
+# Joins backslash-newline (group 1 = the escaped pairs kept: an odd run of backslashes before the newline, an even run is escaped backslashes) and
+# matches a `#` comment line only to leave it whole (group 1 is None): bash ends a comment at its newline, a trailing backslash included.
+CONT = re.compile(r"^[ \t]*#.*|(?<!\\)((?:\\\\)*)\\\n", re.M)
+# A separator ending in a pipe (`|`, `|&`, `)|`), not an or-list `||`. ponytail: a grype right after `(` or `{` (`cat s | (grype)`) still reads light.
+PIPE = re.compile(r"(?<!\|)\|&?\n*$")
+WRAP = re.compile(r"(\w+=\S*|command|npx|uvx|bunx|uv (tool )?run|poetry run|pipx run|(pnpm|npm) exec|(pnpm|yarn) dlx|bun x|python[\d.]* -m)$")
 WRAP_VALUE_OPTS = {"-p", "--package", "--with", "--python", "--from"}  # `uv run --with x`, `npx -p pkg`
 # Wrappers whose listed options take a separate value (`nice -n 5`); timeout also takes a DURATION positional.
 # ponytail: a known-launcher list, so an unlisted one (watch, parallel, `{ ...; }`) still passes light; the gate is
@@ -52,7 +71,10 @@ VALUE_WRAP = {"env": {"-u", "--unset", "-C", "--chdir", "-P", "-a"}, "nice": {"-
                         "--max-lines", "--delimiter", "--eof", "--max-chars", "--arg-file"}}
 SHELLS = {"bash", "sh", "zsh", "dash", "ksh", "fish"}
 SHELL_VALUE_OPTS = {"-o", "-O", "+o", "+O", "--rcfile", "--init-file"}
-LIGHT_FLAGS = {"--version", "--help", "-h", "--collect-only", "--co"}
+# ponytail: `npm install --package-lock-only` counts as light, yet a bare one (no package args) without `--ignore-scripts` can still run the
+# project's own lifecycle scripts (preinstall, prepare, ...), so a heavy script can hide behind it; require --ignore-scripts here if that bites.
+LIGHT_FLAGS = {"--version", "--help", "-h", "--collect-only", "--co", "--list-affected",  # --list-affected: run-ci-tests.sh dry form
+               "--download-db-only", "--download-java-db-only", "--package-lock-only"}  # trivy DB fetch, no scan; npm lockfile, no install
 TEST_FILE = re.compile(r"[A-Za-z0-9_./-]+\.py(::[A-Za-z0-9_.\[\]-]+)*")
 SHORT_FLAGS = re.compile(r"-[qvxsl]+")
 PYTEST_VALUE_OPTS = {"-k", "-m", "-W", "-r", "-p", "-n", "-o", "-c", "--cov", "--cov-report", "--log-file", "--tb", "--maxfail",
@@ -87,7 +109,9 @@ def scoped_pytest(args) -> bool:
 
 def tokens(command: str, extra: str = ""):
     """Shell tokens, punctuation (`;`, `|`, `>`, `&&`, newline) as tokens of their own. Quotes and heredoc bodies never split; raises ValueError on a parse error.
-    `extra` chars are added to the word characters, so they stay inside a word instead of splitting it."""
+    `extra` chars are added to the word characters, so they stay inside a word instead of splitting it.
+    A backslash-newline continuation is joined first (after the heredoc bodies are dropped, so a body line ending in a backslash stays
+    literal); a `#` comment line is left whole, so a trailing backslash there does not join the next line into the comment."""
     lines, delim = [], None
     for line in command.split("\n"):
         if delim is not None:
@@ -96,23 +120,30 @@ def tokens(command: str, extra: str = ""):
         m = re.search(r"<<-?\s*(['\"]?)(\w+)\1", line)
         delim = m.group(2) if m else None
         lines.append(line)
-    lex = shlex.shlex("\n".join(lines), posix=True, punctuation_chars=PUNCT)
+    text = CONT.sub(lambda m: m.group(0) if m.group(1) is None else m.group(1), "\n".join(lines))
+    lex = shlex.shlex(text, posix=True, punctuation_chars=PUNCT)
     lex.whitespace = " \t\r"
     lex.wordchars += extra
     return list(lex)
 
 
-def segments(command: str, extra: str = ""):
-    """Token lists, one per shell segment (split at punctuation); raises ValueError on a parse error.
-    A quoted empty argument (`sed -i '' ...`) is an argument, not a separator: `set('') <= set(PUNCT)` is true, hence the `tok and`."""
-    seg, out = [], []
+def _split(command: str, extra: str = ""):
+    """`(tokens, separator before, separator after)` per shell segment (split at punctuation); raises ValueError on a parse error.
+    A quoted empty argument (`sed -i '' ...`) is an argument, not a separator: `set('') <= set(PUNCT)` is true, hence the `tok and`.
+    Bare newlines right after a separator do not replace it as the one before: `a | <newline> b` is still a pipe."""
+    seg, out, before = [], [], ""
     for tok in tokens(command, extra):
         if tok and set(tok) <= set(PUNCT):
-            out.append(seg)
-            seg = []
+            out.append((seg, before, tok))
+            seg, before = [], (before if not seg and not tok.strip("\n") else tok)
         else:
             seg.append(tok)
-    return out + [seg]
+    return out + [(seg, before, "")]
+
+
+def segments(command: str, extra: str = ""):
+    """Token lists, one per shell segment (split at punctuation); raises ValueError on a parse error."""
+    return [seg for seg, _, _ in _split(command, extra)]
 
 
 def heavy_patterns():
@@ -122,11 +153,14 @@ def heavy_patterns():
 
 
 def strip_wrappers(toks):
-    """Drop leading runner wrappers (env/VAR=x/time/sudo, npx, uv|poetry|pipx run, pnpm exec, python -m, nice, nohup,
-    timeout DURATION, stdbuf, xargs) and their flags; a VALUE_WRAP option's separate value is dropped with it."""
+    """Drop leading runner wrappers (env/VAR=x/time/sudo, npx|uvx|bunx, uv|poetry|pipx run, uv tool run, pnpm exec|dlx, npm exec,
+    yarn dlx, bun x, python -m, nice, nohup, timeout DURATION, stdbuf, xargs) and their flags; a VALUE_WRAP option's separate value is dropped with it.
+    `command -v|-V X` is a presence check, not a launcher: it returns [] so nothing is classified."""
     while toks:
         toks = [os.path.basename(toks[0]) or toks[0]] + toks[1:]  # /usr/bin/env, /usr/bin/python3 -m
         two = " ".join(toks[:2])
+        if two in ("command -v", "command -V"):
+            return []
         if toks[0] in VALUE_WRAP:
             opts, toks = VALUE_WRAP[toks[0]], toks[1:]
             while toks and toks[0].startswith("-") and toks[0] != "-":
@@ -135,12 +169,10 @@ def strip_wrappers(toks):
                 toks = toks[1:]  # DURATION
             toks = toks[1:] if toks[:1] == ["--"] else toks
             continue
-        if WRAP.match(two) and len(toks) > 1:
-            toks = toks[2:]
-        elif WRAP.match(toks[0]):
-            toks = toks[1:]
-        else:
+        n = next((n for n in (3, 2, 1) if WRAP.match(" ".join(toks[:n]))), 0)  # `uv tool run` is three words, `uv run` two, `npx` one
+        if not n:
             break
+        toks = toks[n:]
         while toks and toks[0].startswith("-"):
             toks = toks[2:] if toks[0] in WRAP_VALUE_OPTS else toks[1:]
     return toks
@@ -149,7 +181,8 @@ def strip_wrappers(toks):
 def is_heavy(command: str, patterns) -> bool:
     """True when a shell segment of `command` begins, after runner wrappers, with a heavy pattern.
     Quote- and heredoc-aware: `git commit -m "fix; pytest"` is not heavy; `cd x && uv run pytest` is.
-    Light invocations (--version, --help, --collect-only, `playwright install`) are never heavy.
+    Light invocations (--version, --help, --collect-only, --list-affected, --download-db-only, --package-lock-only except on `ci`,
+    `command -v TOOL`, `playwright install`) are never heavy. A bare `grype` after a pipe or before `<` reads an SBOM from stdin: heavy.
     A pytest run scoped to one or two explicit test files (`a.py`, `a.py::test`), with any -k, is light
     (the hold message advises it); no file, a directory, or a third file stays heavy (see scoped_pytest).
     `bash|sh -c 'STRING'` (any option cluster holding `c`, e.g. `-lc`) is checked as STRING.
@@ -160,11 +193,13 @@ def is_heavy(command: str, patterns) -> bool:
 
 def _heavy(command, patterns, on_parse_error):
     try:
-        segs = segments(command or "", ":[]{}+%")  # `{}`, `+x`, `%e` stay one word: `xargs -I{} pytest {}`
+        segs = _split(command or "", ":[]{}+%")  # `{}`, `+x`, `%e` stay one word: `xargs -I{} pytest {}`
     except ValueError:
         return on_parse_error
-    for toks in segs:
+    for toks, before, after in segs:
         toks = strip_wrappers(toks)
+        if toks == ["grype"] and (PIPE.search(before) or after.startswith("<")):
+            toks = ["grype", "-"]  # a bare grype fed by a pipe or `<` reads an SBOM from stdin: it scans
         if toks and os.path.basename(toks[0]) in SHELLS:
             i = 1
             while i < len(toks) and toks[i][:1] and toks[i][:1] in "-+":
@@ -173,7 +208,8 @@ def _heavy(command, patterns, on_parse_error):
                 if _heavy(toks[i], patterns, True):
                     return True
                 continue
-        if not toks or LIGHT_FLAGS & set(toks) or (toks[0] == "playwright" and (toks[1:2] or [""])[0].startswith("install")):
+        light = LIGHT_FLAGS - {"--package-lock-only"} if toks[1:2] == ["ci"] else LIGHT_FLAGS  # npm ci wipes node_modules, lockfile-only or not
+        if not toks or light & set(toks) or (toks[0] == "playwright" and (toks[1:2] or [""])[0].startswith("install")):
             continue
         seg = " ".join(toks)
         if any(re.match(p, seg) for p in patterns):
@@ -302,7 +338,7 @@ def main() -> int:
         except Exception:  # enrichment only: it must never cancel the deny
             who = ""
         msg = (f"machine busy (load {load1:.1f}/{cores} cores, RAM {ram_s}; {reason}" + (f"; held by {who}" if who else "") + "): "
-               "wait and retry, or run a narrower test (one file or -k filter)")
+               "wait and retry, or narrow the command (one test file, a -k filter, a smaller scan path)")
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                                  "permissionDecision": "deny",
                                                  "permissionDecisionReason": msg}}))

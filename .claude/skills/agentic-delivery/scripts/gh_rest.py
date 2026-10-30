@@ -37,6 +37,8 @@ def _curl(url, token, method, body, timeout):
     p = subprocess.run(cmd + [url], capture_output=True, text=True, timeout=timeout,
                        input=f'header = "Authorization: Bearer {token}"\n')  # token via stdin, not argv
     head, _, text = p.stdout.partition("\n\n")  # text mode folds CRLF
+    while text.startswith("HTTP/"):  # a proxy's CONNECT reply comes first: the real response is the next block
+        head, _, text = text.partition("\n\n")
     m = re.match(r"HTTP/\S+ (\d+)", head)
     status = int(m.group(1)) if m else 0
     nxt = re.search(r'<([^>]+)>;\s*rel="next"', head)

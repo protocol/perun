@@ -12,7 +12,7 @@ Before running it, ask the user three things in plain words, one at a time, and 
 2. Can it be undone cheaply, or is it a one-way door: easy or hard? (`--reversibility`)
 3. What should the options be judged on, and how much does each matter? For example impact 3, cost 2, risk 3.
    (`--criteria name:weight,...`.) Whenever criteria are given, collect or derive at least two options, the claim
-   itself among them, each as an `--option`; "do-nothing" is added for them. veche.py refuses criteria without options.
+   itself among them, each as an `--option` (a short name such as `ship`, no spaces); "do-nothing" is added for them. veche.py refuses criteria without options.
 
 Then run `veche.py` with those flags, the decision as `--claim`, its strongest version (`--steelman`), `--twin`,
 `--max-calls 12`, and `--cmd` set as in the example run in `references/council.md` (a command that reads the prompt on stdin and prints

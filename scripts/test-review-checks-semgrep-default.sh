@@ -5,6 +5,7 @@ set -euo pipefail
 RC=${REVIEW_CHECKS:-$(cd "$(dirname "$0")/.." && pwd)/.claude/skills/deep-code-review/scripts/review_checks.sh}
 T=$(mktemp -d "${TMPDIR:-/tmp}/sgd.XXXXXX") && [ -n "$T" ] && [ -d "$T" ] || { echo "no temp dir" >&2; exit 1; }
 trap 'rm -rf "$T"' EXIT; fail=0
+export DCR_CACHE_ROOT="$T/nocache" DCR_USER_BIN= # a semgrep snapshot or ~/.local/bin provisioned on the host must not change what this asserts
 ok() { echo "ok - $1"; }; bad() { echo "FAIL - $1"; fail=1; }
 mkdir -p "$T/stub" "$T/repo"
 cat >"$T/stub/semgrep" <<'S'

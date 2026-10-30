@@ -44,7 +44,7 @@
 # Self-limit (no outside stop needed): TRAIN_BUDGET_MIN (policy train_budget_min, default 90, 0 = off) is the whole train's wall clock and TRAIN_MAX_BISECT_ROUNDS (policy
 # train_max_bisect_rounds, default 8, 0 = off) caps whole gate rounds (a split re-gates halves; per-PR bisect steps are not counted, only the clock bounds them); each stage timeout is clamped to the budget left. On exhaustion it prints
 # "DEFER: train budget spent ...; culprit suspects #...", exits 5 (the EXIT trap frees locks and leases; 5 is not 4, which means the lease was held and nothing was built), lands nothing more. A red base ends the train at once with BASE_RED_FAILFAST=enforce (default shadow: logs only).
-# Exit: 0 landed, 1 base/browser red or lock held, 4 DEFER (lease still held after LEASE_WAIT_SECS; nothing built), 5 DEFER (own budget spent; see Self-limit), 6 STALE (this script changed on disk and STALE_SELF_EXIT=enforce: checked only before a gate starts, a running gate drains and lands; or `touch $LOG.cancel` = urgent stop at the next tick, file consumed), 2 usage/refused (also a live tag, TRAIN_UNIQUE_RUN=enforce), 3 something not landed (see the SPLIT done line; some PRs may have landed): no GREEN union or CANT
+# Exit: 0 landed, 1 base/browser red or lock held, 4 DEFER (lease still held after LEASE_WAIT_SECS; nothing built), 5 DEFER (own budget spent; see Self-limit), 6 STALE (this script changed on disk and STALE_SELF_EXIT=enforce: checked only before a gate starts, a running gate drains and lands; or `touch $LOG.cancel` once the train runs = urgent stop at the next tick, file consumed; one left from an earlier run of the tag is cleared at start), 2 usage/refused (also a live tag, TRAIN_UNIQUE_RUN=enforce), 3 something not landed (see the SPLIT done line; some PRs may have landed): no GREEN union or CANT
 # (CANT = a real browser failure not attributed: not re-failing alone, pre-existing on the base, or not pinned to a culprit PR; flaky-only bisects print FLAKY, never blame). Without a split, 3 means nothing landed.
 # Every started train (a gate ran) is appended to the yield ledger on exit (train_yield.py; landing_watchdog.py alarms on low yield or a PR that re-rides). A train ended by BASE RED or CULPRIT is recorded as red and left out of both.
 # Optional: CLEAN_ROOT (your own worktree tree: runs reap_own.sh and clean_finished.sh on it first), BASE_AUDIT_CMD (run via bash -c on the bare fresh base before verifying; non-zero prints
@@ -81,6 +81,8 @@ if [ "${TRAIN_UNIQUE_RUN:-shadow}" != off ]; then
     else rm -f "$LOG.pid"; ! mark || OWNP=1; fi
   fi
 fi
+# A "$LOG.cancel" found now is left over from an earlier run of this tag (it ended before its next tick): clear it, or it stops this fresh run at the first tick. Kept while a live twin may own it.
+[ -z "$OWNP" ] && [ "${TRAIN_UNIQUE_RUN:-shadow}" != off ] || rm -f "$LOG.cancel"
 . "$HERE/_clean_union.sh"
 . "$HERE/_dirty_guard.sh"
 echo "train_land: this lands to $BASE_BRANCH: if the host classifier denies the merge, park THAT merge for the owner (do not retry or route around it) and keep every other lane, review and build going." >&2

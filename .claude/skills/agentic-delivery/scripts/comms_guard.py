@@ -10,12 +10,16 @@ Covers: Linear MCP `save_status_update` (kind status) and `save_comment` (messag
 "linear"; Bash `gh pr create|edit` (pr), `gh pr comment` and `gh issue create|edit|comment` (message), `gh release
 create|edit` (release); `curl` or `gh api` calls to repos/<owner>/<repo>/pulls (pr) or /issues (message) with a
 `body`. The body is read from `--body`/`-b`/`--notes`, a heredoc, `$(cat FILE)`, `--body-file`/`-F FILE`, `-d` JSON,
-`-d @FILE`, `--input FILE` or `-f body=...`. A command with no readable body is allowed.
+`-d @FILE`, `--input FILE` or `-f body=...`. A command with no readable body is allowed. A `gh pr create|edit` whose
+`--title` says audit, security or harden is checked as kind `audit-pr` (required sections, and for `create` without
+`--head` that the diff against `--base` is named under "Changes by area", read in the directory of a `cd` ahead of `gh`; no
+repo or base: sections only).
 
 Output: a JSON `hookSpecificOutput.additionalContext` (the lint report); never a `permissionDecision`, never exit 2.
 Register it as `python3 ".../comms_guard.py" || true`. Fail open: bad stdin, a missing communication-structure skill,
 an unreadable file or any error prints nothing. Opt out for a session or a project with `PERUN_COMMS_GUARD=off`
-(settings `env`). Side effects: none (reads the body file, no network). Test: scripts/test_comms_guard.py.
+(settings `env`). Side effects: none (reads the body file and, for an audit PR, runs a read-only `git diff --name-only`;
+no network). Test: scripts/test_comms_guard.py, scripts/test_audit_pr_body.py.
 """
 import json
 import os
@@ -119,18 +123,44 @@ def extract(tool_name, tool_input, cwd=""):
     return (kind, body) if isinstance(body, str) and body.strip() else None
 
 
+def audit(kind, cmd, cwd, lint):
+    """(kind, lint kwargs): a PR written by `gh pr create|edit` with a --title that names an audit, security or hardening
+    change is linted as `audit-pr`; `create` without --head also gets the paths changed against --base (default origin/HEAD)
+    so coverage is checked (read in the directory of a `cd` ahead of gh, else `cwd`), and without a repo or base only the
+    headings are. Anything else, or an old comms_lint, keeps `kind`."""
+    try:
+        m = GH.search(cmd)
+        tail = cmd[m.start():] if m else ""
+        title = next((_value(r, cwd) for r in _flags(tail, r"--title|-t")), None)
+        if kind != "pr" or not title or not lint.AUDIT_TITLE.search(title):
+            return kind, {}
+        if m.group(2) != "create" or any(_flags(tail, r"--head|-H")):
+            return "audit-pr", {}
+        for d in re.findall(r"\b(?:cd|pushd)\s+(?:--\s+)?(\"[^\"]*\"|'[^']*'|[^\s;&|]+)", cmd[:m.start()]):  # a `cd` ahead of gh: that directory is the PR's checkout
+            cwd = os.path.join(cwd or ".", os.path.expandvars(os.path.expanduser(d.strip("\"'"))))
+        base = next((_value(r, cwd) for r in _flags(tail, r"--base|-B")), None)
+        base = base if not base or base.startswith("origin/") else "origin/" + base
+        try:
+            return "audit-pr", {"files": lint.changed_files(base or "origin/HEAD", cwd or None)}
+        except (OSError, ValueError):
+            return "audit-pr", {}
+    except (AttributeError, OSError, ValueError):
+        return kind, {}
+
+
 def main():
     if os.environ.get("PERUN_COMMS_GUARD", "").lower() in ("off", "0", "false"):
         return 0
     try:
         data = json.load(sys.stdin)
-        got = extract(data.get("tool_name") or "", data.get("tool_input") or {}, str(data.get("cwd") or ""))
+        tool_input, cwd = data.get("tool_input") or {}, str(data.get("cwd") or "")
+        got = extract(data.get("tool_name") or "", tool_input, cwd)
         if not got:
             return 0
         sys.path.insert(0, str(LINT_DIR))
         import comms_lint
-        kind, body = got
-        res = comms_lint.lint(kind, body)
+        kind, extra = audit(got[0], str(tool_input.get("command") or ""), cwd, comms_lint)
+        res = comms_lint.lint(kind, got[1], **extra)
         if res["ok"]:
             return 0
         lines = comms_lint.render(res).splitlines()

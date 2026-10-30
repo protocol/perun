@@ -23,6 +23,7 @@ scores every rule and prints the exact fix per failure (exit 1 = below the bar).
 | `status` | 150 | 14 | numbers, ask, markers, vocab, timezone |
 | `leadership` | 220 | 24 | numbers, ask, structure, timezone |
 | `pr` | 200 | 28 | numbers, askif, verified |
+| `audit-pr` | 1200 | 160 | numbers, verified, sections |
 | `release` | 120 | 14 | numbers, ask, vocab |
 | `decision` | 200 | 22 | numbers, ask |
 | `incident` | 220 | 24 | numbers, ask, vocab, timezone |
@@ -36,6 +37,14 @@ numbers, verified, timezone. Nothing demands what the input lacks: `ask` (and `a
 only with `--source` and only when the source has an ask, and flags a missing owner or date only if the source gives one. `status` with four
 or more of the seven leadership labels is checked as `leadership`. Bodies under 60 words skip numbers, ask, markers,
 verified and command. Fenced code does not count toward the budget.
+
+`audit-pr` is the body of an audit, security or hardening PR. `sections` fails, at any length, when a required heading
+(every heading of the template below except `Dependency upgrades`) is missing, `What changes for reviewers and users` is
+empty (items, or `None`), or `Not fixed` carries a file:line, route, URL or file path (counts only). A closing footer
+(`---` or `🤖 Generated`, then only blank, `Generated with` and `Co-Authored-By:` lines) is not checked; other text after
+a `---` is. With `--range BASE..HEAD` it also fails when a changed file is not named under `Changes by area`, by full path
+or by a containing directory with a trailing slash. The guard hook picks this kind when the `gh pr create|edit` title says audit, security
+or harden, and for `create` passes the diff against `--base` (default `origin/HEAD`).
 
 ## Templates
 
@@ -58,6 +67,23 @@ A leadership update for non-technical readers uses the seven labelled sections i
     **Risk and rollback:** <blast radius>; <exact rollback>.
     **Verified:** ✅ <check → result>  ⏳ <not verified; owner, date>
     <Reviewer>, please <approve or decide> by <date, if given>.   |   (no ask: omit the line)
+
+**audit-pr** (an audit, security or hardening PR, picked by its title: reviewers see what changes before they open the diff; heading names are `AUDIT_SECTIONS` in `comms_lint.py`)
+
+    ## Summary
+    <What this PR does and the one review ask, 2-3 sentences; the first sentence 35 words or fewer.>
+    ## What changes for reviewers and users
+    - <Each noticeable change in plain words: a route that now needs sign-in, a new limit or timeout, an upgraded dependency, a changed dev workflow, a new config or env var, a changed error message.>   |   None
+    ## Changes by area
+    - **<Area>:** <what changed>. Why: <the risk in plain words, no exploit steps>. Files: `<path>` or `<dir>/`. Test: <the test that covers it>.
+    ## Dependency upgrades
+    - <Package: old → new>: <why>; <breaking notes>.   |   (nothing upgraded: omit the section)
+    ## How to verify
+    ✅ <check → result with counts, run on this exact head>  ⏳ NOT RUN: <what and why; what the reviewer should run>
+    ## Not fixed
+    <Counts by severity only, tracked privately: `2 high, 5 medium`. No file:line, route or exploit detail.>
+
+Every changed file appears under `Changes by area`, itself or its directory. Claim in `How to verify` only what a log or commit backs.
 
 **release** (release note, changelog entry, customer announcement)
 

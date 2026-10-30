@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# review_checks.sh tool hub: per routed tool (zizmor bandit gosec grype checkov hadolint) a shim covers
+# review_checks.sh tool hub: per routed tool (zizmor actionlint bandit gosec grype checkov hadolint) a shim covers
 # found+finding, found+clean, missing -> "NOT CHECKED: <tool> (install: ...)", wrong-shape JSON -> not run (never clean).
 # snyk-agent-scan is unverified: always NOT CHECKED. Also: every registry tool is documented in references/tool-hub.md.
 set -euo pipefail
@@ -8,12 +8,13 @@ RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.
 T=$(mktemp -d "${TMPDIR:-/tmp}/hub.XXXXXX") && [ -n "$T" ] && [ -d "$T" ] || { echo "no temp dir" >&2; exit 1; }
 trap 'cd /; rm -r -- "$T"' EXIT; fail=0
 ok() { echo "ok - $1"; }; bad() { echo "FAIL - $1"; fail=1; }
-TOOLS="zizmor bandit gosec grype checkov hadolint"
+TOOLS="zizmor actionlint bandit gosec grype checkov hadolint"
 export PERUN_HEAVY_DIR="$T/heavy" HUB_LOG="$T/hub.log"
 mkdir -p "$T/repo" "$T/s-none" && cd "$T/repo"
 gjson() { # gjson found|clean TOOL: the JSON a real run of TOOL would print
   case "$1:$2" in
     found:zizmor) echo '[{"ident":"template-injection","desc":"d","locations":[{"symbolic":{"key":{"Local":{"verbatim_path":".github/workflows/ci.yml"}}},"concrete":{"location":{"start_point":{"row":4}}}}]}]' ;;
+    found:actionlint) echo '[{"message":"m","filepath":"./.github/workflows/ci.yml","line":3,"column":1,"kind":"syntax-check","snippet":"s","end_column":2}]' ;;
     found:bandit) echo '{"results":[{"filename":"./app.py","line_number":2,"test_id":"B602","issue_text":"t"}]}' ;;
     found:gosec) echo '{"Issues":[{"file":"'"$(pwd -P)"'/main.go","line":"3","rule_id":"G101","details":"d"}]}' ;;
     found:grype) echo '{"matches":[{"vulnerability":{"id":"CVE-1","description":"d"},"artifact":{"name":"p","version":"1"}}]}' ;;
@@ -60,7 +61,7 @@ chmod +x "$T/base/semgrep" "$T/base/trivy" "$T/base/gitleaks"
 nck() { jq -e --arg t "$1" 'any(.[]; .tool==$t and .rule=="not-checked" and .file=="")' "$T/out" >/dev/null && ok "$1 $2: not-checked row in JSON" || bad "$1 $2: not-checked row in JSON"; }
 run() { PATH="$T/s-$1:$T/base:$T/sys" bash "$RC" --base base 2>"$T/err" >"$T/out"; }
 for t in $TOOLS; do
-  rc=0; [ "$t" != zizmor ] || rc=11
+  rc=0; [ "$t" != zizmor ] || rc=11; [ "$t" != actionlint ] || rc=1 # findings exit codes
   HUB_JSON=$(gjson found $t) HUB_RC=$rc run "$t"
   jq -e --arg t "$t" 'any(.[]; .tool==$t and .rule!="" and .file!="")' "$T/out" >/dev/null && ok "$t finding" || bad "$t finding"
   ! grep -q "NOT CHECKED: $t" "$T/err" && ok "$t found: no NOT CHECKED" || bad "$t found but NOT CHECKED"

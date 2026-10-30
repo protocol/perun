@@ -56,7 +56,8 @@ class RelText(unittest.TestCase):
     def test_elapsed_timing_and_plain_text_not_advisory(self):
         rc, out = lint("a.spec.ts", "const start = performance.now();\nexpect(performance.now() - start).toBeLessThan(5000);\n"
                        "await expect(page.getByText('Welcome')).toBeVisible();\n")
-        self.assertEqual((rc, out), (0, ""))
+        # a real elapsed bet on line 2: only the timing rule (#2141) fires, never the real-clock rule or the text advisory
+        self.assertEqual((rc, out.count("\n"), "a.spec.ts:2: timing bet under load" in out), (1, 1, True))
 
     def test_python_and_escape(self):
         self.assertIn(":2: advisory", lint("test_a.py", "def test_a():\n    assert page.text == 'Nothing today'\n")[1])

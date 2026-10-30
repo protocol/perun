@@ -1,0 +1,2 @@
+### Fixed
+- `veche.py`: a `COULD_NOT_DECIDE` record from a council that actually ran now keeps `dropped` (each failed seat with its own reason: `cmd exit N`, `cmd timeout`, `cap reached before call` or `malformed answer: ...`) and `cost` (calls and characters charged), as a decided record does. Before, the failure record kept one reason and lost the per-seat reasons, the `dropped` list and the call cost, so a council that lost its seats could not be told apart from one that never started (#2135).

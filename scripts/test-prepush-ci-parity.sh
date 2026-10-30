@@ -8,7 +8,7 @@ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
 pass=0 fail=0
 ok() { if [ "$1" -eq 0 ]; then echo "PASS  $2"; pass=$((pass + 1)); else echo "FAIL  $2"; fail=$((fail + 1)); fi; }
 R="$WORK/r"
-g() { git -C "$R" -c user.email=t@example.com -c user.name=T "$@"; }
+g() { git -C "$R" -c user.email=t@users.noreply.github.com -c user.name=T "$@"; }
 git clone -q --no-hardlinks "$ROOT" "$R" 2>/dev/null
 # the clone holds HEAD; overlay the working-tree hook + gates under test, then pin that as the push base
 cp "$ROOT/.claude/skills/deep-code-review/templates/pre-push-verify.sh" "$R/.claude/skills/deep-code-review/templates/"

@@ -5,15 +5,16 @@ Usage: python3 scripts/perun_doctor.py [REPO] [--fix [--yes]] [--home DIR]
 
 Checks, in plain language: installed version vs this checkout (and the global copy),
 hook entries whose files exist, shipped hook scripts that nothing calls, forked copies
-that drifted from the checkout (sha256), janitor/scheduler presence, policy file, and the
-sandbox probe (git, ssl, network, local bind, ~/.cache write; DCR_NO_PROBE=1 skips it), and an advisory
+that drifted from the checkout (sha256), janitor/scheduler presence, policy file, a WARN when user.email is not a noreply form
+but the default branch's recent commits are (identity_gate.py), and the sandbox probe (git, ssl, network, local bind,
+~/.cache write; DCR_NO_PROBE=1 skips it), and an advisory
 "To run autonomously, add:" section from sandbox_preflight.py (read-only advice: the permissions, sandbox excludes and
 domains this repo's own flows need; it never changes the exit code).
 Exit 0 = nothing to fix, 1 = at least one WARN/FAIL (INFO rows are optional add-ons and never fail the exit code). `--fix` prints a plan (and what default-on would add), needs a typed yes on a TTY or --yes, then
 re-runs the recorded install flags via scripts/update-installed.sh (skills are backed up
 by install.sh first), and re-checks. Stdlib only; read-only without --fix.
 """
-import argparse, hashlib, json, os, re, shlex, subprocess, sys
+import argparse, hashlib, json, os, re, shlex, subprocess, sys, time
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent
@@ -159,6 +160,30 @@ def orphan_dbs(ps_text):
     return out
 
 
+def review_scanners(repo):
+    """(status, detail) for the "review scanners" row, from the record review_checks.sh leaves in <git-common-dir>/review-checks-last.json
+    ({"ts", "wired", "not_run", "fixable", "partial"}). WARN when the last run had wired scanners that did not run, or ran without their
+    offline cache, and a provision fixes it (names the tools and the one command to run yourself; an osv-scanner fix carries this repo as DIR,
+    so the provision re-downloads its ecosystems' DBs). INFO when nothing is recorded or the record is unreadable (never a guess), when the
+    tools that did not run have no provisioning fix, and when a scanner ran with a partial scope (trivy secret-only, semgrep with errors:
+    "partial", absent in older records). OK when everything wired ran in full. Read-only: runs `git rev-parse` and reads one small file."""
+    try:
+        g = subprocess.run(["git", "-C", str(repo), "rev-parse", "--git-common-dir"], capture_output=True, text=True, timeout=10, check=True).stdout.strip()
+        d = json.loads((Path(repo) / g / "review-checks-last.json").read_text())
+        wired, bad, fix = (list(map(str, d[k])) for k in ("wired", "not_run", "fixable"))
+        part = list(map(str, d.get("partial") or []))
+        when = time.strftime("%Y-%m-%d", time.localtime(int(d["ts"])))
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError, OverflowError):
+        return "INFO", "no readable review_checks.sh record in this repo (it writes one after each run): not checked"
+    seen = f"last review_checks run {when}: ran {len(wired) - len(bad)} / wired {len(wired)}"
+    if fix:
+        # a bare --print treats any one ecosystem's osv zip as a warm cache and may emit nothing, so an osv fix names this repo as DIR
+        cmd = f"bash {shlex.quote(str(SRC / '.claude/skills/deep-code-review/scripts/provision_tools.sh'))} --print" + (f" {shlex.quote(str(repo))}" if "osv-scanner" in fix else "")
+        return "WARN", f"{seen}; fixable: {', '.join(fix)}. Run `{cmd}`, paste the one line it prints yourself outside the sandbox (it installs tools and warms offline caches), then re-run review_checks.sh"
+    notes = ([f"not run: {', '.join(bad)}"] if bad else []) + ([f"partial scope: {', '.join(part)}"] if part else [])
+    return ("INFO", f"{seen}; {'; '.join(notes)} (no provisioning fixes it, see the NOT RUN and partial lines)") if notes else ("OK", seen)
+
+
 def check(repo, home):
     rows = []  # (status, check, detail)
     add = lambda s, c, d: rows.append((s, c, d))
@@ -249,6 +274,10 @@ def check(repo, home):
     # policy
     pol = [p for p in walk(repo, 3) if re.search(r"perun[-_]?policy.*\.(json|ya?ml|toml)$", p.name, re.I)]
     add("OK" if pol else "INFO", "policy file", f"found {pol[0].relative_to(repo)}" if pol else "none (optional; defaults apply, write one with install.sh --policy)")
+    sys.path.append(str(SRC / ".claude/skills/deep-code-review/scripts"))
+    import identity_gate
+    if w := identity_gate.doctor_warn(repo):  # WARN-only row: nothing to say when the identity is fine or unknowable
+        add("WARN", "commit identity", w)
     # sandbox probe: harmless checks; each failure names its exact fix. DCR_NO_PROBE=1 skips (tests, offline).
     if not os.environ.get("DCR_NO_PROBE"):
         sys.path.insert(0, str(SRC / ".claude/skills/agentic-delivery/scripts"))
@@ -283,6 +312,8 @@ def check(repo, home):
             add("WARN" if big else "OK", label, f"{len(paths)} worktree(s){size}{hint}")
     except (OSError, subprocess.SubprocessError, TypeError, AttributeError):
         add("INFO", "lane worktrees", "git worktree list failed: not checked")
+    st, detail = review_scanners(repo)
+    add(st, "review scanners", detail)
     return rows
 
 

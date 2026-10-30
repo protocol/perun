@@ -1,0 +1,3 @@
+### Fixed
+- `veche.py`: `--option` names are checked before any call. Every seat has to echo an option name back as a JSON key, and a name that is not a short token made seats fail silently. A name must now be a short token (letters, digits, `-` and `_`, starting with a letter or digit, at most 32 characters); anything else is refused with a `COULD_NOT_DECIDE` record whose reason names the option and the rule, and no seat is called (#2136).
+- `council.md` and `commands/council.md` state the rule, and the example run uses `--option ship --option wait` instead of option names that are whole sentences.

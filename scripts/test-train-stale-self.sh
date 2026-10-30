@@ -84,10 +84,6 @@ ok $? "train_land: the script edited mid-gate, enforce does not exit: the runnin
 out=$(run STUBEDIT=edit VERIFY_CMD="bash $WORK/green.sh" STALE_SELF_EXIT=enforce) && rc=0 || rc=$?
 [ $rc -eq 6 ] && grep -q '^STALE: train_land.sh changed on disk' <<<"$out" && [ ! -s "$WORK/merged.log" ] && [ ! -e "$WORK/traintt.log.pid" ]
 ok $? "train_land: the script edited before a stage starts, enforce exits 6, lands nothing, marker removed"
-touch "$WORK/traintt.log.cancel"
-out=$(run VERIFY_CMD="bash $WORK/green.sh") && rc=0 || rc=$?
-[ $rc -eq 6 ] && grep -q '^CANCEL:' <<<"$out" && [ ! -s "$WORK/merged.log" ] && [ ! -e "$WORK/traintt.log.cancel" ] && [ ! -e "$WORK/traintt.log.pid" ]
-ok $? "train_land: a cancel file stops the train at the next tick (exit 6, lands nothing, file and marker removed)"
 out=$(run STUBEDIT=edit VERIFY_CMD="bash $WORK/green.sh") && rc=0 || rc=$?
 [ $rc -eq 0 ] && grep -q 'SHADOW stale-self-exit: train_land.sh changed' <<<"$out" && landed
 ok $? "train_land: the default (shadow) logs the stale script and runs on"

@@ -80,8 +80,8 @@ def flagged(kind, text, source=None):
 class Table(unittest.TestCase):
     def test_reference_table_is_the_source_of_truth(self):
         kinds = L.load_kinds()
-        self.assertEqual(set(kinds), set(GOOD) | {"leadership"})
-        known = {"numbers", "ask", "askif", "markers", "vocab", "timezone", "structure", "verified", "command", "nolead", "table", "numeric", "dri", "links"}
+        self.assertEqual(set(kinds), set(GOOD) | {"leadership", "audit-pr"})  # audit-pr is tested in test_audit_pr_body.py
+        known = {"numbers", "ask", "askif", "markers", "vocab", "timezone", "structure", "verified", "command", "nolead", "table", "numeric", "dri", "links", "sections"}
         for kind, (words, lines, checks) in kinds.items():
             self.assertGreater(words, 0)
             self.assertGreater(lines, 0)
