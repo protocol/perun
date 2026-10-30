@@ -5,8 +5,8 @@ Kinds, word/line budgets and the optional checks per kind come from the table in
 (the one source of truth; `--list` prints it). Always checked: lead (line 1 is the answer: <=60 words, first
 sentence <=35, no greeting/background opener), budget (fails only above BUDGET_SLACK x the table value), dates (a
 weekday must fit its date, computed from the calendar), filler (AI-slop phrases), placeholder (TBD, [owner], and the
-stand-ins "owner unassigned", "no deadline", "not stated"; a run of capital Xs inside a single-backtick span on one line, a mktemp
-template such as `drain.XXXXXX`, is not one), vague (numberless "significantly", "on track"). Advisory
+stand-ins "owner unassigned", "no deadline", "not stated"; a run of capital Xs inside a single-backtick span on one line, a
+mktemp template such as `drain.XXXXXX`, is not one), vague (numberless "significantly", "on track"). Advisory
 WARNs that never put a draft below the bar: hedge, length (over the table value), markers (check/hourglass lines),
 numbers (a figure in the first 4 content lines), verified, timezone, and ask (runs only with --source, only when the
 source has an ask, and flags a missing owner or date only if the source gives one: nothing demands what the input
