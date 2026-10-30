@@ -3,6 +3,44 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.623.0] — 2026-10-30
+
+### Fixed
+- `scripts/ci-gates.sh rules` now compares its sorted rows in the C locale, like the `sort -u` calls that feed them. Under a UTF-8 locale such as `en_US.UTF-8` its two `comm` calls saw unsorted input, so a baseline with a few rows could report a baselined rule as new, or a baseline that only shrank as grown and needing a `rule-baseline-raise:` line. The shipped baseline is empty, so nothing failed yet. Regression test: `scripts/test-rules-locale.sh` (registered from `scripts/ci-tests.d/rules-locale.sh`) runs the gate under C and `en_US.UTF-8`.
+
+### Added
+- `scripts/ci-gates.sh tests-wired --allowlist <file> <root>`: a standing check that every `scripts/test_*.py` and `scripts/test-*.sh` is run by CI. A test counts as run when `scripts/ci-tests.d/*.sh`, a `.github/workflows/*.yml` step, or a test those run (for example `test-ci-gates.sh`) names it on a non-comment line; otherwise it needs a `name<TAB>reason` row in `scripts/ci-test-allowlist.tsv`. A row without a reason, for a missing file, or for a test CI already runs also fails, so the list only shrinks. It runs from `scripts/ci-tests.d/tests-wired.sh`; its regression test is `scripts/test-tests-wired.sh` (a planted orphan fails, and it gives the same answers under `en_US.UTF-8` as under the C locale).
+- The first run found 71 tests that no CI step ran: 59 are now registered (`secret-rule-waves.sh`, `security-gate-waves.bg.sh` as a background suite, `orphan-tests-misc.sh`, `orphan-tests.sh`) and the 12 corpus re-scores of 30 s or more are allowlisted with their measured runtimes.
+
+### Fixed
+- `scripts/test_auto_update_legacy_marker.py` took about 326 s because it copied `docs/bench` (about 90k files) into a scratch tree; it now skips that directory and runs in about 4 s. Its `install.sh` run, `scripts/test_install_canonical_global.py` and `scripts/test_peer_pains_5.py` now set `DCR_NO_PROBE=1`, so none of them calls github.com through the sandbox probe.
+
+### Added
+- `veche.py`: a decided record carries `kill_criteria_by_lens` (`{lens: text}`), each seat's own kill criterion as worded before near-duplicates collapse, so a reader can see which seat asked for which tripwire. It is additive: `kill_criteria` and `validate_verdict.py` are unchanged, a seat that gave none is left out of the map, and the evil twin's criterion stays in `minority_report.twin` (#2140).
+
+### Changed
+- `veche.py --help`: `--option` states the exact name rule (the `TOKEN` pattern, which the refusal for a bad name now quotes too), `--stakes` and `--reversibility` state the real gate (the council is skipped only when stakes are low or medium and reversibility is easy, and either flag alone convenes), and `--json-out` says how the file is written (#2136, #2139).
+- `council.md` states the reply contract a custom `--cmd` must meet, as the parser really accepts it: a JSON object with a `verdict` and string-only `claims` items, prose and stray braces around it skipped, the first object with a valid `verdict` wins, and the `scores` map may sit in the verdict object or in any other object (#2137). It also lists `kill_criteria_by_lens` in the output row.
+
+### Fixed
+- `veche.py --json-out` writes through a temp file in the same directory and `os.replace`, at the early write and at the final one and on every outcome, so a reader or a crash never sees half a record. A symlinked path keeps pointing at its target, an existing file keeps its mode, a device or FIFO target is written in place, and an unwritable path still exits 2 with the `--json-out: cannot write` message (#2139).
+
+### Fixed
+- The wall-clock pins of `scripts/test_destructive_guard_w20.py`, `scripts/test_secret_extra_rules_w12.py`, `scripts/test_secret_extra_rules_w13.py` and `scripts/test_secret_extra_rules_w14.py` (0.2 s and 0.5 s on 100 KB lines) are now 2.0 s, so a loaded CI runner no longer fails them; a catastrophic-backtracking regression still takes far longer.
+- `scripts/test-rules-locale.sh` and `scripts/test-tests-wired.sh` print `SKIP  en_US.UTF-8 ...` and run their C-locale cases when the runner has no `en_US.UTF-8`, instead of failing on a locale that is not installed.
+
+### Changed
+- `veche.py --help` states the `--json-out` directory rule: the record is written through a temp file beside the target, so a read-only file in a writable directory is replaced, while a read-only directory or a bind-mounted file exits 2. Test: `scripts/test_veche_doc_claims.py`.
+- `council.md` says the `scores` map may sit under `scores` in the verdict object itself, or in any other object (bare or under `scores`), as `veche.py` reads it.
+
+### Fixed
+- `comms_lint.py` `audit-pr`: the attribution footer may sit in markup. A `<sub>🤖 Generated with ...</sub>` line (with or without a `---` rule before it), a `*Generated with ...*` or `_Generated by ..._` line after a rule or the robot line, and a `Co-Authored-By:` line in the same markup are footer-shaped, so a compliant body that ends with one no longer fails "Not fixed carries detail ('https://')". Markup alone does not make a footer: a wrapped line that is not a Generated or Co-Authored-By line, a Generated line with no rule or robot before it, and anything after a footer are still checked. The accepted markup is bounded (`<sub>`, `<sup>`, `<small>`, `*`, `_`, at most six), so a long run of `*` stays linear. `references/artifact-templates.md` states the rule. Test: `scripts/test_audit_pr_footer_markup.py`.
+- `veche.py`: the kill-criteria dedupe key maps `≤` to `<=` and `≥` to `>=` first, so `rate ≤ 5%` and `rate <= 5%` are one tripwire (the first wording stays), while `≤` against `≥` and `<` against `≤` stay two. Test: `scripts/test_veche_uniq_unicode_fold.py`.
+- `veche.py --json-out`: a write that fails at the end of the run no longer turns a blocking verdict into exit 2. `COULD_NOT_DECIDE` keeps exit 3 and `NOT_CONVENED` keeps exit 4; only a verdict that would exit 0 becomes exit 2. The stderr message is unchanged, and `council.md` says so in one clause. Test: `scripts/test_veche_json_out_exit_code.py` (a write that works once, then fails, for each of the three outcomes).
+- `scripts/test-review-checks-scan-summary.sh` unsets `REVIEW_SEMGREP_REGISTRY`, so a host that sets it to `0` (which drops the `--config p/default` the test expects) still passes. Test: `scripts/ci-tests.d/review-checks-scan-summary-registry-env.sh` runs it with the variable set to `0`.
+- size-budget-raise: .claude/skills/communication-structure/references/artifact-templates.md 9171→9234 the audit-pr footer sentence names the markup a footer line may sit in
+- size-budget-raise: .claude/skills/idea-critic/references/council.md 9071→9516 kill_criteria_by_lens in the output row, one sentence stating the --cmd reply contract (the verdict object may carry the scores), and one clause: a --json-out write that fails at the end exits 2 only when the verdict would exit 0
+
 ## [1.622.0] — 2026-10-30
 
 ### Added

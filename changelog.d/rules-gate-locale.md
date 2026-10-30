@@ -1,2 +1,0 @@
-### Fixed
-- `scripts/ci-gates.sh rules` now compares its sorted rows in the C locale, like the `sort -u` calls that feed them. Under a UTF-8 locale such as `en_US.UTF-8` its two `comm` calls saw unsorted input, so a baseline with a few rows could report a baselined rule as new, or a baseline that only shrank as grown and needing a `rule-baseline-raise:` line. The shipped baseline is empty, so nothing failed yet. Regression test: `scripts/test-rules-locale.sh` (registered from `scripts/ci-tests.d/rules-locale.sh`) runs the gate under C and `en_US.UTF-8`.
