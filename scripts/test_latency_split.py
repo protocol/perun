@@ -28,6 +28,7 @@ ADDED = [
     '# Streaming transports — contract & reliability',
     'Read this when the target serves or consumes a WebSocket, SSE or gRPC-streaming endpoint (server, client or SDK wrapper). It fires at FILE or FULL scope on what the repo contains, not only on a diff. Moved verbatim from `api-contracts.md`, where "this file" refers; the auth angle stays in `security-api.md`.',
     'Reconnect-resume, slow-consumer bounds, two-way liveness, ordering/dedup, gRPC keepalive and bidi flow control: `api-contracts-streaming.md` — **read it when** the target serves or consumes a WebSocket, SSE or gRPC-streaming endpoint, at any scope (FILE or FULL, not only a diff). The auth angle (upgrade auth, `Origin`/CSWSH, per-connection limits) stays in `security-api.md`.',
+    'To measure a timing claim, run `scripts/perf_compare.sh` (hyperfine A/B against the base; rules and how to read the verdict: `tool-hub.md`), or `scripts/app_pentest.sh --load` for a running endpoint (`app-pentest.md`).',
 ]
 
 
