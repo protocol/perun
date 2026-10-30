@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=keep one priority queue and flag P0 inflation, review=2027-01-30
 """queue_guard.py — single priority queue: print the next issue to pull, flag P0 inflation.
 
 WHY: when every urgent thing is labelled P0 the label stops ranking anything.

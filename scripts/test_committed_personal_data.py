@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Tests: committed_personal_data.py counts distinct non-reserved email addresses per tracked file (CSV and binary-ish alike), reports path and count only and never an address, drops reserved, noreply, git@ and asset-scale names unless --include-reserved, honors the threshold edge, --strict, --stdin and the size cap, reports the repository total of addresses spread thin over files that each stay below the threshold, gives a file in a recognised compressed or columnar format under the threshold a not-checked row (never a silent pass; parquet, Arrow and ORC need their footer, a zlib header must decode), and fails closed outside a repository or on a bad flag value (no traceback). Every address is a fictional example.com/example.org name or a made-up .zz domain."""
+"""Tests: committed_personal_data.py counts distinct non-reserved email addresses per tracked file (CSV and binary-ish alike), reports path and count only and never an address, drops reserved, noreply, git@ and asset-scale names unless --include-reserved, honors the threshold edge, --strict, --stdin and the size cap, reports the repository total of addresses spread thin over files that each stay below the threshold, gives a file in a recognised compressed or columnar format under the threshold a not-checked row (never a silent pass; parquet, Arrow and ORC need their footer, a zlib header must decode), and fails closed outside a repository or on a bad flag value (no traceback). The fixture signals at the end of each file row are left out of these assertions (see test_committed_personal_data_fixture_label.py), so they keep checking the count and the rest of the row. Every address is a fictional example.com/example.org name or a made-up .zz domain."""
 import bz2
 import gzip
 import importlib.util
 import lzma
 import os
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,8 @@ from pathlib import Path
 
 CPD = Path(__file__).resolve().parent.parent / ".claude/skills/deep-code-review/scripts/committed_personal_data.py"
 ROW = "\t0\temail-addresses\t"
+# The fixture signals every file row ends its count with. Pinned in test_committed_personal_data_fixture_label.py; scan() leaves them out so these tests keep asserting the count and the rest of the row.
+CLAUSE = re.compile(r"; of \d+ counting reserved names, \d+ with placeholder-style local parts, \d+ on reserved domains")
 
 
 def addrs(n, domain="example.com", start=1):
@@ -40,10 +43,11 @@ def arrow_like(a):
     return b"ARROW1\0\0" + b"".join(o.to_bytes(4, "little") for o in off) + b"".join(a) + b"\0" * 8 + b"ARROW1"
 
 
-def scan(files, *args, stdin=None, links=None, git=True):
-    """Build a throwaway repo from {path: bytes}, run the script on it, return (exit code, stdout, stderr)."""
+def scan(files, *args, stdin=None, links=None, git=True, raw=False):
+    """Build a throwaway repo from {path: bytes}, run the script on it, return (exit code, stdout, stderr); stdout keeps the fixture signals only with `raw`."""
     with tempfile.TemporaryDirectory() as d:
         for rel, data in files.items():
+            Path(d, rel).parent.mkdir(parents=True, exist_ok=True)
             Path(d, rel).write_bytes(data)
         for name, target in (links or {}).items():
             os.symlink(target, Path(d, name))
@@ -52,7 +56,7 @@ def scan(files, *args, stdin=None, links=None, git=True):
             subprocess.run(["git", "-C", d, "init", "-q"], check=True, env=env)
             subprocess.run(["git", "-C", d, "add", "-A"], check=True, env=env)
         r = subprocess.run([sys.executable, str(CPD), *args, d], input=stdin, capture_output=True, text=True, env=env, timeout=60)
-        return r.returncode, r.stdout, r.stderr
+        return r.returncode, r.stdout if raw else CLAUSE.sub("", r.stdout), r.stderr
 
 
 class Fixtures(unittest.TestCase):
@@ -77,7 +81,7 @@ class Fixtures(unittest.TestCase):
     def test_no_address_or_domain_in_output(self):
         files = {**self.FILES, "people.csv": csv(addrs(12, "acme.zz"))}
         for args in ((), ("--include-reserved",), ("--include-reserved", "--strict")):
-            rc, out, err = scan(files, *args)
+            rc, out, err = scan(files, *args, raw=True)  # raw: the fixture signals are checked for a leak too
             self.assertIn(rc, (0, 1))
             self.assertIn("people.csv" + ROW, out)  # findings were printed ...
             for leak in ("@", "fixture-user", "example", "acme", "Jane"):
@@ -179,7 +183,7 @@ class Fixtures(unittest.TestCase):
             subprocess.run(["git", "-C", d, "init", "-q"], check=True)
             subprocess.run(["git", "-C", d, "add", "-A"], check=True)
             r = subprocess.run([sys.executable, str(CPD), "--include-reserved", d], capture_output=True)
-        self.assertEqual((r.returncode, r.stdout), (0, b"caf\xe9.csv" + ROW.encode() + b"12 distinct email addresses (threshold 10)\n"))
+        self.assertEqual((r.returncode, CLAUSE.sub("", r.stdout.decode("utf-8", "surrogateescape")).encode("utf-8", "surrogateescape")), (0, b"caf\xe9.csv" + ROW.encode() + b"12 distinct email addresses (threshold 10)\n"))
 
     def test_fails_closed_outside_a_repository_and_on_bad_usage(self):
         rc, out, err = scan({"a.csv": csv(addrs(12))}, git=False)

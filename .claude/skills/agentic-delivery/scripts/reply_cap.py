@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=owner rule: chat replies max 3 lines and 500 chars, review=2027-01-30
 """reply_cap.py — owner rule: chat replies max 3 lines, 500 chars.
 
 Two events, one file (the global install copies it alone):

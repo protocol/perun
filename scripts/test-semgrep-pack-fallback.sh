@@ -2,7 +2,7 @@
 # review_checks.sh: the semgrep p/default pack (the registry, or the provisioned snapshot standing in for it) does not load. The chunk reruns
 # with the bundled rules and the gap is reported ONCE, through one mechanism: the not-run line, the NOT RUN entry and one not-checked row, with the
 # fix named (provision_tools.sh --print). The closing "ran X / wired Y" line and review-checks-last.json count semgrep as partial and fixable
-# (a snapshot fixes it); there is no second "missing tools" report. Stub semgrep, gitleaks and trivy: hermetic, offline.
+# (a snapshot fixes it); there is no second "missing tools" report. Stub semgrep, gitleaks, trufflehog and trivy: hermetic, offline.
 # shellcheck disable=SC2015
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,6 +22,7 @@ echo "$tag:$first" >>"$LOG"
 printf '{"results":[{"path":"%s","start":{"line":2},"check_id":"perun.%s","extra":{"message":"m"}}],"errors":[]}\n' "$first" "$tag"
 S
 printf '#!/bin/sh\nexit 0\n' >"$T/stub/gitleaks"
+printf '#!/bin/sh\necho %s\n' "'{\"runs\":[{\"results\":[]}]}'" >"$T/stub/trufflehog" # a clean SARIF document
 cat >"$T/stub/trivy" <<'S'
 #!/bin/sh
 echo '{"Results":[]}'
@@ -37,7 +38,7 @@ st() { jq -e "$1" "$T/repo/.git/review-checks-last.json" >/dev/null; } # the rec
 rows() { jq -e --argjson c "$1" '[.[] | select(.tool=="semgrep" and .rule=="not-checked")] | length == $c' "$T/o" >/dev/null; } # not-checked semgrep rows
 once() { # the one report: not-run line (with the fix), one NOT RUN entry, one row naming the fix, the rollup, and no "missing tools" row
   err "review_checks: not run: semgrep p/default pack (timeout 2s); bundled rules only (warm a local snapshot: bash $SK/provision_tools.sh --print)" \
-    && err "review_checks: ran 3 / wired 3 scanners; partial: semgrep(bundled-only); fixable: semgrep (run: bash $SK/provision_tools.sh --print)" \
+    && err "review_checks: ran 4 / wired 4 scanners; partial: semgrep(bundled-only); fixable: semgrep (run: bash $SK/provision_tools.sh --print)" \
     && st '.not_run == [] and .partial == ["semgrep(bundled-only)"] and .fixable == ["semgrep"]' && ! err 'missing tools:' && rows 1 \
     && [ "$(grep '^review_checks: NOT RUN:' "$T/e" | grep -o 'semgrep p/default pack' | wc -l | tr -d ' ')" = 1 ] \
     && jq -e '[.[] | select(.tool=="semgrep" and .rule=="not-checked" and (.message | contains("provision_tools.sh --print")))] | length == 1' "$T/o" >/dev/null
@@ -48,7 +49,7 @@ calls registry:f000.txt bundled:f000.txt && once && ok "cold: the registry pack 
 
 mkdir -p "$T/cache/dcr-tools/semgrep"; echo 'rules: []' >"$T/cache/dcr-tools/semgrep/p-default.yml"
 run ok
-calls snapshot:f000.txt && err "review_checks: ran 3 / wired 3 scanners" && ! err 'partial:' && ! err 'fixable:' && st '.partial == [] and .fixable == []' && rows 0 \
+calls snapshot:f000.txt && err "review_checks: ran 4 / wired 4 scanners" && ! err 'partial:' && ! err 'fixable:' && st '.partial == [] and .fixable == []' && rows 0 \
   && ok "warm snapshot is the pack: one run, a full run, nothing partial or fixable" || bad "warm snapshot, healthy"
 
 run hang

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=fail-closed test selection plus a cross-lane serial run lock, review=2027-01-30
 """serial_gate.py — fail-closed test selection + a cross-lane serial run lock.
 
 WHY THIS EXISTS (the failure it closes)

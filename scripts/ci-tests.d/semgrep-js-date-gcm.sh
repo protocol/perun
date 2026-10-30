@@ -1,0 +1,2 @@
+# Bundled semgrep rules perun.js.date-parse-rollover and perun.js.gcm-no-auth-tag-length: annotated ruleid/ok fixtures (live when semgrep is installed, SKIP otherwise) plus offline structural checks of the rule text (severity, message, cipher regex, round-trip suppression, test-path exclusion, authTagLength exemption) that still run where semgrep is absent.
+python3 scripts/test_semgrep_js_date_gcm.py

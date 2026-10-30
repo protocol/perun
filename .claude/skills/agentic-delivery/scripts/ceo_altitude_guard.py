@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=keep the main session delegating instead of hand-editing source, review=2027-01-30
 """ceo_altitude_guard.py — PreToolUse + UserPromptSubmit hook: keep the MAIN session at CEO altitude.
 
 WHY: the doctrine says the conductor specs, delegates and verifies while lanes type (agentic-ceo `references/full-map.md` **Stay strategic**;

@@ -45,6 +45,7 @@ exec 3>&1; [ "$pr" = 0 ] || exec 1>&2 # --print: stdout carries only the one own
 self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
 # binary installer spec
 tools='gitleaks brew gitleaks
+trufflehog brew trufflehog
 semgrep pipx semgrep==1.182.1
 trivy brew trivy
 osv-scanner brew osv-scanner

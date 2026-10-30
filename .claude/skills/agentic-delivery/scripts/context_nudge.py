@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=nudge a handoff at a huge context since long sessions re-read it every turn, review=2027-01-30
 """context_nudge.py — UserPromptSubmit hook: handoff nudge at a huge context, the host's own commands, a model-tier hint.
 
 Long sessions re-read their whole context from cache on every turn, so cost grows with size. This hook reads the

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=surface at most 3 lines of fleet hygiene at session start, review=2027-01-30
 """session_brief.py — SessionStart hook: at most 3 lines of fleet hygiene, report-only.
 
 WHY: fleets ran stale Perun versions, piled up 130+ finished worktrees and leftover dev servers,

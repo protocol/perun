@@ -9,6 +9,7 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-offdb.XXXXXX"); trap 'rm -rf "$T"' EXIT
 export PERUN_HEAVY_DIR="$T/heavy" REVIEW_LEASE_WAIT=0 LOG="$T/log" DCR_CACHE_ROOT="$T/nocache" DCR_USER_BIN= # a provisioned host cache or ~/.local/bin must not change the cold defaults asserted here
 : >"$LOG"
 unset OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY # hermetic: an exported seeded DB dir would turn osv on without REVIEW_OSV
+unset TRIVY_DISABLE_TELEMETRY # hermetic: the telemetry opt-out asserted below must come from review_checks.sh
 fail=0
 ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=1; }
@@ -21,7 +22,7 @@ echo '{"results":[{"packages":[{"package":{"name":"devpkg","version":"1.0.0","ec
 X
 cat >"$T/stub/trivy" <<'X'
 #!/usr/bin/env bash
-echo "trivy $*" >>"$LOG"; echo "${TRIVY_MSG:-FATAL failed to initialize DB: vulnerability DB not found}" >&2; exit 1
+echo "trivy TELEM=${TRIVY_DISABLE_TELEMETRY:-} $*" >>"$LOG"; echo "${TRIVY_MSG:-FATAL failed to initialize DB: vulnerability DB not found}" >&2; exit 1
 X
 cat >"$T/stub/semgrep" <<'X'
 #!/usr/bin/env bash
@@ -66,6 +67,8 @@ TRIVY_MSG="FATAL failed to download vulnerability DB: dial tcp: lookup ghcr.io: 
 : >"$LOG"
 TRIVY_MSG="FATAL failed to download misconfig bundle: dial tcp: no such host" bash "$S/review_checks.sh" --base base >"$T/out" 2>"$T/err"
 has "$T/err" "secret-only" && ok "bundle failure still secret-only" || { bad "bundle fallback"; cat "$T/err"; }
+# trivy 0.76.1 phones home (check.trivy.dev) even with --offline-scan: both calls, the secret-only rerun too, start with the env opt-out
+grep -q '^trivy TELEM=true .*--scanners vuln,misconfig' "$LOG" && grep -q '^trivy TELEM=true .*--scanners secret' "$LOG" && ! grep -q '^trivy TELEM= ' "$LOG" && ok "trivy telemetry off on the scan and the secret-only rerun" || { bad "trivy telemetry env"; cat "$LOG"; }
 # 4. semgrep: XDG cache is the temp dir too
 grep -Eq "^semgrep XDG=.*review-sg\." "$LOG" && ok "semgrep XDG_CACHE_HOME is a temp dir" || bad "semgrep XDG"
 # 5. --repo replaces cd && chains

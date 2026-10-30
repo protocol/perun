@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=deny git push and gh pr merge while a freeze is on, review=2027-01-30
 """PreToolUse(Bash) hook: while a freeze is on, deny `git push` and `gh pr merge`.
 
 WHY: `freeze_gate.py` runs inside pre-push, so it only sees a push that reaches git; a `gh pr merge` never does, and a

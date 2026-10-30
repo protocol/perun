@@ -9,6 +9,8 @@
 #   (whole-name match; SKILL.md, ci.yml, README.md, INDEX.md, CHANGELOG.md need the repo-relative path). A changed .sh/.py no test names
 #   gets one reverse-dependency hop (scripts that source/import it); still none: "UNCOVERED: <file> (no test names it; CI only)".
 #   scripts/test-ci-gates.sh is left to CI (sharded there) unless it or scripts/ci-gates.sh changed.
+#   always= (below): whole-tree gates of CI's "cheap" job flag files no test names, so selection by name never reaches them; they run first on every
+#   non-empty --affected run (a violation fails in seconds, before the suites), a changed one is not UNCOVERED, and each is in --list-affected and the receipt (a .py entry runs under python3).
 #   Privacy scans only the changed files (the whole tree when a .banlist*.txt, ci-gates.sh or secret_scan.py changed). Not the full
 #   suite, so it never records the last-known-good pointer. It records a kind=affected receipt instead (lkg.record_affected_cli, no CLI subcommand: HEAD, the
 #   working-tree tree hash taken before the suites run, base, each selected suite's rc, overall rc; a failure records too, with the suites
@@ -99,6 +101,16 @@ if [ "$affected" -eq 1 ]; then
     printf '%s\t%s\n' "$n" "$(rx "$n")"
   done <<<"$changed" >"$tsv"
   pick "$tsv" 1
+  # Gates CI's "cheap" job runs on every PR over the whole tree, so no test names the file one of them flags (a line ending in a bare mktemp in
+  # comms_lint.py failed CI after a 59/59 affected pass). Seconds each, need no regenerated file (skill_index.py --check does: left to CI).
+  always='scripts/test-mktemp-tmpdir.sh scripts/check_section_pointers.py .claude/skills/deep-code-review/scripts/derived_numbers.py'
+  al=
+  for t in $always; do
+    [ -f "$t" ] || continue  # absent (a fixture repo): skipped
+    al="$al $t" total=$((total + 1)) why_all="$why_all  always→${t}"$'\n'
+    hitl="$hitl${t##*/}"$'\n'
+  done
+  sel="$al$sel"  # first: seconds each, and the run is fail-fast
   # one reverse-dependency hop for a changed script no test names: scripts that source/import it, then the tests naming those
   while IFS= read -r f; do
     case "$f" in *.sh|*.py) ;; *) continue ;; esac
@@ -123,7 +135,10 @@ for t in $sel; do
   echo "== $t"
   # (a ci-test that truly needs the network exports PERUN_ALLOW_NET=1 itself; see scrub_env.sh)
   # scrubbed child env: no real gh login/token/network, no git hook vars, no CLAUDE* session vars (scrub_env.sh)
-  SCRUB_PREFIXES="${SCRUB_PREFIXES:-CLAUDE}" bash .claude/skills/agentic-delivery/scripts/scrub_env.sh bash -e "$t"; r=$?
+  case "$t" in
+    *.py) SCRUB_PREFIXES="${SCRUB_PREFIXES:-CLAUDE}" bash .claude/skills/agentic-delivery/scripts/scrub_env.sh python3 "$t"; r=$? ;;
+    *) SCRUB_PREFIXES="${SCRUB_PREFIXES:-CLAUDE}" bash .claude/skills/agentic-delivery/scripts/scrub_env.sh bash -e "$t"; r=$? ;;
+  esac
   [ "$affected" -eq 0 ] || res[$i]="$t=$r"
   i=$((i + 1))
   [ "$r" -eq 0 ] || { echo "run-ci-tests: FAIL $t" >&2; fail=1; break; }

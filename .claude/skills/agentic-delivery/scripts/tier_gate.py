@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=tier-1 changes need the strongest model and an independent receipted review, review=2027-01-30
 """Review-tier gate: tier-1 changes need the strongest model and an independent, receipted review.
 
 Reads the ONE path-glob -> tier file (templates/review-tiers.tsv; format

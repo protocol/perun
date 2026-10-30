@@ -2,6 +2,8 @@
 # require_clean_tree [dir]: returns 0 when the tree has no tracked changes (untracked files survive a checkout);
 # otherwise prints the exact fix to stderr and returns 1 (callers `|| exit 2`), so uncommitted edits are never
 # silently wiped. A failing `git status` (bad dir, broken index) counts as dirty: fail closed.
+
+# rail: owner=agentic-delivery, why=refuse a checkout that would wipe uncommitted edits, review=2027-01-30
 require_clean_tree() {
   local d=${1:-.} out
   out=$(git -C "$d" status --porcelain --untracked-files=no 2>&1) && [ -z "$out" ] && return 0

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=cap a subagent handback and audit each lane's prose, review=2027-01-30
 """SubagentStop hook: cap a subagent handback, log how far it is from fields-only, and audit each lane's prose.
 
 Caps CHAT NARRATION only — a subagent's final chat message to its caller.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=record which actions one plan approval grants for a whole ticket, review=2027-01-30
 """plan_gate.py: one plan approval covers a whole ticket (build, test, review, PR).
 
 This is the agent's policy record, not a sandbox: host permissions stay the enforcement boundary.

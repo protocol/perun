@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=every PR needs an independent review pass plus an evil-twin check before merge, review=2027-01-30
 """review_gate.py — pre-merge gate: every PR needs an independent deep-code-review DIFF pass plus an evil-twin check.
 
   review_gate.py check <pr> --head SHA [--repo R]   exit 0 ok / off / warn-only; exit 1 only in enforce mode

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=deep-code-review, why=refuse a push whose commits publish a non-noreply git email, review=2027-01-30
 """identity_gate.py -- refuse a push whose commits publish a non-noreply git email.
 
 WHY THIS EXISTS

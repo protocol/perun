@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=deep-code-review, why=every fix commit must touch a pinned test or say why not, review=2027-01-30
 """fix_class_gate.py — every fix commit must touch a pinned test, or say why not.
 
 WHY THIS EXISTS (the failure it closes)

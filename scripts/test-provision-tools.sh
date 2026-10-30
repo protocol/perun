@@ -12,7 +12,7 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-prov.XXXXXX") && [ -n "$T" ] && [ -d "$T
 trap '[ -n "$T" ] && rm -rf "$T"' EXIT; fail=0
 ok() { echo "ok - $1"; }; bad() { echo "FAIL - $1"; fail=1; }
 BASH_BIN=$(type -P bash)
-ALL="gitleaks semgrep trivy osv-scanner actionlint zizmor bandit scorecard gosec grype checkov hadolint"
+ALL="gitleaks trufflehog semgrep trivy osv-scanner actionlint zizmor bandit scorecard gosec grype checkov hadolint"
 mkdir "$T/farm" "$T/ub" "$T/tmp" "$T/proj"
 for c in awk bash basename cat chmod cp cut date dirname env find git grep gtimeout head jq ls mkdir mktemp mv nice paste perl python3 readlink rm sed sleep sort tail tee timeout tr uname uniq wc xargs; do
   p=$(type -P "$c") || continue
@@ -29,14 +29,14 @@ cd "$T/proj"; PHYS=$(pwd -P); q() { printf '%q' "$1"; }
 
 # 1. dry run: lists every missing tool and cold cache, exits 0, writes nothing
 PA=; rc=0; o=$(PT 2>&1) || rc=$?
-[ "$rc" = 0 ] && [ "$(grep -c '^MISSING ' <<<"$o")" = 12 ] && grep -q 'COLD     trivy DB' <<<"$o" && grep -q 'COLD     osv-scanner offline DB' <<<"$o" \
-  && grep -q 'COLD     semgrep p/default snapshot' <<<"$o" && grep -q '12 missing, 3 cold; nothing was installed' <<<"$o" && ok "dry run lists 12 missing, 3 cold" || { bad "dry run"; echo "$o"; }
+[ "$rc" = 0 ] && [ "$(grep -c "^MISSING " <<<"$o")" = 13 ] && grep -q 'COLD     trivy DB' <<<"$o" && grep -q 'COLD     osv-scanner offline DB' <<<"$o" \
+  && grep -q 'COLD     semgrep p/default snapshot' <<<"$o" && grep -q '13 missing, 3 cold; nothing was installed' <<<"$o" && ok "dry run lists 13 missing, 3 cold" || { bad "dry run"; echo "$o"; }
 [ ! -e "$T/cache" ] && [ ! -e "$T/home" ] && ok "dry run writes nothing" || bad "dry run wrote"
 
 # 2. --print: exactly one stdout line with the whole fix; the listing goes to stderr
 PA=; o=$(PT --print 2>"$T/e")
 [ "$(wc -l <<<"$o")" -eq 1 ] && ! grep -q 'MISSING' <<<"$o" && grep -q 'MISSING  gitleaks' "$T/e" && ok "--print: one stdout line, listing on stderr" || { bad "--print shape"; echo "$o"; }
-for want in "brew install pipx gitleaks trivy osv-scanner actionlint scorecard gosec grype hadolint" \
+for want in "brew install pipx gitleaks trufflehog trivy osv-scanner actionlint scorecard gosec grype hadolint" \
   "pipx install semgrep==1.182.1; pipx install zizmor==1.31.1; pipx install bandit==1.9.4; pipx install checkov==3.4.0" \
   'mkdir -p '"$(q "$T/cache/dcr-tools/docker-config-empty")"' && DOCKER_CONFIG='"$(q "$T/cache/dcr-tools/docker-config-empty")"' trivy --cache-dir '"$(q "$T/cache/trivy")"' fs --download-db-only' \
   "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$(q "$T/cache") osv-scanner --offline-vulnerabilities --download-offline-databases $(q "$PHYS")" \
@@ -46,7 +46,7 @@ done
 grep -qE '; bash [^ ]*/provision_tools\.sh$' <<<"$o" && ok "--print ends with a re-check of this script" || bad "--print re-check"
 
 # 3. present tools and warm caches are left out; pipx present means no `brew install pipx`
-PA=$(stubs gitleaks trivy semgrep pipx); warm_trivy
+PA=$(stubs gitleaks trufflehog trivy semgrep pipx); warm_trivy
 o=$(PT --print 2>/dev/null)
 grep -qF "brew install osv-scanner actionlint scorecard gosec grype hadolint; pipx install zizmor==1.31.1" <<<"$o" && ! grep -q 'semgrep==\|download-db-only' <<<"$o" && ok "--print omits present tools and the warm trivy DB" || { bad "partial"; echo "$o"; }
 : >"$T/cache/trivy/db/trivy.db"; o=$(PT --print 2>/dev/null); grep -q 'download-db-only' <<<"$o" && ok "an empty trivy.db is cold" || bad "empty db warm"
@@ -105,24 +105,25 @@ case "\$*" in *--download-db-only*) mkdir -p "\$d/db"; echo x >"\$d/db/trivy.db"
 case "\$*" in *misconfig*) [ -z "\${TV_BUNDLE:-}" ] || { echo "FATAL check bundle: dial check.trivy.dev blocked" >&2; exit 1; } ;; esac
 echo '{"Results":[]}'
 X
-printf '#!/bin/sh\ncase "$*" in *--log-opts*) exit "${GL_HIST_RC:-0}" ;; esac\nexit 0\n' >"$SCN/gitleaks"; chmod +x "$SCN"/*
+printf '#!/bin/sh\ncase "$*" in *--log-opts*) exit "${GL_HIST_RC:-0}" ;; esac\nexit 0\n' >"$SCN/gitleaks"
+printf '#!/bin/sh\necho %s\n' "'{\"runs\":[{\"results\":[]}]}'" >"$SCN/trufflehog"; chmod +x "$SCN"/* # trufflehog: a clean SARIF document
 R=$T/repo; mkdir "$R"; cd "$R"; RP=$(pwd -P); git init -q . && git -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m base && git branch base
 echo 'x = 1' >app.js; printf '{"lockfileVersion":3,"packages":{}}' >package-lock.json; git add . && git -c user.email=t@example.com -c user.name=t commit -q -m files
 RCX=() # extra review_checks.sh arguments
 rc_run() { : >"$LOG"; run PERUN_HEAVY_DIR="$T/heavy" REVIEW_LEASE_WAIT=0 "$@" "$BASH_BIN" "$S/review_checks.sh" --base base ${RCX[@]+"${RCX[@]}"} >"$T/out" 2>"$T/err" || true; }
 e() { grep -qF -- "$1" "$T/err"; }
 st() { jq -e "$1" "$R/.git/review-checks-last.json" >/dev/null; }
-WIRED='["gitleaks","semgrep","trivy","osv-scanner"]'
+WIRED='["gitleaks","trufflehog","semgrep","trivy","osv-scanner"]'
 
 rc_run # cold caches: osv-scanner stays opt-in, semgrep asks the registry for p/default, and the gap is named
 ! grep -q '^osv ' "$LOG" && e "osv-scanner (REVIEW_OSV not set" && e "osv-scanner (warm the offline DB: provision_tools.sh --print)" && grep -q 'semgrep .*--config p/default' "$LOG" \
   && ok "cold: osv-scanner not run, p/default from the registry, gap named" || { bad "cold run"; cat "$T/err" "$LOG"; }
-e "review_checks: ran 3 / wired 4 scanners; not run: osv-scanner; fixable: osv-scanner (run: bash $S/provision_tools.sh --print $(q "$RP"))" && ok "cold: ran 3 / wired 4, fixable osv-scanner, its command names this repo as DIR" || { bad "cold summary"; cat "$T/err"; }
+e "review_checks: ran 4 / wired 5 scanners; not run: osv-scanner; fixable: osv-scanner (run: bash $S/provision_tools.sh --print $(q "$RP"))" && ok "cold: ran 4 / wired 5, fixable osv-scanner, its command names this repo as DIR" || { bad "cold summary"; cat "$T/err"; }
 st ".wired == $WIRED and .not_run == [\"osv-scanner\"] and .fixable == [\"osv-scanner\"] and (.ts | type) == \"number\"" && ok "cold: record written to the git common dir" || { bad "cold record"; cat "$R/.git/review-checks-last.json"; }
 
 warm_osv; rc_run # warm osv DB: offline run, no REVIEW_OSV needed
 grep -qx "osv --offline-vulnerabilities --format json -L ./package-lock.json DIR=$T/cache" "$LOG" && ! e "REVIEW_OSV not set" && ok "warm osv cache: --offline-vulnerabilities with the cache dir" || { bad "warm osv"; cat "$LOG" "$T/err"; }
-e "review_checks: ran 4 / wired 4 scanners" && ! e "fixable:" && st '.not_run == [] and .fixable == []' && ok "warm: ran 4 / wired 4, nothing fixable" || { bad "warm summary"; cat "$T/err"; }
+e "review_checks: ran 5 / wired 5 scanners" && ! e "fixable:" && st '.not_run == [] and .fixable == []' && ok "warm: ran 5 / wired 5, nothing fixable" || { bad "warm summary"; cat "$T/err"; }
 rc_run REVIEW_OSV=1; grep -qx "osv --format json -L ./package-lock.json DIR=" "$LOG" && ok "REVIEW_OSV=1 keeps the online API mode" || { bad "REVIEW_OSV=1"; cat "$LOG"; }
 rc_run REVIEW_OSV_DB_DIR="$T/emptydb"; ! grep -q '^osv ' "$LOG" && e "NOT CHECKED: no pre-seeded DB in REVIEW_OSV_DB_DIR=$T/emptydb" && ok "an explicit empty REVIEW_OSV_DB_DIR beats a warm cache" || { bad "explicit db"; cat "$T/err"; }
 rc_run REVIEW_OSV_DB_DIR="$T/odb"; grep -q "DIR=$T/odb\$" "$LOG" && ok "an explicit warm REVIEW_OSV_DB_DIR is used as is" || { bad "explicit warm db"; cat "$LOG"; }
@@ -146,7 +147,7 @@ rc_run DCR_USER_BIN=; ! grep -q '^osv ' "$LOG" && e "osv-scanner" && e "not run:
 
 mkdir -p .github/workflows; echo 'on: push' >.github/workflows/ci.yml; git add . && git -c user.email=t@example.com -c user.name=t commit -q -m wf
 mv "$T/ub/osv-scanner" "$SCN/osv-scanner"; rc_run # hub tools with work but not installed are wired, not run, fixable
-e "NOT CHECKED: zizmor" && e "NOT CHECKED: actionlint" && e "ran 4 / wired 6 scanners; not run: zizmor, actionlint; fixable: zizmor, actionlint" && st '.fixable == ["zizmor", "actionlint"] and (.wired | index("zizmor"))' && ok "hub tools missing (workflow file routes zizmor and actionlint): wired 6, not run, fixable" || { bad "hub summary"; cat "$T/err"; }
+e "NOT CHECKED: zizmor" && e "NOT CHECKED: actionlint" && e "ran 5 / wired 7 scanners; not run: zizmor, actionlint; fixable: zizmor, actionlint" && st '.fixable == ["zizmor", "actionlint"] and (.wired | index("zizmor"))' && ok "hub tools missing (workflow file routes zizmor and actionlint): wired 7, not run, fixable" || { bad "hub summary"; cat "$T/err"; }
 
 # 7b. fresh repos: trivy's cache dir, secret-only and partial runs, scanners provisioning cannot install, the owner line end to end
 mkrepo() { R=$T/$1; mkdir "$R"; cd "$R"; RP=$(pwd -P); git init -q . && git -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m base && git branch base; }
@@ -162,13 +163,13 @@ rc_run REVIEW_TRIVY_CACHE="$T/mine"
 grep -q "^trivy .* --cache-dir $T/mine --scanners" "$LOG" && ! grep -q -- "--cache-dir $T/cache/trivy" "$LOG" && ok "REVIEW_TRIVY_CACHE still wins" || { bad "REVIEW_TRIVY_CACHE"; cat "$LOG"; }
 
 rc_run TV_BUNDLE=1 # the misconfig bundle is unreachable: the secret-only retry ran, a partial scope and never a full run
-e "review_checks: trivy: secret-only (misconfig bundle unreachable)" && e "review_checks: ran 4 / wired 4 scanners; partial: trivy(secret-only)" && ! e "fixable:" \
+e "review_checks: trivy: secret-only (misconfig bundle unreachable)" && e "review_checks: ran 5 / wired 5 scanners; partial: trivy(secret-only)" && ! e "fixable:" \
   && st '.partial == ["trivy(secret-only)"] and .not_run == [] and .fixable == []' && ok "trivy secret-only: listed as partial, in the record" || { bad "secret-only"; cat "$T/err" "$R/.git/review-checks-last.json"; }
-rc_run; e "ran 4 / wired 4 scanners" && ! e "partial:" && st '.partial == []' && ok "a full run lists nothing partial" || { bad "full run"; cat "$T/err"; }
+rc_run; e "ran 5 / wired 5 scanners" && ! e "partial:" && st '.partial == []' && ok "a full run lists nothing partial" || { bad "full run"; cat "$T/err"; }
 
 SGR='{"path":"app.js","start":{"line":1},"check_id":"x.y","extra":{"message":"m"}}'
 rc_run SG_ROW="$SGR" SG_ERR='{"message":"boom"}' # findings plus errors: it ran, with a partial scope
-e "review_checks: partial: semgrep ran but reported errors" && e "review_checks: ran 4 / wired 4 scanners; partial: semgrep(errors)" && st '.partial == ["semgrep(errors)"] and .not_run == []' \
+e "review_checks: partial: semgrep ran but reported errors" && e "review_checks: ran 5 / wired 5 scanners; partial: semgrep(errors)" && st '.partial == ["semgrep(errors)"] and .not_run == []' \
   && ok "semgrep with errors and findings: ran, partial" || { bad "partial semgrep"; cat "$T/err"; }
 rc_run SG_ERR='{"message":"boom"}' # errors and no findings: nothing usable was scanned
 e "not run: semgrep (scan errored, no findings)" && st '.not_run == ["semgrep"] and .partial == []' && ok "semgrep with errors and no findings: not run, not partial" || { bad "errored semgrep"; cat "$T/err"; }
@@ -178,11 +179,11 @@ mkrepo repo3; echo 'echo hi' >t.sh; echo 'x = 1' >t.py; commit
 SX=$(mktemp -d "$T/sx.XXXXXX"); printf '#!/bin/sh\nexit "${LINT_RC:-0}"\n' >"$SX/shellcheck"; cp "$SX/shellcheck" "$SX/ruff"
 printf '#!/bin/sh\necho %s\n' "'{\"results\":[]}'" >"$SX/bandit"; chmod +x "$SX"/* # bandit: the hub tool a .py file wires
 RCX=(--history); PA=$SX:$SCN; rc_run LINT_RC=2 GL_HIST_RC=2
-e "review_checks: ran 4 / wired 7 scanners; not run: gitleaks-history, shellcheck, ruff" && ! e "fixable:" \
-  && st '(.wired | length) == 7 and (.not_run | sort) == ["gitleaks-history","ruff","shellcheck"] and .fixable == []' && ok "failed shellcheck, ruff and history scans: wired, not run, never fixable" || { bad "failed lint scans"; cat "$T/err"; }
-rc_run; e "review_checks: ran 7 / wired 7 scanners" && st '.not_run == [] and .fixable == []' && ok "healthy shellcheck, ruff and history scans: ran 7 / wired 7" || { bad "healthy lint scans"; cat "$T/err"; }
+e "review_checks: ran 5 / wired 8 scanners; not run: gitleaks-history, shellcheck, ruff" && ! e "fixable:" \
+  && st '(.wired | length) == 8 and (.not_run | sort) == ["gitleaks-history","ruff","shellcheck"] and .fixable == []' && ok "failed shellcheck, ruff and history scans: wired, not run, never fixable" || { bad "failed lint scans"; cat "$T/err"; }
+rc_run; e "review_checks: ran 8 / wired 8 scanners" && st '.not_run == [] and .fixable == []' && ok "healthy shellcheck, ruff and history scans: ran 8 / wired 8" || { bad "healthy lint scans"; cat "$T/err"; }
 SXR=$(mktemp -d "$T/sxr.XXXXXX"); cp "$SX/ruff" "$SX/bandit" "$SXR"/; PA=$SXR:$SCN; rc_run
-e "review_checks: ran 6 / wired 7 scanners; not run: shellcheck" && ! e "fixable:" && st '.not_run == ["shellcheck"] and .fixable == []' && ok "shellcheck not installed: not run, not fixable" || { bad "no shellcheck"; cat "$T/err"; }
+e "review_checks: ran 7 / wired 8 scanners; not run: shellcheck" && ! e "fixable:" && st '.not_run == ["shellcheck"] and .fixable == []' && ok "shellcheck not installed: not run, not fixable" || { bad "no shellcheck"; cat "$T/err"; }
 RCX=(); PA=$SCN
 
 # the owner line end to end: a cold cache root, run the printed command and line (stub brew, pipx, curl, trivy, osv-scanner), then every wired scanner runs
@@ -196,7 +197,7 @@ run DCR_CACHE_ROOT="$C2" "$BASH_BIN" -c "$line" >"$T/prov.out" 2>&1 || true
 cold=; for n in trivy osv semgrep; do run DCR_CACHE_ROOT="$C2" "$BASH_BIN" "$S/provision_tools.sh" --cache "$n" >/dev/null || cold+=" $n"; done
 [ -z "$cold" ] && grep -qx 'pipx install zizmor==1.31.1' "$PL" && ok "the printed owner line installs and warms every cache" || { bad "owner line left cold:$cold"; cat "$T/prov.out" "$PL"; }
 rc_run DCR_CACHE_ROOT="$C2" TV_NEEDDB=1 # trivy must find the DB the owner line warmed: no loop of NOT RUN after a provision
-e "review_checks: ran 4 / wired 4 scanners" && ! e "fixable:" && st '.not_run == [] and .fixable == [] and .partial == []' && ok "after the owner line: ran 4 / wired 4, nothing fixable" || { bad "e2e re-run"; cat "$T/err"; }
+e "review_checks: ran 5 / wired 5 scanners" && ! e "fixable:" && st '.not_run == [] and .fixable == [] and .partial == []' && ok "after the owner line: ran 5 / wired 5, nothing fixable" || { bad "e2e re-run"; cat "$T/err"; }
 PA=$SCN
 
 # 8. the script is routed: full-map.md names it and tool-hub.md documents the owner line

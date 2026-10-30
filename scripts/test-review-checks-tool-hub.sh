@@ -2,6 +2,7 @@
 # review_checks.sh tool hub: per routed tool (zizmor actionlint bandit gosec grype checkov hadolint) a shim covers
 # found+finding, found+clean, missing -> "NOT CHECKED: <tool> (install: ...)", wrong-shape JSON -> not run (never clean).
 # snyk-agent-scan is unverified: always NOT CHECKED. Also: every registry tool is documented in references/tool-hub.md.
+# Offline opt-outs: the stubs log the env they start with, and grype, checkov and trivy must carry the variable that stops their phone-home.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh}
@@ -9,6 +10,7 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/hub.XXXXXX") && [ -n "$T" ] && [ -d "$T" ] || { e
 trap 'cd /; rm -r -- "$T"' EXIT; fail=0
 ok() { echo "ok - $1"; }; bad() { echo "FAIL - $1"; fail=1; }
 TOOLS="zizmor actionlint bandit gosec grype checkov hadolint"
+unset TRIVY_DISABLE_TELEMETRY GRYPE_CHECK_FOR_APP_UPDATE GRYPE_DB_AUTO_UPDATE CKV_SKIP_PACKAGE_UPDATE_CHECK # hermetic: the opt-out must come from review_checks.sh
 export PERUN_HEAVY_DIR="$T/heavy" HUB_LOG="$T/hub.log"
 mkdir -p "$T/repo" "$T/s-none" && cd "$T/repo"
 gjson() { # gjson found|clean TOOL: the JSON a real run of TOOL would print
@@ -39,6 +41,7 @@ for t in $TOOLS; do
   mkdir -p "$T/s-$t"; cat >"$T/s-$t/$t" <<'S'
 #!/usr/bin/env bash
 echo "${0##*/} GOPROXY=${GOPROXY:-} $*" >>"${HUB_LOG:-/dev/null}"
+echo "${0##*/} ENV $(env | grep -E '^(GRYPE|CKV|TRIVY)_' | sort | tr '\n' ' ')" >>"${HUB_LOG:-/dev/null}"
 [ "${HUB_MODE:-}" != crash ] || exit 9
 o=; while [ $# -gt 0 ]; do [ "$1" != -out ] || o=$2; shift; done
 if [ -n "$o" ]; then printf '%s' "$HUB_JSON" >"$o"; else printf '%s\n' "$HUB_JSON"; fi
@@ -55,7 +58,11 @@ done
 # Inert stubs for the older scanners keep the run offline and fast.
 mkdir -p "$T/base"
 printf '#!/bin/sh\necho %s\n' "'{\"results\":[],\"errors\":[]}'" >"$T/base/semgrep"
-printf '#!/bin/sh\necho %s\n' "'{\"Results\":[]}'" >"$T/base/trivy"
+cat >"$T/base/trivy" <<'S'
+#!/bin/sh
+echo "trivy ENV $(env | grep -E '^(GRYPE|CKV|TRIVY)_' | sort | tr '\n' ' ')" >>"${HUB_LOG:-/dev/null}"
+echo '{"Results":[]}'
+S
 printf '#!/bin/sh\nexit 0\n' >"$T/base/gitleaks"
 chmod +x "$T/base/semgrep" "$T/base/trivy" "$T/base/gitleaks"
 nck() { jq -e --arg t "$1" 'any(.[]; .tool==$t and .rule=="not-checked" and .file=="")' "$T/out" >/dev/null && ok "$1 $2: not-checked row in JSON" || bad "$1 $2: not-checked row in JSON"; }
@@ -96,9 +103,16 @@ grep -q "not run: checkov (unparseable" "$T/err" && nck checkov "parsing_errors"
 # grype: SBOM only, findings credited to the scanned SBOM; a lockfile alone is never scanned (dir: covers the whole tree)
 : >"$HUB_LOG"; HUB_JSON=$(gjson found grype) run grype
 jq -e 'any(.[]; .tool=="grype" and .file=="sbom.json")' "$T/out" >/dev/null && ! jq -e 'any(.[]; .tool=="grype" and (.file|test("package-lock")))' "$T/out" >/dev/null && grep -q 'sbom:./sbom.json' "$HUB_LOG" && ! grep -q 'dir:' "$HUB_LOG" && ok "grype credits sbom.json only" || bad "grype credits sbom.json only"
+# offline opt-outs, found with the real binaries under a network-denying sandbox: trivy 0.76.1 telemetry (check.trivy.dev), grype's app-update check
+# (toolbox-data.anchore.io, even with the DB update off), checkov's version lookup (pypi.org). Env vars, not flags: an older tool ignores an unknown variable.
+: >"$HUB_LOG"; HUB_JSON=$(gjson clean grype) run grype; HUB_JSON=$(gjson clean checkov) run checkov
+for o in grype:GRYPE_DB_AUTO_UPDATE=false grype:GRYPE_CHECK_FOR_APP_UPDATE=false checkov:CKV_SKIP_PACKAGE_UPDATE_CHECK=true trivy:TRIVY_DISABLE_TELEMETRY=true; do
+  grep -q "^${o%%:*} ENV .*${o#*:}" "$HUB_LOG" && ok "${o%%:*} starts with ${o#*:}" || bad "${o%%:*} starts with ${o#*:}"
+done
 # docs: gosec network caveat and unverified skill license
 H=$ROOT/.claude/skills/deep-code-review/references/tool-hub.md
 grep -q 'GOPROXY=off' "$H" && grep -q 'CC-BY-SA.*unverified' "$H" && ok "tool-hub.md caveats" || bad "tool-hub.md caveats"
+for v in GRYPE_CHECK_FOR_APP_UPDATE=false CKV_SKIP_PACKAGE_UPDATE_CHECK=true TRIVY_DISABLE_TELEMETRY=true; do grep -qF "$v" "$H" && ok "tool-hub.md names $v" || bad "tool-hub.md names $v"; done
 grep -q '^NOT CHECKED: snyk-agent-scan (unverified' "$T/err" && ok "agent-scan unverified, skipped" || bad "agent-scan unverified"
 for t in $TOOLS snyk-agent-scan; do grep -q "\`$t\`" "$ROOT/.claude/skills/deep-code-review/references/tool-hub.md" && ok "$t documented" || bad "$t documented"; done
 exit $fail

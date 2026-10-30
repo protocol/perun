@@ -48,13 +48,29 @@ many files counts once. 50 is five times the file threshold: a leak of per-recor
 this check found about 850), while a small repository seldom scatters 50 different mailboxes through its docs and headers. A large one
 may, and then gets one lead row. `--threshold 1` lists the files behind the total.
 
+FIXTURE SIGNALS
+---------------
+Test and mock data holds invented addresses and an export holds real ones, and every flagged file used to need a manual look to tell which (in an
+audit of 43 repositories, 30 of 38 single-file rows were test or mock data). So each `email-addresses` file row also counts, over all the distinct
+addresses of the file with the reserved names the file count leaves out put back (so the counts do not change with `--include-reserved`), how many
+have a placeholder-style local part and how many are on a reserved domain. Placeholder-style: the letters left after digits and `._%+-` are dropped are
+only these words, back to back: john, jane, doe, test, tester, testing, user, foo, bar, baz, qux, alice, bob, eve, demo, dummy, fake, mock, sample,
+example, fixture, placeholder, name, email, first, last (`user12`, `john.doe` and `test_user` are; `john.smith`, `info`, `admin` and `1234` are not).
+Reserved domain: the example and test names of "Dropped unless" above. The message gives both counts and the total they are out of, never a value, and
+starts with `likely fixture:` only when the path is a test path AND at least half of the addresses are placeholder-style or on a reserved domain.
+Test path: a directory named test, tests, spec, specs, fixture, fixtures, mock, mocks, testdata, test-data or test_data (with or without `__` on each
+side, as in `__tests__/`), or a file name in which test, spec, fixture or mock (or the plural) stands between `.`, `_` or `-` or an end of the name
+(`people.test.ts`, `test_people.py`, `mock-users.json`; not `contest.csv`, `test-runner/`, `docs/`, `examples/` or `samples/`, where real data lives too).
+The label is a hint, never a filter: no row is dropped, the threshold and the exit code do not look at it, and a flagged file without it is still a lead.
+
 OUTPUT
 ------
 One TSV row per file on stdout, flushed per row: `path<TAB>0<TAB>rule<TAB>message`, the row shape invisible_chars.py prints, so
-review_checks.sh adds each as a finding. Rule `email-addresses` carries the count ("12 distinct email addresses (threshold 10)"), and
-once for the repository total under the path `.` ("69 distinct email addresses across 75 file(s) ..."); rule `not-checked` is surface
-this scan did not cover (an unreadable file, one over the size cap, or a compressed/columnar container). Never an address, a domain or
-a line of a file: only the path and the count (or the container format). Silent when there is nothing to report. Read-only; stdlib only.
+review_checks.sh adds each as a finding. Rule `email-addresses` carries the count and the fixture signals ("12 distinct email addresses
+(threshold 10); of 12 counting reserved names, 12 with placeholder-style local parts, 0 on reserved domains", led by "likely fixture: " when the
+label applies), and once for the repository total under the path `.` ("69 distinct email addresses across 75 file(s) ...", no signals); rule
+`not-checked` is surface this scan did not cover (an unreadable file, one over the size cap, or a compressed/columnar container). Never an address,
+a domain or a line of a file: only the path and the counts (or the container format). Silent when there is nothing to report. Read-only; stdlib only.
 
 EXIT CODES (fail closed)
 ------------------------
@@ -78,6 +94,11 @@ A magic without its footer (a text file that opens with "PAR1" or "ORC") is not 
 compressed or columnar format (brotli, snappy, rar, an Arrow IPC stream, raw deflate, a file whose magic was cut off) is read as plain
 bytes and can pass clean. UTF-16 text, non-ASCII addresses and obfuscated forms (`[at]`, `%40`, `\\u0040`) are not seen. Names are not
 detected.
+
+The `likely fixture:` label is a guess from the path and the shape of the addresses, so read the counts and not only the lead: a reserved name counts
+toward the half, so a test file that hides some real-looking addresses among many reserved names carries the label; real addresses that happen to be
+John, Jane or Bob at a real domain are placeholder-style, and only a test-folder export in which they reach half is labelled; invented names outside
+the word list (`jsmith`, `maria.k`) are not placeholder-style, so a fixture built from them keeps its plain row.
 """
 from __future__ import annotations
 
@@ -109,15 +130,22 @@ CONTAINERS = (
 # quadratic, and an unbounded domain match on `@a.a.a.` repeated for megabytes grows the regex stack to gigabytes.
 DOMAIN = re.compile(rb"(?:[A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,24}")
 LOCAL = re.compile(rb"[A-Za-z0-9._%+-]+")  # matched on the (reversed) 64 bytes before the '@'
-# Run on one lower-cased address: example.com/net/org (and subdomains), the .test/.example/.invalid/.localhost names, noreply forms,
-# image asset-scale names (icon@2x.png is a file name, not a mailbox) and the ssh account of git hosts (git@github.com:org/repo.git).
+# Run on one lower-cased address: example.com/net/org (and subdomains) and the .test/.example/.invalid/.localhost names (RESERVED_DOMAIN, also what the
+# fixture signals count), noreply forms, image asset-scale names (icon@2x.png is a file name, not a mailbox) and the ssh account of git hosts
+# (git@github.com:org/repo.git).
+RESERVED_DOMAIN = re.compile(rb"@(?:[a-z0-9-]+\.)*example\.(?:com|net|org)\Z|\.(?:test|example|invalid|localhost)\Z")
 RESERVED = re.compile(
-    rb"@(?:[a-z0-9-]+\.)*example\.(?:com|net|org)\Z"
-    rb"|\.(?:test|example|invalid|localhost)\Z"
-    rb"|(?<![a-z0-9])(?:no[-_.]?reply|do[-_.]?not[-_.]?reply)(?![a-z0-9])"
+    RESERVED_DOMAIN.pattern
+    + rb"|(?<![a-z0-9])(?:no[-_.]?reply|do[-_.]?not[-_.]?reply)(?![a-z0-9])"
     rb"|@[0-9]+(?:\.[0-9]+)?x(?:-[a-z0-9]+)*\.(?:png|jpe?g|gif|webp|avif|svg|pdf|ico|bmp|tiff?|heic|heif|apng)\Z"
     rb"|\Agit@"
 )
+# Fixture signals. A placeholder-style local part: the letters left after digits and `._%+-` are dropped are only these words, back to back
+# (`user12`, `john.doe`, `test_user`; not `john.smith`, `info` or `admin`). A test path: a whole directory name (`tests/`, `__mocks__/`,
+# `testdata/`) or a word of the file name (`people.test.ts`, `test_people.py`, `mock-users.json`; not `contest.csv` or `test-runner/`).
+PLACEHOLDER = re.compile(rb"(?:john|jane|doe|test|tester|testing|user|foo|bar|baz|qux|alice|bob|eve|demo|dummy|fake|mock|sample|example|fixture|placeholder|name|email|first|last)+")
+TEST_DIR = re.compile(r"(?:^|/)(?:__)?(?:tests?|specs?|fixtures?|mocks?|test[-_]?data)(?:__)?/", re.I)
+TEST_FILE = re.compile(r"(?:^|[._-])(?:tests?|specs?|fixtures?|mocks?)(?:[._-]|$)", re.I)
 
 
 def addresses(buf: bytes, include_reserved: bool = False) -> set[bytes]:
@@ -140,6 +168,29 @@ def addresses(buf: bytes, include_reserved: bool = False) -> set[bytes]:
                     break
         i = buf.find(b"@", i + 1)
     return found
+
+
+def fixture_signals(pool: set[bytes]) -> tuple[int, int, int]:
+    """(placeholder-style local parts, reserved-domain addresses, addresses that are either) among the lower-cased addresses of `pool`.
+
+    Edge cases: an empty pool gives (0, 0, 0); a local part with no letters (`1234@...`) is not placeholder-style; one address that is both
+    counts once in the third number. Pure; no I/O; no value leaves the function, only counts.
+    """
+    ph = rv = either = 0
+    for addr in pool:
+        p = PLACEHOLDER.fullmatch(re.sub(rb"[^a-z]", b"", addr.partition(b"@")[0])) is not None
+        r = RESERVED_DOMAIN.search(addr) is not None
+        ph, rv, either = ph + p, rv + r, either + (p or r)
+    return ph, rv, either
+
+
+def fixture_path(rel: str) -> bool:
+    """True when the repository-relative path `rel` is a test, spec, fixture or mock path (see TEST_DIR and TEST_FILE).
+
+    Edge cases: only whole directory names count (`test-runner/` and `latest/` do not), and in the file name a word counts only between `.`,
+    `_`, `-` or an end of the name (`contest.csv` does not). docs, examples and samples are not test paths: real data lives there too. Pure; no I/O.
+    """
+    return bool(TEST_DIR.search(rel) or TEST_FILE.search(rel.rsplit("/", 1)[-1]))
 
 
 def zlib_stream(head: bytes) -> bool:
@@ -222,13 +273,18 @@ def main(argv: list[str] | None = None) -> int:
             row(rel, "not-checked", "unreadable: %s" % e.strerror)
             continue
         big = len(buf) > a.max_bytes
-        found = addresses(buf[:a.max_bytes], a.include_reserved)
+        body = buf[:a.max_bytes]
+        found = addresses(body, a.include_reserved)
         n = len(found)
         partial = "; only the first %d bytes were read" % a.max_bytes if big else ""
         kind = container(buf, tail, size)
         if n >= a.threshold:
             flagged += 1
-            row(rel, "email-addresses", "%d%s distinct email addresses (threshold %d)%s" % (n, "+" * (n >= MAX_COUNT), a.threshold, partial))
+            pool = found if a.include_reserved else addresses(body, True)  # the reserved names the count leaves out still say fixture or export
+            ph, rv, either = fixture_signals(pool)
+            lead = "likely fixture: " if fixture_path(rel) and 2 * either >= len(pool) else ""
+            row(rel, "email-addresses", "%s%d%s distinct email addresses (threshold %d); of %d counting reserved names, %d with placeholder-style local parts, %d on reserved domains%s" % (
+                lead, n, "+" * (n >= MAX_COUNT), a.threshold, len(pool), ph, rv, partial))
             continue
         holders += bool(found)
         if len(spread) < MAX_COUNT:  # bounds memory: the total stops growing there

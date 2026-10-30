@@ -26,7 +26,7 @@ permissions:
 jobs:
 
   # Heavy steps run as parallel jobs (wall time = slowest job, not the sum); the aggregate `gates` job below keeps the
-  # required check name. scripts/test-ci-gates.sh shards its cases by SHARD=i/N.
+  # required check name. scripts/test-ci-gates.sh shards its cases by SHARD=i/N; `perpr` shards scripts/ci-tests.d with the same SHARD=i/N spelling.
   selftests:
     strategy:
       fail-fast: false
@@ -106,7 +106,13 @@ jobs:
           # fail. Baseline growth vs the PR base is the next step below.
           bash scripts/ci-gates.sh rules --baseline scripts/rule-enforcement-baseline.tsv .
 
+  # Three legs, SHARD=i/3 like selftests: each runs only the scripts/ci-tests.d registrations that scripts/ci-tests-shard.sh lists
+  # for it, so the job takes as long as its slowest slice, not the sum. `gates` needs `perpr`, so it fails unless every leg passes.
   perpr:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -122,16 +128,23 @@ jobs:
         if: github.event_name == 'pull_request'
         run: bash scripts/regen-unlanded.sh origin/main
 
-      # A slow per-PR test registers as scripts/ci-tests.d/<slug>.bg.sh: it starts here, runs alongside the gate
-      # steps below, and the "Per-PR tests" step waits for it and fails on its exit code (a hang is killed after 15 minutes), so it adds no serial time.
+      # A slow per-PR test registers as scripts/ci-tests.d/<slug>.bg.sh: it starts here, runs alongside this leg's serial
+      # tests, and the "Per-PR tests" step waits for it and fails on its exit code (a hang is killed after 15 minutes), so it adds no serial time.
+      # This leg's registrations (serial and background) are listed once, here, into $RUNNER_TEMP/bg/leg; both steps read that list.
       - name: Start background per-PR tests (scripts/ci-tests.d/*.bg.sh)
+        env:
+          SHARD: ${{ matrix.shard }}/3
         run: |
           mkdir -p "$RUNNER_TEMP/bg"
           date +%s >"$RUNNER_TEMP/bg/started"
+          bash scripts/ci-tests-shard.sh >"$RUNNER_TEMP/bg/leg"
+          unset SHARD # the tests must not inherit it: scripts/test-ci-gates.sh reads SHARD as its own slice
           for t in scripts/ci-tests.d/*.bg.sh; do
             [ -e "$t" ] || continue
+            grep -qxF "$t" "$RUNNER_TEMP/bg/leg" || continue
             f="$RUNNER_TEMP/bg/$(basename "$t")"
             : >"$f.log"
+            # shellcheck disable=SC2016 # $1 and $2 expand in the child shell, on purpose
             nohup bash -c 'timeout 900 bash -e "$1" >"$2.log" 2>&1; echo $? >"$2.rc.tmp"; mv "$2.rc.tmp" "$2.rc"' _ "$t" "$f" >/dev/null 2>&1 &
           done
 
@@ -142,13 +155,16 @@ jobs:
       - name: Per-PR tests (scripts/ci-tests.d)
         run: |
           set -euo pipefail
+          [ -s "$RUNNER_TEMP/bg/leg" ] || { echo "FAIL: the start step wrote no test list for this leg"; exit 1; } # else grep fails and every test is skipped
           for t in scripts/ci-tests.d/*.sh; do
             case "$t" in *.bg.sh) continue ;; esac
+            grep -qxF "$t" "$RUNNER_TEMP/bg/leg" || continue # another leg runs it
             echo "== $t"
             bash -e "$t"
           done
           for t in scripts/ci-tests.d/*.bg.sh; do
             [ -e "$t" ] || continue
+            grep -qxF "$t" "$RUNNER_TEMP/bg/leg" || continue
             f="$RUNNER_TEMP/bg/$(basename "$t")"
             echo "== $t (started in the background)"
             [ -f "$f.log" ] || { echo "FAIL: $t was never started"; exit 1; }

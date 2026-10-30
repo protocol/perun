@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=stop starting PRs while ready ones wait unmerged; alarm on a stalled flow, review=2027-01-30
 """flow_alarm.py — three flow checks that read the delivery queue, not the code.
 
   flow_alarm.py                      PreToolUse(Bash) hook (stdin JSON): STOP STARTING. Denies (exit 2) `gh pr create` while

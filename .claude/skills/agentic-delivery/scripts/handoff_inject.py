@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=re-inject a short handoff after a compact so the plan survives, review=2027-01-30
 """handoff_inject.py — SessionStart hook (matchers compact|startup|clear): re-inject a short handoff.
 
 WHY: auto-compact (`autoCompactWindow`) keeps a long session cheap, but a compaction summary can drop the plan.

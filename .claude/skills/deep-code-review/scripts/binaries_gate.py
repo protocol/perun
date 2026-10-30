@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=deep-code-review, why=no git-tracked binary at a banned image/media/archive/build-output extension, review=2027-01-30
 """binaries_gate.py — no git-tracked file at a banned image/media/archive/
 build-output extension.
 

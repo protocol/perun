@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=opt-in reply budget stated up front (never forces a rewrite), review=2027-01-30
 """Reply-budget hook (OPT-IN, `install.sh --with-terse-replies`): state the budget up front, never force a rewrite.
 
 One script, three events (`hook_event_name` in the stdin JSON; absent means Stop):

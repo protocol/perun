@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=deny a git hook bypass: fix the failing hook instead, review=2027-01-30
 """PreToolUse(Bash) hook: deny a git hook bypass. Fix the failing hook; never bypass it.
 
 Denies (exit 2, reason on stderr; the host blocks the call) a command that runs

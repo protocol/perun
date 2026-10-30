@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=keep an installed Perun current with no manual step, review=2027-01-30
 """perun_auto_update.py — keep an installed Perun current with no manual step and no restart.
 
 Wired by `install.sh --apply-operating-layer` as a SessionStart and a UserPromptSubmit hook (the

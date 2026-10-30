@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=nudge when the same command runs more than 3 times in a session, review=2027-01-30
 """PreToolUse(Bash) hook: nudge when the same command runs more than 3 times in one session.
 
 A poll loop (`sleep 30; gh pr checks`, a watchdog call, a status snippet) re-reads the whole cached context on every

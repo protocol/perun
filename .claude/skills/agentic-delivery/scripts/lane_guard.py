@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=refuse to start a write lane that is not isolated, review=2027-01-30
 """Lane-start isolation guard: refuse unless this lane really is isolated.
 
 Run as the FIRST step of every write-lane, from the lane's working directory:

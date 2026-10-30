@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=no work outside the owner's open priority until it is done or blocked, review=2027-01-30
 """focus_gate.py — no work outside the owner's open priority until that priority is done or blocked.
 
 WHY THIS EXISTS (the failure it closes)

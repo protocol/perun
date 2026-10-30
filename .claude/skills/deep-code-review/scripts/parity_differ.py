@@ -1900,18 +1900,28 @@ def _focus_gate():
 
     Returns the module, or None when it is not installed alongside (or fails
     to import) — the caller then requires `--accept-rev` and the `git log`
-    owner check. Side effect: none beyond the import (no bytecode written).
+    owner check. The module is registered in `sys.modules` before it runs:
+    on Python 3.12 and 3.14 its dataclasses look their module up there and
+    fail to build otherwise (3.15 does not), which made the trust route depend
+    on the Python version. An already-loaded `focus_gate` is reused only when
+    it is this same file; a failed import leaves no entry behind. Side
+    effect: the `sys.modules` entry (no bytecode written).
     """
     path = Path(__file__).resolve().parents[2] / "agentic-delivery" / "scripts" / "focus_gate.py"
     if not path.is_file():
         return None
+    held = getattr(sys.modules.get("focus_gate"), "__file__", None)
+    if held and Path(held).resolve() == path:
+        return sys.modules["focus_gate"]
     sys.path.insert(0, str(path.parent))   # focus_gate imports its sibling refix_gate
     try:
         spec = importlib.util.spec_from_file_location("focus_gate", path)
         module = importlib.util.module_from_spec(spec)
+        sys.modules["focus_gate"] = module   # before exec: dataclasses resolve their module here
         spec.loader.exec_module(module)
         return module
     except Exception:   # noqa: BLE001 — any import failure falls back, fail closed
+        sys.modules.pop("focus_gate", None)
         return None
     finally:
         sys.path.remove(str(path.parent))
@@ -1952,8 +1962,8 @@ def read_owner_authored(path: str, rev: str | None = None,
         text = _git(top, ["show", f"{rev}:{rel}"])
         if fg is not None:
             git = fg.real_git(top)
-            _, trusted, source, reasons = fg.load_record(
-                git, rel, rev, fg.resolve_owners(None, git), commit_only=True)
+            owners, _ = fg.resolve_owners(None, git)   # (owners, warning); the warning is not surfaced here
+            _, trusted, source, reasons = fg.load_record(git, rel, rev, owners)
             return (text, source, None) if trusted else (None, None, "; ".join(reasons))
         owners = {e.strip("<>").casefold() for e in re.split(r"[,\s]+", os.environ.get("DCR_OWNER_EMAIL", ""))
                   if e.strip("<>")}

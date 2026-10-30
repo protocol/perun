@@ -20,12 +20,12 @@ for f in .history/old.txt src/app.txt tests/t.txt fixtures/f.txt testdata/d.txt 
   printf '{"k":"%s"}\n' "$key" >"$f"
 done
 git add -A && git -c user.email=t@example.com -c user.name=t commit -q -m files
-out=$(bash "$RC" --base base 2>err.txt) || true; [ -n "${DBG:-}" ] && echo "$out" >&2
+out=$(bash "$RC" --base base 2>err.txt | jq -c '.[] | select(.tool == "gitleaks")') || true; [ -n "${DBG:-}" ] && echo "$out" >&2 # gitleaks rows only (the trufflehog step applies the same skip list: test-review-checks-trufflehog.sh)
 for hit in src/app.txt tests/t.txt docker-registry-credentials.json; do grep -q "$hit" <<<"$out"; chk $? "$hit is still reported"; done
 for gone in .history/ fixtures/f.txt testdata/d.txt '"registry.json"'; do ! grep -q "$gone" <<<"$out"; chk $? "$gone is skipped"; done
-grep -q 'template skipped 4 changed file' err.txt; chk $? "skip count is printed"
+grep -q 'gitleaks template skipped 4 changed file' err.txt; chk $? "skip count is printed"
 printf '[extend]\nuseDefault = true\n' >.gitleaks.toml
 git add -A && git -c user.email=t@example.com -c user.name=t commit -q -m cfg
-out=$(bash "$RC" --base base 2>/dev/null) || true
+out=$(bash "$RC" --base base 2>/dev/null | jq -c '.[] | select(.tool == "gitleaks")') || true
 grep -q '.history/old.txt' <<<"$out"; chk $? "repo with its own .gitleaks.toml does not get the template"
 echo "Tests: $pass/$total"; [ "$pass" -eq "$total" ]

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=no presentation-only PR while an aged P0 or mechanism issue has no PR, review=2027-01-30
 """priority_gate.py — no presentation-only PR while an aged P0/mechanism issue has no PR citing it.
 
 WHY THIS EXISTS (the failure it closes)

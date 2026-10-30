@@ -5,8 +5,8 @@ Read this when `method.md` routes here (its "Situational Phase 1 checks" bullet 
 **Phase 1 — gate disputes and target-shape preflights.**
 
 - **On a `DIFF`, run `scripts/review_checks.sh --base <base>` first.** It runs only the installed local
-  analyzers (shellcheck, `bash -n`, py_compile, ruff/pyflakes, `node --check`, tsc, `go vet`, jq, `invisible-chars` (NUL/C0, bidi, zero-width), `committed-data` (10+ distinct non-reserved emails in a file, count only; a `.` row for 50+ spread thin; `not-checked` for compressed or columnar files), plus
-  gitleaks, semgrep with the repo's rules or else the bundled taint rules plus p/default (`REVIEW_SEMGREP_REGISTRY=0` drops the registry pack), trivy and osv-scanner offline, osv online with `REVIEW_OSV=1`) on the changed files and prints findings JSON; `--history` scans commit history, `--tests` adds
+  analyzers (shellcheck, `bash -n`, py_compile, ruff/pyflakes, `node --check`, tsc, `go vet`, jq, `invisible-chars` (NUL/C0, bidi, zero-width), `committed-data` (10+ distinct non-reserved emails in a file, counts only, and a test-path row leads `likely fixture:` when half or more are placeholder-style or on reserved domains; a `.` row for 50+ spread thin; `not-checked` for compressed or columnar files), plus
+  gitleaks, trufflehog (offline, `--no-verification`: unverified; a row is detector, file, line, never the secret), semgrep with the repo's rules or else the bundled taint rules plus p/default (`REVIEW_SEMGREP_REGISTRY=0` drops the registry pack), trivy and osv-scanner offline, osv online with `REVIEW_OSV=1`) on the changed files and prints findings JSON; `--history` scans commit history, `--tests` adds
   the declared `REVIEW_TEST_CMD`; stderr ends with a one-line ran/skipped summary. Its findings are leads: verify
   each against the code before reporting, report a `not run` line or `not-checked` row as unchecked surface, and never read an empty
   list as clean (analyzers miss fail-open and logic defects). Its gitleaks pass uses `templates/gitleaks.toml`

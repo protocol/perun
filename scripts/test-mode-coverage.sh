@@ -54,6 +54,7 @@ green "$(cat "$ROOT/docs/example-review-report.md")" "the canonical example repo
 mkdir "$T/stub" "$T/repo"
 printf '#!/usr/bin/env bash\nexit 124\n' >"$T/stub/gitleaks"  # 124 = the timebox's exit
 for t in semgrep trivy; do printf '#!/usr/bin/env bash\necho "{\\"results\\":[],\\"Results\\":[]}"\n' >"$T/stub/$t"; done  # no network
+printf '#!/usr/bin/env bash\necho "{\\"runs\\":[{\\"results\\":[]}]}"\n' >"$T/stub/trufflehog"  # a clean SARIF document: a host without trufflehog would add a second not-checked row
 chmod +x "$T/stub"/*
 echo '{}' >"$T/policy.json"
 export PERUN_HEAVY_DIR="$T/heavy0" PERUN_POLICY="$T/policy.json"  # never touch the real lease dir or policy

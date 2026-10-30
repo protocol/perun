@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=deny gh issue create when the same finding is already filed, review=2027-01-30
 """PreToolUse(Bash) hook: deny `gh issue create` when `file_finding.py` finds the same finding already filed.
 
 WHY: most pipeline-filed issues repeated one already closed. `file_finding.py` (the dedupe search over open and closed issues

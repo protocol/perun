@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=no fixed/faster/done claim on a delivery outcome without a measurement, review=2027-01-30
 """outcome_claim_guard.py — Stop + PreToolUse + UserPromptSubmit hook: no "fixed / faster / done" on delivery outcomes without a measurement.
 
 WHY: a coordinator called pipeline work "done" and "improved" at PR open, reported PRs merged and lanes spawned as

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=advise resuming an earlier same-domain lane over a costly new one, review=2027-01-30
 """lane_resume_nudge.py — PreToolUse(Agent|Task) hook: advise resuming an earlier same-domain lane.
 
 Spawning a new lane costs a 30-60k-token startup that re-reads the same code an earlier lane already read. This

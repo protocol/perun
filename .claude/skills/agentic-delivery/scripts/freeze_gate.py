@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=during a freeze allow only deletions and red-trunk fixes, review=2027-01-30
 """freeze_gate.py BASE HEAD — while a freeze is on, allow only deletions and red-trunk fixes.
 
 WHY: a freeze (release stabilisation, incident) that lives in a chat message is broken by the next lane. This makes it a

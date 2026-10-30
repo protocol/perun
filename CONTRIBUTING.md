@@ -37,7 +37,9 @@ Parallel lanes must not bump the version: each one claims "main + 1" and all but
   or `size-budgets.tsv` rows: committing them makes any two PRs conflict once one merges. CI rebuilds them
   for an unlanded PR (`scripts/regen-unlanded.sh`; the size ratchet still compares the rebuilt rows to
   main), and the land commit carries them and is checked byte-for-byte. Register a new test by adding
-  `scripts/ci-tests.d/<slug>.sh` (one command line), not a line in `ci.yml`.
+  `scripts/ci-tests.d/<slug>.sh` (one command line), not a line in `ci.yml`. CI splits the registrations over 3
+  parallel legs by sorted position (`SHARD=i/3 bash scripts/ci-tests-shard.sh` lists leg i's), so a test must not rely on
+  another registration having run first.
   `bash scripts/run-ci-tests.sh --affected` runs only the registered tests a changed file can reach (the pre-push default),
   so run it before pushing instead of just your own new test.
   `bash scripts/ci-gates.sh fragments --config scripts/size-budgets.tsv changelog.d` checks the fragment's marker

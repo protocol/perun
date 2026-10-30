@@ -4,10 +4,11 @@
 # stdout: [{"file","line","rule","message","text","tool"}]. `text` ("rule: message") is the key
 # scripts/score_review.py matches on. Findings are LEADS: verify each against the code before reporting.
 #
-# Tools (linters, gitleaks, osv-scanner, semgrep, trivy): see references/method-situational.md. Each runs only when
-# installed and only on matching changed files. Secrets are redacted and never printed; osv-scanner runs offline on a warm DB (env REVIEW_OSV_DB_DIR, an exported OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY that already holds a seeded database,
+# Tools (linters, gitleaks, trufflehog, osv-scanner, semgrep, trivy): see references/method-situational.md. Each runs only when
+# installed and only on matching changed files. Secrets are redacted and never printed; trufflehog runs offline (`--no-verification --no-update`) over the changed files (every tracked file under --full),
+# 200 per call, with `--sarif`: unlike `--json` that output has no Raw, RawV2, Redacted or SecretParts, so a row carries the detector, file and line only; it skips the same template paths as gitleaks (no repo .gitleaks.toml) and retries a failed call file by file (a file that still fails is a not-checked row); osv-scanner runs offline on a warm DB (env REVIEW_OSV_DB_DIR, an exported OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY that already holds a seeded database,
 # else the cache provision_tools.sh --print warms; no flag needed), or against the OSV API with env REVIEW_OSV=1 (network), and is not run with neither;
-# a lockfile with no osv-scanner/trivy result falls back to npm/pnpm/pip-audit (opt-in: REVIEW_OSV=1 or REVIEW_OSV_DB_DIR; it queries the registry), else a not-checked row; trivy is offline.
+# a lockfile with no osv-scanner/trivy result falls back to npm/pnpm/pip-audit (opt-in: REVIEW_OSV=1 or REVIEW_OSV_DB_DIR; it queries the registry), else a not-checked row; trivy is offline (TRIVY_DISABLE_TELEMETRY=true stops its telemetry ping).
 # semgrep uses repo rules, else the bundled taint rules plus the p/default pack (never `--config auto`; the local snapshot provision_tools.sh --print warms stands in for the registry pack when present).
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
@@ -17,7 +18,7 @@
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
 # Built-in too: committed_personal_data.py counts the distinct non-reserved email addresses in each changed file (third_party/, Pods/, bower_components/ and *.min.js are skipped, as for invisible-chars), binary data included,
-# and reports a file with 10 or more (tool `committed-data`, rule `email-addresses`; the row carries the count only, never an address). Addresses spread thin are summed over the files that stay below 10: 50 or more
+# and reports a file with 10 or more (tool `committed-data`, rule `email-addresses`; the row carries counts only, never an address or domain, and starts `likely fixture:` for a test path whose addresses are mostly placeholder-style or on reserved domains). Addresses spread thin are summed over the files that stay below 10: 50 or more
 # distinct give one `email-addresses` row with the path `.`. `not-checked` = unreadable, over the 32 MiB read cap, or, under the threshold, a file in a format whose pages can hide addresses (parquet, arrow, orc, zip, gzip,
 # zstd, xz, 7z, lz4, bzip2, avro, pdf, zlib; the list and its ceilings are in committed_personal_data.py). gitleaks looks for secrets, not for exported personal data.
 # `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma). gitleaks runs once over the working tree. gitleaks drops
@@ -81,7 +82,7 @@ printf '%s\n' "$files" >"$td/files"
 nex=$(( $(printf '%s\n' "$all" | grep -c . || true) - $(printf '%s\n' "$files" | grep -c . || true) )) # grep -c exits 1 at a count of 0, which set -e would turn into a silent exit
 [ -n "$files" ] || echo "review_checks: 0 files in diff (empty, or only excluded paths); nothing to scan" >&2
 rc=0
-[ -z "$files" ] || wired+=" gitleaks semgrep trivy" # scanners with work this run (any changed file); osv-scanner and the hub add theirs below
+[ -z "$files" ] || wired+=" gitleaks trufflehog semgrep trivy" # scanners with work this run (any changed file); osv-scanner and the hub add theirs below
 # wiredx: scanners that count toward "wired" but that provision_tools.sh cannot install, so they are never "fixable": shellcheck, ruff/pyflakes, gitleaks-history
 [ "$hist" = 0 ] || wiredx+=" gitleaks-history"
 
@@ -92,6 +93,7 @@ changed() { { printf '%s\n' "$files" | grep -E "$1" || true; } | while IFS= read
 # re-list it) and the deduped "NOT RUN" list.
 # ponytail: per-file tools (shellcheck) leave "ran" when any one file fails, the safe direction.
 skip() {
+  [ -z "${skq:-}" ] || { skq=$2; return 0; } # quiet probe (trufflehog's file-by-file retry): keep the reason for the caller, report nothing yet
   echo "review_checks: not run: $1 ($2)" >&2; [ -z "${hubtool:-}" ] || add "$hubtool" "" 0 not-checked "$2"
   [ "$2" = "not installed" ] && return 0
   [ -n "${hubtool:-}" ] || add "$1" "" 0 not-checked "$2"
@@ -141,7 +143,7 @@ have() {
     skip "$1" "not installed"; missing+=" $1"
     case "$1" in semgrep) miss "$1" "install: pipx install semgrep" ;; tsc) miss "$1" "install: npm install -g typescript" ;; *) miss "$1" "install: brew install $1" ;; esac
     return 1; }
-  case "$1" in gitleaks|osv-scanner|semgrep|trivy) lease_take || { skip "$1" "heavy lease full"; return 1; } ;; esac
+  case "$1" in gitleaks|trufflehog|osv-scanner|semgrep|trivy) lease_take || { skip "$1" "heavy lease full"; return 1; } ;; esac
 }
 # add TOOL FILE LINE RULE MSG -> one TSV row.
 add() { printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" >>"$raw"; }
@@ -149,7 +151,7 @@ add() { printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" >>"$raw"; }
 run_one() {
   local tool=$1 nz=(); shift; rc=0
   # lease full: heavy scanners run at lowest priority and are named in the summary (never take the lease while degraded)
-  if [ "$lease" = degraded ]; then case $tool in gitleaks*|osv-scanner|semgrep|trivy|grype|checkov|gosec) [ "$nice19" != 1 ] || nz=(nice -n 19); case " $dg " in *" $tool "*) ;; *) dg+=" $tool" ;; esac ;; esac; fi
+  if [ "$lease" = degraded ]; then case $tool in gitleaks*|trufflehog|osv-scanner|semgrep|trivy|grype|checkov|gosec) [ "$nice19" != 1 ] || nz=(nice -n 19); case " $dg " in *" $tool "*) ;; *) dg+=" $tool" ;; esac ;; esac; fi
   [ -n "${hubtool:-}" ] || case " $ran " in *" $tool "*) ;; *) ran+=" $tool" ;; esac # hub tools count as ran only after a good parse
   tbox ${nz[@]+"${nz[@]}"} "$@" || rc=$?
   # degraded single-worker flag (semgrep --jobs 1, trivy --parallel 1) may be unsupported: after a crash retry once without it;
@@ -286,6 +288,9 @@ elif kind == "checkov":
         sys.exit("sjson: checkov output has no results object")
     if any(x["results"].get("parsing_errors") for x in ds):  # an unparsed file must not read as clean
         sys.exit("sjson: checkov could not parse the file")
+elif kind == "trufflehog":  # SARIF: runs[].results[]; a clean scan still prints the document with "results": []
+    if not isinstance(d, dict) or not isinstance(d.get("runs"), list) or not d["runs"] or not all(isinstance(x, dict) and isinstance(x.get("results"), list) for x in d["runs"]):
+        sys.exit("sjson: trufflehog output has no SARIF runs[].results list")
 elif not isinstance(d, dict) or not isinstance(d.get("results"), list):
     sys.exit(f"sjson: {kind} output has no results list")
 rows = []
@@ -370,6 +375,11 @@ elif kind == "semgrep":
     ps = sorted({pfx(f) for f in fs} - {""}, key=len, reverse=True)
     cid = lambda i: next((i[len(q):] for q in ps if isinstance(i, str) and i.startswith(q)), i)
     rows = [(r["path"], r["start"]["line"], cid(r.get("check_id")), (r.get("extra") or {}).get("message", "")) for r in d["results"]]
+elif kind == "trufflehog":  # only ruleId (the detector), uri and startLine are read; the message is ours. A result with no location raises: unparseable, never dropped
+    for run in d["runs"]:
+        for r in run["results"]:
+            p = r["locations"][0]["physicalLocation"]
+            rows.append((nf(p["artifactLocation"]["uri"]), p.get("region", {}).get("startLine", 0), r["ruleId"], "secret detected (unverified: offline scan, --no-verification)"))
 else:
     for r in d["results"]:
         for p in r.get("packages") or []:
@@ -386,6 +396,9 @@ sys.exit(3 if err else 0)  # 3 = the scan was partial (rows may be empty); 4 = e
 PY
 }
 
+# The allowlist template's skip paths as one ERE, set only while the repo has no .gitleaks.toml of its own (gitleaks then uses the template); trufflehog applies the same list below.
+tplre=; tplwhat="under .history/, fixtures/, testdata/, generated registry JSON or lockfiles"
+[ -f .gitleaks.toml ] || tplre=$(sed -n "s/^  '''\(.*\)''',\$/\1/p" "$here/../templates/gitleaks.toml" 2>/dev/null | paste -sd'|' - || true)
 if have gitleaks; then
   # Content-hash allowlist (templates/gitleaks.toml): trusted only as of BASE, so a change cannot approve its own secret.
   # A missing file or unresolvable base means an empty list; an entry the change adds or edits is itself a finding.
@@ -394,9 +407,9 @@ if have gitleaks; then
   # .gitleaksignore (fingerprints) is likewise read as of BASE (HEAD under --full), never from the working tree.
   export GL_IGNORE=$gli; git show "$ref:.gitleaksignore" >"$gli" 2>/dev/null || : >"$gli"
   glcfg=(); [ -f .gitleaks.toml ] || glcfg=(--config "$here/../templates/gitleaks.toml") # no repo config: use the allowlist template
-  if [ ${#glcfg[@]} -gt 0 ]; then # say what the template hides, so a skipped file is never silent
-    skipped=$(printf '%s\n' "$files" | grep -cE "$(sed -n "s/^  '''\(.*\)''',\$/\1/p" "$here/../templates/gitleaks.toml" | paste -sd'|' -)" || true)
-    [ "${skipped:-0}" -eq 0 ] || echo "review_checks: gitleaks template skipped $skipped changed file(s) under .history/, fixtures/, testdata/ or generated registry JSON" >&2
+  if [ -n "$tplre" ]; then # say what the template hides, so a skipped file is never silent
+    skipped=$(printf '%s\n' "$files" | grep -cE "$tplre" || true)
+    [ "${skipped:-0}" -eq 0 ] || echo "review_checks: gitleaks template skipped $skipped changed file(s) $tplwhat" >&2
   fi
   if [ "$wr" = 1 ]; then # one batched scan of the working tree; only tracked, non-vendored files are reported
     : >"$rep"; glw=$td/glw # extend the config; skip vendored trees at scan time
@@ -428,6 +441,46 @@ if have gitleaks; then
     fi
   fi
 elif [ -n "$files" ]; then add gitleaks "" 0 not-checked "not installed or heavy lease full; secrets were not scanned"; fi
+
+# trufflehog: a second secret detector set, with gitleaks' lease and degraded-nice handling. Offline (--no-verification never calls a provider; --no-update skips the version check). --sarif, never --json or the default
+# output: those print the secret (--json as Raw, RawV2, Redacted and SecretParts), while SARIF holds only the detector, path, line and a fingerprint hash, so no value reaches $out, a row or the record. --log-level=-1 keeps stderr (merged into $out) from corrupting the document.
+# --fail-on-scan-errors: an unreadable file or path exits 1 (a not-run row), where it would otherwise exit 0 and read as clean. Files are named explicitly, 200 per call like semgrep: the changed files, every tracked file under --full.
+# Noise: the gitleaks template's skip paths (tplre, only without a repo .gitleaks.toml) are filtered from the file list here, because trufflehog's own --exclude-paths is ignored for files named on the command line (checked on 3.99.7).
+# .gitleaksignore and .gitleaks-allow do not apply to it; its inline `trufflehog:ignore` comment does (tool-hub.md).
+# A failed chunk (timeout, crash, or one unreadable file: --fail-on-scan-errors fails the whole call and prints nothing) is retried file by file, so one bad file costs only itself: passing files keep their rows,
+# each file that still fails is a not-checked row (partial scope), and when no file passes the tool is "not run" as before: the retry gives up after 3 failures while none has passed. A passing chunk is never retried.
+if have trufflehog; then
+  tf=() tn=0
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    if [ -n "$tplre" ] && [[ $f =~ $tplre ]]; then tn=$((tn + 1)); else tf+=("./$f"); fi
+  done <<<"$files"
+  [ "$tn" -eq 0 ] || echo "review_checks: trufflehog template skipped $tn changed file(s) $tplwhat" >&2
+  [ ${#tf[@]} -gt 0 ] || wired=${wired/ trufflehog/} # nothing left to scan: no work, so the closing line never reads it as a scanner that did not run
+  # tfscan FILE...: one call; 0 when it ran. A failure reports nothing yet (skip stays quiet via $skq): its reason is left in $tfw for the caller.
+  tfscan() {
+    skq=1 tfw=
+    run_one trufflehog trufflehog --log-level=-1 --no-verification --no-update --sarif --fail-on-scan-errors filesystem "$@" && scan_ok trufflehog && { skq=; return 0; }
+    tfw=$skq; skq=; return 1
+  }
+  # tfrows: the last call's findings ($out) as rows; 1 when its output does not parse
+  tfrows() { local f l r m; sjson trufflehog "$out" >"$tsv" && while IFS=$'\t' read -r f l r m; do add trufflehog "$f" "$l" "$r" "$m"; done <"$tsv"; }
+  for ((i = 0; i < ${#tf[@]}; i += 200)); do
+    tfc=("${tf[@]:i:200}")
+    if tfscan "${tfc[@]}"; then tfrows || skip trufflehog "unparseable output; secrets were not scanned"; continue; fi
+    [ ${#tfc[@]} -gt 1 ] || { skip trufflehog "$tfw"; continue; } # one file: a retry is the same call
+    # ponytail: while no file has passed alone, 3 failed single-file retries end the chunk as not run, so a crashed or hung tool costs 3 extra runs per chunk, not up to 200 timeboxed ones;
+    # the price is that 3 or more unreadable files ahead of the first good one also read as not run (loud, never clean). Raise the 3 if that bites.
+    tfwhy=$tfw tfgood=0 tfbad=() tfbw=()
+    for f in "${tfc[@]}"; do
+      if tfscan "$f" && tfrows; then tfgood=1; else tfbad+=("${f#./}"); tfbw+=("${tfw:-unparseable output}"); fi
+      [ "$tfgood" = 1 ] || [ ${#tfbad[@]} -lt 3 ] || break
+    done
+    if [ "$tfgood" = 0 ]; then skip trufflehog "$tfwhy"; continue; fi # no file passes alone: the tool failed, not a file
+    for ((j = 0; j < ${#tfbad[@]}; j++)); do add trufflehog "${tfbad[j]}" 0 not-checked "trufflehog failed on this file alone (${tfbw[j]}); it was not scanned for secrets"; done
+    [ ${#tfbad[@]} -eq 0 ] || { echo "review_checks: partial: trufflehog could not scan ${#tfbad[@]} of ${#tfc[@]} file(s) of a failed chunk (each is a not-checked row)" >&2; case " $ran " in *" trufflehog(errors) "*) ;; *) ran+=" trufflehog(errors)" ;; esac; }
+  done
+elif [ -n "$files" ]; then add trufflehog "" 0 not-checked "not installed or heavy lease full; secrets were not scanned"; fi
 
 lock_files=$(changed '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.sum|Cargo\.lock|poetry\.lock|requirements[^/]*\.txt|composer\.lock)$')
 [ -z "$lock_files" ] || wired+=" osv-scanner"
@@ -503,6 +556,8 @@ fi
 # trivy: offline against the cached DB (no download); no DB or any crash reads as not-run, never as clean.
 # If the vuln+misconfig scan fails (check bundle unreachable in the sandbox), retry secret-only and say so.
 if [ -n "$files" ] && have trivy; then
+  # --offline-scan stops the DB fetch, not trivy's telemetry ping (check.trivy.dev): opt out by env var, since an older trivy crashes on an unknown flag
+  export TRIVY_DISABLE_TELEMETRY=true
   tv=(trivy fs --quiet --format json --skip-version-check --skip-db-update --offline-scan --skip-dirs node_modules,.claude/worktrees,vendor,dist,build,.git,.venv,venv,target)
   tk=trivy; [ "$lease" != degraded ] || { tv+=(--parallel 1); w1+=" trivy"; }
   # REVIEW_TRIVY_CACHE: pre-seeded --cache-dir. A missing DB stays "not run" (never clean) and prints the one-line warm command.
@@ -576,8 +631,10 @@ hubcmd() {
     actionlint) cmd=(actionlint -format '{{json .}}' "$@"); okrc="1" ;; # exit 1 = findings, 2 = bad flag, 3 = fatal (actionlint -h; checked against a real run)
     bandit) cmd=(bandit -q -f json --exit-zero "$@") ;;
     gosec) jf=$rep; : >"$rep"; cmd=(env GOPROXY=off gosec -fmt=json -no-fail -out "$rep" ./...) ;;
-    grype) cmd=(env GRYPE_DB_AUTO_UPDATE=false grype "sbom:$1" -o json) ;; # SBOM only: dir: scans the whole tree (unverified for lockfiles)
-    checkov) cmd=(checkov -f "$1" -o json --quiet --skip-download --soft-fail) ;;
+    # GRYPE_CHECK_FOR_APP_UPDATE=false: grype's own-version check calls toolbox-data.anchore.io even with the DB update off (env var, not a flag: an older grype crashes on an unknown flag)
+    grype) cmd=(env GRYPE_DB_AUTO_UPDATE=false GRYPE_CHECK_FOR_APP_UPDATE=false grype "sbom:$1" -o json) ;; # SBOM only: dir: scans the whole tree (unverified for lockfiles)
+    # CKV_SKIP_PACKAGE_UPDATE_CHECK=true: --skip-download leaves checkov's own-version lookup (pypi.org) on; env var, not a flag, so an older checkov ignores it
+    checkov) cmd=(env CKV_SKIP_PACKAGE_UPDATE_CHECK=true checkov -f "$1" -o json --quiet --skip-download --soft-fail) ;;
     hadolint) cmd=(hadolint -f json --no-fail "$1") ;;
   esac
 }
@@ -642,7 +699,7 @@ if [ -n "$cf" ]; then
 fi
 
 # Built-in, no tool to install: distinct non-reserved email addresses per changed file, binary data files included (committed_personal_data.py), over the same $cf as invisible-chars (vendored paths skipped). Cheap, so
-# unleased: it reads each file's bytes once (capped at 32 MiB). Rows: tool committed-data, rule email-addresses|not-checked (the row with path `.` is the repository total over files below the file threshold); the message has the count or the container format, never a value. Not tagged likely-fixture: a real address in a fixture is still a leak.
+# unleased: it reads each file's bytes once (capped at 32 MiB). Rows: tool committed-data, rule email-addresses|not-checked (the row with path `.` is the repository total over files below the file threshold); the message has counts or the container format, never a value. No likely-fixture hint or tag (a real address in a fixture is still a leak); only the message leads `likely fixture:`, from the path and the share of placeholder-style or reserved-domain addresses.
 pd="$here/committed_personal_data.py"
 if [ -n "$cf" ]; then
   if [ ! -f "$pd" ]; then skip committed-data "committed_personal_data.py missing"
@@ -671,7 +728,7 @@ FXB = re.compile(r"(^|[._-])(fixture|sample|example|mock|test)s?([._-]|$)", re.I
 def fx(p): return FXD.search(p) or FXB.search(p.rsplit("/", 1)[-1])
 def row(t):
     d = {"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "rule": t[3], "message": t[4], "text": f"{t[3]}: {t[4]}", "tool": t[0]}
-    if t[0] in ("gitleaks", "gitleaks-history", "invisible-chars") and fx(t[1]):
+    if t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "invisible-chars") and fx(t[1]):
         d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
     return d
 # Low-confidence bucket: only generic-api-key (the low-signal rule) hits under a fixture DIRECTORY collapse, and only when a (tool, top fixture dir)

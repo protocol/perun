@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=defer a heavy local command while the machine is busy, review=2027-01-30
 """heavy_gate.py — PreToolUse(Bash) hook: defer a heavy local command while the machine is busy.
 
 WHY: host_probe.py and the heavy-lease primitive in perun_policy.py existed but nothing called

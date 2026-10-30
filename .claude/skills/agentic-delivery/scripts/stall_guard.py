@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=nudge when an autonomous turn ends stopped or waiting with work still open, review=2027-01-30
 """stall_guard.py — Stop hook: one nudge when an autonomous turn ends on "stopped / holding / waiting on you" with nothing launched.
 
 WHY: an agent hit one denial or blocker, then ended its turn saying it was stopped or waiting on the owner while other

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=inject the house standing defaults into every new subagent, review=2027-01-30
 """SubagentStart hook: inject the project's house standing-default text into
 every newly-spawned subagent's context, with a per-agent-type minimal-code
 exemption.

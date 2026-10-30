@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=stop a subagent brief that names a tool the lane does not have, review=2027-01-30
 """PreToolUse(Agent|Task) hook: stop a subagent brief that tells the lane to use a tool it does not have.
 
 A lane told to "use the Monitor tool" or "call the bash tool" burns turns on `No such tool` errors (166 dead turns in

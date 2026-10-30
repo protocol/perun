@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=refuse to store a test baseline poisoned by host load, review=2027-01-30
 """baseline_guard.py — store a test baseline only when it is not poisoned by load.
 
 WHY: a baseline taken on a loaded host holds failures that are load, not code; every later PR is then compared to a wrong

@@ -1,6 +1,7 @@
 # Bundled generic taint rules (JavaScript/TypeScript). Sources: req/request query, body, params, cookies, headers.
 # Sinks: classic injection calls on well-known receivers. A guard `if (!ALLOW.has(x)) return|throw` before the sink suppresses it for x.
 # Also hardcoded-credential-compare (a pass/secret/token/api-key name vs a non-empty string literal, WARNING) and hardcoded-basic-auth (a base64-decoded value vs a literal, ERROR); env reads, `typeof` checks, JWT header fields (alg, typ, kid), scheme/sentinel literals (bearer, none, true, ...), single-character literals and test/fixture paths are skipped. ponytail: template literals are not matched.
+# Also date-parse-rollover (INFO: a date accepted only because Number.isFinite/isNaN of an inline Date.parse(x) or new Date(x) passed, with no .toISOString() round trip in the enclosing function; V8 reads 2026-02-30 as 2 March; test paths are skipped) and gcm-no-auth-tag-length (WARNING: createDecipheriv with an *-gcm cipher and no authTagLength option, so a truncated tag is accepted, a forgery risk only when the tag length is attacker-controlled). ponytail: any .toISOString() in the enclosing function counts as the round trip, component compares such as getUTCDate are not recognised, a numeric-timestamp new Date(ts) check can report, and a check on a variable bound first (const d = new Date(x); isNaN(d)) is not flagged because those hits were mostly noise; a cipher name that is not a string literal (or a const bound to one) and an options argument that is not an object literal are skipped.
 rules:
 - id: perun.js.sqli
   mode: taint
@@ -692,3 +693,44 @@ rules:
     - focus-metavariable: $T
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.date-parse-rollover
+  languages: [javascript, typescript]
+  severity: INFO
+  message: 'A date is accepted because Date.parse() or new Date() returned a finite number, but V8 rolls an impossible day over instead of rejecting it (2026-02-30 becomes 2 March). Round-trip the value: format the parsed date back and reject the input unless it matches, for example new Date(ms).toISOString().slice(0, 10) === input.'
+  patterns:
+  - pattern-either:
+    - pattern: $CHK(Date.parse($X))
+    - pattern: $CHK(new Date($X))
+    - pattern: $CHK(new Date($X).getTime())
+  - metavariable-regex:
+      metavariable: $CHK
+      regex: ^(?:Number\.)?(?:isFinite|isNaN)$
+  - pattern-not-inside: |
+      function $F(...) {
+        ...
+        <... $D.toISOString() ...>
+        ...
+      }
+  - pattern-not-inside: |
+      ($...P) => {
+        ...
+        <... $D.toISOString() ...>
+        ...
+      }
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.gcm-no-auth-tag-length
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: 'createDecipheriv() decrypts with an AES-GCM cipher but passes no authTagLength option, so Node accepts an authentication tag shorter than 16 bytes (a 4-byte tag passes). That weakens integrity only when the tag length is attacker-controlled, for example when the tag is whatever follows the ciphertext in the message. Pass { authTagLength: 16 } as the fourth argument.'
+  patterns:
+  - pattern-either:
+    - pattern: $C.createDecipheriv("$ALG", $K, $IV)
+    - pattern: createDecipheriv("$ALG", $K, $IV)
+    - pattern: $C.createDecipheriv("$ALG", $K, $IV, {...})
+    - pattern: createDecipheriv("$ALG", $K, $IV, {...})
+  - pattern-not: '$C.createDecipheriv("$ALG", $K, $IV, {authTagLength: $N, ...})'
+  - pattern-not: 'createDecipheriv("$ALG", $K, $IV, {authTagLength: $N, ...})'
+  - metavariable-regex:
+      metavariable: $ALG
+      regex: (?i).*-gcm$

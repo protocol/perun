@@ -17,7 +17,7 @@ for j in $jobs; do
 done
 sed -n '/^  gates:$/,$p' "$Y" | grep -qF "if: always()" || bad "gates lacks if: always()"
 sed -n '/^  gates:$/,$p' "$Y" | grep -qF "timeout-minutes: 5" || bad "gates lacks timeout-minutes: 5"
-n="$(grep -oE 'SHARD: \$\{\{ matrix.shard \}\}/[0-9]+' "$Y" | grep -oE '[0-9]+$')"
+n="$(awk '/^  [a-z]+:$/ { j = $1 } j == "selftests:"' "$Y" | grep -oE 'SHARD: \$\{\{ matrix.shard \}\}/[0-9]+' | grep -oE '[0-9]+$')"  # the perpr job has its own SHARD (scripts/test-perpr-shard.sh)
 for i in $(seq 1 "${n:-0}"); do grep -qE "^if _shard_on $i; then\$" "$ROOT/scripts/test-ci-gates.sh" || bad "shard $i has no cases"; done
 [ -n "$n" ] || bad "no SHARD matrix"
 [ "$fail" -eq 0 ] && echo "PASS  ci shards keep every step" && echo "Tests: 1/1"

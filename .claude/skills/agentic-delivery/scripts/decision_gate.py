@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=ask the owner only after a recorded evil-twin and council pass, review=2027-01-30
 """decision_gate.py — gate: ask the owner only after a decision record.
 
 Owner rule: before a question or plan reaches the owner, run an evil-twin attack and a council pass and record both.

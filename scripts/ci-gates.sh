@@ -25,6 +25,7 @@
 #                                        every MUST/NEVER/ALWAYS (or bold "Never") rule line in a SKILL.md must sit in a paragraph that names a mechanism (scripts/, ci-gates, evals, hook) or says "advisory"; unenforced rules not in the baseline FAIL (ratchet); --base: baseline rows added vs <ref> need a `rule-baseline-raise:` commit marker
 #   tests-wired --allowlist <file> <root>
 #                                        every scripts/test_*.py and scripts/test-*.sh is run by CI (named in scripts/ci-tests.d/*.sh, .github/workflows/*.yml or a test they run) or listed in <file> with a reason; a stale row FAILS
+#   rails [--audit] <root>               every guard/hook script (name ends _guard/_gate/_cap/_hook, or a hook template wires it) carries `# rail: owner=..., why=..., review=YYYY-MM-DD`; a missing or empty field or a bad date FAILS; --audit lists rails past their review date (never removes one)
 #
 set -euo pipefail
 
@@ -81,6 +82,7 @@ Usage:
   ci-gates.sh binaries <root>
   ci-gates.sh mustload --config <file> <root>
   ci-gates.sh tests-wired --allowlist <file> <root>
+  ci-gates.sh rails [--audit] <root>
 EOF
 }
 
@@ -1656,6 +1658,86 @@ cmd_tests_wired() {
   printf 'tests-wired: ok (%d tests: %d run by CI, %d allowlisted)\n' "$total" "$((total - listed))" "$listed"
 }
 
+# ---------------------------------------------------------------------------
+# rails — every guard/hook script records an owner, a reason and a review date (#1592).
+#
+# A rail is a script under .claude/skills/*/scripts/ that blocks or warns an agent: its name ends in _guard, _gate, _cap
+# or _hook, or a .claude/skills/*/templates/*.settings.json runs it as a hook command. Each carries one line in its first
+# 10 lines: `# rail: owner=<skill or role>, why=<one clause>, review=YYYY-MM-DD` (a role, never a person). A rail with no
+# such line, an empty or missing field, or a review date that is not a real calendar day FAILS, so a new guard cannot
+# land unowned; any other script that carries the line is checked too. A past review date does NOT fail the gate (that
+# would break every PR on one day): `--audit` lists the rails past it for the owner to confirm (bump review=) or retire,
+# and never removes one. No firing log is shared by the rails (reply_cap, handback_cap and file_finding each keep a
+# private one), so --audit prints no firing counts and calls no rail "never-firing": that needs a shared log first.
+# Limit: a hook wired only in a user's own settings, not a shipped template, is in the set only if it is named like a rail.
+# The regression test is scripts/test-rails.sh.
+# ---------------------------------------------------------------------------
+cmd_rails() {
+  local audit=0 root=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --audit) audit=1; shift ;;
+      -*) die "rails: unknown option: $1" ;;
+      *) [ -z "$root" ] || die "rails: unexpected extra argument: $1"; root="$1"; shift ;;
+    esac
+  done
+  [ -n "$root" ] || die "rails: <root> is required"
+  [ -d "$root/.claude/skills" ] || die "rails: $root/.claude/skills not found (fail closed)"
+  python3 - "$root" "$audit" <<'PY'
+import datetime, glob, itertools, json, os, re, sys
+
+root, audit = sys.argv[1], sys.argv[2] == "1"
+wired = set()  # basenames a shipped hook template runs
+for p in glob.glob(root + "/.claude/skills/*/templates/*.settings.json"):
+    for group in json.load(open(p, encoding="utf-8")).get("hooks", {}).values():
+        for entry in group:
+            for hook in entry.get("hooks", []):
+                wired.update(re.findall(r"[\w.-]+\.(?:py|sh)\b", hook.get("command", "")))
+named = re.compile(r"_(guard|gate|cap|hook)\.(py|sh)$")
+header = re.compile(r"# rail: owner=([^,]*), why=(.*), review=(.*)")
+rails, bad = [], []
+for f in sorted(glob.glob(root + "/.claude/skills/*/scripts/*")):
+    if not os.path.isfile(f):
+        continue
+    with open(f, encoding="utf-8", errors="replace") as fh:
+        lines = [l.rstrip("\n") for l in itertools.islice(fh, 10) if l.startswith("# rail:")]
+    base, rel = os.path.basename(f), os.path.relpath(f, root)
+    if not (lines or named.search(base) or base in wired):
+        continue
+    m = header.fullmatch(lines[0]) if len(lines) == 1 else None
+    if not m:
+        bad.append(f"{rel}: needs exactly one `# rail: owner=<skill or role>, why=<one clause>, review=YYYY-MM-DD` line in its first 10 lines")
+        continue
+    owner, why, review = (g.strip() for g in m.groups())
+    try:
+        due = datetime.date(*map(int, review.split("-"))) if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", review) else None
+    except ValueError:
+        due = None
+    if not owner or not why:
+        bad.append(f"{rel}: owner and why must not be empty")
+    elif due is None:
+        bad.append(f"{rel}: review={review!r} is not a real YYYY-MM-DD date")
+    else:
+        rails.append((rel, owner, why, due))
+if not rails and not bad:
+    bad.append("no guard or hook scripts under .claude/skills (fail closed)")
+for b in bad:
+    print("rails: FAIL " + b)
+if bad:
+    sys.exit(1)
+print(f"rails: ok ({len(rails)} rails)")
+if audit:
+    today = datetime.date.today()
+    late = [r for r in rails if r[3] < today]
+    print(f"rails: audit {today}: {len(late)} of {len(rails)} past their review date")
+    for rel, owner, why, due in late:
+        print(f"  {rel}  owner={owner}  review={due}  why={why}")
+    if late:
+        print("  owner: confirm each (bump review= in its header) or retire it; this audit never removes a rail")
+    print("rails: firing counts: none, no log of rail firings is shared (reply_cap, handback_cap and file_finding keep private ones), so no rail is called never-firing")
+PY
+}
+
 [ "$#" -gt 0 ] || { usage; exit 2; }
 subcmd="$1"; shift
 case "$subcmd" in
@@ -1671,6 +1753,7 @@ case "$subcmd" in
   mustload) cmd_mustload "$@" ;;
   rules) cmd_rules "$@" ;;
   tests-wired) cmd_tests_wired "$@" ;;
+  rails) cmd_rails "$@" ;;
   -h|--help) usage; exit 0 ;;
   *) printf 'ci-gates: unknown subcommand: %s\n' "$subcmd" >&2; usage; exit 2 ;;
 esac

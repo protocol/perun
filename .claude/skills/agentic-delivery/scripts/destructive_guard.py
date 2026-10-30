@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=deny destructive host commands before they run (best effort; the OS sandbox is the boundary), review=2027-01-30
 """PreToolUse(Bash) hook entry: runs `destructive_guard_core.py`, which holds all of the guard logic and its documentation.
 
 Python never caches bytecode for the script it is started on, so a 2000-line hook script was recompiled on every tool

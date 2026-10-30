@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=tell a lane to checkpoint near its tool-call cap, review=2027-01-30
 """PostToolUse hook: count a lane's tool calls and tell it to checkpoint near its cap.
 
 A lane cannot see its own token spend while it runs, but every tool call it

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-ceo, why=a deferred owner question is no reason to sit idle while work remains, review=2027-01-30
 """stop_reminder.py — advisory deferred-question hooks: a deferred owner
 question is not a reason to sit idle while other work remains.
 

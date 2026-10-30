@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=re-touching a recently fixed file needs a class-level artifact, review=2027-01-30
 """refix_gate.py — re-touching a recently-fixed file requires a class-level artifact.
 
 WHY THIS EXISTS (the failure it closes)

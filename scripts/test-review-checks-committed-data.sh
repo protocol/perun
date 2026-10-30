@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests for review_checks.sh's built-in committed-data step (committed_personal_data.py): a CSV and a binary-ish file with 12 distinct
-# made-up-domain addresses give one email-addresses row each (count only, never an address, not tagged likely-fixture); 9 addresses,
+# made-up-domain addresses give one email-addresses row each (counts only, never an address; no likely-fixture hint or tag); 9 addresses,
 # reserved example.com names and vendor/, node_modules/, third_party/, Pods/ and *.min.js files give none; a small parquet-like file
 # gives a not-checked row; six files of 9 addresses each, none reaching the threshold, give one repository-total row (path ".");
 # diff mode flags only changed files and --full all tracked files; the step is listed under "analyzers ran"; a missing script gives
@@ -54,9 +54,9 @@ PATH="$T/bin" bash "$RC" --base base 2>"$T/err" >"$T/out" || true
 rows() { jq -r '[.[] | select(.tool=="committed-data") | .file] | sort | join(" ")' "$1"; }
 
 [ "$(rows "$T/out")" = ". export.parquet report.csv small.parquet ten.csv tests/fixtures/people.csv" ] && ok "csv and binary flagged; 9 addresses, reserved names, vendored paths and unchanged files are not" || bad "row files: $(rows "$T/out")"
-jq -e '[.[] | select(.tool=="committed-data" and .file=="report.csv")] | length == 1 and all(.[]; .rule=="email-addresses" and .line==0 and .message=="12 distinct email addresses (threshold 10)" and .text=="email-addresses: 12 distinct email addresses (threshold 10)")' "$T/out" >/dev/null && ok "row shape: rule, count, text" || bad "row shape"
+jq -e '[.[] | select(.tool=="committed-data" and .file=="report.csv")] | length == 1 and all(.[]; .rule=="email-addresses" and .line==0 and .message=="12 distinct email addresses (threshold 10); of 12 counting reserved names, 12 with placeholder-style local parts, 0 on reserved domains" and .text=="email-addresses: " + .message)' "$T/out" >/dev/null && ok "row shape: rule, count, fixture signals, text" || bad "row shape"
 jq -e 'any(.[]; .tool=="committed-data" and .file=="ten.csv" and (.message|startswith("10 distinct")))' "$T/out" >/dev/null && ok "threshold edge: 10 flagged" || bad "ten.csv row"
-jq -e '[.[] | select(.tool=="committed-data")] | length == 6 and all(.[]; (has("hint")|not) and (.text|contains("likely-fixture")|not))' "$T/out" >/dev/null && ok "fixture-path row not tagged likely-fixture" || bad "fixture tag"
+jq -e '[.[] | select(.tool=="committed-data")] | length == 6 and all(.[]; (has("hint")|not) and (.text|contains("likely-fixture")|not))' "$T/out" >/dev/null && ok "fixture-path row carries no likely-fixture hint or tag (its message may lead with the content-based label)" || bad "fixture tag"
 jq -e '[.[] | select(.tool=="committed-data" and .file==".")] | length == 1 and .[0].rule=="email-addresses" and .[0].line==0 and .[0].message=="63 distinct email addresses across 8 file(s) that each stay below the file threshold 10 (repository threshold 50; --threshold 1 lists the files)"' "$T/out" >/dev/null && ok "addresses spread thin give one repository-total row" || bad "repository-total row"
 jq -e '[.[] | select(.tool=="committed-data" and .file=="small.parquet")] | length == 1 and .[0].rule=="not-checked" and (.[0].message|contains("compressed/columnar container (parquet)"))' "$T/out" >/dev/null && ok "small parquet under the threshold is a not-checked row, not a clean pass" || bad "container row"
 jq -e 'any(.[]; .tool=="committed-data")' "$T/out" >/dev/null && ! grep -Eq '@|fixture-user|acme|\.zz' "$T/out" "$T/err" && ok "no address, local part or domain in stdout or stderr" || bad "value leaked, or no committed-data rows to check"

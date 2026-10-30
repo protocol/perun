@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=flag a gate or push piped to tail/head/grep that masks its exit status, review=2027-01-30
 """PreToolUse(Bash) hook: flag a gate/push/merge command piped to tail/head/grep.
 
 `gate | tail` reports the reader's exit status, so a failing gate reads as 0 and a

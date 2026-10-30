@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=a changed test file must really run and assert, review=2027-01-30
 """vacuous_test_gate.py [REPORT] (--changed PATH... | --base REF) [--strict] — a changed test file must really run and assert.
 
 WHY: a spec that asserts nothing, or skips itself when fixture data is missing, reads green. Two checks.

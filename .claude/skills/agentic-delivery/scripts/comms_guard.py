@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rail: owner=agentic-delivery, why=warn when a PR or tracker write misses its artifact template, review=2027-01-30
 """comms_guard.py — PreToolUse hook: lint a PR or tracker write against its artifact template and WARN, never block.
 
 WHY: agents post PR bodies, status updates and comments that bury the lead, pad with filler and repeat a wrong
