@@ -2,6 +2,8 @@
 
 Read this when the target has a server request handler, page loader or resolver that assembles one response from several async calls, or an application-level cache layer (memoization, Redis, CDN). It fires at FILE or FULL scope on what the repo contains, not only on a diff. Moved verbatim from `performance-db-cost.md`; "above" and "below" in these bullets resolve against that file's *Indexes*, *Necessity*, *N+1* and *External / API / LLM calls* bullets, and its 🚩 grep list stays there.
 
+To measure a timing claim, run `scripts/perf_compare.sh` (hyperfine A/B against the base; rules and how to read the verdict: `tool-hub.md`), or `scripts/app_pentest.sh --load` for a running endpoint (`app-pentest.md`).
+
 ## Handler await ordering
 
 - **Sequential `await`s with no data dependency are an accidental serialization, not

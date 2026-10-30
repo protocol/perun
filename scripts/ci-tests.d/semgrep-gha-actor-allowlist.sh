@@ -1,0 +1,2 @@
+# Bundled semgrep rule perun.gha.actor-allowlist-from-vars (templates/semgrep-taint/gha.yml): annotated ruleid/ok workflow and action.yml fixtures (live when semgrep is installed, SKIP otherwise) plus offline replays of the rule's own regexes and structural pins (severity, [heuristic] message, name hints, path scope) that still run where semgrep is absent.
+python3 scripts/test_semgrep_gha_actor_allowlist.py

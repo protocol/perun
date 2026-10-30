@@ -26,10 +26,15 @@ run resumes from it and `--offline` re-analyses it without any call. A missing i
 
 Exit codes: 0 ok, 2 usage, an unreadable or unwritable --data, a --root that is not a checkout of --repo, or no data.
 Side effects: `gh api` calls (read-only); `--data` writes that file.
-Limits: durations are job wall time (started to completed); a duplicate is the same check suite key in two enforced CI
-steps (a PR or merge-group gate; a build, install or generate step is never flagged), so a matrix or OS split also
-shows up: each recommendation says to check that first. Jobs match on workflow and displayed name, with a matrix
-suffix ignored. Duplicates are read from the workflow files under --root, so --root must be a checkout of --repo.
+Limits: durations are job wall time (started to completed); a duplicate is the same check command (script and
+arguments) in two enforced CI steps (a PR or merge-group gate; a build, install or generate step is never flagged), so a
+matrix or OS split also shows up: each recommendation says to check that first. The same script with different
+arguments is an advisory (check one covers the other before dropping), never a drop, and is not priced. The API times
+steps, not suites: a saving is priced only for a step that runs that one command; for any other step the suite's own
+time is unmeasured and the recommendation says to time it locally. Jobs match on workflow and displayed name, with a
+matrix suffix ignored. Duplicates are read from the workflow files under --root, so --root must be a checkout of --repo.
+A run whose jobs or attempts call fails is named in the notes and its job data stays missing until a later run with
+the same --data retries it; a failed runs-list or pulls call stops collection and says so.
 """
 from __future__ import annotations
 
@@ -59,19 +64,37 @@ def is_check(key):
     return key.split()[0] in pp._RUN or bool(CHECK.search(key.lower()))
 
 
+def api_error(err):
+    """One line for a failed `gh api` call's stderr: gh's own `<message> (HTTP nnn)` line, else the JSON body's
+    "message" (what the curl fallback keeps, after `HTTP nnn:`) with that status, else the last line. Never the bare
+    `}` that ends a multi-line body. Blank stderr gives "gh api failed"."""
+    err = (err or "").strip() or "gh api failed"
+    m = re.search(r"^gh: (.+ \(HTTP \d+\))$", err, re.M)
+    if m:
+        return m.group(1)[:300]
+    m = re.search(r'"message":\s*"((?:[^"\\]|\\.)*)"', err)
+    if m:
+        st = re.match(r"HTTP (\d+)", err)
+        return (m.group(1) + (" (HTTP %s)" % st.group(1) if st else ""))[:300]
+    return err.splitlines()[-1][:300]
+
+
 def gh_get(path, params=None):
-    """GET one REST page through bare `gh api` (curl fallback on gh's macOS-sandbox TLS failure) -> parsed JSON."""
+    """GET one REST page through bare `gh api` (curl fallback on gh's macOS-sandbox TLS failure) -> parsed JSON.
+    A failure raises OSError with `api_error`'s one-line reason."""
     args = ["gh", "api", path + ("?" + urllib.parse.urlencode(params) if params else "")]
     p = subprocess.run(args, capture_output=True, text=True)
     rc, out, err = gh_rest.fallback(args, p.returncode, p.stdout, p.stderr)
     if rc:
-        raise OSError((err or "gh api failed").strip().splitlines()[-1][:300])
+        raise OSError(api_error(err))
     return json.loads(out)
 
 
 def collect(repo, bundle, n_runs=30, n_pulls=30, get=gh_get):
-    """Fill `bundle` {runs, jobs, prior, pulls, limits} from the API, reusing what is there. A failed call stops
-    collection and is recorded in bundle['limits'] (rerun with the same --data to resume); it never raises."""
+    """Fill `bundle` {runs, jobs, prior, pulls, limits} from the API, reusing what is there. A failed jobs or attempts
+    call skips that run and is recorded once in bundle['limits'] with the run id and the API message (a later run
+    with the same --data retries it); a failed runs-list or pulls call stops collection and is recorded there too
+    (rerun with the same --data to resume). It never raises."""
     for k, v in (("runs", []), ("jobs", {}), ("prior", {}), ("pulls", [])):
         bundle.setdefault(k, v)
     bundle["limits"] = []
@@ -83,13 +106,17 @@ def collect(repo, bundle, n_runs=30, n_pulls=30, get=gh_get):
             bundle["runs"] = [pp._run_row(r) for r in got.get("workflow_runs", [])][:n_runs]
         for r in bundle["runs"]:
             rid = str(r["id"])
-            if rid not in bundle["jobs"]:
-                got = get("%s/actions/runs/%s/jobs" % (base, rid), {"per_page": 100, "filter": "latest"})
-                bundle["jobs"][rid] = [pp._job_row(j) for j in got.get("jobs", [])]
-            for a in range(1, (r.get("run_attempt") or 1)):  # earlier attempts: which job failed before the re-run
-                if "%s/%d" % (rid, a) not in bundle["prior"]:
-                    got = get("%s/actions/runs/%s/attempts/%d/jobs" % (base, rid, a), {"per_page": 100})
-                    bundle["prior"]["%s/%d" % (rid, a)] = [pp._job_row(j) for j in got.get("jobs", [])]
+            try:  # one run's endpoint can fail every time (an HTTP 502 on its /jobs): name it, go on to the next run
+                if rid not in bundle["jobs"]:
+                    got = get("%s/actions/runs/%s/jobs" % (base, rid), {"per_page": 100, "filter": "latest"})
+                    bundle["jobs"][rid] = [pp._job_row(j) for j in got.get("jobs", [])]
+                for a in range(1, (r.get("run_attempt") or 1)):  # earlier attempts: which job failed before the re-run
+                    if "%s/%d" % (rid, a) not in bundle["prior"]:
+                        got = get("%s/actions/runs/%s/attempts/%d/jobs" % (base, rid, a), {"per_page": 100})
+                        bundle["prior"]["%s/%d" % (rid, a)] = [pp._job_row(j) for j in got.get("jobs", [])]
+            except (OSError, ValueError) as e:
+                # ponytail: an outage adds one note per remaining run; add a consecutive-failure stop if that shows up
+                bundle["limits"].append("run %s skipped, its jobs or attempts call failed: %s" % (rid, e))
         for page in range(1, (n_pulls + 9) // 10 + 1):  # a PR object is large: small pages survive a body-cutting proxy
             if len(bundle["pulls"]) >= n_pulls or bundle.get("pulls_pages", 0) >= page:
                 continue
@@ -192,11 +219,16 @@ def oss_jobs(repo, root, run=subprocess.run):
 
 def dup_jobs(root, jobs):
     """Check suites (suite keys from `pipeline_profile.commands`, `is_check` only) run by two or more enforced CI steps
-    (a PR or merge-group gate: a push-to-main run is the post-merge copy, not a duplicate). Keep the copy in the job
-    with the lower p50 (red sooner); drop the others and price each from its step's median, split evenly over the
-    suites that step runs (an even split, not a measurement). Job rows match on workflow and job name."""
+    (a PR or merge-group gate: a push-to-main run is the post-merge copy, not a duplicate). The same normalized command
+    (script and arguments, as `commands` prints it) in two steps is a duplicate (`identical` True): keep the copy in the
+    job with the lower p50 (red sooner) and drop the others. A suite whose steps all run it with different arguments is
+    only an advisory (`identical` False, `saved_s` None): one may not cover the other. (Beside a repeated command, a
+    copy with other arguments is left out: only the repeat is reported.) A step's median prices a copy only when that
+    step runs that one command; the API times whole steps, never one suite, so for any other step
+    `step_p50_s` is None (unmeasured) rather than an even split of the step; `saved_s` sums the measured copies (None
+    when none is). Job rows match on workflow and job name."""
     wdir = os.path.join(root, ".github", "workflows")
-    seen, nkeys, names = {}, {}, {}
+    seen, ncmd, names = {}, {}, {}  # seen: suite key -> normalized command -> {step location}
     for fn in sorted(os.listdir(wdir)) if os.path.isdir(wdir) else []:
         if not fn.endswith((".yml", ".yaml")):
             continue
@@ -208,31 +240,37 @@ def dup_jobs(root, jobs):
             for st in job["steps"]:
                 if st["run"] and pp._wf_stage(wf, st, job)[1]:
                     loc = (fn, job["name"], pp.step_label(st))
-                    for _, key, _b in pp.commands(st["run"]):
-                        nkeys.setdefault(loc, set()).add(key)  # the split counts every suite the step runs
+                    for cmd, key, _b in pp.commands(st["run"]):
+                        ncmd[loc] = ncmd.get(loc, 0) + 1  # every suite command counts: the step median covers them all
                         if is_check(key):
-                            seen.setdefault(key, {})[loc] = 1
+                            seen.setdefault(key, {}).setdefault(cmd, {})[loc] = 1
 
     def find(fn, name):
         return [j for j in jobs if j["workflow"] in names[fn]
                 and (j["job"] == name or j["job"].startswith(name + " ("))]
 
+    groups = []  # (suite key, identical, {step location}), one per command that repeats
+    for key, by_cmd in sorted(seen.items()):
+        # no command repeats: the same suite with different arguments in each step is only an advisory
+        groups += [(key, True, locs) for locs in by_cmd.values() if len(locs) > 1] or [
+            (key, False, dict.fromkeys(loc for locs in by_cmd.values() for loc in locs))]
     out = []
-    for key, locs in sorted(seen.items()):
+    for key, identical, locs in groups:
         if len(locs) < 2:
             continue
         rows = []
         for fn, job, step in locs:
             m = find(fn, job)
-            sec = [s / len(nkeys[(fn, job, step)]) for j in m for s in [j["step_p50"].get(step)] if s is not None]
+            sec = [s for j in m for s in [j["step_p50"].get(step)] if s is not None and ncmd[(fn, job, step)] == 1]
             rows.append({"workflow_file": fn, "job": job, "step": step,
                          "job_p50_s": max((j["p50_s"] or 0 for j in m), default=None) if m else None,
                          "step_p50_s": max(sec) if sec else None})
         order = sorted(range(len(rows)), key=lambda i: (rows[i]["job_p50_s"] is None, rows[i]["job_p50_s"] or 0, i))
         keep = rows[order[0]]
         drop = [rows[i] for i in order[1:]]
-        out.append({"suite": key, "keep": keep, "drop": drop,
-                    "saved_s": sum(r["step_p50_s"] or 0 for r in drop) if any(r["step_p50_s"] for r in drop) else None})
+        out.append({"suite": key, "identical": identical, "keep": keep, "drop": drop,
+                    "saved_s": sum(r["step_p50_s"] or 0 for r in drop)
+                    if identical and any(r["step_p50_s"] for r in drop) else None})
     return out
 
 
@@ -253,12 +291,15 @@ def recommend(wfs, jobs, dups, lead, flake_jobs=None):
         if all(x["step_p50_s"] is not None and x["step_p50_s"] < DUP_FLOOR_S for x in drops):
             continue
         for x in drops:
+            if d["identical"]:
+                tail = (". Run it once: keep the first, drop the second, unless the copies are a matrix or OS split; %s."
+                        % ("saves at most about %s per run (its step's median)" % f(x["step_p50_s"]) if x["step_p50_s"]
+                           else "the suite's own time is unmeasured: time it locally to price the saving"))
+            else:
+                tail = "; same suite, different arguments: check one covers the other before dropping."
             rec.append({"kind": "duplicate-job", "target": x["job"],
-                        "text": "suite `%s` runs in job `%s` (step `%s`) and again in job `%s` (step `%s`, %s). Run it "
-                                "once: keep the first, drop the second, unless the copies are a matrix or OS split%s."
-                                % (d["suite"], k["job"], k["step"], x["job"], x["step"], x["workflow_file"],
-                                   "; saves about %s per run (even split over its step's suites)" % f(x["step_p50_s"])
-                                   if x["step_p50_s"] else "")})
+                        "text": "suite `%s` runs in job `%s` (step `%s`) and again in job `%s` (step `%s`, %s)%s"
+                                % (d["suite"], k["job"], k["step"], x["job"], x["step"], x["workflow_file"], tail)})
     if jobs:
         j = jobs[0]
         rec.append({"kind": "slowest-job", "target": j["job"],
@@ -309,8 +350,10 @@ def render(rep):
                                                 "n/a" if j["flakes"] is None else j["flakes"])
           for j in rep["slowest_jobs"]]
     L += ["", "DUPLICATE CHECKS (same suite in 2+ CI steps)"]
-    L += ["  %s: keep in `%s`; also in %s" % (d["suite"], d["keep"]["job"],
-                                              ", ".join("`%s`" % x["job"] for x in d["drop"])) for d in rep["duplicates"]]
+    names = lambda xs: ", ".join("`%s`" % x["job"] for x in xs)  # noqa: E731
+    L += ["  %s: keep in `%s`; also in %s" % (d["suite"], d["keep"]["job"], names(d["drop"])) if d["identical"] else
+          "  %s: different arguments in %s (advisory: check one covers the other)"
+          % (d["suite"], names([d["keep"]] + d["drop"])) for d in rep["duplicates"]]
     L += ["  none found"] * (not rep["duplicates"])
     ld = rep["lead"]
     L += ["", "PR LEAD TIME  prs=%d  open-to-merge p50=%s p90=%s  push-to-merge=%s  post-green wait=%s  merged/day=%s" % (

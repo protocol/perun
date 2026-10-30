@@ -148,9 +148,10 @@ Run `python3 <skill>/scripts/<name>` (`bash` for `.sh`). `name: purpose — argu
 - review_checks.sh: run local, read-only analyzers over the files changed since… — [--base REF] [--tests] [--history]…
 - score_review.py: Score a review's findings against a ground-truth file: recall… — GROUND_TRUTH.json FINDINGS.json…
 - security_verify.py: verify-or-drop triage of security findings. — [findings.json|-] [override-file]
+- sibling_sweep.py: leads for an incomplete fix: a call changed here, its… — --repo DIR --base REF [--head REF]
 - tenant_scope_check.py: heuristic lead-finder for cross-tenant authz holes in Prisma… — error. Reads files only; writes nothing.
 - token_differ.py: the tier-1 design<->app design-token VALUE parity gate. — --design <file> --app <file> [--map…
-- No documented CLI: app_pentest.sh, binaries_gate.py, ci_cost_lint.py, closes_lint.py, identity_gate.py, invisible_chars.py, reaper_lint.py, review_feedback.py, source_scan_tests.py, supply_chain_check.sh, validate_status_claims.py
+- No documented CLI: app_pentest.sh, binaries_gate.py, ci_cost_lint.py, closes_lint.py, identity_gate.py, invisible_chars.py, perf_compare.sh, reaper_lint.py, review_feedback.py, source_scan_tests.py, supply_chain_check.sh, validate_status_claims.py
 
 ### growth-analytics
 - readout_check.py: deterministic pass/fail checks on a finished two-arm A/B… — READOUT.json

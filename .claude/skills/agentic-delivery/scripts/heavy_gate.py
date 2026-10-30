@@ -8,7 +8,7 @@ hook runs on every Bash call, so the admission check happens without anyone reme
 
 What it does: if the command starts a test runner, a build, a whole-repo security scanner (semgrep scan|ci|--config, trivy
 fs|repo|image|config|rootfs, osv-scanner, grype, checkov, gitleaks detect|git|dir, trufflehog git|filesystem|github), a JS dependency
-install (npm|pnpm|yarn|bun ci|i|install) or a Perun scan/CI entrypoint (review_checks.sh, run-ci-tests.sh, app_pentest.sh, run as `bash PATH`
+install (npm|pnpm|yarn|bun ci|i|install) or a Perun scan/CI entrypoint (review_checks.sh, run-ci-tests.sh, app_pentest.sh, perf_compare.sh, run as `bash PATH`
 or directly) (DEFAULT_PATTERNS, or the newline-separated regexes in $PERUN_HEAVY_PATTERNS, each matched at the start of a shell segment,
 after runner wrappers are stripped), it denies the call when host_probe.decide(lane_type="heavy") says HOLD (load1 > cores or low free
 RAM; swap is not read, one sample shows no trend) or when the machine-wide heavy leases already fill the
@@ -50,7 +50,7 @@ DEFAULT_PATTERNS = (
     r"semgrep( .*)? (scan|ci|--config)\b", r"trivy( .*)? (fs|repo|image|config|rootfs)\b", r"(osv-scanner|checkov) \S",
     r"grype (?!(db|version|help)(\s|$))\S",
     r"gitleaks( .*)? (detect|git|dir)\b", r"trufflehog( .*)? (git|filesystem|github)\b", r"(npm|pnpm|yarn|bun) (ci|i|install)\b",
-    r"((ba|z)?sh )?(\S*/)?(review_checks|run-ci-tests|app_pentest)\.sh\b",
+    r"((ba|z)?sh )?(\S*/)?(review_checks|run-ci-tests|app_pentest|perf_compare)\.sh\b",
 )
 PUNCT = ";()<>|&\n"
 # Joins backslash-newline (group 1 = the escaped pairs kept: an odd run of backslashes before the newline, an even run is escaped backslashes) and

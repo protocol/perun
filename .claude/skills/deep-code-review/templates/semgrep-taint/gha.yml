@@ -1,0 +1,16 @@
+# Bundled GitHub Actions rule (text regexes). Scans .github/workflows/*.yml|yaml and action.yml|yaml only. The language is regex, not yaml, so a file that fails YAML parsing is still scanned.
+# actor-allowlist-from-vars (WARNING, a heuristic lead): an actor check (github.actor, github.triggering_actor, GITHUB_ACTOR) fed by a configuration variable (vars.NAME).
+# Three regexes: the variable and the actor are the two operands of one comparison or contains(); or a variable named like an allow-list (allow, releaser, deployer, approver, admin, maintainer, trusted)
+# and an actor reference sit in one step, in either order. Comment lines are skipped. It cannot see where the variable is defined, so a job that declares the environment still flags.
+# Not covered: context.actor, the ids (GITHUB_ACTOR_ID), a job- or workflow-level env that a later step compares.
+rules:
+- id: perun.gha.actor-allowlist-from-vars
+  languages: [regex]
+  severity: WARNING
+  message: '[heuristic] An actor check (github.actor, github.triggering_actor or GITHUB_ACTOR) is fed by a configuration variable (vars.NAME). Anyone with write access can create, update and delete repository variables, and a repository variable overrides an organization variable of the same name, so a writer can add themselves to the list. Keep the list where only admins can change it: an environment variable (creating one needs admin access in an organization repository) read in a step of a job that declares that environment (environment variables are only available once the job starts), or a code-owned file. Drop this lead if the variable is defined on that job''s environment.'
+  pattern-either:
+  - pattern-regex: '(?im)^(?![ \t]*#)[^\n]*?(?:contains\(\s*(?:fromJSON\(\s*)?(?<![\w.])vars\.\w+\s*\)?\s*,\s*(?<![\w.])github[._](?:triggering_)?actor\b|(?<![\w.])github[._](?:triggering_)?actor\b\s*[!=]=\s*(?<![\w.])vars\.\w+|(?<![\w.])vars\.\w+\s*[!=]=\s*(?<![\w.])github[._](?:triggering_)?actor\b)'
+  - pattern-regex: '(?im)^(?![ \t]*#)[^\n]*?(?<![\w.])vars\.\w*(?:allow|releaser|deployer|approver|admin|maintainer|trusted)\w*(?:[^\n]*\n(?![ \t]*-[ \t]+[\w-]+:|[ ]{0,2}[\w-]+:)){0,15}?[^\n]*?(?<![\w.])github[._](?:triggering_)?actor\b'
+  - pattern-regex: '(?im)^(?![ \t]*#)[^\n]*?(?<![\w.])github[._](?:triggering_)?actor\b(?:[^\n]*\n(?![ \t]*-[ \t]+[\w-]+:|[ ]{0,2}[\w-]+:)){0,15}?[^\n]*?(?<![\w.])vars\.\w*(?:allow|releaser|deployer|approver|admin|maintainer|trusted)\w*'
+  paths:
+    include: [".github/workflows/*.yml", ".github/workflows/*.yaml", "action.yml", "action.yaml"]

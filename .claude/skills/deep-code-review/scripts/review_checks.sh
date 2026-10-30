@@ -21,6 +21,8 @@
 # and reports a file with 10 or more (tool `committed-data`, rule `email-addresses`; the row carries counts only, never an address or domain, and starts `likely fixture:` for a test path whose addresses are mostly placeholder-style or on reserved domains). Addresses spread thin are summed over the files that stay below 10: 50 or more
 # distinct give one `email-addresses` row with the path `.`. `not-checked` = unreadable, over the 32 MiB read cap, or, under the threshold, a file in a format whose pages can hide addresses (parquet, arrow, orc, zip, gzip,
 # zstd, xz, 7z, lz4, bzip2, avro, pdf, zlib; the list and its ceilings are in committed_personal_data.py). gitleaks looks for secrets, not for exported personal data.
+# Built-in too, base mode only (a --full scan has no diff): sibling_sweep.py lists the unchanged call sites, in non-test code, of a function whose call arguments the diff changed elsewhere (tool `sibling-sweep`,
+# rule `unchanged-sibling-call`, message starts "lead:"): the sibling route a fix may have missed. Leads to open, never findings; a name with more than 25 call sites is skipped; scope and ceilings are in its docstring.
 # `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma). gitleaks runs once over the working tree. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
 # gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row per top fixture dir when it has >3 (every other rule, and name-only matches, stay rows); REVIEW_FIXTURE_ROWS=all lists every hit.
@@ -40,6 +42,9 @@
 # scope (trivy secret-only, semgrep with errors or bundled-only) and which a provision fixes (a missing tool, a cold cache, semgrep bundled-only); wired also counts shellcheck, ruff/pyflakes and (with --history) gitleaks-history,
 # which provision_tools.sh cannot install, so they can be "not run" but never "fixable". The same summary is recorded best-effort in
 # <git-common-dir>/review-checks-last.json for perun_doctor.py.
+# guarddog (optional, offline, never installs or fetches): the npm packages a changed package-lock.json newly adds (against the merge-base lock; a bump counts) that are already
+# installed under node_modules at the locked version get `guarddog npm scan` (hasInstallScript packages first; cap 25 and REVIEW_GUARDDOG_BUDGET seconds in all, default 300; threat-* rules only,
+# each lead tagged [heuristic]; every package left unscanned is named in a not-checked row). A newly added lock entry with hasInstallScript is a lead of its own; see references/tool-hub.md.
 # All temp files live in one private mktemp -d dir per run, removed on exit.
 # Each tool run is timeboxed (default 60s); a semgrep chunk whose p/default pack hangs spends a second timebox on the bundled-rules rerun. Exit 0 even with findings; 2 on usage/unresolvable base.
 set -euo pipefail
@@ -141,7 +146,7 @@ miss() { gap+="${gap:+; }$1 ($2)"; }
 have() {
   command -v "$1" >/dev/null || {
     skip "$1" "not installed"; missing+=" $1"
-    case "$1" in semgrep) miss "$1" "install: pipx install semgrep" ;; tsc) miss "$1" "install: npm install -g typescript" ;; *) miss "$1" "install: brew install $1" ;; esac
+    case "$1" in semgrep) miss "$1" "install: pipx install semgrep" ;; guarddog) miss "$1" "install: pipx install guarddog" ;; tsc) miss "$1" "install: npm install -g typescript" ;; *) miss "$1" "install: brew install $1" ;; esac
     return 1; }
   case "$1" in gitleaks|trufflehog|osv-scanner|semgrep|trivy) lease_take || { skip "$1" "heavy lease full"; return 1; } ;; esac
 }
@@ -291,6 +296,9 @@ elif kind == "checkov":
 elif kind == "trufflehog":  # SARIF: runs[].results[]; a clean scan still prints the document with "results": []
     if not isinstance(d, dict) or not isinstance(d.get("runs"), list) or not d["runs"] or not all(isinstance(x, dict) and isinstance(x.get("results"), list) for x in d["runs"]):
         sys.exit("sjson: trufflehog output has no SARIF runs[].results list")
+elif kind == "guarddog":  # results: rule -> hits; errors: rule -> why it did not run (its key stays in results, empty). A rule error costs that rule only: the other hits stay and a not-checked row names it
+    if not isinstance(d, dict) or not isinstance(d.get("results"), dict) or not isinstance(d.get("errors") or {}, dict) or not any(str(r).startswith("threat-") for r in (*d["results"], *(d.get("errors") or {}))):
+        sys.exit("sjson: guarddog output has no results object or no threat-* rule")
 elif not isinstance(d, dict) or not isinstance(d.get("results"), list):
     sys.exit(f"sjson: {kind} output has no results list")
 rows = []
@@ -380,6 +388,14 @@ elif kind == "trufflehog":  # only ruleId (the detector), uri and startLine are 
         for r in run["results"]:
             p = r["locations"][0]["physicalLocation"]
             rows.append((nf(p["artifactLocation"]["uri"]), p.get("region", {}).get("startLine", 0), r["ruleId"], "secret detected (unverified: offline scan, --no-verification)"))
+elif kind == "guarddog":  # threat-* rules only (capability-* fire on benign code); one row per rule from its first hit, relative to the package dir; code and match are source snippets and are never read
+    cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package can ship a file named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
+    for r, h in d["results"].items():
+        if r.startswith("threat-") and h:
+            f, _, l = str(h[0].get("location", "")).rpartition(":")
+            rows.append((cl(f or "."), int(l) if l.isdigit() else 0, cl(r), f"{len(h)} hit(s): {cl(h[0].get('message', ''))[:200]} [heuristic]"))
+    for r, e in sorted((d.get("errors") or {}).items()):
+        rows.append((".", 0, "not-checked", f"rule {cl(r)} did not run ({cl(e)[:120]}); its hits were not checked"))
 else:
     for r in d["results"]:
         for p in r.get("packages") or []:
@@ -388,7 +404,7 @@ else:
                      for v in p.get("vulnerabilities") or []]
 for row in rows:
     print("\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in row))
-err = kind == "semgrep" and d.get("errors")
+err = kind in ("semgrep", "guarddog") and d.get("errors")
 if err and not rows:  # errors and no findings: partial when some scanned file raised no error, else exit 4 (nothing usable was scanned)
     bad = {e.get("path") if isinstance(e, dict) else None for e in err}
     sys.exit(3 if None not in bad and len(set((d.get("paths") or {}).get("scanned") or [])) > len(bad) else 4)
@@ -675,6 +691,106 @@ while IFS=';' read -r hn hs hm hre _ hh; do
 done < <(printf '%s\n' "${hub[@]}")
 hubtool=
 
+# guarddog: the npm packages a changed package-lock.json newly adds (name@version absent from the merge-base lock, so a version bump counts) that are already installed at the locked version
+# (the installed package.json says so: a lock-only bump leaves the old code on disk, and scanning that would read as clean) get an offline YARA scan. It never installs and never runs `verify`;
+# guarddog reads a non-directory argument as a registry package NAME and would fetch it, so only existing directories inside the repo are passed. 3.2.0 has no offline flag: its startup refresh of the
+# typosquat top-package lists (github.com, hugovk.github.io, packages.ecosyste.ms) is stopped by pointing GUARDDOG_TOP_PACKAGES_CACHE_LOCATION at fresh stub lists, and the --no-sandbox retry (guarddog's
+# own kernel sandbox is what otherwise blocks its network) adds a dead proxy. Only threat-* rules become leads (capability-* fire on benign code), and YARA rules are heuristics, so each lead says so.
+# The install-hook rules (threat-npm-preinstall-script, threat-process-hooks) match the path */package.json, a nested one: a package's own root package.json, where install hooks live, is never flagged
+# by them, so a newly added lock entry with hasInstallScript is a lead of its own (tool package-lock). Unleased: light.
+# ponytail: package-lock.json only (no yarn.lock or pnpm-lock.yaml); add a parser when those repos need it.
+# gdnew LOCK BASELOCK LEADS: "dir<TAB>name<TAB>version<TAB>flag" per package LOCK has and BASELOCK lacks, flag 1 = its lock entry has hasInstallScript (dir: the first copy inside the repo whose
+# package.json version is the locked one, else "-"). LEADS gets finished rows: a package-lock lead per flagged package and a not-checked row per entry that cannot be scanned safely (no version, or control
+# characters in its name, version or key). Every field is printable: a \r would split a row and the closing summary drops it silently, so control characters become "?". Non-zero when LOCK has no packages map.
+gdnew() {
+  python3 -I - "$@" <<'PY'
+import json, os, sys
+f, bf, lf = sys.argv[1:]
+cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"
+def pk(p):  # {lock key: (name, version, hasInstallScript)}; the root "", workspace roots and link entries are repo code, not a download
+    d = json.load(open(p, encoding="utf-8"))["packages"]
+    return {k: (str(v.get("name") or k.rsplit("node_modules/", 1)[1]), v.get("version"), v.get("hasInstallScript") is True) for k, v in d.items() if "node_modules/" in k and not v.get("link")}
+try: old = {(n, v) for n, v, _ in pk(bf).values()}
+except Exception: old = set()  # no usable lock at the merge-base: every package is new
+new = {}
+for k, (n, v, s) in pk(f).items():
+    if (n, v) not in old: e = new.setdefault((n, v), [[], False]); e[0].append(k); e[1] = e[1] or s
+def has(q, v):  # q holds version v: a lock-only bump leaves the old code installed, and scanning that would read as clean
+    try: return json.load(open(os.path.join(q, "package.json"), encoding="utf-8")).get("version") == v
+    except (OSError, ValueError, AttributeError): return False
+root, d0, rows, leads = os.path.realpath(".") + os.sep, os.path.dirname(f), [], []
+for (n, v), (ks, s) in sorted(new.items(), key=lambda kv: not kv[1][1]):  # stable: hasInstallScript packages first, so the cap and the time budget never leave them out
+    nm, vs = cl(n), cl(v) if isinstance(v, str) else "?"
+    ok = isinstance(v, str) and all(x.isprintable() for x in (n, v, f, *ks))
+    if not ok: leads.append(("guarddog", cl(f), 0, "not-checked", f"{nm}@{vs}: the lock entry has no version, or control characters in its name, version or key; not scanned"))
+    if s: leads.append(("package-lock", cl(f), 0, "has-install-script", f"{nm}@{vs} is newly added and its lock entry has hasInstallScript: it has a preinstall, install or postinstall script that npm runs on install. guarddog's install-hook rules never read a package's own root package.json, so read that script [heuristic]"))
+    # the realpath test keeps a symlink or a .. key from leading a scan outside the repo
+    p = next((q for q in (os.path.join(d0, k) for k in ks) if os.path.isdir(q) and (os.path.realpath(q) + os.sep).startswith(root) and has(q, v)), "-") if ok else "-"
+    rows.append(f"{p}\t{nm}\t{vs}\t{int(s)}")
+if leads: open(lf, "a", encoding="utf-8").write("".join("\t".join(map(str, r)) + "\n" for r in leads))
+if rows: print("\n".join(rows))
+PY
+}
+glk=$(changed '(^|/)package-lock\.json$')
+if [ -n "$glk" ]; then
+  hubtool=guarddog
+  if [ "$full" = 1 ]; then skip guarddog "SKIPPED: --full has no base to find newly added packages against"
+  else
+    gdn=$td/gdnew gdb=$td/gdbase gdl=$td/gdleads; : >"$gdn"; : >"$gdl"
+    gmb=$(git merge-base "$ref" HEAD 2>/dev/null || echo "$ref") # the lock as the diff above sees its base: the moved base tip would call the base's own bumps new
+    while IFS= read -r f; do
+      git show "$gmb:$f" >"$gdb" 2>/dev/null || echo '{}' >"$gdb" # no lock there: every package is new
+      gdnew "$f" "$gdb" "$gdl" >>"$gdn" 2>/dev/null || skip guarddog "SKIPPED: $f has no packages map (lockfileVersion 1) or is unparseable"
+    done <<<"$glk"
+    cat "$gdl" >>"$raw" # the hasInstallScript leads and the named not-checked rows stand with or without guarddog
+    gdT=$(grep -c . "$gdn" || true)
+    if [ "$gdT" != 0 ] && { wiredx+=" guarddog"; have guarddog; }; then
+      gdc=$td/gdcache gdP=0 gdS=0 gdR=0 gdN=0 gdQ=0 gdq= gdsb=() gdpx=() gdt0=$SECONDS gdbud=${REVIEW_GUARDDOG_BUDGET:-300} gdp=http://127.0.0.1:9
+      case "$gdbud" in ''|*[!0-9]*) gdbud=300 ;; esac
+      mkdir -p "$gdc"
+      for gk in npm pypi rubygems go; do printf '{"downloaded_timestamp": %s, "packages": ["example"]}\n' "$(date +%s)" >"$gdc/top_${gk}_packages.json"; done
+      gdrun() { run_one guarddog env GUARDDOG_TOP_PACKAGES_CACHE_LOCATION="$gdc" ${gdpx[@]+"${gdpx[@]}"} guarddog "$@" </dev/null; }
+      gdscan() { gdrun npm scan ${gdsb[@]+"${gdsb[@]}"} --output-format json "$PWD/$1"; }
+      gdok=0 # only a guarddog 3.x scans: the scan JSON was checked on 3.2.0, and any other answer is a named not-checked row, never a clean
+      if gdrun --version; then
+        if [ "$rc" = 0 ] && grep -qE '(^|[^0-9.])3\.[0-9]+\.[0-9]+' "$out"; then gdok=1
+        else skip guarddog "SKIPPED: needs guarddog 3.x (the scan JSON was checked on 3.2.0); --version said: $(head -n1 "$out" | tr -d '[:cntrl:]' | cut -c1-60) (exit $rc)"; fi
+      fi
+      if [ "$gdok" = 1 ]; then
+        while IFS=$'\t' read -r gp gnm gv _; do
+          case "$gp" in ''|-) gdN=$((gdN + 1)); continue ;; esac
+          gdP=$((gdP + 1))
+          if [ "$gdP" -gt 25 ] || [ $((SECONDS - gdt0)) -ge "$gdbud" ]; then gdQ=$((gdQ + 1)); [ "$gdQ" -gt 10 ] || gdq+="${gdq:+, }$gnm@$gv"; continue; fi
+          [ -d "$PWD/$gp" ] || { gdN=$((gdN + 1)); continue; } # a non-directory argument is a registry package NAME to guarddog: a fetch
+          gdscan "$gp" || continue
+          if [ "$rc" != 0 ] && [ "${#gdsb[@]}" = 0 ] && grep -qi 'sandbox initialization failed' "$out"; then # inside another sandbox its own kernel sandbox cannot start
+            gdsb=(--no-sandbox) gdpx=(HTTP_PROXY=$gdp HTTPS_PROXY=$gdp ALL_PROXY=$gdp http_proxy=$gdp https_proxy=$gdp all_proxy=$gdp NO_PROXY= no_proxy=) # without it nothing blocks its network: a dead proxy does
+            echo "review_checks: guarddog: kernel sandbox unavailable here (nested sandbox); scanning without it, network blocked by a dead proxy" >&2
+            gdscan "$gp" || continue
+          fi
+          scan_ok guarddog || continue
+          e=0; sjson guarddog "$out" >"$tsv" || e=$?
+          case "$e" in 0) gdS=$((gdS + 1)) ;; 3) gdR=$((gdR + 1)) ;; *) skip guarddog "unparseable output"; continue ;; esac # 3: a rule did not run (its own row says which); the hits of the others stay
+          while IFS=$'\t' read -r gf gln grl gmsg; do
+            if [ "$grl" = not-checked ]; then add guarddog "$gp" 0 not-checked "$gnm@$gv: $gmsg"; else add guarddog "$gp/$gf" "$gln" "$grl" "$gnm@$gv: $gmsg"; fi
+          done <"$tsv"
+        done < <(awk -F'\t' '$4 == 1' "$gdn"; awk -F'\t' '$4 != 1' "$gdn") # hasInstallScript packages first, across every lock
+        if [ "$gdP" = 0 ]; then skip guarddog "SKIPPED: none of $gdT newly added packages is installed under node_modules at its locked version"
+        elif [ "$gdS" = "$gdT" ]; then ran+=" guarddog"
+        else
+          [ $((gdS + gdR)) = 0 ] || ran+=" guarddog(scanned-$gdS-of-$gdT)"
+          gdm="scanned $gdS of $gdT newly added packages in full; $gdN not installed at the locked version or unreadable"
+          [ "$gdR" = 0 ] || gdm+="; $gdR scanned with a rule that did not run"
+          [ "$gdQ" -le 10 ] || gdq+=" and $((gdQ - 10)) more"
+          [ -z "$gdq" ] || gdm+="; over the cap of 25 or the ${gdbud}s time budget, not scanned: $gdq"
+          add guarddog "" 0 not-checked "$gdm; a failed or partial scan has its own row"
+        fi
+      fi
+    fi
+  fi
+  hubtool=
+fi
+
 # Optional, --full only: tenant_scope_check.py (Prisma id-only where in server code); SKIPPED when the tree has no *.prisma.
 if [ "$full" = 1 ]; then
   if [ -z "$(changed '\.prisma$')" ]; then skip tenant-scope "SKIPPED: no *.prisma"
@@ -707,6 +823,18 @@ if [ -n "$cf" ]; then
     pdok=0; run_one committed-data python3 "$pd" --stdin <<<"$cf" && scan_ok committed-data && pdok=1
     # flushed per row, as above: a timeout still yields the findings made so far
     if [ "$pdok" = 1 ] || [ "$rc" = 124 ] || [ "$rc" = 142 ]; then while IFS=$'\t' read -r f l r m; do add committed-data "$f" "$l" "$r" "$m"; done <"$out"; fi
+  fi
+fi
+
+# Built-in, no tool to install, base mode only: unchanged call sites of a function whose call arguments this diff changed (sibling_sweep.py; read-only git diff and git grep against commits, no checkout).
+# Cheap, so unleased. Rows: tool sibling-sweep, rule unchanged-sibling-call|not-checked; leads for the reviewer to open, never findings. The script's one-line stderr summary lands in $out too and is not a row (no tabs).
+ss="$here/sibling_sweep.py"
+if [ "$full" != 1 ] && [ -n "$files" ]; then
+  if [ ! -f "$ss" ]; then skip sibling-sweep "sibling_sweep.py missing"
+  else
+    if run_one sibling-sweep python3 -I "$ss" --repo . --base "$base" && scan_ok sibling-sweep; then  # rows are written once at the end, so a timeout or crash leaves none
+      while IFS=$'\t' read -r f l r m; do [ -z "$m" ] || add sibling-sweep "$f" "$l" "$r" "$m"; done <"$out"  # the stderr summary line has no tabs: not a row
+    fi
   fi
 fi
 
