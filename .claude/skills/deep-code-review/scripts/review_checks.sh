@@ -254,7 +254,7 @@ if [ -n "$json_files" ] && have jq; then
   done <<<"$json_files"
 fi
 
-# Scanner JSON (file $2, may have log noise before the JSON) of kind $1 -> TSV: file, line, rule, message.
+# Scanner JSON (file $2, may have log lines before the JSON, which starts a line) of kind $1 -> TSV: file, line, rule, message.
 # Fails closed: missing, empty or malformed JSON exits non-zero instead of reading as "no findings".
 sjson() {
   python3 - "$1" "$2" <<'PY'
@@ -263,10 +263,11 @@ kind = sys.argv[1]
 def nf(f):  # scanners echo the path they were given ("./.github/..."); rows must carry the changed-file form
     return os.path.normpath(f) if f else f
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
-i = min([x for x in (t.find("{"), t.find("[")) if x >= 0], default=-1)
-if i < 0:
+# The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
+m = re.search(r"^[\[{]", t, re.M)
+if not m:
     sys.exit("sjson: no JSON in scanner output")
-d = json.JSONDecoder().raw_decode(t[i:])[0]
+d = json.JSONDecoder().raw_decode(t[m.start():])[0]
 # Wrong-shape JSON must not read as clean: gitleaks is a list, semgrep and osv an object with a "results" list.
 if kind == "gitleaks":
     if not isinstance(d, list):
@@ -631,7 +632,7 @@ fi
 # Flags were checked against each tool's official docs (verified) or not (unverified: skipped by default). License class:
 # route-only = never bundled, only run when the user installed it (licenses unchecked, so nothing is bundle-ok yet).
 hub=(
-  'zizmor;verified;batch;^\.github/workflows/[^/]+\.ya?ml$;route-only;pipx install zizmor'
+  'zizmor;verified;batch;^\.github/(workflows/[^/]+|dependabot)\.ya?ml$|(^|/)action\.ya?ml$;route-only;pipx install zizmor' # also audits Dependabot config and action manifests; actionlint reads workflows only
   'actionlint;verified;batch;^\.github/workflows/[^/]+\.ya?ml$;route-only;brew install actionlint'
   'bandit;verified;batch;\.py$;route-only;pipx install bandit'
   'gosec;verified;batch;\.go$;route-only;go install github.com/securego/gosec/v2/cmd/gosec@latest'

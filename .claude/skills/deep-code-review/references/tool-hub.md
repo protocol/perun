@@ -31,7 +31,7 @@ The agent sandbox denies installs and most network, so the owner provisions scan
 
 | Tool | Covers | Command shape | Flags | Class |
 |---|---|---|---|---|
-| `zizmor` | GitHub Actions workflows | `zizmor --format=json --offline FILES`; exit 11-14 means findings | verified (usage docs, JSON shape, exit codes) | route-only |
+| `zizmor` | GitHub Actions workflows, Dependabot config, action manifests (`action.yml` or `.yaml`, in any directory the hub does not exclude: `node_modules`, `vendor`, `dist`, `build`, ...) | `zizmor --format=json --offline FILES`; exit 11-14 means findings; exit 3 (no file it could audit, e.g. a lone `action.yml` that is not an Actions manifest) is not run, never clean | verified (usage docs, JSON shape, exit codes) | route-only |
 | `actionlint` | GitHub Actions workflows | `actionlint -format '{{json .}}' FILES`; exit 1 means findings (2 bad flag, 3 fatal) | verified (`actionlint -h` and a real run, 2026-10-30); JSON shape checked strictly | route-only |
 | `bandit` | Python security | `bandit -q -f json --exit-zero FILES` | verified (man page); JSON shape checked strictly, not documented | route-only |
 | `gosec` | Go security | `gosec -fmt=json -no-fail -out FILE ./...` (needs `go.mod`) | verified (README); JSON shape checked strictly, not documented | route-only |
