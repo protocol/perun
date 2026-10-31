@@ -2,6 +2,8 @@
 # Sinks: classic injection calls on well-known receivers. A guard `if (!ALLOW.has(x)) return|throw` before the sink suppresses it for x.
 # Also hardcoded-credential-compare (a pass/secret/token/api-key name vs a non-empty string literal, WARNING) and hardcoded-basic-auth (a base64-decoded value vs a literal, ERROR); env reads, `typeof` checks, JWT header fields (alg, typ, kid), scheme/sentinel literals (bearer, none, true, ...), single-character literals and test/fixture paths are skipped. ponytail: template literals are not matched.
 # Also date-parse-rollover (INFO: a date accepted only because Number.isFinite/isNaN of an inline Date.parse(x) or new Date(x) passed, with no .toISOString() round trip in the enclosing function; V8 reads 2026-02-30 as 2 March; test paths are skipped) and gcm-no-auth-tag-length (WARNING: createDecipheriv with an *-gcm cipher and no authTagLength option, so a truncated tag is accepted, a forgery risk only when the tag length is attacker-controlled). ponytail: any .toISOString() in the enclosing function counts as the round trip, component compares such as getUTCDate are not recognised, a numeric-timestamp new Date(ts) check can report, and a check on a variable bound first (const d = new Date(x); isNaN(d)) is not flagged because those hits were mostly noise; a cipher name that is not a string literal (or a const bound to one) and an options argument that is not an object literal are skipped.
+# Also body-cap-after-buffer (INFO: await req.formData()/json()/text()/arrayBuffer() on a receiver named like req or request (req, request, c.req, event.request) followed later in the same block by a .size/.length/.byteLength > cap on the result or on a .get(...) entry of it, or preceded only by a content-length > cap check; a comparison with the literal 0 is an emptiness check, not a cap, and a counted getReader() read passes; test, fixture and mock paths are skipped). ponytail: the receiver is matched by name (one ending in req or request), so a request bound to another name (r) or read through a call (req.clone().json()) is missed, only a > comparison with the result on the left is recognised, a result bound by destructuring or read inline (await req.formData()).get(...) is not tied to a later check, a ?. or ! on the result or on its .get(...) entry (body?.length, body!.length, form.get("f")!.size) is not matched, a deeper field path (body.items.length) is not the result, a read and its check in different blocks (the read inside a try, the check after it) are not tied, and a cap that lives in a middleware or framework option is invisible.
+# Also limiter-key-forwarded-header (INFO: an x-forwarded-for / x-real-ip read inside a function named like clientKey, limiterKey, rateKey, deriveKey or getIp; test, fixture and mock paths are skipped). ponytail: the function name is a heuristic, so a key built in an anonymous or differently named function (getClientIp, for one) is missed and any function with a matching name is reported.
 rules:
 - id: perun.js.sqli
   mode: taint
@@ -734,3 +736,85 @@ rules:
   - metavariable-regex:
       metavariable: $ALG
       regex: (?i).*-gcm$
+- id: perun.js.body-cap-after-buffer
+  languages: [javascript, typescript]
+  severity: INFO
+  message: The request body is read whole (formData, json, text or arrayBuffer) and its size is only checked afterwards, or only a content-length header is compared before reading. The whole body is already in memory when the cap runs, and a declared length does not bound a chunked body. Read the stream with getReader() and stop at a running byte total instead.
+  patterns:
+  - pattern: await $REQ.$M()
+  - metavariable-regex:
+      metavariable: $REQ
+      regex: (?i).*req(?:uest)?$
+  - metavariable-regex:
+      metavariable: $M
+      regex: ^(?:formData|json|text|arrayBuffer)$
+  - metavariable-regex:
+      metavariable: $N
+      regex: ^(?!0$)
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern-inside: |
+            $V = await $REQ.$M();
+            ...
+            <... $V.$P > $N ...>
+        - pattern-inside: |
+            $V = await $REQ.$M();
+            ...
+            $F = $V.get(...);
+            ...
+            <... $F.$P > $N ...>
+        - pattern-inside: |
+            $V = await $REQ.$M();
+            ...
+            <... $V.get(...).$P > $N ...>
+      - metavariable-regex:
+          metavariable: $P
+          regex: ^(?:size|length|byteLength)$
+    - patterns:
+      - pattern-either:
+        - pattern-inside: |
+            <... (<... $H.get("$CL") ...>) > $N ...>;
+            ...
+            <... await $REQ.$M() ...>
+        - pattern-inside: |
+            $L = <... $H.get("$CL") ...>;
+            ...
+            <... (<... $L ...>) > $N ...>;
+            ...
+            <... await $REQ.$M() ...>
+      - metavariable-regex:
+          metavariable: $CL
+          regex: (?i)^content-length$
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.limiter-key-forwarded-header
+  languages: [javascript, typescript]
+  severity: INFO
+  message: A client or rate-limit key is derived from x-forwarded-for or x-real-ip. Check that only entries added by trusted proxies are used (a client controls the leftmost ones), that a missing header does not map every caller to one shared constant key, and that a missing header does not fail open and skip limiting.
+  patterns:
+  - pattern-either:
+    - pattern: $H.get("$HDR")
+    - pattern: $H.header("$HDR")
+    - pattern: $H["$HDR"]
+  - metavariable-regex:
+      metavariable: $HDR
+      regex: (?i)^(?:x-forwarded-for|x-real-ip)$
+  - pattern-either:
+    - pattern-inside: |
+        function $F(...) {
+          ...
+        }
+    - pattern-inside: |
+        $F = function (...) {
+          ...
+        }
+    - pattern-inside: |
+        $F = ($...P) => {
+          ...
+        }
+  - metavariable-regex:
+      metavariable: $F
+      regex: (?i).*(?:(?:client|limiter|rate)key|derivekey|getip)
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
