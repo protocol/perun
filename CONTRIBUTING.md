@@ -38,13 +38,23 @@ Parallel lanes must not bump the version: each one claims "main + 1" and all but
   for an unlanded PR (`scripts/regen-unlanded.sh`; the size ratchet still compares the rebuilt rows to
   main), and the land commit carries them and is checked byte-for-byte. Register a new test by adding
   `scripts/ci-tests.d/<slug>.sh` (one command line), not a line in `ci.yml`. CI splits the registrations over 3
-  parallel legs by sorted position (`SHARD=i/3 bash scripts/ci-tests-shard.sh` lists leg i's), so a test must not rely on
-  another registration having run first.
+  parallel legs by recorded seconds (`scripts/ci-durations.tsv`: the longest test goes first, to the least-loaded leg; a
+  test with no row counts as the median, so adding one needs no table edit; `*.bg.sh` ones go round-robin;
+  `SHARD=i/3 bash scripts/ci-tests-shard.sh` lists leg i's), so a test must not rely on another registration having run first.
   `bash scripts/run-ci-tests.sh --affected` runs only the registered tests a changed file can reach (the pre-push default),
   so run it before pushing instead of just your own new test.
   `bash scripts/ci-gates.sh fragments --config scripts/size-budgets.tsv changelog.d` checks the fragment's marker
   lines and headings (the pre-commit and pre-push hooks, land and CI run it), so a malformed fragment fails your
   commit instead of the release.
+- **Test-time table:** refresh `scripts/ci-durations.tsv` when the slowest `perpr` leg's `Per-PR tests` step is more than 20%
+  over the fastest on a PR run (until then a new test counts as the median, so only the balance drifts). Save the 3 `perpr`
+  job logs as `leg1.log`, `leg2.log` and `leg3.log` (`gh api repos/<owner>/<repo>/actions/jobs/<job id>/logs`; the job id is in
+  the job's URL on the run page), rebuild the rows (the seconds between consecutive `== <registration>` lines, rounded, at least 1)
+  and put them under the table's header with its run id and date updated:
+
+  ```bash
+  awk 'FNR == 1 { p = "" } $2 == "==" && $3 ~ /^scripts\/ci-tests\.d\// { t = substr($1, 12, 2) * 3600 + substr($1, 15, 2) * 60 + substr($1, 18); d = t - q; if (d < 0) d += 86400; if (p != "") print p "\t" (d < 1.5 ? 1 : int(d + 0.5)); p = ($3 ~ /\.bg\.sh$/ ? "" : $3); q = t }' leg1.log leg2.log leg3.log | LC_ALL=C sort
+  ```
 - **Land:** on the branch, run `bash scripts/land-release.sh`. Under a lock it merges `origin/main`
   (generated-file conflicts are regenerated, anything else aborts), stamps the next minor across the
   lockstep set, folds the fragments into `CHANGELOG.md`, regenerates, and commits. Push and merge as
