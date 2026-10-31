@@ -18,7 +18,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 R = ROOT / ".claude/skills/deep-code-review/references"
 PARENT = "security-appsec.md"
 SPLITS = ("appsec-egress.md", "appsec-flows.md", "appsec-corroboration.md")
-PARENT_CAP = 28000  # old file 32790 B (-14.6% at the cap)
+PARENT_CAP = 28300  # old file 32790 B (-13.7% at the cap)
 TRIGGERS = {  # index row -> phrase its trigger must carry
     "appsec-egress.md": "SSRF guard",
     "appsec-flows.md": "check-then-act",
@@ -50,6 +50,8 @@ ADDED = (  # prefix of every line in the new files that the old file did not hav
     "## A06:2025 — Insecure Design (depth: detect steps for business flows)",
     "Read this when a finding claims that input reaches a sink",
     '    is not "clean" (the `Secrets` rule in security-appsec.md still holds:',
+    "Seed the route list with `python3 -I .claude/skills/deep-code-review/scripts/route_auth_map.py --paths DIR`",
+    "one per line). Without `--paths` it flags handlers with no auth evidence as CWE-306/862 leads; silence is not proof.",
 )
 h = lambda s: hashlib.sha256(s.strip().encode()).hexdigest()[:16]  # noqa: E731
 text = lambda n: (R / n).read_text(encoding="utf-8")  # noqa: E731

@@ -96,6 +96,9 @@ status + size; **also** follow redirects separately, grep bodies for sentinel/ca
 **diff anon vs authenticated body** for the same URL (subset-equality = pass — size alone misses small leaks and
 login-shell 200s).
 
+Seed the route list with `python3 -I .claude/skills/deep-code-review/scripts/route_auth_map.py --paths DIR` (GET and ANY routes,
+one per line). Without `--paths` it flags handlers with no auth evidence as CWE-306/862 leads; silence is not proof.
+
 ```bash
 # Tune BASE + paths from the route inventory; no auth headers. Local/dev first.
 for path in / /api/meta /api/... ; do

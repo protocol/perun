@@ -51,8 +51,8 @@ class InstallCommands(unittest.TestCase):
             self.assertEqual(mine.read_text(), "mine\n")
             self.assertTrue((repo / ".claude/commands/review.md.new").is_file())
             self.assertIn("review.md.new", r.stdout)
-            self.assertEqual(install(repo).returncode, 0)  # idempotent: no extra .new for identical deliver.md
-            self.assertEqual(sorted(names(repo) - ALWAYS), ["review.md.new", "review.md.new-1"])
+            self.assertEqual(install(repo).returncode, 0)  # idempotent: the .new already holds the shipped review.md, so no .new-1; deliver.md is current
+            self.assertEqual(sorted(names(repo) - ALWAYS), ["review.md.new"])
             subprocess.run([sys.executable, str(ROOT / "scripts/perun_uninstall.py"), str(repo), "--apply"], capture_output=True, text=True)
             self.assertEqual(mine.read_text(), "mine\n")
             self.assertFalse((repo / ".claude/commands/deliver.md").exists())

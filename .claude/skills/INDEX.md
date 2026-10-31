@@ -147,6 +147,7 @@ Run `python3 <skill>/scripts/<name>` (`bash` for `.sh`). `name: purpose — argu
 - post_review.sh: post review findings to a PR (opt-in). — <PR-number> <findings.json> [--post]
 - provision_tools.sh: make review_checks.sh scanners actually run. — [--print] [DIR]
 - review_checks.sh: run local, read-only analyzers over the files changed since… — [--base REF] [--tests] [--history]…
+- route_auth_map.py: heuristic lead-finder for HTTP handlers with no authentication… — [--paths] DIR
 - score_review.py: Score a review's findings against a ground-truth file: recall… — GROUND_TRUTH.json FINDINGS.json…
 - security_verify.py: verify-or-drop triage of security findings. — [findings.json|-] [override-file]
 - sibling_sweep.py: leads for an incomplete fix: a call changed here, its… — --repo DIR --base REF [--head REF]

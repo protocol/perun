@@ -3,7 +3,9 @@
 
 Usage (called by install.sh): perun_marker.py TARGET --dirs REL... [--pre FILE --template FILE] [--agent-created] [--files REL...] [--backups REL...] [--agents-block NAME...] [--agents-created] [--settings-created] [--version V] [--remote URL]
        perun_marker.py backup-ok TARGET BACKUP_ROOT      (exit 1 when BACKUP_ROOT or a parent below TARGET is a symlink)
-       perun_marker.py dedupe BACKUP_ROOT NEW DEST       (drop NEW only when identical to the installed DEST)
+       perun_marker.py dedupe BACKUP_ROOT NEW DEST [TARGET KEY]  (drop NEW only when identical to the installed DEST, or, with TARGET and
+                                                  KEY = <host>/skills/<name>, to what the marker still holds for KEY: the last install, unedited)
+       perun_marker.py refresh TARGET REL SRC            (exit 0 after overwriting TARGET/REL with SRC; only when the marker's files sha says install wrote it and nobody edited it)
 
 Writes TARGET/.claude/.perun-install.json, merged with any previous marker:
   skills: {<host>/skills/<name>: {<file>: sha256}}  hashes of the copy just installed
@@ -85,19 +87,42 @@ def symlink_free(root, path):
     return not any((root.joinpath(*parts[:i + 1])).is_symlink() for i in range(len(parts)))
 
 
-def drop_identical_backup(root, new, dest):
-    """Remove the fresh backup `new` only when it is provably the shipped copy: byte-identical to the just-installed `dest`
-    (same entries, same sha256), with no symlink in either tree or anywhere on the path. Anything else stays. Returns a status line."""
+def drop_identical_backup(root, new, dest, prev=None):
+    """Remove the fresh backup `new` only when it is provably a copy install itself shipped: byte-identical to the just-installed `dest`
+    (same entries, same sha256), or equal to `prev`, the marker's skills hashes for this dir from BEFORE this install (the release install
+    wrote last time, unedited since). Like hash_dir, that comparison leaves __pycache__ out, but only bytecode: any other file under a
+    __pycache__ counts as yours, and so does any entry the previous install did not write (an empty directory, a FIFO). No symlink in
+    either tree or anywhere on the path.
+    Anything else stays: an edited copy, a pre-Perun copy (no `prev`), your own files. Returns a status line."""
     root, new, dest = Path(root), Path(new), Path(dest)
     if not (symlink_free(root, new) and new.is_dir() and dest.is_dir() and not dest.is_symlink()):
         return "backup: kept (symlink or unexpected path)"
     ne, de = _entries(new, True), _entries(dest, True)  # every entry counts, __pycache__ included
-    if ne is None or de is None or ne != de or any((new / e).is_file() != (dest / e).is_file() or ((new / e).is_file() and sha(new / e) != sha(dest / e)) for e in ne):
+    same = ne is not None and de is not None and ne == de and not any((new / e).is_file() != (dest / e).is_file() or ((new / e).is_file() and sha(new / e) != sha(dest / e)) for e in ne)
+    cache = [Path(e) for e in ne or () if "__pycache__" in Path(e).parts]
+    older = ne is not None and bool(prev) and hash_dir(new) == prev and all(((new / c).is_dir() and c.name == "__pycache__") or (c.suffix == ".pyc" and c.parent.name == "__pycache__") for c in cache)
+    older = older and all(e in prev or any(k.startswith(e + "/") for k in prev) for e in ne if "__pycache__" not in Path(e).parts)  # only files and their parent dirs
+    if not (same or older):
         return "backup: kept (differs from the installed copy)"
     for f in sorted(new.rglob("*"), reverse=True):  # files first, then dirs, one at a time; the walk above proved no symlinks
         (f.rmdir if f.is_dir() else f.unlink)()
     new.rmdir()
-    return "backup: identical to the installed copy, not kept"
+    return "backup: identical to the installed copy, not kept" if same else "backup: unedited copy of the previous install, not kept"
+
+
+def refresh_unedited(target, rel, src):
+    """Overwrite TARGET/rel with the file `src` in place, only when install wrote it (the marker's `files` sha256 still matches: unedited, a plain
+    file, no symlink on its path). Deletes nothing: a `rel.new` / `rel.new-N` next to it stays. Returns False and touches nothing in every
+    other case, an unreadable marker included."""
+    p = Path(target) / rel
+    try:
+        want = load(target)["files"][rel]
+    except (OSError, ValueError, LookupError, TypeError):
+        return False
+    if not (symlink_free(target, p) and p.is_file() and sha(p) == want):
+        return False
+    p.write_bytes(Path(src).read_bytes())
+    return True
 
 
 def _skill_of(backup):
@@ -167,8 +192,15 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["backup-ok"]:
         sys.exit(0 if symlink_free(sys.argv[2], sys.argv[3]) else 1)
     if sys.argv[1:2] == ["dedupe"]:
-        print(drop_identical_backup(*sys.argv[2:5]))
+        a = sys.argv[2:]
+        try:  # install.sh calls this before record() rewrites the marker, so it still holds the previous install's hashes
+            prev = load(a[3])["skills"][a[4]] if len(a) > 4 else None
+        except (OSError, ValueError, LookupError, TypeError):  # no marker or no entry for this dir (a pre-Perun copy), or unreadable: keep the backup
+            prev = None
+        print(drop_identical_backup(*a[:3], prev))
         sys.exit(0)
+    if sys.argv[1:2] == ["refresh"]:
+        sys.exit(0 if refresh_unedited(*sys.argv[2:5]) else 1)
     ap = argparse.ArgumentParser()
     ap.add_argument("target")
     ap.add_argument("--dirs", nargs="*", default=[])

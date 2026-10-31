@@ -26,7 +26,7 @@ class Hook(unittest.TestCase):
         self.repo.mkdir()
         self.counter = self.tmp / "counter"
         self.env = {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "PERUN_", "DCR_"))}
-        self.env.update(HOME=str(self.tmp), GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", COUNTER=str(self.counter))
+        self.env.update(HOME=str(self.tmp), PERUN_HEAVY_DIR=str(self.tmp / "heavy"), GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", COUNTER=str(self.counter))
         self.git("init", "-q", "-b", "main")
         (self.repo / "a.txt").write_text("one\n")
         self.commit("base")

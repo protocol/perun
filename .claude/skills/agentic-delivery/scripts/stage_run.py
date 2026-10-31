@@ -33,7 +33,8 @@ Lease file: `<pid> <start epoch> heavy <pid start time> <child pgid> <child star
 (a lease from another host is ignored: its pids mean nothing here). If stage_run is SIGKILLed its child
 keeps running and the pid may be reused: perun_policy._leases ignores a lease whose recorded pid start time no longer matches,
 and the next stage_run kills the group of such a dead lease when the child (same pgid and start time) is still alive, then
-removes the lease. ponytail: a group whose leader already exited but whose grandchildren live on is not found; add a
+removes the lease (a stale lease in the macOS sandbox fallback dir is only removed, its group never signalled).
+ponytail: a group whose leader already exited but whose grandchildren live on is not found; add a
 `ps -g` sweep if that is measured.
 """
 import argparse
@@ -129,16 +130,18 @@ def stamp(d, pid: int, own: str, pgid: int = 0, child: str = "-", kind: str = "h
 
 
 def reap(d) -> None:
-    """Kill the stage child of every lease whose stage_run is dead (or its pid reused), then drop that lease."""
+    """Kill the stage child of every lease whose stage_run is dead (or its pid reused), then drop that lease. A lease in any dir but
+    `pp.lease_dir()` (the sandbox fallback, which confined code can write) is only dropped: its text never picks a group to signal."""
+    own = os.path.realpath(d) == os.path.realpath(pp.lease_dir())
     for f in d.glob("*") if d.is_dir() else []:
         try:
-            t = f.read_text().split()
+            t = pp.read_lease(f).split()
             pid, pgid = int(t[0]), int(t[4])
         except (OSError, ValueError, IndexError):
             continue
         if len(t) not in (6, 7) or (len(t) == 7 and t[6] != pp.HOST) or (pp._alive(pid) and (t[3] == "-" or pp.pstart(pid) in ("", t[3]))):
             continue
-        if pgid > 1 and t[5] != "-" and pp.pstart(pgid) == t[5]:
+        if own and pgid > 1 and t[5] != "-" and pp.pstart(pgid) == t[5]:
             print(f"stage_run: reaping orphaned stage group {pgid} of dead stage_run {pid}", file=sys.stderr)
             if not kill_group(pgid):
                 continue  # not signalable: keep the lease so the next run retries
@@ -179,7 +182,7 @@ def main(argv=None) -> int:
             print(f"stage_run: run dir {a.run_dir} already exists; refusing to reuse a run id (pick a fresh one)", file=sys.stderr)
             return 1
         os.environ["PERUN_RUN_DIR"] = a.run_dir
-    pid, d, t0, ppid0 = os.getpid(), pp.lease_dir(), time.time(), os.getppid()
+    pid, d, t0, ppid0 = os.getpid(), pp.lease_dir() if a.hook else pp.writable_lease_dir(), time.time(), os.getppid()  # a hook takes no lease: no probe
     leased = not a.hook  # a commit hook is a fast check, not a heavy job: no lease, no slot wait
     cls = "browser" if a.name == "train-browser" else "train" if a.name.startswith("train-") else "heavy"  # train_gate classes
     enforce = pol["train_gate"] == "enforce"

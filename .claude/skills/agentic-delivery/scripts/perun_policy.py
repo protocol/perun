@@ -55,6 +55,8 @@ half its included minutes: local-first), and cloud when that script is missing o
   perun_policy.py heavy-release  drop this shell's lease (idempotent)
   perun_policy.py --selftest
 
+Leases live in `<cache>/perun/heavy` (<cache> = `$XDG_CACHE_HOME` or `~/.cache`). On macOS only, where that is read-only (a Claude Code sandbox) writers use `/tmp/claude-<uid>/perun/heavy` (a 0700 dir you own, else skipped) and every reader checks both and skips anything that is not a regular file; `$PERUN_HEAVY_DIR` pins exactly one dir. Every sandboxed session of the user shares that fallback, so one can forge a holder there and delay or deny heavy commands (accepted).
+
 Exit 0 ok, 2 usage / malformed policy / unknown dimension.
 """
 import contextlib
@@ -62,6 +64,7 @@ import json
 import os
 import re
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -290,9 +293,87 @@ LEASE_TTL = 2 * 3600
 
 
 def lease_dir() -> Path:
-    """Machine-wide lease dir: `$PERUN_HEAVY_DIR` (tests), else `$XDG_CACHE_HOME` or `~/.cache`, /perun/heavy."""
+    """Machine-wide lease dir: `$PERUN_HEAVY_DIR` (tests), else `$XDG_CACHE_HOME` or `~/.cache`, /perun/heavy. Pure: touches no disk.
+    Writers take `writable_lease_dir()`; readers pass this to `_leases`/`lease_load`/`exclusive_holder`, which add the sandbox fallback."""
     d = os.environ.get("PERUN_HEAVY_DIR")
     return Path(d) if d else Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "perun" / "heavy"
+
+
+def _fallback(create: bool = False) -> Path | None:
+    """macOS only (None elsewhere): the sandbox fallback lease dir, `<root>/perun/heavy` with root `$PERUN_HEAVY_FALLBACK_ROOT` (tests) or
+    `/tmp/claude-<uid>`, the one place a Claude Code sandbox can write when `~/.cache` is read-only (hooks run unsandboxed, so readers
+    must look here too). None unless root is a real directory (not a symlink) owned by this user with mode exactly 0700, and `perun` and
+    `heavy` below it, where they exist, are real directories (not symlinks) owned by this user: /tmp is shared, and a planted root or
+    component would redirect writes or forge a lease holder. `create` makes a missing root 0700 (writers only; readers never create it).
+    Accepted limit: every sandboxed session of this user can write here, so one can forge a holder (a lease or `heavy.exclusive` naming a
+    live pid) and make the hook and the train gate delay or deny heavy commands, or plant a FIFO where a sandboxed writer is about to
+    create its temp or `.waiting` file and stall that writer (only reads are hardened against non-regular files). That is a same-user
+    denial of service, not a way to run or signal anything: readers skip non-regular files and stage_run only unlinks stale leases here.
+    The forged holder is pinned by test_lease_sandbox_hardening."""
+    if sys.platform != "darwin":
+        return None
+    root = Path(os.environ.get("PERUN_HEAVY_FALLBACK_ROOT") or f"/tmp/claude-{os.getuid()}")
+    try:
+        if create:
+            with contextlib.suppress(FileExistsError):
+                root.mkdir(mode=0o700)
+        st = root.lstat()
+    except OSError:
+        return None
+    if not (stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid() and stat.S_IMODE(st.st_mode) == 0o700):
+        return None
+    d = root / "perun" / "heavy"
+    for p in (d.parent, d):  # a missing one is made by a writer; a symlink or foreign dir planted in its place is refused
+        try:
+            st = p.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return None
+        if not (stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid()):
+            return None
+    return d
+
+
+def lease_dirs() -> list:
+    """Every dir a lease can live in, for readers: `lease_dir()` plus the sandbox fallback when it passes `_fallback()` and is not the
+    same directory (realpath). `$PERUN_HEAVY_DIR` pins exactly that one dir. Read-only: creates nothing."""
+    d = lease_dir()
+    fb = None if os.environ.get("PERUN_HEAVY_DIR") else _fallback()
+    return [d] if fb is None or os.path.realpath(fb) == os.path.realpath(d) else [d, fb]
+
+
+def _dirs(d: Path) -> list:
+    """`lease_dirs()` when `d` is one of them (a reader handed the primary or the fallback sees both), else `[d]`: a dir a test or a
+    caller names explicitly stays isolated."""
+    ds = lease_dirs()
+    return ds if os.path.realpath(d) in map(os.path.realpath, ds) else [d]
+
+
+def _writable(d: Path) -> bool:
+    """True when a file can really be created in `d` and in its parent (where write_lease and exclusive_acquire put theirs). Creates `d`
+    if missing. os.access lies under a sandbox and mkdir(exist_ok) passes on a read-only dir that exists, so only a real create tells."""
+    import tempfile  # lazy: hooks import this module per call, only writers probe
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        for p in (d, d.parent):
+            tempfile.TemporaryFile(dir=p).close()
+    except OSError:
+        return False
+    return True
+
+
+def writable_lease_dir() -> Path:
+    """Where this process writes leases: `lease_dir()` when a file can be created there, else (macOS only) the sandbox fallback (root
+    created 0700 if missing), else `lease_dir()` anyway so the caller fails as before (stage_run runs unleased, the CLI exits 2).
+    `$PERUN_HEAVY_DIR` pins it, and any other platform just takes `lease_dir()`, both with no probe. ponytail: `.waiting` and
+    `.gate.lock` live in this dir, so a sandboxed and an unsandboxed lane queue and lock apart; they still count each other's
+    leases (readers see both dirs)."""
+    d = lease_dir()
+    if sys.platform != "darwin" or os.environ.get("PERUN_HEAVY_DIR") or _writable(d):
+        return d
+    fb = _fallback(create=True)
+    return fb if fb and _writable(fb) else d
 
 
 def _alive(pid: int) -> bool:
@@ -305,6 +386,19 @@ def _alive(pid: int) -> bool:
     except PermissionError:
         pass  # exists, owned by another user
     return True
+
+
+def read_lease(f: Path) -> str:
+    """First 4096 bytes of lease file `f` as text (a lease is under 400), OSError unless it is a regular file. Opens without blocking and
+    without following a symlink, then checks the open fd: the sandbox fallback is writable by confined code and read by unsandboxed
+    code, and a FIFO planted there would block a plain read_text forever. Every lease, holder and queue-marker read goes through here."""
+    fd = os.open(f, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError(f"not a regular file: {f}")
+        return os.read(fd, 4096).decode()
+    finally:
+        os.close(fd)
 
 
 LIGHT_WEIGHT = 0.25  # a light lane (read-only, docs) holds this fraction of a heavy lane's slot
@@ -329,11 +423,11 @@ def _leases(d: Path, now: float, exclude: int | None = None) -> list:
     plus an optional declared kind word (`light`, ...). stage_run.py writes six words, `<pid> <start> <kind> <pid start
     time> <child pgid> <child start time>`: when the recorded pid start time differs from the live one the pid was reused
     and the lease is dead; an optional seventh word is the host, and a lease from another host is ignored. A lease with a dead pid, a start older than LEASE_TTL (2h)
-    or unreadable/malformed content is ignored, never deleted."""
+    or unreadable/malformed content is ignored, never deleted. Reads every dir of `lease_dirs()` when `d` is one of them."""
     out = []
-    for f in d.glob("*") if d.is_dir() else []:
+    for f in (f for x in _dirs(d) if x.is_dir() for f in x.glob("*")):
         try:
-            t = f.read_text().split()
+            t = read_lease(f).split()
             pid, start = int(t[0]), int(t[1])
         except (OSError, ValueError, IndexError):
             continue
@@ -418,7 +512,7 @@ def heavy_acquire(d: Path, slots: int, pid: int, kind: str | None = None) -> boo
     load, w = lease_load(d, exclude=pid), lane_weight(kind, 0, None)
     wait = d / ".waiting"  # a weighted stage that does not fit marks itself; newer small stages then queue behind it (no starvation)
     try:
-        queued = time.time() - wait.stat().st_mtime < 30 and wait.read_text() != str(pid)
+        queued = time.time() - wait.stat().st_mtime < 30 and read_lease(wait) != str(pid)
     except OSError:
         queued = False
     if load >= slots or (w > 1 and load > 0 and load + w > slots) or (queued and w < 1):
@@ -478,14 +572,20 @@ def heavy_release(d: Path, pid: int) -> None:
 
 
 def exclusive_holder(d: Path):
-    """Pid of the live EXCLUSIVE lease (a train gate running), else None. Stored beside the lease dir
+    """Pid of the live EXCLUSIVE lease (a train gate running), else None; the first holder found across `lease_dirs()` when `d` is one
+    of them (see `_exclusive_in` for the file and its validity rules). Read-only."""
+    return next(filter(None, map(_exclusive_in, _dirs(d))), None)
+
+
+def _exclusive_in(d: Path):
+    """Pid of the live EXCLUSIVE lease stored beside lease dir `d`, else None. Stored beside the lease dir
     (`heavy.exclusive`, content `<pid> <start epoch>`) so it never fills a slot. Valid only while the pid is alive AND the
     file's mtime is younger than LEASE_TTL: the holder renews it (exclusive_renew) at each step, so a long gate keeps it
     and a pid reused after a reboot (live pid, old mtime) expires. Dead pid, expired, unreadable or malformed = None
     (heavy_gate stays fail-open); nothing is deleted here."""
     f = d.parent / "heavy.exclusive"
     try:
-        pid, _ = (int(x) for x in f.read_text().split())
+        pid, _ = (int(x) for x in read_lease(f).split())
         fresh = time.time() - f.stat().st_mtime < LEASE_TTL
     except (OSError, ValueError):
         return None
@@ -496,8 +596,12 @@ def exclusive_acquire(d: Path, pid: int) -> bool:
     """Take the machine-wide exclusive lease for `pid`; False while another valid holder has it. The content (`pid ts`)
     is written whole to a temp file and hard-linked into place (atomic and exclusive: nobody sees an empty file, two
     gates cannot both win). A lease is unlinked only after two expiry checks; our own is replaced by rename. While held,
-    heavy_gate.py denies every heavy command ("gate running: wait"). Side effect: creates `d.parent`."""
+    heavy_gate.py denies every heavy command ("gate running: wait"). Side effect: creates `d.parent`. A live holder in any
+    other dir of `lease_dirs()` also refuses. ponytail: that check spans two dirs, so it is not atomic across them (a sandboxed
+    and an unsandboxed gate started in the same instant can both win; same-dir races stay exclusive via the link)."""
     f = d.parent / "heavy.exclusive"
+    if any(h not in (None, pid) for h in map(_exclusive_in, _dirs(d))):
+        return False
     d.parent.mkdir(parents=True, exist_ok=True)
     tmp = d.parent / f"heavy.exclusive.{pid}.tmp"
     tmp.write_text(f"{pid} {int(time.time())}")
@@ -507,13 +611,13 @@ def exclusive_acquire(d: Path, pid: int) -> bool:
                 os.link(tmp, f)
                 return True
             except FileExistsError:
-                h = exclusive_holder(d)
+                h = _exclusive_in(d)
                 if h == pid:
                     os.replace(tmp, f)
                     return True
                 if h is not None:
                     return False
-                if exclusive_holder(d) is None:  # re-check right before unlink
+                if _exclusive_in(d) is None:  # re-check right before unlink
                     f.unlink(missing_ok=True)
         return False
     finally:
@@ -522,13 +626,13 @@ def exclusive_acquire(d: Path, pid: int) -> bool:
 
 def exclusive_renew(d: Path, pid: int) -> None:
     """Refresh the lease mtime while `pid` still holds it (called by the train at each step); no-op otherwise."""
-    if exclusive_holder(d) == pid:
+    if _exclusive_in(d) == pid:
         os.utime(d.parent / "heavy.exclusive")
 
 
 def exclusive_release(d: Path, pid: int) -> None:
     """Drop the exclusive lease only if `pid` holds it; a missing one is fine."""
-    if exclusive_holder(d) == pid:
+    if _exclusive_in(d) == pid:
         (d.parent / "heavy.exclusive").unlink(missing_ok=True)
 
 
@@ -619,9 +723,9 @@ def main(argv: list) -> int:
         if argv in (["heavy-exclusive"], ["heavy-exclusive-release"], ["heavy-exclusive-renew"]):  # caller shell = holder
             hp = holder_pid()
             if argv != ["heavy-exclusive"]:
-                (exclusive_release if argv[0].endswith("release") else exclusive_renew)(lease_dir(), hp)
+                (exclusive_release if argv[0].endswith("release") else exclusive_renew)(writable_lease_dir(), hp)
                 return 0
-            ok = exclusive_acquire(lease_dir(), hp)
+            ok = exclusive_acquire(writable_lease_dir(), hp)
             print(hp if ok else "HELD")
             return 0 if ok else 1
         if argv == ["heavy-load"]:
@@ -630,11 +734,11 @@ def main(argv: list) -> int:
         if argv == ["heavy-release"] or argv[:1] == ["heavy-acquire"] and (len(argv) == 1 or len(argv) == 3 and argv[1] == "--kind"):
             pid = os.getppid()  # the calling shell outlives this CLI; its death frees the lease
             if argv == ["heavy-release"]:
-                heavy_release(lease_dir(), pid)
+                heavy_release(writable_lease_dir(), pid)
                 return 0
             import host_probe
             load1, cores = host_probe.read_load1_and_cores()
-            ok = heavy_acquire(lease_dir(), heavy_slots(cores or os.cpu_count() or 1, load1, pol["tokens"], host_probe.read_cpu_idle_pct()),
+            ok = heavy_acquire(writable_lease_dir(), heavy_slots(cores or os.cpu_count() or 1, load1, pol["tokens"], host_probe.read_cpu_idle_pct()),
                                pid, argv[2] if len(argv) == 3 else None)
             print(pid if ok else "FULL")
             return 0 if ok else 1

@@ -408,9 +408,10 @@ install_skill_copy() {
     fi
   fi
   if [[ -n "${backup}" ]]; then
-    # A backup byte-identical to the fresh copy is just the shipped files again: drop it so unchanged re-runs add nothing.
-    # Any other backup (an edited copy, an older release, your own copy) is never deleted by install.
-    python3 "${SCRIPT_DIR}/scripts/perun_marker.py" dedupe "${backup_root}" "${backup}" "${cmp_dir}"
+    # A backup byte-identical to the fresh copy is just the shipped files again, and one equal to what the marker says the last install wrote
+    # (still the pre-record() marker here) is an earlier release nobody edited: drop either so re-runs and version bumps add nothing.
+    # Any other backup (an edited copy, a pre-Perun copy, your own files) is never deleted by install.
+    python3 "${SCRIPT_DIR}/scripts/perun_marker.py" dedupe "${backup_root}" "${backup}" "${cmp_dir}" "${TARGET_DIR}" "${dest#"${TARGET_DIR}"/}"
     [[ ! -d "${backup}" ]] || BACKUP_DIRS+=("${backup#"${TARGET_DIR}"/}")
   fi
   local skill_ver="unknown"
@@ -504,32 +505,53 @@ if [[ -f "${HS_TSV}" ]]; then
   done
 fi
 
-# write_gate_file <src> <dest> <executable:0|1> — copy a CI-gates template
-# into the target. NEVER overwrites an existing file at <dest>: if one is
-# already there, writes <dest>.new (or .new-N on a further collision) instead
-# and prints a note so the owner reviews/merges by hand. This is the only
-# writer for --with-gates output; both call sites below share it so the
-# never-overwrite rule cannot drift between the workflow and the runner.
+# write_gate_file <src> <dest> <executable:0|1> — copy a CI-gates template or
+# slash command into the target. NEVER overwrites a file you may have edited: a
+# <dest> that differs gets <dest>.new (or .new-N on a further collision) instead
+# and a note so the owner reviews/merges by hand. Writes nothing when <dest>, or
+# an existing <dest>.new / .new-N, already holds <src>, so a re-run adds no
+# sibling. One exception: a <dest> the install marker recorded (install wrote
+# it) and nobody has edited since is refreshed in place (a release bump, via
+# perun_marker.py refresh). Nothing is deleted: a .new already there stays.
+# GATE_WROTE=1 tells the caller it wrote <dest> itself, fresh or refreshed, so
+# it can record the new sha256. This is the only writer for --with-gates output
+# and slash commands, so the never-overwrite rule cannot drift between them.
+GATE_WROTE=0
 write_gate_file() {
-  local src="$1" dest="$2" make_exec="$3"
+  local src="$1" dest="$2" make_exec="$3" f re='^\.new(-[0-9]+)?$'
+  GATE_WROTE=0
   mkdir -p "$(dirname "${dest}")"
-  if [[ -e "${dest}" ]]; then
-    local newdest="${dest}.new"
-    if [[ -e "${newdest}" ]]; then
-      local n=1
-      while [[ -e "${newdest}-${n}" ]]; do
-        n=$((n + 1))
-      done
-      newdest="${newdest}-${n}"
-    fi
-    cp "${src}" "${newdest}"
-    [[ "${make_exec}" -eq 1 ]] && chmod +x "${newdest}"
-    echo "note: ${dest} already exists -> wrote ${newdest} instead (review and merge by hand)"
-  else
+  if [[ ! -e "${dest}" ]]; then
     cp "${src}" "${dest}"
     [[ "${make_exec}" -eq 1 ]] && chmod +x "${dest}"
+    GATE_WROTE=1
     echo "installed: ${dest}"
+    return 0
   fi
+  cmp -s "${src}" "${dest}" && return 0  # already current
+  if python3 "${SCRIPT_DIR}/scripts/perun_marker.py" refresh "${TARGET_DIR}" "${dest#"${TARGET_DIR}"/}" "${src}"; then
+    [[ "${make_exec}" -eq 1 ]] && chmod +x "${dest}"
+    GATE_WROTE=1
+    echo "updated: ${dest} (unedited since install)"
+    return 0
+  fi
+  for f in "${dest}.new" "${dest}".new-[0-9]*; do
+    if [[ "${f#"${dest}"}" =~ ${re} && -f "${f}" && ! -L "${f}" ]] && cmp -s "${src}" "${f}"; then  # exact .new / .new-N names only
+      echo "note: ${dest} differs from the shipped file; ${f} already holds the shipped one (review and merge by hand)"
+      return 0
+    fi
+  done
+  local newdest="${dest}.new"
+  if [[ -e "${newdest}" ]]; then
+    local n=1
+    while [[ -e "${newdest}-${n}" ]]; do
+      n=$((n + 1))
+    done
+    newdest="${newdest}-${n}"
+  fi
+  cp "${src}" "${newdest}"
+  [[ "${make_exec}" -eq 1 ]] && chmod +x "${newdest}"
+  echo "note: ${dest} already exists -> wrote ${newdest} instead (review and merge by hand)"
 }
 
 if [[ "${WITH_GATES}" -eq 1 ]]; then
@@ -723,7 +745,8 @@ fi
 # Slash commands: copy commands/*.md into .claude/commands/, but only those whose skill is installed.
 # review, deliver always; cost-retro, perun, perun-run need agentic-ceo/agentic-delivery;
 # critic, council need idea-critic; idea needs idea-critic and agentic-delivery.
-# Never overwrites (write_gate_file writes <dest>.new); only files written fresh go in the uninstall record.
+# Never overwrites a file you edited (write_gate_file writes <dest>.new); a file this install wrote and you left alone is refreshed in place.
+# Only files write_gate_file wrote itself (fresh or refreshed) go in the uninstall record, so a refresh updates the recorded sha256.
 if [[ -d "${SCRIPT_DIR}/commands" ]]; then
   for cmd in "${SCRIPT_DIR}"/commands/*.md; do
     name="$(basename "${cmd}" .md)"
@@ -735,10 +758,8 @@ if [[ -d "${SCRIPT_DIR}/commands" ]]; then
       *) continue ;;
     esac
     dest="${TARGET_DIR}/.claude/commands/${name}.md"
-    [[ -e "${dest}" ]] && cmp -s "${cmd}" "${dest}" && continue  # re-install: already current
-    existed=0; [[ -e "${dest}" ]] && existed=1
     write_gate_file "${cmd}" "${dest}" 0
-    [[ "${existed}" -eq 1 ]] || COMMAND_FILES+=(".claude/commands/${name}.md")
+    [[ "${GATE_WROTE}" -eq 0 ]] || COMMAND_FILES+=(".claude/commands/${name}.md")
   done
 fi
 
@@ -1007,12 +1028,19 @@ if [[ -f "${PERUN_POLICY_FILE}" ]]; then POLICY_LINE="$(PERUN_POLICY="${PERUN_PO
 else POLICY_LINE="defaults (no .perun/policy.json)"; fi
 
 # Summary: every file this run wrote, split into vendored (copied verbatim from Perun) and generated (created for this repo).
-perun_summary() {
+# The scan roots are only the subpaths install itself writes, never a whole host dir: under a home target .claude/ also holds
+# files other processes write during the run (session transcripts, todos). The globs add the .new and .bak siblings.
+# ponytail: .claude/commands is scanned whole and install owns settings.local.json, so another process's mid-run write to either still lists; exact per-file record if that matters.
+perun_summary() (
+  cd "${TARGET_DIR}" || return 0
+  shopt -s nullglob
   local roots=() r
-  for r in "${HOSTS[@]}" .perun .github .githooks scripts AGENTS.md; do [[ -e "${TARGET_DIR}/${r}" ]] && roots+=("${r}"); done
-  [[ ${#roots[@]} -gt 0 ]] || return 0
+  for r in "${HOSTS[@]}"; do roots+=("${r}/skills/INDEX.md"); done
+  roots+=("${INSTALLED_DIRS[@]}" .claude/commands .claude/agents/delivery-lane.md .claude/house-defaults.md .claude/.perun-install.json
+    .claude/.dcr-install-flags* .claude/settings.local.json* .claude/settings.*.json.new* .github/workflows/dcr-gates.yml*
+    scripts/dcr-gates.sh* scripts/integrator-gate.sh* .githooks/pre-push* .perun/policy.json AGENTS.md)
   local list
-  list="$(cd "${TARGET_DIR}" && find "${roots[@]}" -type f -newer "${STAMP}" 2>/dev/null | LC_ALL=C sort | awk -F/ '
+  list="$({ find "${roots[@]}" -type f -newer "${STAMP}" 2>/dev/null || true; } | LC_ALL=C sort -u | awk -F/ '
     $2 == "skills" && NF >= 4 { c[$1 "/skills/" $3 "/"]++; next }
     $2 == "skills" || /^(\.github\/workflows\/dcr-gates\.yml|scripts\/(dcr-gates|integrator-gate)\.sh|\.githooks\/pre-push)$/ { print "V  " $0; next }
     { print "G  " $0 }
@@ -1022,7 +1050,7 @@ perun_summary() {
   printf '%s\n' "${list}" | grep '^V ' | cut -c4- | sed 's/^/  /' || true
   echo "Generated (created for this repo; machine-local ones are in .git/info/exclude):"
   printf '%s\n' "${list}" | grep '^G ' | cut -c4- | sed 's/^/  /' || true
-}
+)
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   exec 1>&3

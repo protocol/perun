@@ -3,7 +3,7 @@
 # changed since REF (default origin/main, compared as REF...HEAD) and print findings as a JSON array on
 # stdout: [{"file","line","rule","message","text","tool"}]. `text` ("rule: message") is the key
 # scripts/score_review.py matches on. Findings are LEADS: verify each against the code before reporting.
-# Diff mode (not --full or --history) adds "new": true|false to every row: its file+line is on a line REF...HEAD adds (rename-aware; line 0 and file-level rows are false). No row is ever dropped.
+# Diff mode (not --full or --history) adds "new": true|false|null to every row: its file+line is on a line REF...HEAD adds (rename-aware; line 0 and file-level rows are false); null for every row in a file whose working copy differs from HEAD (edited, staged or not, or untracked), since most rows read the working tree and the diff reads commits. No row is ever dropped; if a git read for the flags fails, the key is omitted and stderr says so.
 #
 # Tools (linters, gitleaks, trufflehog, osv-scanner, semgrep, trivy): see references/method-situational.md. Each runs only when
 # installed and only on matching changed files. Secrets are redacted and never printed; trufflehog runs offline (`--no-verification --no-update`) over the changed files (every tracked file under --full),
@@ -24,7 +24,7 @@
 # zstd, xz, 7z, lz4, bzip2, avro, pdf, zlib; the list and its ceilings are in committed_personal_data.py). gitleaks looks for secrets, not for exported personal data.
 # Built-in too, base mode only (a --full scan has no diff): sibling_sweep.py lists the unchanged call sites, in non-test code, of a function whose call arguments the diff changed elsewhere (tool `sibling-sweep`,
 # rule `unchanged-sibling-call`, message starts "lead:"): the sibling route a fix may have missed. Leads to open, never findings; a name with more than 25 call sites is skipped; scope and ceilings are in its docstring.
-# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma). gitleaks runs once over the working tree. gitleaks drops
+# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler with no authentication evidence; SKIPPED without handlers). gitleaks runs once over the working tree. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
 # gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row per top fixture dir when it has >3 (every other rule, and name-only matches, stay rows); REVIEW_FIXTURE_ROWS=all lists every hit.
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
@@ -799,6 +799,15 @@ if [ "$full" = 1 ]; then
     echo "tenant-scope: heuristic; scanned $(sed -nE 's/.*"server_files": ([0-9]+).*/\1/p' "$out" | tail -n1) server files; silence is not proof of tenant isolation" >&2
     while IFS=$'\t' read -r p l r m; do add tenant-scope "$p" "$l" "$r" "$m"; done < <(sed -nE 's/^(.+):([0-9]+): (HIGH|MED): ([^:]+): (.*)$/\1\t\2\t\4\t\5/p' "$out" | awk -F'\t' 'BEGIN{OFS=FS}{gsub(/ /,"-",$3)}1')
   fi
+  # route_auth_map.py: HIGH rows (a state-changing handler with no auth evidence) become rows; INFO rows stay in the script's own report. SKIPPED when it finds no handler.
+  if have python3 && run_one route-auth python3 -I "$here/route_auth_map.py" "$PWD" && scan_ok route-auth; then
+    n=$(sed -nE 's/.*"handlers": ([0-9]+).*/\1/p' "$out" | tail -n1)
+    if [ "${n:-0}" = 0 ]; then skip route-auth "SKIPPED: no HTTP handlers"
+    else
+      echo "route-auth: heuristic; scanned $n handlers; silence is not proof of authentication" >&2
+      while IFS=$'\t' read -r p l m; do add route-auth "$p" "$l" missing-auth "$m"; done < <(sed -nE 's/^(.+):([0-9]+): HIGH: (.*)$/\1\t\2\t\3/p' "$out")
+    fi
+  fi
 fi
 
 lease_drop
@@ -849,8 +858,10 @@ fi
 r=; for t in $ran; do case " $failed " in *" ${t%%(*} "*) ;; *) r+=" $t" ;; esac; done; ran=$r
 # "new" flags, diff mode only (a --full or --history row may sit on a line no diff added). Flags are pinned so user git config cannot change the parse:
 # --inter-hunk-context=0 and --no-color keep hunk counts and headers exact, the prefixes fix the "+++ b/" name, and -a gives a text file with a NUL byte (invisible-chars rows) hunks instead of "Binary files differ".
-ud=; if [ "$wr" = 0 ] && [ "$hist" = 0 ]; then ud=$td/udiff; git -c core.quotePath=false diff -U0 --inter-hunk-context=0 -M -a --no-color --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/ "$base"...HEAD >"$ud" || ud=; fi
-REVIEW_STATE="$(git rev-parse --git-common-dir)/review-checks-last.json" HERE="$here" python3 - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" "$wired" "$gap" "$wiredx" "$ud" <<'PY'
+# Most rows read the working tree but the diff reads commits (sibling-sweep reads HEAD, so for it null is only cautious), so a row in a file whose working copy differs from HEAD (edited, staged or not, or untracked) is flagged null, not a guessed true/false: $td/dirty is `git status --porcelain -z` (an "XY path" entry per file; --no-renames lists both sides of a rename, -uall every untracked file). --no-optional-locks keeps it a pure read: `git diff HEAD` rewrote .git/index for a file that only changed its mtime even with that flag (git 2.50.1). If a git read here fails, "new" is omitted from every row and stderr says so.
+# ponytail: ignored untracked files and assume-unchanged/skip-worktree edits are not listed (add --ignored if a row ever needs the first); a file staged different from HEAD but reverted in the working tree is listed too, where null is only cautious.
+ud=; if [ "$wr" = 0 ] && [ "$hist" = 0 ]; then ud=$td/udiff; { git -c core.quotePath=false diff -U0 --inter-hunk-context=0 -M -a --no-color --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/ "$base"...HEAD >"$ud" && git --no-optional-locks status --porcelain -z --no-renames -uall >"$td/dirty"; } || { ud=; echo 'review_checks: could not list files that differ from HEAD; "new" omitted' >&2; }; fi
+REVIEW_STATE="$(git rev-parse --git-common-dir)/review-checks-last.json" HERE="$here" python3 - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" "$wired" "$gap" "$wiredx" "$ud" "$td/dirty" <<'PY'
 import json, os, re, shlex, sys, time
 rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1], encoding="utf-8", errors="replace")]
 rows = [t for i, t in enumerate(rows) if t[3:4] != ["not-checked"] or t not in rows[:i]]  # a tool failing on N files is one not-checked row
@@ -886,8 +897,9 @@ for t in data:
     k = key(t)
     if not k or len(groups[k]) <= 3: out.append(row(t))
     elif k not in done: done.add(k); out.append(summ(k, groups[k]))
-ud = sys.argv[11]  # `git diff -U0` of BASE...HEAD; "" under --full/--history (no "new" key)
+ud = sys.argv[11]  # `git diff -U0` of BASE...HEAD; "" under --full/--history or when a git read above failed (no "new" key)
 if ud:
+    dirty = {e[3:] for e in open(sys.argv[12], "rb").read().decode("utf-8", "replace").split("\0")}  # "XY path" entries: files with a staged or working-tree change, or untracked
     adds, cur, inh = {}, None, False  # adds: file -> [(first line, count)] of added lines; cur: the file whose hunks are being read; inh: past its first hunk header, where a "+++ " line is content
     for l in open(ud, encoding="utf-8", errors="replace"):
         if l.startswith("diff --git "): cur, inh = None, False
@@ -895,8 +907,9 @@ if ud:
             inh = True; m = re.match(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@", l)
             if cur and m: adds[cur].append((int(m[1]), 1 if m[2] is None else int(m[2])))  # "+N" is one line, "+N,0" none
         elif not inh and l.startswith("+++ b/"): cur = l[6:].rstrip("\n").split("\t")[0]; adds[cur] = []  # git adds a tab after a name with a space; a quoted name or /dev/null leaves cur unset
-    for r in out:  # file-level rows (line 0, no file) are never new; every other path is read relative to the repo root, as the tools print it ("./x", absolute)
-        r["new"] = r["line"] > 0 and r["file"] not in ("", "-") and any(a <= r["line"] < a + c for a, c in adds.get(os.path.relpath(r["file"]), ()))
+    for r in out:  # a row in a dirty file is null (unknown); else file-level rows (line 0, no file) are never new; every path is read relative to the repo root, as the tools print it ("./x", absolute)
+        f = os.path.relpath(r["file"]) if r["file"] not in ("", "-") else None
+        r["new"] = None if f in dirty else r["line"] > 0 and f is not None and any(a <= r["line"] < a + c for a, c in adds.get(f, ()))
 print(json.dumps(out, indent=1))
 n = len(out)
 dg, w1 = sys.argv[5].split(), sys.argv[6].split()  # lease full: "1 worker" only for tools whose single-worker flag ran; "nice 19" only when nice worked
@@ -904,7 +917,9 @@ def lab(t):
     b = t.split("(")[0]
     return t + (f" (degraded: lease full{', nice 19' if sys.argv[7] == '1' else ''}{', 1 worker' if b in w1 else ''})" if b in dg else "")
 print(f"review_checks: {n} findings; {sys.argv[4]} files excluded; analyzers ran: {', '.join(lab(t) for t in sys.argv[2].split()) or 'none'}; skipped (not installed): {', '.join(sys.argv[3].split()) or 'none'}", file=sys.stderr)
-if ud: print(f"review_checks: {sum(r['new'] for r in out)} of {n} rows are on lines this diff adds", file=sys.stderr)
+if ud:
+    k = sum(r["new"] is None for r in out)
+    print(f"review_checks: {sum(r['new'] is True for r in out)} of {n} rows are on lines this diff adds" + (f", {k} unknown (file differs from HEAD)" if k else ""), file=sys.stderr)
 # "ran X / wired Y": wired = scanners with work in this run (their files matched); fixable = wired and either missing or running without a cache a provision warms.
 # argv[10] (shellcheck, ruff/pyflakes, gitleaks-history) is wired too, but provision_tools.sh cannot install it, so it is never fixable.
 wired = sys.argv[8].split()
