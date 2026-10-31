@@ -65,12 +65,13 @@ existing install's handbacks are not suddenly rejected; exempt types always
 skip it.
 
 BACKGROUND WORK (policy `background_guard`: `off|warn|block`, default `warn`; env PERUN_BACKGROUND_GUARD overrides). A lane
-owns its background jobs until they exit. When the lane's cwd is inside a LINKED worktree and a test or build runner
+waits for background work from its worktree until it exits. When the lane's cwd is inside a LINKED worktree and a test or build runner
 (BG_RE: pytest, jest, vitest, playwright, make, `npm test`, `cargo test`, `go build`, a `*test*.py|sh` script, ...) has its
 cwd inside that worktree, `warn` sends the owner a `systemMessage` naming the pid and command, and `block` exits 2 with the
 same text on stderr (released after PUSH_MAX_S, like a live `git push` or `git commit`: PUSH_RE matches both for a process whose argv[0] is `git`, `-C`/`-c`
 and an `env VAR=...` or perl alarm wrapper included, but not `commit-tree`, `commit-graph`, `push-x` or a `claude -p` brief or `grep` that names them; read-only
-agent types, READONLY_RE, are never held for one). Dev servers are not matched. The scan reuses
+agent types, READONLY_RE, are never held for one). Every hold (live push or commit, background work, dirty worktree) restarts its window once a check
+finds its condition gone (`_release`); a check that could not run keeps it. Dev servers are not matched. The scan reuses
 lane_liveness.cwd_pids (lsof, else /proc) plus one `ps`, excludes this hook's own pid, ancestors and descendants
 (`_skip_pids`, shared with the live push/commit check), and fails open: a blind scan prints COULD_NOT_CHECK and never blocks. A non-worktree cwd (a shared checkout) is not scanned.
 DIRTY WORKTREE (same switch): in a linked worktree, `git status --porcelain` (gitignored files excluded) listing
@@ -215,7 +216,8 @@ def _read_blocks(path):
 
 # A process whose argv[0] is `git` (any path), alone or behind `env VAR=...` or `perl -e 'alarm N; exec @ARGV'`:
 # `git [-c k=v] [-C dir | -C "dir w/ space"] [--opt] push|commit` (a hook can make either slow; `commit-tree`, `commit-graph` and `push-x` do not match,
-# nor does a `claude -p` lane brief, a shell string or a `grep` that only names the words); group 2/3/4 = the -C dir (double-quoted, single-quoted or bare)
+# nor does a `claude -p` lane brief, a shell string or a `grep` that only names the words); group 2/3/4 = the -C dir (double-quoted, single-quoted or bare;
+# `ps` prints argv without quotes, so a space inside a -c value or -C path splits it: a known limit, see `_push_running`)
 PUSH_RE = re.compile(r"""^(?:(?:\S*/)?env\s+(?:\w+=\S*\s+)*|(?:\S*/)?perl\s+-e\s+(?:'[^']*'|alarm\s+\d+;\s*exec\s+@ARGV)\s+)*(?:\S*/)?git((?:\s+-C\s+(?:"([^"]*)"|'([^']*)'|(\S+))|\s+-c\s+\S+|\s+-\S+)*)\s+(?:push|commit)(?![\w-])""")
 PUSH_MAX_S = int(os.environ.get("HANDBACK_PUSH_MAX_S", "1800"))  # keep blocking while the push or commit is live, at most this long
 
@@ -224,7 +226,10 @@ def _push_running(cwd):
     """True/False: is a `git push` or `git commit` (also `git -C <dir> push|commit`) live with its cwd or -C dir in the same git worktree as `cwd`?
     Only a process whose argv[0] is `git` counts (PUSH_RE), so a `claude -p "<brief that says git commit>"` host, a sibling lane or a `grep` that merely names the words does not.
     Never counts `_skip_pids`: this hook, its ancestors (a `git commit` whose own hook runs this one) or its descendants.
-    None = could not check (no cwd, ps/lsof denied or failed): the hook stays advisory and fails open, but says so."""
+    None = could not check (no cwd, ps/lsof denied or failed): the hook stays advisory and fails open, but says so.
+    Known limit: `ps` prints argv without quoting, so a space inside a `-c` value or a `-C` path splits it
+    (`git -c user.name=Jane Smith commit`, `git -C /acme/my repo commit`), PUSH_RE no longer matches, and that push or
+    commit is not held (fails open, no COULD_NOT_CHECK). Selftest cases `known-limit-*` pin this."""
     if not cwd or not os.path.isdir(cwd):
         return None
     try:
@@ -449,7 +454,7 @@ def _bg_running(cwd):
 
 def _hold(agent_id, suffix):
     """True while a block on this lane's `suffix` condition is younger than PUSH_MAX_S (the state file's mtime is the
-    first block), so a stuck process cannot trap the lane forever."""
+    first block), so a stuck process cannot trap the lane forever. `_release` removes the file once the condition is gone."""
     os.makedirs(STATE_DIR, exist_ok=True)
     path = _state_path(agent_id) + suffix
     try:
@@ -458,6 +463,16 @@ def _hold(agent_id, suffix):
         first = time.time()
         open(path, "w").close()
     return time.time() - first < PUSH_MAX_S
+
+
+def _release(agent_id, suffix):
+    """Forget this lane's `suffix` hold because its condition is gone: the next block opens a fresh PUSH_MAX_S window.
+    Without it the state file's mtime stays the first block, so a later block after one long-past block is released at
+    once. Never called when the check could not run (None): the hold is kept. Ignores OSError (no file, no dir)."""
+    try:
+        os.remove(_state_path(agent_id) + suffix)
+    except OSError:
+        pass
 
 
 def _counted(msg):
@@ -474,7 +489,10 @@ def _counted(msg):
 
 
 def check(data):
-    """Return the hook exit code (0 pass, 2 block) for one hook-input dict."""
+    """Return the hook exit code (0 pass, 2 block) for one hook-input dict.
+    The push or commit, background and dirty-worktree checks are all evaluated before it returns 2, so each one that finds
+    no condition resets its hold's window even while another hold blocks (`_release`; a check that could not run, None,
+    keeps it). The first hold that blocks wins, in that order, and a lower hold is never started while a higher one blocks."""
     if str(data.get("agent_type") or "") in _exempt_types():
         return 0
     ro = READONLY_RE.search(str(data.get("agent_type") or ""))  # a read-only type never owns a commit or push: not held, not scanned
@@ -482,12 +500,14 @@ def check(data):
     if running is None and data.get("cwd"):
         sys.stderr.write("COULD_NOT_CHECK: cannot tell whether a git push or commit from this worktree is still running (ps/lsof unavailable).\n")
     agent_id = str(data.get("agent_id") or "unknown")
+    hold_text = None  # stderr text of the first hold that blocks; the scans below still run so each empty one resets its hold
     if running and _hold(agent_id, ".push"):  # keep blocking while the push or commit is live, released after PUSH_MAX_S
-        sys.stderr.write(
+        hold_text = (
             "A git push or commit from this worktree is still running (its pre-push or pre-commit hook may take 15+ minutes) and may not be yours. "
             f"Wait for it with lane_guard.py wait --pid <pid> --timeout <s>, then hand back; the hold ends after {PUSH_MAX_S} s at most.\n"
         )
-        return 2
+    if running is False:
+        _release(agent_id, ".push")
     mode = _bg_mode()
     notes = []
     bg = _bg_running(data.get("cwd")) if mode != "off" else []
@@ -495,24 +515,30 @@ def check(data):
         sys.stderr.write("COULD_NOT_CHECK: cannot tell whether a test or build from this worktree is still running (ps/lsof unavailable).\n")
     if bg:
         what = ", ".join(f"pid {p} `{c[:80]}`" for p, c in bg[:3]) + (f" (+{len(bg) - 3} more)" if len(bg) > 3 else "")
-        if mode == "block" and _hold(agent_id, ".bg"):
-            sys.stderr.write(
-                f"Background work from this worktree is still running: {what}. You own it until it exits: wait with "
-                "lane_guard.py wait --pid <pid> --timeout <s> (or stop your own process), then hand back.\n"
+        if mode == "block" and hold_text is None and _hold(agent_id, ".bg"):
+            hold_text = (
+                f"Background work from this worktree is still running: {what}. Wait for it with "
+                "lane_guard.py wait --pid <pid> --timeout <s>, or stop it if this lane started it, then hand back; "
+                f"the hold ends after {PUSH_MAX_S} s at most.\n"
             )
-            return 2
         if mode == "warn":
             notes.append(f"background_guard: this lane handed back with a test/build still running from its worktree: {what}.")
+    elif bg == []:
+        _release(agent_id, ".bg")
     dirty = [] if ro or mode == "off" else _dirty_tree(data.get("cwd"))
     if dirty is None and data.get("cwd"):
         sys.stderr.write("COULD_NOT_CHECK: cannot tell whether this worktree has uncommitted changes (git status failed).\n")
     if dirty:
         left = f"{len(dirty)} uncommitted path(s) (first: `{dirty[0][:80]}`)"
-        if mode == "block" and _hold(agent_id, ".dirty"):
-            sys.stderr.write(f"This linked worktree has {left}. Commit or discard your own changes, then hand back; if the edits are not yours, tell the owner.\n")
-            return 2
+        if mode == "block" and hold_text is None and _hold(agent_id, ".dirty"):
+            hold_text = f"This linked worktree has {left}. Commit or discard your own changes, then hand back; if the edits are not yours, tell the owner.\n"
         if mode == "warn":
             notes.append(f"background_guard: this lane handed back with a dirty worktree: {left}. Ignore if these edits are not yours.")
+    elif dirty == []:
+        _release(agent_id, ".dirty")
+    if hold_text:
+        sys.stderr.write(hold_text)
+        return 2
     msg = data.get("last_assistant_message") or ""
     if not bg and mode != "off" and _waiting_claim(msg):  # scan saw nothing (or was blind) but the lane says it is waiting
         notes.append("background_guard: this lane's handback says it is waiting on background work; it must wait in its own turn (lane_guard.py wait) and hand back the result.")
@@ -798,6 +824,61 @@ def _selftest():
     case("push-live-keeps-blocking", rc, 2)
     os.utime(_state_path("p4") + ".push", (0, 0))  # first block long ago (> PUSH_MAX_S): released
     case("push-block-releases-after-max-age", check({"agent_id": "p4", "cwd": "/live", "last_assistant_message": "VERIFIED"}), 0)
+    # a hold forgets its first block once its condition is gone: block long past, condition clears, condition returns -> held again
+    global _bg_mode, _bg_running, _dirty_tree
+    real_scans = (_bg_mode, _bg_running, _dirty_tree)
+    live = {".push": False, ".bg": False, ".dirty": False}  # per scan: True condition live, False none, None could not check
+    _bg_mode = lambda: "block"
+    _push_running = lambda cwd: live[".push"]
+    _bg_running = lambda cwd: {True: [(7, "pytest -x")], False: [], None: None}[live[".bg"]]
+    _dirty_tree = lambda cwd: {True: [" M a.py"], False: [], None: None}[live[".dirty"]]
+    lane = lambda aid: {"agent_id": aid, "cwd": "/idle", "last_assistant_message": "VERIFIED"}
+    sfile = lambda held, sfx: _state_path(held["agent_id"]) + sfx
+    with redirect_stderr(io.StringIO()):
+        for sfx in live:
+            held, name = lane(f"hold{sfx}"), sfx[1:]
+            live[sfx] = True
+            case(f"{name}-hold-blocks-while-condition-live", check(held), 2)
+            os.utime(sfile(held, sfx), (0, 0))  # first block long ago (> PUSH_MAX_S)
+            live[sfx] = None
+            case(f"{name}-hold-kept-when-scan-could-not-run", [check(held), os.path.exists(sfile(held, sfx))], [0, True])
+            live[sfx] = True
+            case(f"{name}-hold-released-after-max-age", check(held), 0)
+            live[sfx] = False
+            case(f"{name}-hold-condition-clears-passes", check(held), 0)
+            live[sfx] = True
+            case(f"{name}-hold-fresh-window-when-condition-returns", check(held), 2)
+            live[sfx] = False
+        # a lower hold that a higher one masks on this call still resets once its own scan is empty, so it gets a fresh window later
+        for low, high in ((".bg", ".push"), (".dirty", ".push"), (".dirty", ".bg")):
+            held, lo, hi = lane(f"mask{low}{high}"), low[1:], high[1:]
+            live[low] = True
+            case(f"{lo}-hold-opens-before-{hi}-blocks", check(held), 2)
+            os.utime(sfile(held, low), (0, 0))
+            live[low], live[high] = False, True
+            case(f"{lo}-hold-reset-while-{hi}-blocks", [check(held), os.path.exists(sfile(held, low))], [2, False])
+            live[low], live[high] = True, False
+            case(f"{lo}-hold-fresh-window-after-{hi}-ends", check(held), 2)
+            live[low] = False
+        # the first hold that blocks wins (push, background, dirty) and no lower hold is started on that call
+        marks = ("A git push or commit", "Background work", "uncommitted path")
+        for on, want in (((".push", ".bg", ".dirty"), marks[0]), ((".bg", ".dirty"), marks[1]), ((".dirty",), marks[2])):
+            held, out = lane(f"first{on[0]}"), io.StringIO()
+            live.update({s: s in on for s in live})
+            with redirect_stderr(out):
+                rc = check(held)
+            case(f"{on[0][1:]}-hold-wins-and-starts-no-lower-hold",
+                 [rc, [m in out.getvalue() for m in marks], [os.path.exists(sfile(held, s)) for s in live]],
+                 [2, [m == want for m in marks], [s == on[0] for s in live]])
+        live.update({s: False for s in live})
+    live[".bg"] = True
+    err = io.StringIO()
+    with redirect_stderr(err):
+        check({"agent_id": "bgtext", "cwd": "/idle", "last_assistant_message": "VERIFIED"})
+    live[".bg"] = False
+    case("bg-hold-text-names-the-way-out-not-ownership",
+         [s in err.getvalue() for s in ("You own", "lane_guard.py wait", "if this lane started it", f"after {PUSH_MAX_S} s")], [False, True, True, True])
+    _bg_mode, _bg_running, _dirty_tree = real_scans
     _push_running = real_push
     case("push-check-no-cwd-is-unknown", _push_running(""), None)
     real_run = subprocess.run
@@ -846,10 +927,22 @@ def _selftest():
                          ("shell-string", "zsh -c sleep 900; echo remember to git commit later"), ("grep", "grep -rn git commit docs")):
             subprocess.run = _ps_with(row, f"{me} 1 python3 handback_cap.py", cwd=wt)  # a process that only names the words, not an ancestor either
             case(f"{who}-naming-git-commit-not-counted", _push_running(wt), False)
+        subprocess.run = _ps_with("sleep 1", f"{me} 1 python3 handback_cap.py", f"124 {me} sh -c lsof", "125 124 git commit -m x", cwd=wt)
+        case("descendant-with-git-commit-in-argv-not-counted", _push_running(wt), False)
         subprocess.run = lambda argv, **k: subprocess.CompletedProcess(argv, 0, "garbage\n", "")
         case("ps-unparseable-is-unknown-not-false", _push_running(wt), None)
+        # known limit: ps prints argv without quotes, so a space inside a -c value or a -C path splits it and PUSH_RE no longer matches: not held (fails open)
+        subprocess.run = _ps_with("git -c user.name=Jane commit -m x", cwd=wt)
+        case("known-limit-control-dash-c-without-space-is-held", _push_running(wt), True)
+        for who, row in (("dash-c-value-with-space", "git -c user.name=Jane Smith commit -m x"), ("dash-C-path-with-space", "git -C /acme/my repo commit -m x")):
+            subprocess.run = _ps_with(row, cwd=wt)
+            case(f"known-limit-{who}-is-not-held", _push_running(wt), False)
     finally:
         subprocess.run = real_run
+    ptab = _ps_table("400 1 claude -p brief\n450 400 sh -c hook\n500 450 python3 handback_cap.py\n510 500 sh -c lsof\n520 510 git commit -m x\n900 1 git commit -m y\n")
+    skipped = _skip_pids(ptab, 500)  # hook 500: ancestors 450 and 400 (the walk up stops at a pid whose parent is 1), descendants 510 and 520
+    case("skip-pids-skips-hook-ancestors-and-descendants", sorted(skipped), [400, 450, 500, 510, 520])
+    case("skip-pids-leaves-only-the-unrelated-git-commit", sorted(p for p, (_, c) in ptab.items() if PUSH_RE.search(c) and p not in skipped), [900])
     def cd(c):
         m = PUSH_RE.search(c)
         return m and (m.group(2) or m.group(3) or m.group(4))

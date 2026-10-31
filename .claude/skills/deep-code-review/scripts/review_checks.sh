@@ -32,11 +32,11 @@
 # REVIEW_LEASE_WAIT s, default 120) and releases it afterwards. If the lease is still full after the wait the scanners
 # run degraded without the lease (`nice -n 19` when nice works, plus `--jobs 1` for semgrep and `--parallel 1` for trivy,
 # dropped on a crash and retried once) and the summary labels them "(degraded: lease full, ...)"; REVIEW_LEASE_FULL=skip restores the old skip.
-# A summary "N findings; N files excluded; analyzers ran: ...; skipped (not installed): ..." goes to stderr, then "NOT RUN: <tool> (<why>), ..." (or "none"); a tool
+# A summary "N findings; N files excluded; analyzers ran: ...; skipped (not installed): ..." goes to stderr (N counts every row but the not-checked ones, which are surface nobody covered, not findings; a "K not-checked row(s)" line follows when there are any), then "NOT RUN: <tool> (<why>), ..." (or "none"); a tool
 # that timed out, crashed or (REVIEW_LEASE_FULL=skip) lost the lease is listed there (once, with a not-checked row on stdout) and never under "ran", so it cannot read as zero findings; a tool that is merely not installed stays under "skipped (not installed)". `--tests` also runs the command
 # declared in env REVIEW_TEST_CMD (opt-in; it executes project code). Never installs anything. A missing tool
 # or a timeout prints "review_checks: not run: <tool> (<why>)" on stderr and is not a failure. A semgrep scan that emitted findings but
-# reported errors prints "review_checks: partial: semgrep ran ..." instead (never "not run"). A semgrep chunk with errors and zero results is "partial" when some scanned file raised no error (the unscanned part is a not-checked row), and "not run" only when every scanned file errored. A hub tool that reports a file outside its scanned list is "not run" (paths do not line up), never a clean. tsc also resolves the repo-local node_modules/.bin/tsc (cwd or git toplevel only), run only when REVIEW_TEST_CMD is set.
+# reported errors prints "review_checks: partial: semgrep ran ..." instead (never "not run"), whatever the error level (a warn-level parse error still makes the scan partial). That line ends with the error counts (N errors on M of S scanned files, by type and level) and each errored file is a not-checked row (path, line 0; 20 per 200-file chunk at most, then one row with the path `.` for the rest, naming the first path left out so two chunks never share a row; an error with no path is counted, not rowed). A semgrep chunk with errors and zero results is "partial" when every error names a path and some scanned file raised no error, and "not run" when every scanned file errored or any error has no path (the unread files are then unknown, so the chunk counts as not scanned and no row names a file). A hub tool that reports a file outside its scanned list is "not run" (paths do not line up), never a clean. tsc also resolves the repo-local node_modules/.bin/tsc (cwd or git toplevel only), run only when REVIEW_TEST_CMD is set.
 # Offline caches that scripts/provision_tools.sh --print warms once, outside the sandbox, are used when present: the osv-scanner offline DB
 # (unless REVIEW_OSV_DB_DIR or REVIEW_OSV=1 choose a mode), the trivy DB (trivy always runs offline) and a local semgrep p/default snapshot.
 # A closing "ran X / wired Y scanners" stderr line names the scanners that had work this run, those that did not run, those that ran with a partial
@@ -258,10 +258,11 @@ fi
 # Fails closed: missing, empty or malformed JSON exits non-zero instead of reading as "no findings".
 sjson() {
   python3 - "$1" "$2" <<'PY'
-import hashlib, json, os, pathlib, re, sys
+import collections, hashlib, json, os, pathlib, re, sys
 kind = sys.argv[1]
 def nf(f):  # scanners echo the path they were given ("./.github/..."); rows must carry the changed-file form
     return os.path.normpath(f) if f else f
+cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package or file can be named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 # The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
 m = re.search(r"^[\[{]", t, re.M)
@@ -391,7 +392,6 @@ elif kind == "trufflehog":  # only ruleId (the detector), uri and startLine are 
             p = r["locations"][0]["physicalLocation"]
             rows.append((nf(p["artifactLocation"]["uri"]), p.get("region", {}).get("startLine", 0), r["ruleId"], "secret detected (unverified: offline scan, --no-verification)"))
 elif kind == "guarddog":  # threat-* rules only (capability-* fire on benign code); one row per rule from its first hit, relative to the package dir; code and match are source snippets and are never read
-    cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package can ship a file named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
     for r, h in d["results"].items():
         if r.startswith("threat-") and h:
             f, _, l = str(h[0].get("location", "")).rpartition(":")
@@ -404,13 +404,31 @@ else:
             pk = p.get("package") or {}
             rows += [(r["source"]["path"], 0, v.get("id"), f"{pk.get('name')}@{pk.get('version')}: {v.get('summary', '')}")
                      for v in p.get("vulnerabilities") or []]
-for row in rows:
-    print("\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in row))
 err = kind in ("semgrep", "guarddog") and d.get("errors")
+rc = 3 if err else 0  # 3 = the scan was partial (rows may be empty); 4 = errors on every scanned file and no findings. Decided on the findings alone: the not-checked rows below are added after
 if err and not rows:  # errors and no findings: partial when some scanned file raised no error, else exit 4 (nothing usable was scanned)
     bad = {e.get("path") if isinstance(e, dict) else None for e in err}
-    sys.exit(3 if None not in bad and len(set((d.get("paths") or {}).get("scanned") or [])) > len(bad) else 4)
-sys.exit(3 if err else 0)  # 3 = the scan was partial (rows may be empty); 4 = errors on every scanned file and no rows
+    rc = 3 if None not in bad and len(set((d.get("paths") or {}).get("scanned") or [])) > len(bad) else 4
+if kind == "semgrep" and rc == 3:  # name what semgrep could not fully read, at any level (a warn-level parse error is never downgraded to clean): counts by type and level on stderr, one not-checked row per errored path
+    by, files = collections.Counter(), {}  # "<type> (<level>)" -> errors; path -> its distinct "<type>, <level>" pairs. An error with no path is counted, not rowed
+    for e in err if isinstance(err, list) else [err]:
+        e = e if isinstance(e, dict) else {}
+        ty = e.get("type"); ty = ty[0] if isinstance(ty, list) and ty else ty  # a PartialParsing error is ["PartialParsing", [locations]]
+        ty, lv = (str(x) if x else "unknown" for x in (ty, e.get("level")))
+        by[f"{ty} ({lv})"] += 1
+        if isinstance(e.get("path"), str) and e["path"]: files.setdefault(e["path"], {})[f"{ty}, {lv}"] = 1
+    # ponytail: 20 named files per chunk (the stderr counts stay exact), then one row for the rest; raise the cap if a reviewer needs every path
+    gp = sorted(files)
+    rows += [(cl(p), 0, "not-checked", f"semgrep could not fully read this file ({'; '.join(files[p])}); rules may have missed part of it") for p in gp[:20]]
+    if len(gp) > 20:  # path ".": an empty leading field would collapse in the caller's TSV read. The first unlisted path keeps each chunk's row unique (chunks hold disjoint files), else the closing dedup of identical not-checked rows would merge two chunks with equal counts into one
+        rows.append((".", 0, "not-checked", f"semgrep could not fully read {len(gp) - 20} more file(s) ({len(gp)} with errors in this chunk; the first 20 in path order are listed, the rest start at {cl(gp[20])}); rules may have missed part of them"))
+    sc = d.get("paths"); sc = sc.get("scanned") if isinstance(sc, dict) else None
+    sc = {str(x) for x in sc} if isinstance(sc, list) else set()
+    print(f"review_checks: partial: semgrep ran but reported errors (coverage incomplete; findings above are real) ({sum(by.values())} error(s) on {len(sc & set(gp))} of {len(sc)} scanned file(s): "
+          + ", ".join(f"{k} x{n}" for k, n in sorted(by.items(), key=lambda kn: (-kn[1], kn[0]))) + ("; see not-checked rows)" if gp else ")"), file=sys.stderr)
+for row in rows:
+    print("\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in row))
+sys.exit(rc)
 PY
 }
 
@@ -561,8 +579,8 @@ elif have semgrep; then
     elif [ "$e" = 0 ] || [ "$e" = 3 ]; then
       sgok=1
       while IFS=$'\t' read -r p l r m; do add semgrep "$p" "$l" "$r" "$m"; done <"$tsv"
-      # a "(note)" token in ran is a partial scope: the closing line and the record list it apart from a full run
-      [ "$e" = 0 ] || { echo "review_checks: partial: semgrep ran but reported errors (coverage incomplete; findings above are real)" >&2; case " $ran " in *" semgrep(errors) "*) ;; *) ran+=" semgrep(errors)" ;; esac; }
+      # a "(note)" token in ran is a partial scope: the closing line and the record list it apart from a full run. On exit 3 sjson has already printed the partial line (error counts by type and level) and added the not-checked rows read above
+      [ "$e" = 0 ] || case " $ran " in *" semgrep(errors) "*) ;; *) ran+=" semgrep(errors)" ;; esac
     else skip semgrep "unparseable output"; fi
   done
   if [ "$sgerr" -gt 0 ] && [ "$sgok" = 1 ]; then # other chunks scanned fine: partial coverage, not a voided tool
@@ -912,12 +930,13 @@ if ud:
         f = os.path.relpath(r["file"]) if r["file"] not in ("", "-") else None
         r["new"] = None if f in dirty else r["line"] > 0 and f is not None and any(a <= r["line"] < a + c for a, c in adds.get(f, ()))
 print(json.dumps(out, indent=1))
-n = len(out)
+n = len(out); nc = sum(r["rule"] == "not-checked" for r in out)  # not-checked rows are unchecked surface, so they are counted apart from findings
 dg, w1 = sys.argv[5].split(), sys.argv[6].split()  # lease full: "1 worker" only for tools whose single-worker flag ran; "nice 19" only when nice worked
 def lab(t):
     b = t.split("(")[0]
     return t + (f" (degraded: lease full{', nice 19' if sys.argv[7] == '1' else ''}{', 1 worker' if b in w1 else ''})" if b in dg else "")
-print(f"review_checks: {n} findings; {sys.argv[4]} files excluded; analyzers ran: {', '.join(lab(t) for t in sys.argv[2].split()) or 'none'}; skipped (not installed): {', '.join(sys.argv[3].split()) or 'none'}", file=sys.stderr)
+print(f"review_checks: {n - nc} findings; {sys.argv[4]} files excluded; analyzers ran: {', '.join(lab(t) for t in sys.argv[2].split()) or 'none'}; skipped (not installed): {', '.join(sys.argv[3].split()) or 'none'}", file=sys.stderr)
+if nc: print(f"review_checks: {nc} not-checked row(s) (surface a tool did not cover, not findings)", file=sys.stderr)
 if ud:
     k = sum(r["new"] is None for r in out)
     print(f"review_checks: {sum(r['new'] is True for r in out)} of {n} rows are on lines this diff adds" + (f", {k} unknown (file differs from HEAD)" if k else ""), file=sys.stderr)

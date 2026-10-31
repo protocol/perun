@@ -196,8 +196,26 @@ cmd_privacy() {
     done < <(scan_files "$t")
   done
 
+  # Prefilter: ONE pass of `grep -f` over every pattern at once (same flags and 1000-file batches as the per-pattern greps below)
+  # lists the only files any pattern can match, so a clean tree is read once, not once per pattern. Every pattern already passed
+  # the ERE probe above, so the list holds only valid EREs. Same status rule as below: 0 = candidates, 1 = none, anything else
+  # = gate error, which fails closed (a failed prefilter must never read as "no candidates"). The list is newline-delimited, so a
+  # path holding a newline cannot round-trip (a hit would read as the clean files named after its pieces): such a tree skips the
+  # prefilter and every file goes to the per-pattern scan below, as before.
+  local i out cs nl_path=0
+  local -a cand=()
+  [ "${#scan[@]}" -eq 0 ] || case "${scan[*]}" in *$'\n'*) nl_path=1; cand=("${scan[@]}") ;; esac
+  for ((i = 0; nl_path == 0 && i < ${#scan[@]}; i += 1000)); do
+    out="$(grep -IlE -D skip -f <(printf '%s\n' "${patterns[@]}") -- "${scan[@]:i:1000}" 2>/dev/null)" && cs=0 || cs=$?
+    case "$cs" in
+      0) while IFS= read -r f; do cand+=("$f"); done <<<"$out" ;;
+      1) : ;;
+      *) die "privacy: grep failed while prefiltering (exit $cs); failing closed" ;;
+    esac
+  done
+
   local hit=0 files status
-  [ "${#scan[@]}" -eq 0 ] || for pat in "${patterns[@]}"; do
+  [ "${#cand[@]}" -eq 0 ] || for pat in "${patterns[@]}"; do
     # -l: report file names only. -I: skip binaries. -D skip: never open a
     # FIFO/device (a stray named pipe blocks the scan forever). `--` guards dash-leading
     # target paths from being read as options. Capture grep's exit status
@@ -207,9 +225,8 @@ cmd_privacy() {
     # (macOS fails at ~15K files with exit 126). Merge per-chunk statuses so a
     # match anywhere wins over clean and any error still fails closed.
     files="" status=1
-    local i out cs
-    for ((i = 0; i < ${#scan[@]}; i += 1000)); do
-      out="$(grep -IlE -D skip -e "$pat" -- "${scan[@]:i:1000}" 2>/dev/null)" && cs=0 || cs=$?
+    for ((i = 0; i < ${#cand[@]}; i += 1000)); do
+      out="$(grep -IlE -D skip -e "$pat" -- "${cand[@]:i:1000}" 2>/dev/null)" && cs=0 || cs=$?
       case "$cs" in
         0) files+="${files:+$'\n'}$out"; [ "$status" -gt 1 ] || status=0 ;;
         1) : ;;
