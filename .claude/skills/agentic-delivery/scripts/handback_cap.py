@@ -65,7 +65,9 @@ existing install's handbacks are not suddenly rejected; exempt types always
 skip it.
 
 BACKGROUND WORK (policy `background_guard`: `off|warn|block`, default `warn`; env PERUN_BACKGROUND_GUARD overrides). A lane
-waits for background work from its worktree until it exits. When the lane's cwd is inside a LINKED worktree and a test or build runner
+waits for background work from its worktree until it exits. The switch sets what a live test or build and a dirty worktree get
+(`warn` a note, `block` exit 2); a handback that only claims to be waiting gets a bounded block in every mode but `off`
+(below). When the lane's cwd is inside a LINKED worktree and a test or build runner
 (BG_RE: pytest, jest, vitest, playwright, make, `npm test`, `cargo test`, `go build`, a `*test*.py|sh` script, ...) has its
 cwd inside that worktree, `warn` sends the owner a `systemMessage` naming the pid and command, and `block` exits 2 with the
 same text on stderr (released after PUSH_MAX_S, like a live `git push` or `git commit`: PUSH_RE matches both for a process whose argv[0] is `git`, `-C`/`-c`
@@ -87,8 +89,15 @@ lane's linked worktree, only when lane_worktree.sh made it (marker file, `lane/`
 has one), it sits under the lane root, is clean including ignored files, equals its upstream, and no test/build runs from
 it (a blind scan only reports). Other trees and the main checkout are never touched; any doubt keeps the tree and says so
 on stderr. Full rule list: `_reap_own_worktree`.
-When the scan finds nothing but the handback text itself says the lane is "waiting on" its background tests (WAIT_RE),
-a `systemMessage` flags it in every mode but `off`; never a block (the text is a claim, not evidence).
+When the scan finds nothing but the handback text itself says the lane is "waiting on" its background tests (WAIT_RE), the
+stop is blocked (exit 2) in every mode but `off`, because a lane that stops now ends with its work unverified. stderr says to
+wait in this turn (a local process: `lane_guard.py wait --pid <pid> --timeout <s>`) and hand back the result, or to hand back
+status=UNVERIFIED naming what is still pending (for example a remote check). The text is a claim, not evidence, so the block
+is bounded (`_wait_block`): none when the input has no agent_id (the counter has nothing to key on), none while it has
+`stop_hook_active` true, none when the first status line of the handback (its first STATUS_RE match) reads UNVERIFIED (it
+already says the work is unverified, so the way out above cannot loop; a later UNVERIFIED line does not exempt it), and at most
+MAX_BLOCKS per agent_id (its own `.wait` counter file beside the block counter). Where no block applies a `systemMessage` flags
+the claim and the stop goes through. A hold above (push or commit, background, dirty) runs first and wins.
 
 NARRATION NUDGE: when a non-exempt lane wrote at least HANDBACK_NARR_NUDGE (default 100, 0 = off) estimated tokens of
 prose between tool calls, a `systemMessage` names the amount and the per-call `narr_rate`. Detect-and-measure after the
@@ -301,7 +310,7 @@ def _skip_pids(table, me):
     return skip | kids
 
 
-# The lane's own words: it hands back "waiting on" its background tests. Advisory only (see check()).
+# The lane's own words: it hands back "waiting on" its background tests. A claim, not evidence: a bounded block (see _wait_block).
 _WAIT_KW = (r"(?:background|bg|tests?|test\s+(?:suite|run)|suites?|builds?|pytest|playwright|e2e|gates?|pre-push|ci|checks?"
             r"|lint|workflows?|actions|jobs?|runs?)")
 WAIT_RE = re.compile(
@@ -322,8 +331,8 @@ def _waiting_claim(msg):
     """True when a counted line of `msg` (fences and '! ' lines excluded, as for the cap) claims the lane is waiting
     on background work. A match whose own clause (the text back to the previous punctuation, and the next five words
     after it) carries a negation ("not waiting on tests", "wait for CI not needed") or names a person ("waiting on
-    owner to run tests") does not count. A heuristic: it misses wordings it has no keyword for, which is why it only
-    advises."""
+    owner to run tests") does not count. A heuristic: it misses wordings it has no keyword for, and a wrong hit costs
+    one bounded block (`_wait_block`)."""
     for ln in _counted(msg):
         for m in WAIT_RE.finditer(ln):
             head = _CLAUSE_END.split(ln[:m.start()])[-1]
@@ -332,6 +341,30 @@ def _waiting_claim(msg):
             if not (_NOT_A_CLAIM.search(head + " " + m.group(0) + " " + tail) or past):
                 return True
     return False
+
+
+def _wait_block(data):
+    """True when this stop is blocked for a handback that claims to wait on background work. Not when `data` has no
+    agent_id (the counter has nothing to key on), not while it has `stop_hook_active` (a stop hook already sent this stop
+    back), not when the first status line of the handback (its first STATUS_RE match) reads UNVERIFIED (it already says the
+    work is unverified, so the way out in the block text cannot loop; a later UNVERIFIED line does not exempt it), and at
+    most MAX_BLOCKS times per agent_id, counted in its own `.wait` file beside `_state_path` (the shape-block counter is
+    separate). Side effect: the counter file. A state file that cannot be written means the bound cannot be kept: no block."""
+    aid = data.get("agent_id")
+    first = STATUS_RE.search(data.get("last_assistant_message") or "")
+    if not aid or data.get("stop_hook_active") or (first and "unverified" in first.group(0).lower()):
+        return False
+    path = _state_path(str(aid)) + ".wait"
+    n = _read_blocks(path)
+    if n >= MAX_BLOCKS:
+        return False
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(path, "w") as fh:
+            fh.write(str(n + 1))
+    except OSError:
+        return False
+    return True
 
 
 def _bg_found(table, pids, me):
@@ -492,7 +525,8 @@ def check(data):
     """Return the hook exit code (0 pass, 2 block) for one hook-input dict.
     The push or commit, background and dirty-worktree checks are all evaluated before it returns 2, so each one that finds
     no condition resets its hold's window even while another hold blocks (`_release`; a check that could not run, None,
-    keeps it). The first hold that blocks wins, in that order, and a lower hold is never started while a higher one blocks."""
+    keeps it). The first hold that blocks wins, in that order, and a lower hold is never started while a higher one blocks.
+    After the holds, a handback that claims to wait on background work is blocked, within the bounds of `_wait_block`."""
     if str(data.get("agent_type") or "") in _exempt_types():
         return 0
     ro = READONLY_RE.search(str(data.get("agent_type") or ""))  # a read-only type never owns a commit or push: not held, not scanned
@@ -541,6 +575,14 @@ def check(data):
         return 2
     msg = data.get("last_assistant_message") or ""
     if not bg and mode != "off" and _waiting_claim(msg):  # scan saw nothing (or was blind) but the lane says it is waiting
+        if _wait_block(data):
+            sys.stderr.write(
+                "Handback blocked: it says this lane is waiting on background work, and a lane that stops now ends with its work unverified. "
+                "Wait in this turn (a local process: lane_guard.py wait --pid <pid> --timeout <s>) and hand back the result, or hand back "
+                "status=UNVERIFIED naming what is still pending (for example a remote check). "
+                f"This block is bounded: it does not repeat once a stop hook has sent this stop back, and stops after {MAX_BLOCKS} per agent id.\n"
+            )
+            return 2
         notes.append("background_guard: this lane's handback says it is waiting on background work; it must wait in its own turn (lane_guard.py wait) and hand back the result.")
     if notes:  # one JSON line however many findings
         _SENT.append(1)
@@ -789,7 +831,7 @@ def main():
 def _selftest():
     import io
     import shutil
-    from contextlib import redirect_stderr
+    from contextlib import redirect_stderr, redirect_stdout
 
     global STATE_DIR
     tmp = tempfile.mkdtemp(prefix="handback-cap-selftest-")
@@ -968,6 +1010,50 @@ def _selftest():
     case("git-commit-graph-does-not-match", bool(PUSH_RE.search("git commit-graph write")), False)
     case("git-push-x-does-not-match", bool(PUSH_RE.search("git push-x origin")), False)
     case("git-log-grep-commit-does-not-match", bool(PUSH_RE.search("git log --grep commit")), False)
+
+    # a handback that claims to wait on background work is blocked, bounded (holds above win and never reach this)
+    wait_msg = "Gate running in background; waiting on completion."
+    saved_guard = os.environ.get("PERUN_BACKGROUND_GUARD")
+
+    def wait_check(mode, aid, msg=wait_msg, **extra):  # (rc, stdout, stderr) of one check() in background_guard mode `mode`
+        os.environ["PERUN_BACKGROUND_GUARD"] = mode
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = check({"last_assistant_message": msg, **({"agent_id": aid} if aid else {}), **extra})
+        return rc, out.getvalue(), err.getvalue()
+    try:
+        for mode in ("warn", "block"):
+            case(f"wait-claim-blocks-in-{mode}-mode", wait_check(mode, f"wc-{mode}")[0], 2)
+        case("wait-claim-block-names-the-way-out",
+             [s in wait_check("warn", "wc-text")[2] for s in ("lane_guard.py wait --pid <pid> --timeout <s>", "status=UNVERIFIED")], [True, True])
+        case("wait-claim-with-stop-hook-active-passes-with-the-note",
+             [(r := wait_check("warn", "wc-active", stop_hook_active=True))[0], "waiting on background work" in r[1]], [0, True])
+        case("wait-claim-block-releases-after-max-blocks",
+             [wait_check("warn", "wc-max")[0] for _ in range(MAX_BLOCKS + 1)], [2] * MAX_BLOCKS + [0])
+        remote = "Waiting on CI for PR 1234; local gates green."
+        case("wait-claim-on-a-remote-check-is-blocked-and-names-unverified",
+             [(r := wait_check("warn", "wc-remote", remote))[0], "status=UNVERIFIED" in r[2]], [2, True])
+        case("wait-claim-without-an-agent-id-keeps-the-note",
+             [(r := wait_check("warn", None, remote))[0], "waiting on background work" in r[1], r[2]], [0, True, ""])
+        case("unverified-handback-naming-a-wait-is-never-blocked",
+             wait_check("warn", "wc-unv", "status=UNVERIFIED sha=abc1234 result=pushed tests=3/3 blockers=waiting on CI for PR 1234")[0], 0)
+        verified = "status=VERIFIED sha=abc1234 result=done tests=3/3"  # the first status line decides, not a later UNVERIFIED line
+        case("wait-claim-after-a-verified-status-is-blocked-despite-a-later-unverified-line",
+             wait_check("warn", "wc-late-line", verified + "\nUNVERIFIED: waiting on CI for PR 1234")[0], 2)
+        case("wait-claim-after-a-verified-status-is-blocked-despite-a-later-unverified-field",
+             wait_check("warn", "wc-late-field", verified + "\n- unverified: lint\nWaiting on CI for PR 1234.")[0], 2)
+        case("wait-claim-after-an-unverified-first-status-passes-with-the-note",
+             [(r := wait_check("warn", "wc-first-unv", "status=UNVERIFIED sha=abc1234 result=pushed tests=3/3\nWaiting on CI for PR 1234."))[0],
+              "waiting on background work" in r[1]], [0, True])
+        case("wait-claim-mode-off-is-silent", wait_check("off", "wc-off")[:2], (0, ""))
+        case("verified-handback-is-silent",
+             wait_check("warn", "wc-ok", "status=VERIFIED sha=abc1234 result=done tests=3/3 blockers=none")[:2], (0, ""))
+    finally:
+        if saved_guard is None:
+            os.environ.pop("PERUN_BACKGROUND_GUARD", None)
+        else:
+            os.environ["PERUN_BACKGROUND_GUARD"] = saved_guard
+        _SENT.clear()  # the notes above printed a systemMessage; the narration nudge cases below need a clean slate
 
     # short message passes
     case("short-passes", check({"agent_id": "a1", "last_assistant_message": "VERIFIED | verdict=ok"}), 0)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Regression test: a handback that says the lane is waiting on its background tests is flagged (advisory, never a
-block) even when the process scan finds nothing, the case the scan alone missed."""
+"""Regression test: a handback that says the lane is waiting on its background tests is flagged even when the process
+scan finds nothing, the case the scan alone missed. These cases run with `stop_hook_active` true, the bound past which
+the claim is only flagged; the first claim is a bounded block, covered by `handback_cap.py --selftest`."""
 import json
 import sys
 import unittest
@@ -12,7 +13,7 @@ from test_background_work_guard import run_check  # noqa: E402
 
 class WaitClaim(unittest.TestCase):
     def flagged(self, msg, mode="warn", bg=lambda cwd: []):
-        rc, out, _ = run_check({"last_assistant_message": msg}, mode, bg)
+        rc, out, _ = run_check({"last_assistant_message": msg, "stop_hook_active": True}, mode, bg)
         self.assertEqual(rc, 0)
         return bool(out) and "waiting on background work" in json.loads(out)["systemMessage"]
 
@@ -60,7 +61,7 @@ class WaitClaim(unittest.TestCase):
         self.assertEqual(len(out.strip().splitlines()), 1)
         self.assertIn("still running from its worktree", json.loads(out)["systemMessage"])
 
-    def test_block_mode_flags_but_does_not_block(self):
+    def test_block_mode_flags_the_claim_past_the_bound(self):
         self.assertTrue(self.flagged("VERIFIED, waiting for the test suite", "block"))
 
     def test_plain_handback_and_off_mode_are_silent(self):
