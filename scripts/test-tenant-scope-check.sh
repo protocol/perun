@@ -85,6 +85,10 @@ j=$(tail -n1 <<<"$out"); python3 -I -c 'import json,sys; d=json.loads(sys.argv[1
 out=$(python3 -I "$TS" "$W/empty" 2>/dev/null); rc=$?
 [ "$rc" -eq 0 ] && [ "$(wc -l <<<"$out" | tr -d ' ')" = 1 ]; ok $? "dir without a schema: exit 0, summary only"
 python3 -I "$TS" "$W/nope" 2>/dev/null; [ $? -eq 2 ]; ok $? "bad DIR: exit 2"
+# A backslash as the last character of a file, inside an open string, once raised IndexError in mask(): the scan must survive a truncated file.
+mkdir -p "$W/bs/app/api/x"; cp -R "$W/prisma" "$W/bs/"; printf 'const s = "a\\' >"$W/bs/app/api/x/route.ts"
+python3 -I "$TS" "$W/bs" >/dev/null 2>"$W/err0"; rc=$?
+[ "$rc" -eq 0 ] && ! grep -q Traceback "$W/err0" && grep -qx 'heuristic; scanned 1 server files' "$W/err0"; ok $? "a backslash ending the file inside an open string: scanned, no crash"
 # review_checks.sh --full: rows for the HIGH/MEDs when a *.prisma is tracked, a SKIPPED line when none is.
 RC="$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh"
 G="$W/git"; mkdir -p "$G"; cp -R "$W/prisma" "$W/app" "$G/"; git -C "$G" init -q

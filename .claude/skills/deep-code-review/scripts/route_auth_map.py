@@ -8,15 +8,24 @@ OF AUTHENTICATION: the scan only sees the call shapes listed below.
 
 1. Inventory every handler: Next.js app/**/route.(ts|tsx|js|jsx|mjs) exported GET/POST/PUT/PATCH/DELETE (function, const, destructured or re-exported),
    pages/api/** (methods read from `req.method` checks, else ANY), "use server" exported async functions (METHOD ACTION), Express/Router/Hono/
-   Fastify `<receiver>.get|post|put|patch|delete|all("/path", ...)`, FastAPI `@x.get(...)` and Flask `@x.route(..., methods=[...])` decorators.
+   Fastify `<receiver>.get|post|put|patch|delete|all("/path", ...)` (TS type arguments allowed: `app.post<{ Body: Widget }>("/path", h)`), FastAPI `@x.get(...)` and Flask `@x.route(..., methods=[...])` decorators.
 2. One row per handler: `path:line: SEV: METHOD route auth=<evidence>`. Evidence, first hit wins: a call, decorator or `Depends(...)` naming an
    identity check (IDENTITY below: getServerSession, auth(), currentUser, requireAuth*, verify*, login_required...; a Depends/Security argument
    with user, auth, token, current, bearer, jwt, api_key, verify or login in it) or `req.user`/`current_user.`/`g.user` in the handler, in a
    same-file function it names, or at module level (a `.use(<auth>)` or Fastify addHook on the same receiver BEFORE the route counts, with its
    path prefix); else `token` (a header read in the handler and a comparison with a secret/token/api-key/password word on one line); else `middleware` (a Next
    middleware.ts/proxy.ts of the same app that names an identity check, or can answer 401/403 under any name (`status: 401`, `.status(403)`,
-   `new Response("Unauthorized"`), and whose matcher covers the route, less any route a quoted `/path` in that file names as an allow-list entry
-   (a trailing `(.*)`, `/*` or `/:name*` is dropped first; a path in the condition of an `if` that refuses is a scope check, not an entry)); else `none`.
+   `.code(401)`, `statusCode = 403`, `.unauthorized(`, `.forbidden(`, `new Response("Unauthorized"`), and whose matcher covers the route, less any route a quoted `/path` in that file names as an allow-list entry
+   (a trailing `(.*)`, `/*` or `/:name*` is dropped first; a path in the condition of an `if` that refuses is a scope check, not an entry)); else `root-hook` (a Fastify `x.addHook("onRequest"|"preHandler"|"preValidation"|"preParsing", fn)` on a receiver bound
+   to a `Fastify(...)` call, at any depth (a factory function included), whose `fn` can refuse as above or names an identity check, inline or in a same-file function or const it names.
+   It covers what the hook file wires onto that receiver AFTER the hook, in source order and within the block that holds the hook (a plugin function or an `if` does not leak): the routes of a scanned file that it passes to `x.register(plugin, opts)` by a relative import (or an inline
+   `require`/`import`), or that it calls as `fn(x, ...)` with x as the first argument and `fn` imported from that file, and the non-GET routes declared on x in its own file. What the hook covers is read
+   from the `if` statements of its text up to and including its first refusal: a negated path test with a bare return (`if (!req.url.startsWith("/api/")) return;`) is a scope, so only routes under it
+   are covered; a positive path test with a bare return (`=== "/api/ping"`, or `PUBLIC_PATHS.includes(url)` over a same-file declaration of the paths) is an allow-list entry (also after the refusal),
+   so a route it names keeps its own evidence (`===` and `==` name that path only, `startsWith` and any other test such as `includes` every route whose path starts with it, `/api/pingpong` too, as JS
+   does); a path in the condition of a refusing `if` is a scope (`startsWith` scopes the routes under it by path segment, `===` and any other test only that path), and a `!` before it covers nothing. A quoted path anywhere else (a role table the hook reads, a path
+   test in a refusing `if` after the first refusal) says nothing, and a route-registration literal never counts. A bare return before the first refusal under a condition that is no path test and no
+   identity check (`if (req.headers["x-preview"]) return;`) is a bypass: the hook covers nothing. The `prefix` option of the register call is put before the route when such a path is judged); else `none`.
 3. SEV: HIGH when auth is none and the handler mutates (any method but GET; ANY and ACTION count as mutating), else INFO.
 
 Known limits (NOT covered, so silence proves nothing): auth applied at a mount in another file (`app.use("/api", authedRouter)`) reads none;
@@ -38,7 +47,18 @@ middleware; the shown route has no mount prefix; ANY has no method check, so a r
 pages/api handler can be over-flagged; not handled: Django urls, NestJS decorators, `.route(path).get()` chains, calls chained on a call result
 (`new Elysia().get(...)`) or split from their receiver by whitespace, `fastify.route({...})`, `app.on(...)`, a call with a spread argument
 (`app.post("/x", ...guards, h)`), inline "use server", wrapped action consts (`export const a = wrap(async ...)`), template or computed route
-paths, `.all("/x/*", guard)` as a gate (it reads as an ANY route), TS generics on a route call. A decorator above the route decorator
+paths, `.all("/x/*", guard)` as a gate (it reads as an ANY route). A type-argument list is read only when its angle brackets balance within 2000 characters with no `;`, `&&` or `||` outside
+brackets and a `(` follows, so a list that breaks that reads as no route. A `root-hook` row is only as good as the text scan: conditions are not evaluated (a method
+test, a regex or computed path test, a scope held in a variable, an `endsWith`, `includes` or `slice(0, n) ===` test read as a prefix test when it exempts and as the path itself when it scopes, a per-route opt-out inside the hook, or a bypass OR-ed with a path test still reads `root-hook`,
+and a path rule that is no `if` condition (a ternary, an `&&` chain, a `switch` `case`) is not read at all, so a route it exempts reads `root-hook`), a `!` before a scope path in a refusing
+`if`, or before a path test that is OR-ed or AND-ed with anything else, makes the hook cover nothing (which side is open is unknown), a bare return after the first refusal is not checked as a
+bypass, the hook must come before the `register` call, the direct call or the route in source order and in a block that holds it (an awaited register has already loaded its routes; a route above the
+hook in its own file is never credited, nor is a GET of its own file; a hook in a plugin function or an `if` reaches nothing after that block, and code formatted at column 0 widens the block), every wiring site seen of a routes file must be covered (every call of an imported name counts as one, and direct calls are read only in
+files that contain `.register` or `addHook`; a namespace member call `ns.fn(app)` or a call with type arguments is not seen), a `prefix` that is not a plain string literal leaves a hook with a
+scope or allow-list path covering nothing, handlers are followed through same-file declarations only (an imported guard is not read), allow-list paths
+are matched as text, and a bare IDENTITY name or a 401/403 alone makes a hook count. A hook on a receiver not bound to `Fastify(...)` (a plugin parameter, a factory result,
+`await Fastify()`) stays file-local (the `.use`/addHook rule above), and receivers are matched by name per file. Any other way of registering routes (a path alias,
+autoload, `.route`, a plugin that registers another, `import type`, `export default function`, a typed CJS binding) is not seen, so those routes read none. A decorator above the route decorator
 (Flask/FastAPI register the undecorated function) is ignored, so `@login_required` placed there reads none. A JS handler ends at the next line
 that starts at column 0 and a Python one at the next line indented no deeper than its decorator, so minified one-line files blur spans.
 Public-by-design routes (login, webhooks, health, NextAuth `[...nextauth]`) read none, or `middleware` when a gate lets them through by a rule that is not a literal path:
@@ -50,7 +70,7 @@ Exit 0 always on a readable DIR (report-only: never fails a build on its own), 2
 ponytail: text scan on the tenant_scope_check.py masker, not an AST -- regex literals with quotes can desync it. Upgrade to a parser if
 precision matters more.
 """
-import json, os, re, sys
+import json, os, posixpath, re, sys
 
 sys.dont_write_bytecode = True  # `python3 -I` drops this dir from sys.path: add it for the sibling import and leave no __pycache__ behind
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -81,7 +101,8 @@ TEST = re.compile(r"\.(?:test|spec)\.|(?:^|/)(?:__tests__|tests?|e2e)/|(?:^|/)(?
 NAPP = re.compile(r"(?:(.*)/)?app/(?:(.*)/)?route\.(?:[tj]sx?|mjs)$")
 NAPI = re.compile(r"(?:(.*)/)?pages/(api/.+)\.(?:[tj]sx?|mjs)$")
 MWF = re.compile(r"(?:middleware|proxy)\.[jt]s")
-REFUSE = re.compile(r"""\bstatus[:(]\s*40[13]|Response\(\s*["'](?:Unauthorized|Forbidden)""")  # a middleware that can answer 401/403 gates what its matcher covers, whatever its check is called
+REFUSE = re.compile(r"""\bstatus[:(]\s*40[13]|Response\(\s*["'](?:Unauthorized|Forbidden)|\.code\(\s*40[13]|\bstatusCode\s*=\s*40[13]|\.(?:unauthorized|forbidden)\(""")  # a middleware or hook that can answer 401/403 gates what it covers, whatever its check is called
+GATE = re.compile(REFUSE.pattern + "|" + CALL.pattern)  # text that can refuse a request or calls an identity check
 END = re.compile(r"^\S", re.M)  # a JS span ends at the next line that starts at column 0 (its closing brace or the next declaration)
 JSFN = re.compile(r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)|^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\b|function\b|\()", re.M)
 PYFN = re.compile(r"^(?:@[^\n]*\n)*(?:async[ \t]+)?def[ \t]+(\w+)", re.M)  # decorators above a def belong to it, not to the module
@@ -90,10 +111,18 @@ LIT = re.compile(r"""(["'`])(/[^"'`$]*)\1""")
 GLOB = re.compile(r"(?:\(\.\*\)|/\*|/:\w+\*)$")  # the wildcard that ends a glob-style path literal: `/sign-in(.*)`, `/x/*`, `/x/:path*`
 JOIN = re.compile(r"(?:[?:]|&&|\|\|)\s*|(?<!\s)\s+(?=[.?:]|&&|\|\|)")  # whitespace a statement runs over: after `? : && ||`, before `. ? : && ||`
 HOOK = re.compile(r"""(["'])(?:onRequest|preHandler|preValidation|preParsing)\1""")
-RCV = re.compile(r"\b(\w+)\s*(?::[^=\n]+)?=\s*(?:await\s+)?(?:new\s+)?(?:express|Router|Hono|Fastify|fastify|Elysia)\b")
+BARE = re.compile(r"\breturn\s*(?:;|\}|$)|\b(?:done|next)\(\s*\)", re.M)  # a statement that lets the request through unanswered: `return;`, `return }`, `return` ending a line, `done()`
+RCV =re.compile(r"\b(\w+)\s*(?::[^=\n]+)?=\s*(?:await\s+)?(?:new\s+)?(?:express|Router|Hono|Fastify|fastify|Elysia)\b")
 PYDEC = re.compile(r"^([ \t]*)@\w+\.(%s|route)\(" % H, re.M)
 PYDEF = re.compile(r"\bdef\s+\w+\s*\(")
-JSPRE = re.compile(r"\.(?:%s|all)\(|use server" % H)
+JSPRE = re.compile(r"\.(?:%s|all)[(<]|use server" % H)
+OPEN = re.compile(r"\s*\(")
+FRCV = re.compile(r"""\b(\w+)\s*(?::[^=\n]+)?=\s*(?:[Ff]astify|require\(\s*["']fastify["']\s*\))\s*\(""")  # a receiver bound to a Fastify instance
+DECL = re.compile(r"^([ \t]*)(?:export\s+)?(?:async\s+)?(?:function|const|let|var)\s+([\w$]+)", re.M)
+IMP = (re.compile(r"""\bimport\s+([^"']*?)\s*from\s*(["'])(\.[^"'\n]*)\2"""),  # import a, { b as c } from "./x"
+       re.compile(r"""\b(?:const|let|var)\s+([^=]*?)=\s*(?:await\s+)?(?:require|import)\(\s*(["'])(\.[^"'\n]*)\2"""))  # const { a } = require("./x")
+INL = re.compile(r"""\b(?:require|import)\(\s*["'](\.[^"'\n]*)["']""")  # register(require("./x"))
+ARG1 = re.compile(r"\s*([\w$]+)\s*[,)]")  # the first argument of a call, when it is a bare name
 
 
 def pymask(s, keep=False):
@@ -162,6 +191,18 @@ def nextdecl(m, i):
     return x.start() if x else len(m)
 
 
+def outdent(m, i, n):
+    """Index of the line break before the first non-blank line after i that is indented no deeper than n columns, else len(m)."""
+    e = re.compile(r"\n[ \t]{0,%d}(?=\S)" % n).search(m, i)
+    return e.start() if e else len(m)
+
+
+def block_end(m, i):
+    """Index of the line break that ends the block holding position i: before the first later line indented less than i's own line (len(m) when that line is at column 0)."""
+    n = len(re.match(r"[ \t]*", m[m.rfind("\n", 0, i) + 1:])[0])
+    return outdent(m, i, n - 1) if n else len(m)
+
+
 def defs(m, py):
     """{name: (start, end)} of column-0 function definitions: start just after the name (Python: at its decorators), end at the next column-0 declaration or statement."""
     out = {}
@@ -179,11 +220,10 @@ def p2re(p):
     return re.sub(r"(?<!\?):\w+", "[^/]+", p)
 
 
-def refusing_ifs(m, mk):
-    """(open, close) indexes of the parentheses of each `if (...)` in masked text m whose body can answer 401/403 (REFUSE in strings-kept mk).
+def ifs(m):
+    """(open, close, start, end) of each `if (...)` in masked text m: the indexes of the condition's parentheses and of the first and last character of its body.
     The body is the braced block (nested statements count, an `else` branch does not) or the one statement, which ends at the first `;` or line break outside brackets
     that does not carry it on (the next line starts with `.`, `?`, `:`, `&&` or `||`, or this one ends in `?`, `:`, `&&` or `||`: a ternary, logical or chained call)."""
-    out = []
     j = JOIN.sub(lambda x: x[0].replace("\n", " "), m)  # same length as m, with those line breaks read as spaces
     for t in re.finditer(r"\bif\s*\(", m):
         a = t.end() - 1
@@ -197,8 +237,26 @@ def refusing_ifs(m, mk):
             for e in range(s, len(m)):
                 d += (j[e] in "([{") - (j[e] in ")]}")
                 if d < 1 and j[e] in ";\n": break
-        if REFUSE.search(mk[s:e + 1]): out.append((a, b))
-    return out
+        yield a, b, s, e
+
+
+def refusing_ifs(m, mk):
+    """(open, close) indexes of the parentheses of each `if (...)` in masked text m whose body (see ifs) can answer 401/403 (REFUSE in strings-kept mk)."""
+    return [(a, b) for a, b, s, e in ifs(m) if REFUSE.search(mk[s:e + 1])]
+
+
+def litpath(g):
+    """The path a quoted /path match g (LIT) names as an allow-list entry: a trailing `(.*)`, `/*` or `/:name*` and trailing slashes dropped."""
+    return GLOB.sub("", g[2]).rstrip("/")
+
+
+def lit(mk, g):
+    """(path, op) of the quoted /path match g (LIT) in strings-kept text mk: the path as litpath reads it, and how the text tests it. op is "=" when the literal is compared with
+    `==` or `===` on either side against a plain identifier or member chain (`req.url`, `req.routeOptions.url`), "^" when it is the argument of `startsWith(`, else "?" (`includes`,
+    a collection, a regex, `!==`, or `==`/`===` against a call or an index: `slice(0, n)`, `path.dirname(x)`, `split("?")[0]` can test a prefix or a derived value, and "?" only
+    moves a route toward flagged). gated() reads the op by role: a test that exempts or scopes a route by its raw string reads differently from one that scopes it by path segment."""
+    pre, post = mk[max(0, g.start() - 40):g.start()], mk[g.end():g.end() + 40]
+    return litpath(g), "=" if re.search(r"[\w$]\s*={2,3}\s*$", pre) or re.match(r"\s*={2,3}(?!=)\s*[\w$.]+(?=\s*[^\s\w$.?(\[])", post) else "^" if re.search(r"startsWith\(\s*$", pre) else "?"
 
 
 def mw_pats(m, mk):
@@ -213,7 +271,7 @@ def mw_pats(m, mk):
     j = close_of(m, i) if c == "[" else m.find(c, i + 1) if c in ("'", '"', "`") else -1
     ms = [p.replace("\\\\", "\\") for p in re.findall(r"""['"`](/[^'"`]*)['"`]""", mk[i:j + 1])]
     sc = refusing_ifs(m, mk)
-    lits = {GLOB.sub("", g[2]).rstrip("/") for g in LIT.finditer(mk) if not any(a < g.start() < b for a, b in sc)}
+    lits = {litpath(g) for g in LIT.finditer(mk) if not any(a < g.start() < b for a, b in sc)}
     opn = "".join("(?!%s(?:/|$))" % re.escape(q) for q in lits if q and not any(p.startswith(q) for p in ms))
     if not x: return [re.compile(opn + ".*")]
     pats = []
@@ -235,20 +293,50 @@ def next_hs(m, route, mwb, hs, gone, fn):
         hs.extend((t.start(), ex, route, [fn[lo]] if lo in fn else [], None, None, mwb) for lo, ex in items(t.group(1)) if ex in VERBS)
 
 
-def call_hs(m, mk, hs, uses, gone):
-    """Express/Router/Hono/Fastify `<receiver>.get|post|...(path, ...)` routes and positional `.use(...)` / `.addHook(...)` auth."""
-    rcv = RECEIVERS | set(RCV.findall(m))
-    for t in re.finditer(r"\b(\w+)\.(use|addHook|%s|all)\(" % H, m):
-        r, k = t.group(1), t.group(2)
-        op = t.end() - 1
-        cl = close_of(m, op) if r in rcv else -1
+def opener(m, i):
+    """Index of the `(` that opens the call arguments at m[i], past a TS type-argument list `<...>` when m[i] is `<`; -1 when it is no call (`x.get < y && f(z)`).
+    The angles must balance within 2000 characters, no `;`, `&&`, `||` or closing bracket may stand outside brackets before they do, and `(` must follow."""
+    if m[i:i + 1] == "(": return i
+    o = a = 0
+    for k in range(i, min(len(m), i + 2000)):
+        c = m[k]
+        if c in "([{": o += 1
+        elif c in ")]}":
+            o -= 1
+            if o < 0: return -1
+        elif o == 0:
+            if c == "<": a += 1
+            elif c == ">" and m[k - 1] != "=":  # `=>` is an arrow type, not a closing angle
+                a -= 1
+                if a == 0:
+                    x = OPEN.match(m, k + 1)
+                    return x.end() - 1 if x else -1
+            elif c == ";" or m[k:k + 2] in ("&&", "||"): return -1
+    return -1
+
+
+def callargs(m, mk, names, rcv=None):
+    """(match, open, close, parts) of each `<receiver>.<name>(...)` or `.<name><T>(...)` call (name: regex alternatives) in masked text m, on a receiver in rcv when given;
+    a call with a spread argument or unbalanced brackets is skipped."""
+    for t in re.finditer(r"\b(\w+)\.(%s)(?=[(<])" % names, m):
+        if rcv is not None and t.group(1) not in rcv: continue
+        op = opener(m, t.end())
+        cl = close_of(m, op) if op > 0 else -1
         ps = parts(m[op + 1:cl], mk[op + 1:cl]) if cl > 0 else None
-        if not ps: continue
+        if ps: yield t, op, cl, ps
+
+
+def call_hs(m, mk, hs, uses, gone):
+    """Express/Router/Hono/Fastify `<receiver>.get|post|...(path, ...)` routes, TS type arguments allowed, and positional `.use(...)` / `.addHook(...)` auth."""
+    rcv, frcv = RECEIVERS | set(RCV.findall(m)), set(FRCV.findall(mk))
+    for t, op, cl, ps in callargs(m, mk, "use|addHook|%s|all" % H, rcv):
+        r, k = t.group(1), t.group(2)
         p0 = ps[0][1].strip()
         lit = LIT.fullmatch(p0)
         if k in ("use", "addHook"):
             gone.append((t.start(), cl + 1))
             if k == "addHook" and not HOOK.fullmatch(p0): continue
+            if k == "addHook" and r in frcv and len(ps) > 1 and not re.fullmatch(r"[\w$.]+", ps[1][0].strip()): continue  # an inline handler on a Fastify() receiver is judged by wiring(), not by name
             lab = ident(",".join(a[0] for a in ps), True)
             if lab: uses.append((r, t.start(), lit.group(2).rstrip("*/") if lit else "", lab))
         elif lit and len(ps) > 1:
@@ -273,15 +361,137 @@ def py_hs(m, mk, hs, gone):
         elif km: meths = [v for v in VERBS if re.search(r"""['"]%s['"]""" % v, km.group(1), re.I)]
         else: meths = ["GET"]
         if not meths: continue
-        e = re.compile(r"\n[ \t]{0,%d}(?=\S)" % len(t.group(1))).search(m, sc)
-        end = e.start() if e else len(m)
+        end = outdent(m, sc, len(t.group(1)))
         gone.append((t.start(), end))
         hs.append((t.start(), "|".join(meths), pyroute(pm.group(2)), [(t.start(), dm.start()), (dm.end() - 1, end)], None, None, None))
 
 
-def analyze(rel, raw, mws):
-    """[(path, line, METHOD, route, auth)] for one file."""
-    py = rel.endswith(".py")
+def mount(ps):
+    """Path prefix a `x.register(plugin, opts)` call (ps: its parts) mounts the plugin under: the literal `prefix` of an inline options object, "" when there is none to read
+    (no options, or an object with neither `prefix` nor a spread), None when it is unknown (an options variable, a spread, a prefix that is not a string literal)."""
+    o = ps[1][1].strip() if len(ps) > 1 else "{}"
+    if o[:1] != "{" or "..." in o: return None
+    if not re.search(r"\bprefix\b", o): return ""
+    g = re.search(r"\bprefix\s*:\s*" + LIT.pattern + r"\s*[,}]", o)
+    return g[2].rstrip("/") if g else None
+
+
+def resolve(rel, spec, known):
+    """The file in known (rel's scanned files) that the relative import `spec` written in `rel` names: as written, with a source extension or as a directory index; a `.js` spec finds its `.ts` source. None when absent."""
+    b = posixpath.normpath(posixpath.join(posixpath.dirname(rel), spec))
+    for c in (b, re.sub(r"\.jsx?$", "", b)):
+        for s in ("",) + EXT + tuple("/index" + e for e in EXT):
+            if c + s in known: return c + s
+
+
+def decls(m):
+    """{name: (start, end)} of function and const/let/var declarations at any indent: start just after the name, end at the next line indented no deeper than the declaration.
+    ponytail: one entry per name (the last wins), so the same name in two scopes collides; upgrade to scoped lookup if that matters."""
+    return {t.group(2): (t.end(), outdent(m, t.end(), len(t.group(1)))) for t in DECL.finditer(m)}
+
+
+def reach(m, dc, a, b):
+    """[(start, end)] spans of m[a:b] and, transitively, of the same-file declarations (dc) whose names appear in it."""
+    sp, seen = [(a, b)], set()
+    for x, y in sp:  # grows as it goes
+        for w in re.findall(r"[\w$]+", m[x:y]):
+            if w in dc and w not in seen: seen.add(w); sp.append(dc[w])
+    return sp
+
+
+def hook(m, mk, dc, a, b):
+    """([scope groups], [exempt paths]) of a Fastify hook handler at m[a:b] that can answer 401/403 or names an identity check, else None; each path is a lit() pair, and a route
+    is covered when every group scopes it and no exempt path lets it through (see gated). The handler's text is the span plus, transitively, the same-file declarations (dc) it
+    names. Only the `if` statements up to and including the first refusal (the first REFUSE match of each span) say what the hook covers; a quoted /path anywhere else (a role
+    table the hook reads, a path test after the refusal) says nothing. A trailing `(.*)`, `/*` or `/:name*` is dropped from a path.
+    - A path in the condition of an `if` whose body refuses or calls an identity check is a scope (one group for all of them); a `!` before it makes the test ambiguous: None.
+    - A path test whose body is a bare return (BARE), the path written in the condition or in a same-file declaration the condition names: negated (`!`) it is a scope (a group per
+      `if`), else an allow-list entry, also after the first refusal; a negated one that is OR-ed or AND-ed with anything else is ambiguous: None.
+    - A bare return before the first refusal under a condition that is no path test and no identity check (an IDENTITY call, or a comparison with a secret/token/api-key/password
+      word) is a bypass: None.
+    ponytail: conditions are not evaluated (a bypass OR-ed with a path test reads as the path test; `includes`, `endsWith`, a regex test and `==`/`===` against a call or an index
+    (`slice(0, n)`, `path.dirname(x)`, `split("?")[0]`) read as a prefix test when they exempt and as the path itself when they scope), a trailing slash on a `startsWith` literal is dropped, so it exempts a longer name too, a
+    bare return after the first refusal is not checked as a bypass, `return reply...` and `return true` are not bare, and a bare return in a same-file helper the hook names voids
+    it too (a noisy HIGH, never a quiet one)."""
+    sp = reach(m, dc, a, b)
+    if not (REFUSE.search("\n".join(mk[x:y] for x, y in sp)) or CALL.search("\n".join(m[x:y] for x, y in sp))
+            or (re.fullmatch(r"[\w$.]+", m[a:b].strip()) and USE.search(m[a:b]))): return None
+    cut = {}  # span -> index of its first refusal
+    for x, y in sp:
+        r = REFUSE.search(mk, x, y)
+        cut[x, y] = r.start() if r else y
+    groups, scope, free = [], set(), set()
+    for o, c, s, e in ifs(m):
+        span = next((p for p in sp if p[0] <= o < p[1]), None)
+        if span is None: continue
+        before = o < cut[span]
+        if GATE.search(mk[s:e + 1]):
+            if not before: continue
+            for g in LIT.finditer(mk, o, c):
+                if "!" in m[o:g.start()]: return None
+                scope.add(lit(mk, g))
+        elif BARE.search(m[s:e + 1]):
+            lits = {lit(mk, g) for x, y in reach(m, dc, o, c + 1) for g in LIT.finditer(mk, x, y)}
+            if lits and "!" not in m[o:c]: free |= lits
+            elif not before: continue
+            elif lits and re.search(r"&&|\|\|", m[o:c]): return None
+            elif lits: groups.append(sorted(lits))
+            elif not (CALL.search(m[o:c]) or CMP.search(mk[o:c]) and SEC.search(mk[o:c])): return None
+    return ([sorted(scope)] if scope else []) + groups, sorted(free)
+
+
+def wiring(rel, raw, known):
+    """(hooks, sites) of the file rel. hooks: {receiver: [(position, end of its block, hook())]} for each `x.addHook("onRequest"|...)` that hook() accepts, x being bound to a `Fastify(...)` call, at any depth.
+    sites: [(file, (mount, hooks))], one for each place rel wires the routes of a scanned file onto an instance: `x.register(plugin, opts)` whose plugin is a relative import, or an inline
+    require/import, of that file (mount is mount(opts)), and a call `fn(x, ...)` of a name imported from it outside any register call (mount ""). hooks are those on x placed before the
+    call or register in a block that holds it (block_end); a direct call whose first argument is not a bare name has none.
+    ponytail: direct calls are read only in files that contain `.register` or `addHook` (the masker is slow), so a second call site elsewhere is missed; a namespace member call
+    (`ns.fn(app)`) or a call with type arguments is not seen; every call of an imported name is a site, so a helper called from a hook or a factory called elsewhere leaves its file uncovered."""
+    m, mk = mask(raw), mask(raw, True)
+    imp, dc, hooks, sites = {}, decls(m), {}, []
+    for rx in IMP:
+        for t in rx.finditer(mk):
+            imp.update((b, resolve(rel, t[3], known)) for _, b in items(re.sub(r"[{}]", "", t[1])))
+    for t, op, cl, ps in callargs(m, mk, "addHook", set(FRCV.findall(mk))):
+        if len(ps) < 2 or not HOOK.fullmatch(ps[0][1].strip()): continue
+        a = op + 2 + len(ps[0][0])  # the handler argument
+        h = hook(m, mk, dc, a, a + len(ps[1][0]))
+        if h: hooks.setdefault(t[1], []).append((t.start(), block_end(m, t.start()), h))
+    regs = list(callargs(m, mk, "register"))
+    for t, op, cl, ps in regs:
+        fs = {resolve(rel, s, known) for s in INL.findall(ps[0][1])} | {imp.get(w) for w in re.findall(r"[\w$]+", ps[0][0])}
+        site = (mount(ps), [h for p, q, h in hooks.get(t[1], []) if p < t.start() < q])
+        sites += [(f, site) for f in fs]  # an unresolved name gives None: no file is called that
+    names = [re.escape(w) for w, f in imp.items() if f]
+    for t in (re.finditer(r"(?<![\w$.])(%s)\(" % "|".join(names), m) if names else ()):
+        if any(op < t.start() < cl for _, op, cl, _ in regs): continue  # inside a register call: the register site covers it
+        x = ARG1.match(m, t.end())
+        sites.append((imp[t[1]], ("", [h for p, q, h in hooks.get(x and x[1], []) if p < t.start() < q])))
+    return hooks, sites
+
+
+def gated(sites, route):
+    """True when at every site (mount, hooks) of the file a refusing root hook covers `route`. A hook with no path literal covers it whatever the mount; one with scope
+    groups covers only the routes every group scopes, less the routes an exempt path lets through, judged on mount + route (an unknown mount covers nothing). A path is read by
+    its op (lit), as the JS test runs: a scope is the path itself for `==`, `===` and any other test, and the routes under it by path segment for `startsWith`; an exemption is
+    the path itself for `==` and `===` against a plain name, and every route whose raw path starts with it (`/x/healthz` under `/x/health`) for `startsWith` and any other test, the root `/` alone
+    for any but `startsWith`. No sites: False."""
+    def cover(p, t): q, op = t; return p == q or op == "^" and bool(q) and p.startswith(q + "/")
+    def exempt(p, t): q, op = t; return p == q or op != "=" and (op == "^" or bool(q)) and p.startswith(q)
+    def ok(pre, sc, ex):
+        if not (sc or ex): return True
+        if pre is None: return False
+        p = (pre + route).rstrip("/")
+        return all(any(cover(p, q) for q in g) for g in sc) and not any(exempt(p, q) for q in ex)
+    return bool(sites) and all(any(ok(pre, *h) for h in hs) for pre, hs in sites)
+
+
+def analyze(rel, raw, mws, sites=None, hooks=None):
+    """[(path, line, METHOD, route, auth)] for one file; sites: the wiring() sites that wire the file, for the root-hook evidence; hooks: the wiring() hooks of the file itself.
+    A non-GET route is also covered by the hook of its own receiver declared before it in a block that holds the route (a route above the hook keeps its own evidence, and a GET reads INFO either way).
+    ponytail: source order stands in for Fastify registration order, so a route added before the hook is never credited (conservative); block nesting stands in for encapsulation, so a hook
+    in a plugin function or an `if` never reaches a route after the block, and a column-0 one-liner widens the block to the end of the file."""
+    hooks, py = hooks or {}, rel.endswith(".py")
     mk_ = pymask if py else mask
     m, mk, rl = mk_(raw), mk_(raw, True), raw.splitlines()
     fn = defs(m, py)
@@ -309,7 +519,8 @@ def analyze(rel, raw, mws):
         use = next((u[3] for u in uses if u[0] == rcv and u[1] < pos and (route == u[2] or route.startswith(u[2] + "/"))), None)
         pats = mws.get(mwb) if mwb is not None else None
         mw = "middleware" if pats and any(x.fullmatch(route) for x in pats) else None
-        lab = pre or use or next((g[0] for g in got if g[0]), None) or ("token" if any(g[1] for g in got) else None) or mw or "none"
+        mine = [h for p, q, h in hooks.get(rcv, ()) if p < pos < q]  # hooks on this route's receiver declared before it, in a block that holds it
+        lab = pre or use or next((g[0] for g in got if g[0]), None) or ("token" if any(g[1] for g in got) else None) or mw or ("root-hook" if gated(sites, route) or meth != "GET" and gated([("", mine)], route) else None) or "none"
         if any(MARK in l for l in rl[max(0, ln - 2):ln]): lab = "public"
         out.append((rel, ln, meth, route, lab))
     return out
@@ -328,16 +539,20 @@ def scan(root):
         for f in sorted(fn):
             rel = os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/")
             if f.endswith(EXT) and not TEST.search(rel): files.append(rel)
-    mws, rows, seen = {}, [], 0
+    known = set(files)
+    mws, rows, todo, cov, own = {}, [], [], {}, {}  # todo: files with handlers; cov: file -> wiring() sites that wire it; own: file -> its own wiring() hooks
     for rel in files:
         raw = read(root, rel) if MWF.fullmatch(os.path.basename(rel)) else None
         if raw is not None: mws[os.path.dirname(rel)] = mw_pats(mask(raw), mask(raw, True))
     for rel in files:
         raw = read(root, rel)
-        if raw is None or not (NAPP.match(rel) or NAPI.match(rel) or (PYDEC if rel.endswith(".py") else JSPRE).search(raw)): continue
-        seen += 1
-        rows += analyze(rel, raw, mws)
-    return sorted(rows), seen
+        if raw is None: continue
+        if ".register" in raw or "addHook" in raw:
+            own[rel], sites = wiring(rel, raw, known)
+            for f, site in sites: cov.setdefault(f, []).append(site)
+        if NAPP.match(rel) or NAPI.match(rel) or (PYDEC if rel.endswith(".py") else JSPRE).search(raw): todo.append((rel, raw))
+    for rel, raw in todo: rows += analyze(rel, raw, mws, cov.get(rel), own.get(rel))
+    return sorted(rows), len(todo)
 
 
 def main(argv):

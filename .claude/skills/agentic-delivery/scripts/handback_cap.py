@@ -68,9 +68,11 @@ BACKGROUND WORK (policy `background_guard`: `off|warn|block`, default `warn`; en
 owns its background jobs until they exit. When the lane's cwd is inside a LINKED worktree and a test or build runner
 (BG_RE: pytest, jest, vitest, playwright, make, `npm test`, `cargo test`, `go build`, a `*test*.py|sh` script, ...) has its
 cwd inside that worktree, `warn` sends the owner a `systemMessage` naming the pid and command, and `block` exits 2 with the
-same text on stderr (released after PUSH_MAX_S, like a live push). Dev servers are not matched. The scan reuses
-lane_liveness.cwd_pids (lsof, else /proc) plus one `ps`, excludes this hook's own pid, ancestors and descendants, and
-fails open: a blind scan prints COULD_NOT_CHECK and never blocks. A non-worktree cwd (a shared checkout) is not scanned.
+same text on stderr (released after PUSH_MAX_S, like a live `git push` or `git commit`: PUSH_RE matches both for a process whose argv[0] is `git`, `-C`/`-c`
+and an `env VAR=...` or perl alarm wrapper included, but not `commit-tree`, `commit-graph`, `push-x` or a `claude -p` brief or `grep` that names them; read-only
+agent types, READONLY_RE, are never held for one). Dev servers are not matched. The scan reuses
+lane_liveness.cwd_pids (lsof, else /proc) plus one `ps`, excludes this hook's own pid, ancestors and descendants
+(`_skip_pids`, shared with the live push/commit check), and fails open: a blind scan prints COULD_NOT_CHECK and never blocks. A non-worktree cwd (a shared checkout) is not scanned.
 DIRTY WORKTREE (same switch): in a linked worktree, `git status --porcelain` (gitignored files excluded) listing
 uncommitted or untracked paths gets a `systemMessage` under `warn` (merged with the line above, one JSON line) or exit 2
 under `block` (released after PUSH_MAX_S). Read-only agent types (READONLY_RE: review, investigat, audit, explore) are
@@ -211,32 +213,36 @@ def _read_blocks(path):
         return 0
 
 
-# `git [-c k=v] [-C dir | -C "dir w/ space"] [--opt] push`; group 2/3 = the -C dir (quoted or bare)
-PUSH_RE = re.compile(r"""\bgit\b((?:\s+-C\s+(?:"([^"]*)"|'([^']*)'|(\S+))|\s+-c\s+\S+|\s+-\S+)*)\s+push\b""")
-PUSH_MAX_S = int(os.environ.get("HANDBACK_PUSH_MAX_S", "1800"))  # keep blocking while the push is live, at most this long
+# A process whose argv[0] is `git` (any path), alone or behind `env VAR=...` or `perl -e 'alarm N; exec @ARGV'`:
+# `git [-c k=v] [-C dir | -C "dir w/ space"] [--opt] push|commit` (a hook can make either slow; `commit-tree`, `commit-graph` and `push-x` do not match,
+# nor does a `claude -p` lane brief, a shell string or a `grep` that only names the words); group 2/3/4 = the -C dir (double-quoted, single-quoted or bare)
+PUSH_RE = re.compile(r"""^(?:(?:\S*/)?env\s+(?:\w+=\S*\s+)*|(?:\S*/)?perl\s+-e\s+(?:'[^']*'|alarm\s+\d+;\s*exec\s+@ARGV)\s+)*(?:\S*/)?git((?:\s+-C\s+(?:"([^"]*)"|'([^']*)'|(\S+))|\s+-c\s+\S+|\s+-\S+)*)\s+(?:push|commit)(?![\w-])""")
+PUSH_MAX_S = int(os.environ.get("HANDBACK_PUSH_MAX_S", "1800"))  # keep blocking while the push or commit is live, at most this long
 
 
 def _push_running(cwd):
-    """True/False: is a `git push` (also `git -C <dir> push`) live with its cwd or -C dir in the same git worktree as `cwd`?
+    """True/False: is a `git push` or `git commit` (also `git -C <dir> push|commit`) live with its cwd or -C dir in the same git worktree as `cwd`?
+    Only a process whose argv[0] is `git` counts (PUSH_RE), so a `claude -p "<brief that says git commit>"` host, a sibling lane or a `grep` that merely names the words does not.
+    Never counts `_skip_pids`: this hook, its ancestors (a `git commit` whose own hook runs this one) or its descendants.
     None = could not check (no cwd, ps/lsof denied or failed): the hook stays advisory and fails open, but says so."""
     if not cwd or not os.path.isdir(cwd):
         return None
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from lane_liveness import same_tree as _same_tree
-        r = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, timeout=10)
-        if r.returncode != 0 or not r.stdout.strip():
+        r = subprocess.run(["ps", "-axo", "pid=,ppid=,command="], capture_output=True, text=True, timeout=10)
+        table = _ps_table(r.stdout) if r.returncode == 0 else {}
+        if not table:
             return None
-        root = os.path.realpath(cwd)
-        for ln in r.stdout.splitlines():
-            pid, _, cmd = ln.strip().partition(" ")
+        root, skip = os.path.realpath(cwd), _skip_pids(table, os.getpid())
+        for pid, (_, cmd) in table.items():
             m = PUSH_RE.search(cmd)
-            if not m or not pid.isdigit() or int(pid) == os.getpid():
+            if not m or pid in skip:
                 continue
             cdir = m.group(2) or m.group(3) or m.group(4)
             if cdir and _same_tree(cdir, root):
                 return True
-            out = subprocess.run(["lsof", "-a", "-d", "cwd", "-p", pid, "-Fn"], capture_output=True, text=True, timeout=10)
+            out = subprocess.run(["lsof", "-a", "-d", "cwd", "-p", str(pid), "-Fn"], capture_output=True, text=True, timeout=10)
             if out.returncode > 1:
                 return None
             if any(n.startswith("n") and _same_tree(n[1:], root) for n in out.stdout.splitlines()):
@@ -272,6 +278,24 @@ def _ps_table(text):
     rows = (ln.split(None, 2) for ln in text.splitlines())
     return {int(a): (int(b), c) for a, b, c in (r for r in rows if len(r) == 3) if a.isdigit() and b.isdigit()}
 
+
+def _skip_pids(table, me):
+    """pids a process scan must never count: `me`, its ancestors (the host that runs this hook; a headless `claude -p`
+    host carries the lane's brief, `git commit` included, in its argv) and its descendants (the ps/lsof it spawned).
+    `table` maps pid -> (ppid, command)."""
+    skip, p = {me}, me
+    while p in table and table[p][0] > 1 and table[p][0] not in skip:
+        p = table[p][0]
+        skip.add(p)
+    kids = {me}
+    while True:
+        more = {q for q, (pp, _) in table.items() if pp in kids} - kids
+        if not more:
+            break
+        kids |= more
+    return skip | kids
+
+
 # The lane's own words: it hands back "waiting on" its background tests. Advisory only (see check()).
 _WAIT_KW = (r"(?:background|bg|tests?|test\s+(?:suite|run)|suites?|builds?|pytest|playwright|e2e|gates?|pre-push|ci|checks?"
             r"|lint|workflows?|actions|jobs?|runs?)")
@@ -306,19 +330,9 @@ def _waiting_claim(msg):
 
 
 def _bg_found(table, pids, me):
-    """[(pid, command)] of test/build processes among `pids`. `table` maps pid -> (ppid, command). Never counts `me`,
-    its ancestors (the host that runs this hook) or its descendants (the ps/lsof it spawned)."""
-    skip, p = {me}, me
-    while p in table and table[p][0] > 1 and table[p][0] not in skip:
-        p = table[p][0]
-        skip.add(p)
-    kids = {me}
-    while True:
-        more = {q for q, (pp, _) in table.items() if pp in kids} - kids
-        if not more:
-            break
-        kids |= more
-    skip |= kids
+    """[(pid, command)] of test/build processes among `pids`. `table` maps pid -> (ppid, command). Never counts
+    `_skip_pids(table, me)`."""
+    skip = _skip_pids(table, me)
     return sorted((p, table[p][1]) for p in pids if p in table and p not in skip and BG_RE.search(table[p][1]))
 
 
@@ -463,14 +477,15 @@ def check(data):
     """Return the hook exit code (0 pass, 2 block) for one hook-input dict."""
     if str(data.get("agent_type") or "") in _exempt_types():
         return 0
-    running = _push_running(data.get("cwd"))
+    ro = READONLY_RE.search(str(data.get("agent_type") or ""))  # a read-only type never owns a commit or push: not held, not scanned
+    running = False if ro else _push_running(data.get("cwd"))
     if running is None and data.get("cwd"):
-        sys.stderr.write("COULD_NOT_CHECK: cannot tell whether a git push from this worktree is still running (ps/lsof unavailable).\n")
+        sys.stderr.write("COULD_NOT_CHECK: cannot tell whether a git push or commit from this worktree is still running (ps/lsof unavailable).\n")
     agent_id = str(data.get("agent_id") or "unknown")
-    if running and _hold(agent_id, ".push"):  # keep blocking while the push is live, released after PUSH_MAX_S
+    if running and _hold(agent_id, ".push"):  # keep blocking while the push or commit is live, released after PUSH_MAX_S
         sys.stderr.write(
-            "A git push from this worktree is still running (its pre-push hook may take 15+ minutes). "
-            "You own it until it exits: wait with lane_guard.py wait --pid <pid> --timeout <s>, then hand back.\n"
+            "A git push or commit from this worktree is still running (its pre-push or pre-commit hook may take 15+ minutes) and may not be yours. "
+            f"Wait for it with lane_guard.py wait --pid <pid> --timeout <s>, then hand back; the hold ends after {PUSH_MAX_S} s at most.\n"
         )
         return 2
     mode = _bg_mode()
@@ -488,7 +503,7 @@ def check(data):
             return 2
         if mode == "warn":
             notes.append(f"background_guard: this lane handed back with a test/build still running from its worktree: {what}.")
-    dirty = [] if READONLY_RE.search(str(data.get("agent_type") or "")) or mode == "off" else _dirty_tree(data.get("cwd"))
+    dirty = [] if ro or mode == "off" else _dirty_tree(data.get("cwd"))
     if dirty is None and data.get("cwd"):
         sys.stderr.write("COULD_NOT_CHECK: cannot tell whether this worktree has uncommitted changes (git status failed).\n")
     if dirty:
@@ -746,7 +761,9 @@ def main():
 # the state dir and env overrides are trivially isolated per case.
 # ---------------------------------------------------------------------------
 def _selftest():
+    import io
     import shutil
+    from contextlib import redirect_stderr
 
     global STATE_DIR
     tmp = tempfile.mkdtemp(prefix="handback-cap-selftest-")
@@ -770,6 +787,12 @@ def _selftest():
     case("push-not-running-passes", check({"agent_id": "p2", "cwd": "/idle", "last_assistant_message": "VERIFIED"}), 0)
     case("push-unknown-passes-with-COULD_NOT_CHECK", check({"agent_id": "p5", "cwd": "/denied", "last_assistant_message": "VERIFIED"}), 0)
     case("push-exempt-type-passes", check({"agent_id": "p3", "agent_type": "Explore", "cwd": "/live", "last_assistant_message": "x"}), 0)
+    case("push-readonly-type-passes", check({"agent_id": "p6", "agent_type": "security-reviewer", "cwd": "/live", "last_assistant_message": "VERIFIED"}), 0)  # a review type never owns a commit
+    case("push-writer-type-blocks", check({"agent_id": "p7", "agent_type": "general-purpose", "cwd": "/live", "last_assistant_message": "VERIFIED"}), 2)
+    err = io.StringIO()
+    with redirect_stderr(err):
+        check({"agent_id": "p8", "cwd": "/live", "last_assistant_message": "VERIFIED"})
+    case("push-hold-text-does-not-claim-ownership", ("You own" in err.getvalue(), "lane_guard.py wait" in err.getvalue()), (False, True))
     for _ in range(MAX_BLOCKS + 5):  # many stop attempts while the push is live: still blocked
         rc = check({"agent_id": "p4", "cwd": "/live", "last_assistant_message": "VERIFIED"})
     case("push-live-keeps-blocking", rc, 2)
@@ -791,9 +814,10 @@ def _selftest():
     os.makedirs(os.path.join(mdir, ".git"))
     os.makedirs(wt)
     open(os.path.join(wt, ".git"), "w").close()
-    def _ps_with(cmd):
+    def _ps_with(cmd, *rows, cwd=""):  # pid 123 (ppid 1) runs `cmd`; `rows` are extra "pid ppid command" lines; lsof says every pid sits in `cwd`
         def run(argv, **k):
-            return subprocess.CompletedProcess(argv, 0, f"123 {cmd}\n" if argv[0] == "ps" else "", "")
+            out = "".join(f"{r}\n" for r in (f"123 1 {cmd}", *rows)) if argv[0] == "ps" else f"n{cwd}\n" if cwd else ""
+            return subprocess.CompletedProcess(argv, 0, out, "")
         return run
     subprocess.run = _ps_with(f"git -C {wt} push origin x")
     try:
@@ -807,6 +831,23 @@ def _selftest():
             f.write("gitdir: ../../.git/modules/sm\n")
         subprocess.run = _ps_with(f"git -C {sm} push origin x")
         case("submodule-push-is-own-push", _push_running(mdir), True)
+        subprocess.run = _ps_with(f"git -C {wt} commit -m x")  # a live commit (slow pre-commit hook) is held like a push
+        case("nested-worktree-commit-not-main-commit", _push_running(mdir), False)
+        case("nested-worktree-commit-is-own-commit", _push_running(wt), True)
+        brief = "git commit -m Fix it"  # a live commit whose pre-commit hook runs this hook: an ancestor, not a bystander; its cwd is the lane worktree
+        me = os.getpid()
+        subprocess.run = _ps_with(brief, f"{me} 123 python3 handback_cap.py", cwd=wt)
+        case("ancestor-with-git-commit-in-argv-not-counted", _push_running(wt), False)
+        subprocess.run = _ps_with(brief, f"{me} 124 python3 handback_cap.py", "124 123 sh -c handback_cap.py", cwd=wt)
+        case("grandparent-with-git-commit-in-argv-not-counted", _push_running(wt), False)
+        subprocess.run = _ps_with(brief, f"{me} 1 python3 handback_cap.py", cwd=wt)
+        case("unrelated-git-commit-still-counted", _push_running(wt), True)
+        for who, row in (("sibling-claude-brief", "claude -p Implement X. Never run git commit --no-verify. Report when done"),
+                         ("shell-string", "zsh -c sleep 900; echo remember to git commit later"), ("grep", "grep -rn git commit docs")):
+            subprocess.run = _ps_with(row, f"{me} 1 python3 handback_cap.py", cwd=wt)  # a process that only names the words, not an ancestor either
+            case(f"{who}-naming-git-commit-not-counted", _push_running(wt), False)
+        subprocess.run = lambda argv, **k: subprocess.CompletedProcess(argv, 0, "garbage\n", "")
+        case("ps-unparseable-is-unknown-not-false", _push_running(wt), None)
     finally:
         subprocess.run = real_run
     def cd(c):
@@ -818,6 +859,22 @@ def _selftest():
     case("git-dash-c-then-C-matches", cd("git -c a=b -C /w/y push"), "/w/y")
     case("plain-git-push-matches", bool(PUSH_RE.search("git push origin")), True)
     case("git-status-does-not-match", bool(PUSH_RE.search("git status --push")), False)
+    case("plain-git-commit-matches", bool(PUSH_RE.search("git commit -m x")), True)
+    case("git-dash-C-commit-matches", cd("git -C /w/x commit -q -m x"), "/w/x")
+    case("wrapped-git-commit-matches",  # the second form is how ps prints the same argv: no quotes
+         [bool(PUSH_RE.search(c)) for c in ("perl -e 'alarm 30; exec @ARGV' git commit -m x", "perl -e alarm 30; exec @ARGV git commit -m x")], [True, True])
+    case("env-wrapped-git-commit-and-push-match",
+         [bool(PUSH_RE.search(c)) for c in ("env GIT_AUTHOR_NAME=x GIT_COMMITTER_NAME=y git commit -m x", "/usr/bin/env A=b git push origin x")], [True, True])
+    case("perl-wrapped-git-push-matches",
+         [bool(PUSH_RE.search(c)) for c in ("perl -e 'alarm 30; exec @ARGV' git push origin x", "perl -e alarm 30; exec @ARGV git push origin x")], [True, True])
+    case("path-qualified-git-matches", [bool(PUSH_RE.search(c)) for c in ("/usr/bin/git commit -m x", "/opt/homebrew/bin/git -C /w/x push")], [True, True])
+    case("words-in-another-argv0-do-not-match",  # a lane brief, a shell string, a grep, and names that merely end in git
+         [bool(PUSH_RE.search(c)) for c in ("claude -p Implement X. Never run git commit --no-verify. Report when done", "zsh -c sleep 900; echo remember to git commit later",
+                                            "grep -rn git commit docs", "echo git push", "mygit commit -m x", "/opt/legit/bin/legit push")], [False] * 6)
+    case("git-commit-tree-does-not-match", bool(PUSH_RE.search("git commit-tree HEAD^{tree}")), False)
+    case("git-commit-graph-does-not-match", bool(PUSH_RE.search("git commit-graph write")), False)
+    case("git-push-x-does-not-match", bool(PUSH_RE.search("git push-x origin")), False)
+    case("git-log-grep-commit-does-not-match", bool(PUSH_RE.search("git log --grep commit")), False)
 
     # short message passes
     case("short-passes", check({"agent_id": "a1", "last_assistant_message": "VERIFIED | verdict=ok"}), 0)

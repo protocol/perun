@@ -1025,6 +1025,11 @@ MW = [  # (app dir, route dir, route, auth): which routes the app's Next middlew
     ("apps/glob", "acme-glob/x", "/acme-glob/x", "none"), ("apps/glob", "acme-path/x", "/acme-path/x", "none"),  # ... /* or /:name* names the path before it
     ("apps/glob", "acme-seg/x", "/acme-seg/x", "none"),  # the slash before a wildcard goes too
     ("apps/glob", "acme-api/other", "/acme-api/other", "middleware"), ("apps/glob", "acme-mid/x", "/acme-mid/x", "middleware"),  # siblings stay covered; a wildcard inside the path is not read
+    ("apps/g-code401", "api/x", "/api/x", "middleware"), ("apps/g-code403", "api/x", "/api/x", "middleware"),  # `.code(401)` (spaced) and `.code(403)`
+    ("apps/g-stat401", "api/x", "/api/x", "middleware"), ("apps/g-stat403", "api/x", "/api/x", "middleware"),  # `statusCode=401` and `statusCode = 403` assignments
+    ("apps/g-unauth", "api/x", "/api/x", "middleware"), ("apps/g-forbid", "api/x", "/api/x", "middleware"),  # `.unauthorized(` and `.forbidden(` helpers
+    ("apps/g-decoys", "api/x", "/api/x", "none"),  # a comparison, other statuses, look-alike names and a definition are no refusal
+    ("apps/g-ident", "acme-api/x", "/acme-api/x", "none"),  # a path in an `if` that only calls an identity check (it cannot refuse) stays an allow-list entry
 ]
 for base, d, route, lab in MW:
     FX["%s/app/%s/route.ts" % (base, d)] = POST1
@@ -1095,6 +1100,20 @@ FX["apps/scope-arr/proxy.ts"] = gate(
 FX["apps/glob/proxy.ts"] = gate(
     "  const open = createRouteMatcher(['/sign-in(.*)', '/acme-api/webhooks(.*)', '/acme-seg/(.*)', '/acme-glob/*', '/acme-path/:path*', '/acme-mid/*/x']);\n"
     "  if (open(req)) return NextResponse.next();\n  if (!isMemberSession(req)) return new NextResponse('Unauthorized', { status: 401 });\n")
+
+# Refusal spellings of a Fastify-style reply: `.code(401|403)`, `statusCode = 401|403`, `.unauthorized(`, `.forbidden(`.
+FX["apps/g-code401/proxy.ts"] = gate("  if (!isMemberSession(req)) return reply.code( 401 ).send();\n")
+FX["apps/g-code403/proxy.ts"] = gate("  if (!isMemberSession(req)) return reply.code(403).send();\n")
+FX["apps/g-stat401/proxy.ts"] = gate("  if (!isMemberSession(req)) { reply.statusCode=401; return reply.send(); }\n")
+FX["apps/g-stat403/proxy.ts"] = gate("  if (!isMemberSession(req)) { reply.statusCode = 403; return reply.send(); }\n")
+FX["apps/g-unauth/proxy.ts"] = gate("  if (!isMemberSession(req)) return reply.unauthorized('denied');\n")
+FX["apps/g-forbid/proxy.ts"] = gate("  if (!isMemberSession(req)) return reply.forbidden();\n")
+FX["apps/g-decoys/proxy.ts"] = gate(
+    "  const a = res.statusCode === 401;\n  const b = xstatusCode = 401;\n  const c = barcode(401) + reply.code(402) + reply.code(404);\n  reply.statusCode = 402;\n"
+    "  const d = stats.unauthorizedCount(1) + stats.forbiddenTotal;\n  function unauthorized() { return 1; }\n")
+FX["apps/g-ident/proxy.ts"] = gate(
+    "  if (req.nextUrl.pathname.startsWith('/acme-api/')) { requireAuth(req); }\n"
+    "  if (!isMemberSession(req)) return new NextResponse('Unauthorized', { status: 401 });\n")
 
 DEPKW = ("user", "auth", "token", "current", "bearer", "jwt", "api_key", "apikey", "verify", "login")  # one FastAPI route per Depends keyword
 FX["api/deps.py"] = "from fastapi import Depends, FastAPI\n\napp = FastAPI()\n" + "".join(
@@ -1246,13 +1265,348 @@ GOLD += [
     ("apps/rootm/app/route.ts", "function POST", "HIGH: POST / auth=none"),
 ]
 
+# Typed registrations: `app.post<{ ... }>("/path", h)` is a route; the type-argument list is read by a bounded balanced `<...>` scan, so a comparison is not one.
+FX["api/typed.ts"] = (
+    'import Fastify from "fastify";\nconst app = Fastify();\n\n'
+    'app.post<{ Params: { id: string }; Body: Widget }>("/acme-api/widgets/:id", async (req, reply) => reply.send({ ok: true }));\n'
+    'app.post("/acme-api/widgets", async (req, reply) => reply.send({ ok: true }));\n'
+    'app.put<{ Body: Widget }>("/acme-api/typed-auth", { preHandler: [app.authenticate] }, async (req) => req.body);\n'
+    'app.get<Map<string, Array<Widget>>>("/acme-api/nested", async () => []);\n'
+    'app.delete<() => void>("/acme-api/arrow", async () => ({}));\n'
+    'app.all<[string, number]>("/acme-api/tuple", async () => ({}));\n'
+    'app.patch<{ Body: Widget }> ("/acme-api/spaced", async () => ({}));\n')
+FX["api/typed-use.ts"] = 'const app = express();\napp.use<Opts>(requireAuth);\napp.post("/acme-api/after-use", (req, res) => res.send("x"));\n'
+FX["api/typed-hook.ts"] = 'const app = Fastify();\napp.addHook<Req>("onRequest", requireAuth);\napp.post("/acme-api/after-hook", async () => ({}));\n'
+FX["api/typed-only.ts"] = 'app.post<{ Body: Widget }>("/acme-api/only", async () => ({}));\n'  # the only thing in the file that says it holds a route
+FX["api/longtype.ts"] = (  # the closing `>` is the last character read at 1999 columns from the `<`: 2000 is too far
+    'app.use<requireAuth, ' + "A" * 1986 + '>(x);\n'  # too far: no use, and nothing is read from the file's start for it (the routes below keep no auth)
+    'app.post<' + "A" * 1998 + '>("/acme-api/long-ok", h);\n'
+    'app.post<' + "A" * 1999 + '>("/acme-api/long-far", h);\n')
+FX["lib/cmp.ts"] = (  # not routes: a comparison, and `<...>` lists that break a rule or lead to no call
+    "const a = x.get < y && f(z);\n"
+    'app.post<a && b>("/acme-api/d1", h);\n'
+    'app.post<a || b>("/acme-api/d2", h);\n'
+    'app.post<a; b>("/acme-api/d3", h);\n'
+    'f(app.post<a), (b>("/acme-api/d4", h));\n'
+    'app.post<T> + wrap("/acme-api/d5", h);\n'
+    "app.get<y && f(z);\n"
+    "app.get<Foo")  # ends inside the list, no final newline
+GOLD += [
+    ("api/typed.ts", '"/acme-api/widgets/:id"', "HIGH: POST /acme-api/widgets/:id auth=none"),
+    ("api/typed.ts", '"/acme-api/widgets"', "HIGH: POST /acme-api/widgets auth=none"),
+    ("api/typed.ts", '"/acme-api/typed-auth"', "INFO: PUT /acme-api/typed-auth auth=authenticate"),
+    ("api/typed.ts", '"/acme-api/nested"', "INFO: GET /acme-api/nested auth=none"),
+    ("api/typed.ts", '"/acme-api/arrow"', "HIGH: DELETE /acme-api/arrow auth=none"),
+    ("api/typed.ts", '"/acme-api/tuple"', "HIGH: ANY /acme-api/tuple auth=none"),
+    ("api/typed.ts", '"/acme-api/spaced"', "HIGH: PATCH /acme-api/spaced auth=none"),
+    ("api/typed-use.ts", '"/acme-api/after-use"', "INFO: POST /acme-api/after-use auth=requireAuth"),
+    ("api/typed-hook.ts", '"/acme-api/after-hook"', "INFO: POST /acme-api/after-hook auth=requireAuth"),
+    ("api/typed-only.ts", '"/acme-api/only"', "HIGH: POST /acme-api/only auth=none"),
+    ("api/longtype.ts", '"/acme-api/long-ok"', "HIGH: POST /acme-api/long-ok auth=none"),
+]
+
+
+# Fastify root hooks: `app.addHook("onRequest", ...)` on a `Fastify()` receiver whose handler can refuse (or names an identity check) covers, as `auth=root-hook`, what the hook file
+# wires onto that receiver after the hook: the files it imports AND passes to `register(` or calls with the instance first, and its own non-GET routes, less the paths the hook
+# text exempts or scopes. Scenarios live under rh/<name>/.
+def rts(path, routes, fn="routes"):
+    """One POST route per (route, expected auth) in the file path, and the GOLD rows for them."""
+    FX[path] = "export default async function %s(app) {\n" % fn + "".join('  app.post("%s", async () => ({ ok: true }));\n' % r for r, _ in routes) + "}\n"
+    GOLD.extend((path, '"%s"' % r, "%s: POST %s auth=%s" % ("HIGH" if a == "none" else "INFO", r, a)) for r, a in routes)
+
+
+RH = 'import Fastify from "fastify";\nimport routes from "./routes";\n\nconst app = Fastify();\n\n'
+
+
+def rh(name, hook, *routes, head=RH, tail="\napp.register(routes);\n"):
+    """rh/<name>/app.ts is head + hook + tail; its rh/<name>/routes.ts (when routes are given) is registered by it."""
+    FX["rh/%s/app.ts" % name] = head + hook + tail
+    if routes: rts("rh/%s/routes.ts" % name, routes)
+
+
+HK = 'app.addHook("onRequest", async (req, reply) => reply.code(401).send());\n'
+rh("scope", 'const quiet = !process.env.DEBUG;\n\napp.addHook("onRequest", async (req, reply) => {\n  if (req.url.startsWith("/acme-api/admin") && !req.user) return reply.code(403).send();\n});\n',
+   ("/acme-api/admin/users", "root-hook"), ("/acme-api/admin", "root-hook"), ("/acme-api/administrator", "none"), ("/acme-api/widgets", "none"))  # a refusing `if` names a path: that is the hook's scope
+rh("identity", 'app.addHook("preValidation", async (req, reply) => {\n  if (req.url.startsWith("/acme-api/priv")) {\n    await app.authenticate(req, reply);\n  }\n});\n',
+   ("/acme-api/priv/data", "root-hook"), ("/acme-api/priv", "root-hook"), ("/acme-api/private", "none"), ("/acme-api/pub", "none"))  # an identity check under a path test scopes it too
+rh("neg", 'app.addHook("onRequest", async (req, reply) => {\n  if (!req.url.startsWith("/acme-api/open")) {\n    return reply.code(401).send();\n  }\n});\n',
+   ("/acme-api/open/ping", "none"), ("/acme-api/x", "none"))  # a negated path test: which side is open is unknown, so the hook covers nothing
+rh("named", 'export async function guard(req, reply) {\n  limit(2);\n  if ([...open, ...docs, ...misc].includes(req.url)) return;\n  if (!req.headers.authorization) return reply.unauthorized("denied");\n}\n\nfunction limit(n) {\n  return n ? limit(n - 1) : n;\n}\n\n'
+            'function build() {\n  const open = ["/acme-api/status"];\n  let docs = ["/acme-api/docs/*"];\n  var misc = ["/acme-api/misc"];\n  return ["/acme-api/other"];\n}\n\napp.addHook("preHandler", guard);\n',
+   ("/acme-api/status", "none"), ("/acme-api/docs/page", "none"), ("/acme-api/docs", "none"), ("/acme-api/misc", "none"), ("/acme-api/other", "root-hook"), ("/acme-api/widgets", "root-hook"))  # a named handler, the allow-lists it reads two hops away (any indent, const/let/var, not the line after them) and a recursive helper
+rh("hops", 'async function guard(req, reply) {\n  await check(req, reply);\n}\n\nasync function check(req, reply) {\n  if (!req.headers.authorization) return reply.code(401).send();\n}\n\napp.addHook("onRequest", guard);\n',
+   ("/acme-api/hops", "root-hook"))  # the refusal is in a function the named handler calls: declarations are followed transitively
+rh("dollar", 'async function $guard(req, reply) {\n  if ($open.includes(req.url)) return;\n  return reply.code(403).send();\n}\n\nconst $open = ["/acme-api/status"];\n\napp.addHook("onRequest", $guard);\n',
+   ("/acme-api/status", "none"), ("/acme-api/widgets", "root-hook"))  # a handler and an allow-list named with `$`
+rh("ref", 'app.addHook("preParsing", app.authenticate);\n', ("/acme-api/any", "root-hook"),
+   head='import fastify from "fastify";\nimport routes from "./routes";\n\nconst app = fastify();\n\n')  # a bare identity reference is a hook; `fastify()` binds a receiver too
+rh("plugin", "", ("/acme-api/plug", "none"), head='import routes from "./routes";\n\nexport default async function plugin(fastify) {\n  ' + HK.replace("app.", "fastify."),
+   tail="  fastify.register(routes);\n}\n")  # the receiver is a parameter, no `Fastify()` call binds it: that hook stays file-local
+rh("late", HK, ("/acme-api/late", "none"), tail="", head='import Fastify from "fastify";\nimport routes from "./routes";\n\nconst app = Fastify();\n\napp.register(routes);\n\n')  # a hook added after the register call does not reach it
+rh("send", 'app.addHook("onSend", async (req, reply) => reply.code(401).send());\n', ("/acme-api/sent", "none"))  # only request hooks gate
+rh("eof", 'app.addHook("onRequest", gate);\n', ("/acme-api/eof", "root-hook"),
+   tail="\napp.register(routes);\n\nfunction gate(req, reply) { return reply.code(401).send(); }\n")  # the handler is the last line of the file
+rh("resp", 'app.addHook("onRequest", async () => new Response("Unauthorized"));\n', ("/acme-api/resp", "root-hook"))  # a refusal that is spelled in a string
+rh("refplain", 'app.addHook("onRequest", logRequest);\n', ("/acme-api/plain", "none"))  # a bare reference to a name that is no identity check
+rh("short", 'app.addHook("onRequest");\n', ("/acme-api/short", "none"))  # a hook call with no handler
+rh("after", 'app.addHook("onRequest", async (req, reply) => {\n  if (!req.headers.authorization) return reply.code(401).send();\n  if (req.url === "/acme-api/ping") return;\n});\n',
+   ("/acme-api/ping", "none"), ("/acme-api/other", "root-hook"))  # a positive path test with a bare return after the refusing `if` is still an allow-list entry (kept as it was), and the `!` before the refusal is no negated scope test
+rh("two", 'app.addHook("onRequest", async (req, reply) => {\n  if (req.url.startsWith("/acme-api/admin")) return reply.code(403).send();\n});\n\n'
+          'app.addHook("preHandler", async (req, reply) => {\n  if (req.url.startsWith("/acme-api/billing")) return reply.code(403).send();\n});\n',
+   ("/acme-api/admin/x", "root-hook"), ("/acme-api/billing/y", "root-hook"), ("/acme-api/pub", "none"))  # each of two hooks covers its own scope
+# A path test is read by its operator, as JS runs it: `startsWith` exempts every route whose raw path starts with the literal, `===` and `==` only the path itself.
+EQ = 'app.addHook("onRequest", async (req, reply) => {\n  %s\n  if (!req.headers.authorization) return reply.code(401).send();\n});\n'
+rh("eqfree", EQ % 'if (req.url === "/acme-api/ping") return;\n  if (req.url == "/acme-api/pong") return;\n  if ("/acme-api/pang" === req.url) return;\n  if ("/acme-api/peng" == req.url) return;',
+   ("/acme-api/ping", "none"), ("/acme-api/ping/deep", "root-hook"), ("/acme-api/pingz", "root-hook"), ("/acme-api/pong", "none"), ("/acme-api/pong/deep", "root-hook"),
+   ("/acme-api/pang", "none"), ("/acme-api/pang/deep", "root-hook"), ("/acme-api/peng", "none"), ("/acme-api/peng/deep", "root-hook"),
+   ("/acme-api/other", "root-hook"))  # `===` and `==`, on either side, let through the path itself: not what is under it, not a longer name
+rh("eqroot", EQ % 'if (req.url === "/") return;', ("/", "none"), ("/acme-api/any", "root-hook"))  # an exact "/" is the root only
+rh("incfree", EQ % 'if (["/", "/acme-api/status"].includes(req.url)) return;', ("/", "none"), ("/acme-api/status", "none"), ("/acme-api/status/x", "none"), ("/acme-api/statusz", "none"),
+   ("/acme-api/any", "root-hook"))  # any other test exempts by raw prefix, but its "/" is still the root only
+rh("swroot", EQ % 'if (req.url.startsWith("/")) return;', ("/", "none"), ("/acme-api/any", "none"))  # every path starts with "/": the hook covers nothing
+rh("swscope", 'app.addHook("onRequest", async (req, reply) => {\n  if (req.url.startsWith("/") && !req.user) return reply.code(401).send();\n});\n',
+   ("/", "root-hook"), ("/acme-api/any", "none"))  # a `startsWith("/")` scope reads as the root alone (a noisy HIGH, never a quiet one)
+rh("eqscope", 'app.addHook("onRequest", async (req, reply) => {\n  if (req.url === "/acme-api/admin") return reply.code(403).send();\n});\n',
+   ("/acme-api/admin", "root-hook"), ("/acme-api/admin/users", "none"), ("/acme-api/other", "none"))  # `===` in a refusing `if` scopes the path itself, not what is under it
+rh("eqtwo", 'app.addHook("onRequest", async (req, reply) => {\n  if (req.url.startsWith("/acme-api/admin")) return reply.code(403).send();\n});\n\n'
+            'app.addHook("preHandler", async (req, reply) => {\n  if (req.url === "/acme-api/billing") return reply.code(403).send();\n});\n',
+   ("/acme-api/admin", "root-hook"), ("/acme-api/admin/x", "root-hook"), ("/acme-api/administrator", "none"), ("/acme-api/billing", "root-hook"), ("/acme-api/billing/y", "none"))  # a `startsWith` scope still covers what is under its path, next to an `===` one that does not
+rh("incscope", 'app.addHook("onRequest", async (req, reply) => {\n  if (["/acme-api/admin"].includes(req.url)) return reply.code(403).send();\n});\n',
+   ("/acme-api/admin", "root-hook"), ("/acme-api/admin/users", "none"))  # any other test scopes the path itself too
+rh("neqscope", EQ % 'if (req.url !== "/acme-api/admin") return;', ("/acme-api/admin", "root-hook"), ("/acme-api/admin/users", "none"), ("/acme-api/other", "none"))  # `!==` returns every other path unanswered: only the path itself is refused
+# `==` and `===` name the path itself only against a plain name or member chain: a call or an index (`slice(0, n)`, `substring(0, n)`, `path.dirname(x)`, `split("?")[0]`) can make it a prefix
+# or derived-value test, so an exemption on either side of the operator reads as a prefix test and the deeper route is not covered (a noisy HIGH, never a quiet one).
+rh("eqslice", EQ % 'if (req.url.slice(0, 15) === "/acme-api/admin") return;', ("/acme-api/admin", "none"), ("/acme-api/admin/users", "none"), ("/acme-api/other", "root-hook"))
+rh("eqsubstr", EQ % 'if (req.url.substring(0, 15) == "/acme-api/admin") return;', ("/acme-api/admin", "none"), ("/acme-api/admin/users", "none"), ("/acme-api/other", "root-hook"))
+rh("eqdirname", EQ % 'if (path.dirname(req.url) === "/acme-api") return;', ("/acme-api/foo", "none"), ("/other/x", "root-hook"))
+rh("eqindex", EQ % 'if (req.url.split("?")[0] === "/acme-api/ping") return;', ("/acme-api/ping", "none"), ("/acme-api/ping/deep", "none"), ("/acme-api/other", "root-hook"))
+rh("eqcallrev", EQ % 'if ("/acme-api/admin" === req.url.slice(0, 15)) return;\n  if ("/acme-api/pong" == req.url?.substring(0, 14)) return;\n  if ("/acme-api/ping" === parts[0]) return;',
+   ("/acme-api/admin/users", "none"), ("/acme-api/pong/deep", "none"), ("/acme-api/ping/deep", "none"), ("/acme-api/other", "root-hook"))  # the same on the other side of the operator
+FX["rh/bare/app.ts"] = ('import a from "a";\nconst b = require("b");\nconst app = Fastify();\n\n' + HK
+                        + '\napp.register(a);\napp.register(b);\napp.register(require("c"));\napp.register(import("d"));\n')  # packages, not the files next to it
+for n in "abcd": rts("rh/bare/%s.ts" % n, [("/acme-api/" + n, "none")], n)
+rh("scopevar", 'app.addHook("onRequest", async (req, reply) => {\n  if (req.url.startsWith("/acme-api/admin")) return reply.code(403).send();\n});\n',
+   ("/acme-api/admin/x", "none"), tail="\nconst opts = loadOptions();\napp.register(routes, opts);\n")  # a scoped hook cannot be judged against a mount that is unknown
+rh("other", HK, ("/acme-api/elsewhere", "none"), tail="\nconst other = Fastify();\nother.register(routes);\n")  # the hook is on `app`, the register call on `other`
+rh("log", 'app.addHook("onRequest", async (req) => {\n  req.log.info("verify(token) skipped");\n  const auth = req.headers["x-auth"];\n  req.log.info({ auth });\n});\n\napp.register(a);\n\n' + HK, tail="\napp.register(b);\n",
+   head='import Fastify from "fastify";\nimport a from "./a";\nimport b from "./b";\n\nconst app = Fastify();\n\n')  # logging is no gate (an identity name in a string, a bare variable): `a` stays open, `b` sits behind the refusing hook
+rts("rh/log/a.ts", [("/acme-api/audited", "none")], "a")
+rts("rh/log/b.ts", [("/acme-api/gated", "root-hook")], "b")
+FX["rh/main/app.ts"] = (
+    'import Fastify, { FastifyInstance } from "fastify";\nimport widgets from "./routes/widgets";\nimport unused from "./routes/unused";\nimport "./routes/side";\n\n'
+    "const app: FastifyInstance = Fastify();\n\napp.get(\"/acme-api/early\", async () => ({ ok: true }));\n\napp.addHook(\n  \"onRequest\",\n  async (req, reply) => {\n"
+    '    if (req.url.startsWith("/acme-api/health")) return;\n    if (req.url === "/") return;\n'
+    '    if (!req.headers.authorization) return reply.code(401).send({ error: "unauthorized" });\n  },\n);\n\n'
+    'app.get("/acme-api/ping", async () => ({ ok: true }));\napp.register(widgets);\napp.register(corsPlugin);\n')
+FX["rh/main/routes/widgets.ts"] = (
+    "export default async function widgets(app) {\n"
+    '  app.post<{ Params: { id: string }; Body: Widget }>("/acme-api/widgets/:id", async (req, reply) => reply.send({ ok: true }));\n'
+    '  app.delete("/acme-api/widgets/:id", async () => ({ ok: true }));\n'
+    '  app.post("/acme-api/health", async () => ({ ok: true }));\n  app.post("/acme-api/health/check", async () => ({ ok: true }));\n'
+    '  app.post("/acme-api/healthz", async () => ({ ok: true }));\n  app.post("/acme-api/ping", async () => ({ ok: true }));\n'
+    '  app.post("/", async () => ({ ok: true }));\n  app.post("/acme-api/early", async () => ({ ok: true }));\n'
+    '  app.post("/acme-api/own", { preHandler: [app.authenticate] }, async () => ({ ok: true }));\n}\n')
+for n in ("orphan", "unused", "side"):  # never imported / imported, never registered / imported for its side effects only
+    rts("rh/main/routes/%s.ts" % n, [("/acme-api/" + n, "none")], n)
+GOLD += [
+    ("rh/main/app.ts", '"/acme-api/ping"', "INFO: GET /acme-api/ping auth=none"),  # a GET of the hook's own file keeps its own evidence (INFO either way)
+    ("rh/main/app.ts", '"/acme-api/early"', "INFO: GET /acme-api/early auth=none"),
+    ("rh/main/routes/widgets.ts", 'app.post("/acme-api/early"', "INFO: POST /acme-api/early auth=root-hook"),  # a route registration before the hook is no exemption either
+    ("rh/main/routes/widgets.ts", '>("/acme-api/widgets/:id"', "INFO: POST /acme-api/widgets/:id auth=root-hook"),
+    ("rh/main/routes/widgets.ts", 'app.delete("/acme-api/widgets/:id"', "INFO: DELETE /acme-api/widgets/:id auth=root-hook"),
+    ("rh/main/routes/widgets.ts", '"/acme-api/health"', "HIGH: POST /acme-api/health auth=none"),  # exempt by the hook's text
+    ("rh/main/routes/widgets.ts", '"/acme-api/health/check"', "HIGH: POST /acme-api/health/check auth=none"),  # and what is under it
+    ("rh/main/routes/widgets.ts", '"/acme-api/healthz"', "HIGH: POST /acme-api/healthz auth=none"),  # `startsWith` is a raw string prefix: the hook lets a longer name through too
+    ("rh/main/routes/widgets.ts", '"/acme-api/ping"', "INFO: POST /acme-api/ping auth=root-hook"),  # a route registration is no exemption
+    ("rh/main/routes/widgets.ts", 'app.post("/"', "HIGH: POST / auth=none"),  # the exempt "/" is the root only
+    ("rh/main/routes/widgets.ts", '"/acme-api/own"', "INFO: POST /acme-api/own auth=authenticate"),  # a route's own evidence comes first
+]
+for n in ("a", "b"):  # one routes file registered at a hooked and at an unhooked site: every site must be gated, in whichever order they come
+    FX["rh/sites/%s-app.ts" % n] = ('import Fastify from "fastify";\nimport r1 from "./r1";\nimport r2 from "./r2";\n\nconst app = Fastify();\n\n'
+                                    + ("app.register(r2);\n" + HK + "app.register(r1);\n" if n == "a" else "app.register(r1);\n" + HK + "app.register(r2);\n"))
+    rts("rh/sites/r%s.ts" % ("1" if n == "a" else "2"), [("/acme-api/r" + ("1" if n == "a" else "2"), "none")], "r" + ("1" if n == "a" else "2"))
+PFX = (("lit", '{ prefix: "/acme-api/" }', ("/widgets", "root-hook"), ("/health", "none")),
+       ("pre", '{ prefix: "/acme-api", logLevel: "info" }', ("/widgets", "root-hook"), ("/health", "none")),  # the literal prefix is joined to the route, then judged against the hook's paths
+       ("bare", '{ logLevel: "info" }', ("/acme-api/widgets", "root-hook"), ("/acme-api/health", "none")),  # options without a prefix mount at the root
+       ("var", "opts", ("/widgets", "none")), ("spread", '{ ...base, prefix: "/acme-api" }', ("/widgets", "none")), ("short", "{ prefix }", ("/widgets", "none")),
+       ("cat", '{ prefix: "/acme-api" + base }', ("/widgets", "none")), ("cat2", '{ prefix: BASE + "/acme-api" }', ("/widgets", "none")))  # an unknown mount cannot be judged against paths
+rh("prefix", 'const opts = { prefix: "/acme-api" };\nconst base = "";\nconst prefix = "/acme-api";\n\napp.addHook("onRequest", async (req, reply) => {\n  if (req.url.startsWith("/acme-api/health")) return;\n'
+             '  if (!req.headers.authorization) return reply.code(401).send();\n});\n',
+   head='import Fastify from "fastify";\n' + "".join('import %s from "./routes/%s";\n' % (n, n) for n, *_ in PFX) + "\nconst app = Fastify();\n\n",
+   tail="\n" + "".join("app.register(%s, %s);\n" % (n, o) for n, o, *_ in PFX))
+for n, _, *rs in PFX: rts("rh/prefix/routes/%s.ts" % n, rs, n)
+IMPS = (("esm.ts", 'import esm from "./routes/esm";', "esm"), ("ren.ts", "import { a as renamed } from './routes/ren';", "renamed"), ("ns.ts", 'import * as ns from "./routes/ns";', "ns.default"),
+        ("dir/index.ts", 'import dir from "./routes/dir";', "dir, opts"), ("js.ts", 'import js from "./routes/js.js";', "js"), ("jsx.tsx", 'import jsx from "./routes/jsx.jsx";', "jsx"),
+        ("exact.ts", 'import exact from "./routes/exact.ts";', "exact"), ("cjs.ts", 'const cjs = require("./routes/cjs");', "cjs"), ("dst.ts", "const { named } = require('./routes/dst');", "named"),
+        ("inl.ts", "", 'require("./routes/inl")'), ("inl2.ts", "", "require('./routes/inl2')"), ("dyn.ts", "", 'import("./routes/dyn")'),
+        ("awt.ts", 'const awt = await import("./routes/awt");', "awt.default"), ("dol.ts", 'import $dol from "./routes/dol";', "$dol"))  # (routes file, how app.ts imports it, the register argument)
+FX["rh/imports/app.ts"] = ("".join(i + "\n" for _, i, _ in IMPS if i) + 'const app = require("fastify")({ logger: true });\n\napp.addHook("onRequest", app.authenticate);\n\n'
+                           + "".join("app.register(%s);\n" % a for *_, a in IMPS))  # a global hook covers every file it registers, whatever the mount
+for f, *_ in IMPS: rts("rh/imports/routes/" + f, [("/acme-api/" + f.rsplit(".", 1)[0].replace("/", "-"), "root-hook")], "r")
+
+
+# Fixture A: a Fastify instance built in a factory function, its routes declared below the hook and its route modules called with the instance (no `register`). Fixture B: a top-level
+# hook with an optional-chaining scope test, an allow-list held in a declaration and an identity check under a bare return. `variant` writes one under rh/<dir>/ with `edits` ((old, new),
+# each old text once) applied to its first file, and `flip` ({row: auth}) naming the rows that edit changes: the variants below are the fixture mutants M1-M5.
+FA = '''import Fastify, { type FastifyInstance } from "fastify";
+import { widgetRoutes } from "./widgets.ts";
+import { gadgetRoutes } from "./gadgets.ts";
+import { earlyRoutes } from "./early.ts";
+import { orphanRoutes } from "./orphan.ts";
+import { verifySession } from "./session.ts";
+
+const ROLE_RULES: Record<string, string[]> = { "/acme-api/admin/purge": ["owner"], "/acme-api/widgets": ["member", "owner"] };
+function rolesFor(url: string): string[] { return ROLE_RULES[url] ?? ["owner"]; }
+
+export function buildServer(opts: { region: string }): FastifyInstance {
+  const app = Fastify({ logger: false });
+  app.addHook("onSend", async (_req, reply) => { reply.header("x-content-type-options", "nosniff"); });
+  app.post("/acme-api/before", async () => ({ ok: true }));
+  earlyRoutes(app);
+  app.addHook("onRequest", async (req, reply) => {
+    if (!req.url.startsWith("/acme-api/")) return;
+    if (req.url === "/acme-api/ping") return;
+    const session = await verifySession(req.headers.authorization);
+    if (!session) return reply.code(401).send({ error: "Sign in first" });
+    if (!rolesFor(req.url).includes(session.role)) return reply.code(403).send({ error: "Role not allowed" });
+    if (session.kind === "service" && req.url.startsWith("/acme-api/admin")) return reply.code(403).send({ error: "Service tokens cannot do this" });
+    req.user = session;
+  });
+  app.post<{ Body: { name: string } }>("/acme-api/widgets", async () => ({ ok: true }));
+  app.post("/acme-api/ping", async () => ({ pong: true }));
+  app.post("/inbound/hook", async () => ({ ok: true }));
+  widgetRoutes(app);
+  gadgetRoutes(app, opts.region);
+  return app;
+}
+'''
+FB = '''import Fastify from "fastify";
+import { verifyToken } from "./tokens.ts";
+const PUBLIC_PATHS = ["/api/status"];
+const app = Fastify();
+app.addHook("preHandler", async (req, reply) => {
+  if (!req.routeOptions.url?.startsWith("/api/")) return;
+  if (PUBLIC_PATHS.includes(req.routeOptions.url)) return;
+  if (await verifyToken(req.headers.authorization)) return;
+  return reply.code(401).send({ error: "Missing or wrong token" });
+});
+app.post("/api/orders", async () => ({ ok: true }));
+app.post("/api/status", async () => ({ ok: true }));
+export default app;
+'''
+
+
+def fam(fn, args, *routes):
+    """A route module of Fixture A: `export function fn(args)` holding one `app.<verb>(path, handler)` per (verb, path)."""
+    return 'import type { FastifyInstance } from "fastify";\n\nexport function %s(%s) {\n' % (fn, args) + "".join('  app.%s("%s", async () => ({ ok: true }));\n' % r for r in routes) + "}\n"
+
+
+FA_ALL = {"server.ts": FA,
+          "widgets.ts": fam("widgetRoutes", "app: FastifyInstance", ("post", "/acme-api/widgets/:id/archive"), ("delete", "/inbound/widgets/:id")),
+          "gadgets.ts": fam("gadgetRoutes", "app: FastifyInstance, region: string", ("put<{ Params: { id: string } }>", "/acme-api/gadgets/:id")),
+          "early.ts": fam("earlyRoutes", "app: FastifyInstance", ("post", "/acme-api/early")),
+          "orphan.ts": fam("orphanRoutes", "app: FastifyInstance", ("post", "/acme-api/orphan")),
+          "session.ts": 'export async function verifySession(authorization: string | undefined) {\n  return authorization ? { role: "owner", kind: "user" } : null;\n}\n'}  # no route: the pre-filter skips it
+FA_ROWS = (  # (file, marker, row, auth)
+    ("server.ts", '"/acme-api/before"', "POST /acme-api/before", "none"),  # above the hook
+    ("server.ts", '}>("/acme-api/widgets"', "POST /acme-api/widgets", "root-hook"),  # typed, below it: the role table's "/acme-api/widgets" is no allow-list entry
+    ("server.ts", 'app.post("/acme-api/ping"', "POST /acme-api/ping", "none"),  # allow-listed by the hook's `return` test
+    ("server.ts", '"/inbound/hook"', "POST /inbound/hook", "none"),  # outside the hook's scope
+    ("widgets.ts", '"/acme-api/widgets/:id/archive"', "POST /acme-api/widgets/:id/archive", "root-hook"),  # called with the instance below the hook
+    ("widgets.ts", '"/inbound/widgets/:id"', "DELETE /inbound/widgets/:id", "none"),  # the same module, outside the scope
+    ("gadgets.ts", '"/acme-api/gadgets/:id"', "PUT /acme-api/gadgets/:id", "root-hook"),  # a second argument after the instance
+    ("early.ts", '"/acme-api/early"', "POST /acme-api/early", "none"),  # called above the hook
+    ("orphan.ts", '"/acme-api/orphan"', "POST /acme-api/orphan", "none"))  # imported, never called
+FB_ROWS = (("api.ts", 'app.post("/api/orders"', "POST /api/orders", "root-hook"), ("api.ts", 'app.post("/api/status"', "POST /api/status", "none"))  # the second is allow-listed through PUBLIC_PATHS
+
+
+def variant(d, files, rows, edits=(), flip=None):
+    """Write `files` under rh/<d>/ (edits applied to the first, each old text once) and a GOLD row for each (file, marker, row, auth) of rows, `flip` ({row: auth}) overriding auth."""
+    first = next(iter(files))
+    text = files[first]
+    for old, new in edits:
+        assert text.count(old) == 1, old
+        text = text.replace(old, new)
+    FX.update(("rh/%s/%s" % (d, f), text if f == first else t) for f, t in files.items())
+    for f, marker, row, auth in rows:
+        a = (flip or {}).get(row, auth)
+        GOLD.append(("rh/%s/%s" % (d, f), marker, "%s: %s auth=%s" % ("HIGH" if a == "none" else "INFO", row, a)))
+
+
+HOT = dict.fromkeys(("POST /acme-api/widgets", "POST /acme-api/widgets/:id/archive", "PUT /acme-api/gadgets/:id"), "none")  # Fixture A's root-hook rows, all open
+variant("fa", FA_ALL, FA_ROWS)
+variant("fa-m1", FA_ALL, FA_ROWS, [('    if (req.url === "/acme-api/ping") return;\n', '    if (req.url === "/acme-api/ping") return;\n    if (req.headers["x-acme-preview"] === "1") return;\n')], HOT)  # M1: a bypass voids the hook
+variant("fa-m2", FA_ALL, FA_ROWS, [('if (!req.url.startsWith("/acme-api/")) return;', 'if (req.url.startsWith("/acme-api/")) return;')],
+        {**HOT, "POST /inbound/hook": "root-hook", "DELETE /inbound/widgets/:id": "root-hook"})  # M2: without its `!` the scope test is an allow-list entry
+variant("fa-m3", FA_ALL, FA_ROWS, [("  widgetRoutes(app);\n", ""), ("  earlyRoutes(app);\n", "  earlyRoutes(app);\n  widgetRoutes(app);\n")],
+        {"POST /acme-api/widgets/:id/archive": "none"})  # M3: called above the hook
+variant("fa-m5", FA_ALL, FA_ROWS, [("  widgetRoutes(app);\n", "  const other = Fastify();\n  widgetRoutes(other);\n")], {"POST /acme-api/widgets/:id/archive": "none"})  # M5: called with another instance
+variant("fb", {"api.ts": FB}, FB_ROWS)
+variant("fb-m4", {"api.ts": FB}, FB_ROWS, [("{ verifyToken }", "{ lookupCart }"), ("await verifyToken(", "await lookupCart(")], {"POST /api/orders": "none"})  # M4: the bare return is no identity check
+
+
+# The corners of those rules, one scenario each: `ah` writes an onRequest hook around its body lines.
+def ah(*body):
+    return 'app.addHook("onRequest", async (req, reply) => {\n' + "".join("  %s\n" % l for l in body) + "});\n"
+
+
+R401 = "if (!req.headers.authorization) return reply.code(401).send();"
+OPEN = 'function %s(req) {\n  if (req.url === "/acme-api/open") return;\n}\n\n'
+rh("retb", ah('if (req.url === "/acme-api/ping") { return }', 'if (req.url === "/acme-api/ready") return', 'if (!req.headers.authorization) return reply.code(401).send({ login: "/sign-in" });'),
+   ("/acme-api/ping", "none"), ("/acme-api/ready", "none"), ("/acme-api/widgets", "root-hook"))  # a bare return is `return }` or a `return` ending its line; a path in a refusal's body is no scope
+for w in ("done", "next"):  # `done()` and `next()` let the request through unanswered: a bare return that is no path test and no identity check
+    rh(w, 'app.addHook("onRequest", (req, reply, %s) => {\n  if (req.method === "HEAD") return %s( );\n  %s\n  %s();\n});\n' % (w, w, R401, w), ("/acme-api/" + w, "none"))
+rh("outside", HK, ("/acme-api/open", "root-hook"), ("/acme-api/other", "root-hook"), head=RH + OPEN % "earlier", tail="\napp.register(routes);\n\n" + OPEN % "later")  # an `if` outside the hook and the declarations it names says nothing
+rh("lateret", ah(R401, 'if (req.method === "HEAD") return;'), ("/acme-api/late", "root-hook"))  # a bare return after the first refusal is not checked as a bypass
+rh("lateneg", ah(R401, 'if (!req.url.startsWith("/acme-api/")) return;'), ("/inbound/x", "root-hook"), ("/acme-api/y", "root-hook"))  # nor read as a scope
+for n, op in (("and", "&&"), ("or", "||")):  # a negated path test AND-ed or OR-ed with anything: which side is open is unknown, so the hook covers nothing
+    rh("cneg-" + n, ah('if (!req.url.startsWith("/acme-api/") %s req.method === "GET") return;' % op, R401), ("/acme-api/x", "none"))
+rh("keycmp", ah('if (req.headers["x-api-key"] === expected) return;', "return reply.code(401).send();"), ("/acme-api/key", "root-hook"))  # comparing a secret-looking value is an identity check, not a bypass
+rh("bypass-sec", ah('if (req.headers["x-token"]) return;', "return reply.code(401).send();"), ("/acme-api/preview", "none"))  # a secret-looking name with no comparison is a bypass
+rh("bypass-str", ah('if (req.headers["x-verify(1)"]) return;', "return reply.code(401).send();"), ("/acme-api/str", "none"))  # an identity call spelled in a string is no identity check
+rh("strret", ah('if (req.url === "/acme-api/ping") reply.header("x-note", "return;");', R401), ("/acme-api/ping", "root-hook"))  # a `return;` spelled in a string is no bare return, so the path test exempts nothing
+rh("lateresp", ah('if (!req.headers.authorization) return new Response("Forbidden");', 'if (!req.url.startsWith("/acme-api/")) return;'), ("/inbound/x", "root-hook"))  # a refusal spelled as a Response string cuts the rules there too
+rh("respstr", ah('if (req.url.startsWith("/acme-api/admin")) return new Response("Forbidden");'), ("/acme-api/admin/x", "root-hook"), ("/acme-api/other", "none"))  # and its path test is a scope
+rh("groups", ah('if (!req.url.startsWith("/acme-api/")) return;', 'if (!req.url.startsWith("/acme-api/admin")) return;', R401),
+   ("/acme-api/admin/x", "root-hook"), ("/acme-api/admin", "root-hook"), ("/acme-api/widgets", "none"), ("/inbound/x", "none"))  # each negated test is a scope of its own: a route must be under all of them
+rh("factory", HK, ("/acme-api/fac", "root-hook"), tail="\napp.register(routes(deps));\n")  # a plugin factory called inside register is the register site, not a second site
+rh("onroute", 'app.addHook("onRoute", async (req, reply) => reply.code(401).send());\napp.addHook("onListen", async (req, reply) => reply.code(401).send());\n', ("/acme-api/life", "none"))  # lifecycle hooks gate no request
+rh("callsp", "  " + HK, ("/acme-api/sp", "root-hook"), head='import Fastify from "fastify";\nimport routes from "./routes";\n\nexport function build(opts) {\n  const app = Fastify();\n',
+   tail="  routes( app , opts.region );\n}\n")  # a spaced direct call with the instance first, below the hook in the same function
+rh("names", HK, ("/acme-api/names", "root-hook"), tail="\nroutes(app);\nmyroutes(other);\n$routes(other);\nreg.routes(other);\n")  # only a call of the imported name itself is a site: not a longer name, a `$` name or a member
+rh("regcall", HK, ("/acme-api/regcall", "none"), tail="\napp.register(routes);\nroutes(other);\n")  # registered under the hook, and also called with another instance
+rh("callfirst", HK, ("/acme-api/cf", "none"), tail="\nroutes(other);\napp.register(routes);\n")  # the same call above the register: a call that is not inside it is a site of its own
+rh("dollarcall", HK, ("/acme-api/dc", "root-hook"), head=RH.replace("import routes", "import $routes"), tail="\n$routes(app);\n")  # an imported name written with `$`
+rh("encdc", "function setup(app) {\n  " + HK + "}\n", ("/acme-api/encdc", "none"), tail="\nroutes(app);\n")  # a direct call after the block that holds the hook is not covered
+rh("nohook", HK, ("/acme-api/nohook", "none"))
+FX["rh/nohook/b.ts"] = RH + "app.register(routes);\n"  # a second file registers the same routes with no hook above
+FX["rh/enc/app.ts"] = RH + 'app.register(async function (app) {\n  ' + HK + '  app.post("/acme-api/inside", async () => ({ ok: true }));\n});\n\napp.post("/acme-api/outside", async () => ({ ok: true }));\n\napp.register(routes);\n'
+rts("rh/enc/routes.ts", [("/acme-api/enc", "none")])
+FX["rh/recv/app.ts"] = 'import Fastify from "fastify";\n\nconst app = Fastify();\nconst other = Fastify();\n\n' + HK + 'app.post("/acme-api/mine", async () => ({ ok: true }));\nother.post("/acme-api/theirs", async () => ({ ok: true }));\n'
+FX["rh/reqfy/app.ts"] = ('const app = require("fastify")();\n\napp.addHook("onRequest", async (req, reply) => {\n  const session = await verifySession(req.headers.authorization);\n'
+                        '  if (!session) return reply.code(401).send();\n});\napp.post("/acme-api/req", async () => ({ ok: true }));\n')
+FX["api/legacy-hook.ts"] = 'export default async function plugin(fastify) {\n  fastify.addHook("onRequest", async (req, reply) => { await authenticate(req, reply); });\n  fastify.post("/acme-api/plugged", async () => ({ ok: true }));\n}\n'
+FX["api/named-ref.ts"] = 'import Fastify from "fastify";\n\nconst app = Fastify();\napp.addHook("onRequest", requireAuth);\napp.post("/acme-api/named", async () => ({ ok: true }));\n'
+FX["api/short-hook.ts"] = 'import Fastify from "fastify";\n\nconst app = Fastify();\napp.addHook("onRequest");\napp.post("/acme-api/shorthook", async () => ({ ok: true }));\n'
+GOLD += [
+    ("api/short-hook.ts", '"/acme-api/shorthook"', "HIGH: POST /acme-api/shorthook auth=none"),  # a hook call with no handler in a file that holds a route is no evidence
+    ("rh/enc/app.ts", '"/acme-api/inside"', "INFO: POST /acme-api/inside auth=root-hook"),  # a hook in a plugin function covers what follows it in that function
+    ("rh/enc/app.ts", '"/acme-api/outside"', "HIGH: POST /acme-api/outside auth=none"),  # and nothing after it
+    ("rh/recv/app.ts", '"/acme-api/mine"', "INFO: POST /acme-api/mine auth=root-hook"),  # a hook covers the routes of its own receiver
+    ("rh/recv/app.ts", '"/acme-api/theirs"', "HIGH: POST /acme-api/theirs auth=none"),  # and of no other instance
+    ("rh/reqfy/app.ts", '"/acme-api/req"', "INFO: POST /acme-api/req auth=root-hook"),  # `require("fastify")()` binds a Fastify instance too
+    ("api/legacy-hook.ts", '"/acme-api/plugged"', "INFO: POST /acme-api/plugged auth=authenticate"),  # a hook on a receiver no `Fastify()` call binds keeps the by-name rule
+    ("api/named-ref.ts", '"/acme-api/named"', "INFO: POST /acme-api/named auth=requireAuth"),  # so does a named guard on a `Fastify()` receiver
+]
+
+
 JS_T = 'const app = require("express")();\napp.post("/t", (req, res) => res.send("t"));\n'
 FX["webapp/api/route.ts"] = POST1  # `webapp/` is not an `app/` directory: not a Next route
 for rel in ("test/app.js", "tests/app.js", "src/tests/app.js", "e2e/app.js", "__tests__/app.js", "src/x.spec.js", "src/x.test.js"):  # one silent file per TEST alternative
     FX[rel] = JS_T
 for rel in ("api/conftest.py", "api/items_test.py", "api/test_items.py"):
     FX[rel] = '@app.post("/t")\ndef t():\n    return 1\n'
-QUIET = ("lib/client.js", "lib/keys.js", "lib/plain.ts")  # scanned (they look like they hold a route) but yield no handler row
+QUIET = ("lib/client.js", "lib/keys.js", "lib/plain.ts", "lib/cmp.ts")  # scanned (they look like they hold a route) but yield no handler row
 
 
 def write(root, files):
@@ -1289,6 +1643,7 @@ def each(old, a, b, sep=", "):
     return [(old, old[:i] + sep.join(ms[:k] + ms[k + 1:]) + old[j:]) for k in range(len(ms))]
 
 
+LIT_POST = r'\s*={2,3}(?!=)\s*[\w$.]+(?=\s*[^\s\w$.?(\[])", post)'  # lit()'s test of what follows the literal
 # One row per rule: replacing `old` (which must occur exactly once in route_auth_map.py) by `new` must change what the script prints.
 MUTANTS = [
     # header: the sibling import must work under -I and leave no bytecode beside the script
@@ -1378,10 +1733,11 @@ MUTANTS = [
     *each(r"(?:onRequest|preHandler|preValidation|preParsing)", "(?:", ")", "|"),
     (r"""(["'])(?:onRequest""", r"""(["])(?:onRequest"""), (r"""(["'])(?:onRequest""", r"""(['])(?:onRequest"""),
     *each(r"(?:express|Router|Hono|Fastify|fastify|Elysia)", "(?:", ")", "|"),
-    (r"(?:await\s+)?", ""), (r"(?:new\s+)?", ""), (r"(?::[^=\n]+)?", ""),
+    (r"=\s*(?:await\s+)?(?:new\s+)?(?:express", r"=\s*(?:new\s+)?(?:express"), (r"(?:new\s+)?", ""), (r"\b(\w+)\s*(?::[^=\n]+)?=\s*(?:await", r"\b(\w+)\s*=\s*(?:await"),
+    (r"""\b(\w+)\s*(?::[^=\n]+)?=\s*(?:[Ff]astify""", r"""\b(\w+)\s*=\s*(?:[Ff]astify"""), (r"=\s*(?:await\s+)?(?:require|import)", r"=\s*(?:require|import)"),
     (r"^([ \t]*)@", r"^()@"), (r"@\w+\.(%s|route)", r"@\w\.(%s|route)"), (r'(%s|route)\(" % H, re.M)', r'(%s)\(" % H, re.M)'),
     (r'" % H, re.M)', r'" % H)'),
-    (r"(?:%s|all)\(|use", r"(?:%s)\(|use"), (r'|use server"', '"'),
+    (r"(?:%s|all)[(<]|use", r"(?:%s)[(<]|use"), (r"(?:%s|all)[(<]|use", r"(?:%s|all)\(|use"), (r"(?:%s|all)[(<]|use", r"(?:%s|all)[<]|use"), (r'|use server"', '"'),
     # pymask
     (r'if t[0] == "#": return sp(t)', r'if t[0] == "#": return t'),
     # ident
@@ -1423,7 +1779,10 @@ MUTANTS = [
     ("mw_pats(mask(raw), mask(raw, True))", "mw_pats(mask(raw), raw)"),
     (r"\bstatus[:(]", r"status[:(]"), (r"[:(]\s*40", r"[(]\s*40"), (r"[:(]\s*40", r"[:]\s*40"),
     (r"[:(]\s*40", r"[:(]40"), (r"[:(]\s*40", r"[:(]\s40"), (r"[:(]\s*40", r"[:(]\s+40"),
-    ("40[13]|", "40[1]|"), ("40[13]|", "40[3]|"), ("40[13]|", "40[123]|"), ("40[13]|", "40.|"),
+    *[(c + "40[13]", c + v) for c in (r"\bstatus[:(]\s*", r"\.code\(\s*", r"\bstatusCode\s*=\s*") for v in ("40[1]", "40[3]", "40[123]", "40.")],
+    (r"|\.code\(\s*", r"|code\(\s*"), (r"\.code\(\s*", r"\.code\("), (r"\bstatusCode\s*=\s*", r"\bstatusCode\s*={1,3}\s*"), (r"\bstatusCode\s*=\s*", r"\bstatusCode\s*="),
+    (r"|\bstatusCode", r"|statusCode"), *each(r"\.(?:unauthorized|forbidden)\(", "(?:", ")", "|"),
+    (r"|\.(?:unauthorized|forbidden)\(", r"|(?:unauthorized|forbidden)\("), (r"\.(?:unauthorized|forbidden)\(", r"\.(?:unauthorized|forbidden)"),
     (r"""\bstatus[:(]\s*40[13]|Response""", "Response"), (r"""|Response\(\s*["'](?:Unauthorized|Forbidden)""", ""),
     (r"""|Response\(\s*["']""", r"""|["']"""), (r"""|Response\(""", r"""|\bResponse\("""),
     (r"Response\(\s*", r"Response\s*"), (r"Response\(\s*", r"Response\("),
@@ -1453,7 +1812,7 @@ MUTANTS = [
     ("if not any(a < g.start() < b for a, b in sc)", "if not sc"), ("if not any(a < g.start() < b for a, b in sc)", "if any(a < g.start() < b for a, b in sc)"),
     ("a < g.start() < b", "a < g.start()"), ("a < g.start() < b", "g.start() < b"), ("a < g.start() < b", "a < g.end() < b"),
     (r'r"\bif\s*\("', r'r"\bif\("'), (r'r"\bif\s*\("', r'r"\bif\s+\("'), (r'r"\bif\s*\("', r'r"\bif \("'),
-    ("a = t.end() - 1", "a = t.end()"), ("b = close_of(m, a)", "b = close_of(mk, a)"), ("out.append((a, b))", "out.append((a, e))"),
+    ("a = t.end() - 1", "a = t.end()"), ("b = close_of(m, a)", "b = close_of(mk, a)"), ("[(a, b) for a, b, s, e in ifs(m)", "[(a, e) for a, b, s, e in ifs(m)"),
     # the body: where it starts, a braced block (not its else) or one statement that ends at `;` or a line break outside brackets
     ("s = b + 1", "s = b"), ("while m[s:s + 1].isspace(): s += 1", 'while m[s:s + 1] == " ": s += 1'),
     ('if m[s:s + 1] == "{": e = close_of(m, s)', 'if m[s:s + 1] == "(": e = close_of(m, s)'),
@@ -1473,8 +1832,9 @@ MUTANTS = [
     (r"(?<!\s)\s+(?=", r"(?<!\s)[ \t]+(?="), (r"(?<!\s)\s+(?=", r"(?<!s)\s+(?="),
     (r"(?=[.?:]|&&|\|\|)", r"(?=[?:]|&&|\|\|)"), (r"(?=[.?:]|&&|\|\|)", r"(?=[.:]|&&|\|\|)"), (r"(?=[.?:]|&&|\|\|)", r"(?=[.?]|&&|\|\|)"),
     (r"(?=[.?:]|&&|\|\|)", r"(?=[.?:]|\|\|)"), (r"(?=[.?:]|&&|\|\|)", r"(?=[.?:]|&&)"),
-    ("if REFUSE.search(mk[s:e + 1]):", "if True:"), ("REFUSE.search(mk[s:e + 1])", "REFUSE.search(mk)"),
-    ("REFUSE.search(mk[s:e + 1])", "REFUSE.search(mk[s:])"), ("REFUSE.search(mk[s:e + 1])", "REFUSE.search(mk[:e + 1])"),
+    ("if REFUSE.search(mk[s:e + 1])]", "]"), ("REFUSE.search(mk[s:e + 1])", "REFUSE.search(mk)"),
+    ("REFUSE.search(mk[s:e + 1])", "REFUSE.search(mk[s:])"), ("REFUSE.search(mk[s:e + 1])", "REFUSE.search(mk[:e + 1])"), ("yield a, b, s, e", "yield a, b, s, b"),
+    ('REFUSE.pattern + "|" + CALL.pattern', "REFUSE.pattern"), ('REFUSE.pattern + "|" + CALL.pattern', "CALL.pattern"),
     # next_hs
     (r"(?:async\s+)?function\s+(%s)\b", r"function\s+(%s)\b"),
     (r"(?:const|let|var)\s+(%s)\b", r"(?:let|var)\s+(%s)\b"), (r"(?:const|let|var)\s+(%s)\b", r"(?:const|var)\s+(%s)\b"),
@@ -1488,9 +1848,9 @@ MUTANTS = [
     ("[fn[lo]] if lo in fn else []", "[fn[lo]]"),
     # call_hs
     ("rcv = RECEIVERS | set(RCV.findall(m))", "rcv = RECEIVERS"),
-    (r"(use|addHook|%s|all)", r"(addHook|%s|all)"), (r"(use|addHook|%s|all)", r"(use|%s|all)"), (r"(use|addHook|%s|all)", r"(use|addHook|%s)"),
-    ("cl = close_of(m, op) if r in rcv else -1", "cl = close_of(m, op)"),
-    ("if not ps: continue", "if not ps: pass"), ("p0 = ps[0][1].strip()", "p0 = ps[0][1]"), ("lit = LIT.fullmatch(p0)", "lit = LIT.match(p0)"),
+    ('"use|addHook|%s|all" % H', '"addHook|%s|all" % H'), ('"use|addHook|%s|all" % H', '"use|%s|all" % H'), ('"use|addHook|%s|all" % H', '"use|addHook|%s" % H'),
+    ("if rcv is not None and t.group(1) not in rcv: continue", "pass"), ("rcv is not None and ", ""), ("t.group(1) not in rcv", "t.group(1) in rcv"),
+    ("if ps: yield t, op, cl, ps", "yield t, op, cl, ps"), ("p0 = ps[0][1].strip()", "p0 = ps[0][1]"), ("lit = LIT.fullmatch(p0)", "lit = LIT.match(p0)"),
     ('if k in ("use", "addHook"):', 'if k == "use":'), ("gone.append((t.start(), cl + 1))", "pass"),
     ('if k == "addHook" and not HOOK.fullmatch(p0): continue', "pass"), ('if k == "addHook" and not HOOK.fullmatch(p0): continue', 'if k == "addHook" and HOOK.fullmatch(p0): continue'),
     ('lab = ident(",".join(a[0] for a in ps), True)', 'lab = ident(",".join(a[0] for a in ps))'),
@@ -1504,14 +1864,15 @@ MUTANTS = [
     ('ident(",".join(a[0] for a in ps[:-1]), True), r, None', 'ident(",".join(a[0] for a in ps[:-1])), r, None'),
     ('ident(",".join(a[0] for a in ps[:-1]), True), r, None', 'ident(",".join(a[0] for a in ps[:-1]), True), None, None'),
     # py_hs
-    ("pm = ps and re.fullmatch(", "pm = re.fullmatch("), ("ps[0][1].strip())", "ps[0][1])"),
+    ("pm = ps and re.fullmatch(", "pm = re.fullmatch("), (r'\1""", ps[0][1].strip())', r'\1""", ps[0][1])'), ("HOOK.fullmatch(ps[0][1].strip())", "HOOK.fullmatch(ps[0][1])"),
     (r"""(/[^"']*|)""", r"""(/[^"']*)"""), (r"""(["'])(/[^"']*|)""", r"""(["])(/[^"']*|)"""), (r"""(["'])(/[^"']*|)""", r"""(['])(/[^"']*|)"""),
     ("dm = PYDEF.search(m, cl) if pm else None", "dm = PYDEF.search(m, cl)"), ("if sc < 0: continue", "if False: continue"),
     (r"[\[(]([^\])]*)", r"\[([^\])]*)"),
     ('meths = [t.group(2).upper()]', "meths = [t.group(2)]"), ("km.group(1), re.I)]", "km.group(1))]"),
     (r"""['"]%s['"]""", r"""["]%s["]"""), (r"""['"]%s['"]""", r"""[']%s[']"""),
     ('else: meths = ["GET"]', 'else: meths = ["ANY"]'), ("if not meths: continue", "if not meths: pass"),
-    (r"[ \t]{0,%d}(?=\S)", r"[ \t]{%d}(?=\S)"), ("% len(t.group(1))", "% 0"), ("end = e.start() if e else len(m)", "end = e.start() if e else 0"),
+    (r"[ \t]{0,%d}(?=\S)", r"[ \t]{%d}(?=\S)"), ("% n).search(m, i)", "% 0).search(m, i)"), ("return e.start() if e else len(m)", "return e.start() if e else 0"),
+    ("outdent(m, sc, len(t.group(1)))", "outdent(m, sc, 0)"), ("outdent(m, t.end(), len(t.group(1)))", "outdent(m, t.end(), 0)"),
     ("[(t.start(), dm.start()), (dm.end() - 1, end)]", "[(dm.start(), dm.start()), (dm.end() - 1, end)]"),
     ("[(t.start(), dm.start()), (dm.end() - 1, end)]", "[(t.start(), dm.start())]"),
     # analyze
@@ -1540,8 +1901,10 @@ MUTANTS = [
     ("any(x.fullmatch(route) for x in pats)", "all(x.fullmatch(route) for x in pats)"),
     ("lab = pre or use or", "lab = use or"), ("lab = pre or use or", "lab = pre or"), ("lab = pre or use or", "lab = use or pre or"),
     ('next((g[0] for g in got if g[0]), None) or ("token"', '("token"'),
-    ('or ("token" if any(g[1] for g in got) else None) or mw', "or mw"), ("else None) or mw or \"none\"", 'else None) or "none"'),
-    ('or ("token" if any(g[1] for g in got) else None) or mw or "none"', 'or mw or ("token" if any(g[1] for g in got) else None) or "none"'),
+    ('or ("token" if any(g[1] for g in got) else None) or mw', "or mw"),
+    ('or mw or ("root-hook" if gated(sites, route)', 'or ("root-hook" if gated(sites, route)'),
+    ('or ("root-hook" if gated(sites, route) or meth != "GET" and gated([("", mine)], route) else None) or "none"', 'or "none"'), ("if gated(sites, route) or meth", "if sites or meth"),
+    ('or ("token" if any(g[1] for g in got) else None) or mw or ("root-hook"', 'or mw or ("token" if any(g[1] for g in got) else None) or ("root-hook"'),
     ("any(g[1] for g in got)", "all(g[1] for g in got)"),
     ("rl[max(0, ln - 2):ln]", "rl[max(0, ln - 1):ln]"), ("rl[max(0, ln - 2):ln]", "rl[max(0, ln - 3):ln]"),
     ("rl[max(0, ln - 2):ln]", "rl[max(0, ln - 2):ln - 1]"), ("rl[max(0, ln - 2):ln]", "rl[max(0, ln - 2):ln + 1]"), ("rl[max(0, ln - 2):ln]", "rl[ln - 2:ln]"),
@@ -1552,8 +1915,132 @@ MUTANTS = [
     ("MWF.fullmatch(os.path.basename(rel))", "MWF.fullmatch(rel)"), ("MWF.fullmatch(os.path.basename(rel))", "MWF.match(os.path.basename(rel))"),
     ("MWF.fullmatch(os.path.basename(rel))", "MWF.search(os.path.basename(rel))"),
     ("mw_pats(mask(raw), mask(raw, True))", "mw_pats(mask(raw, True), mask(raw, True))"),
-    ("if raw is None or not (NAPP", "if not (NAPP"), ("not (NAPP.match(rel) or NAPI", "not (NAPI"), ("or NAPI.match(rel) or (PYDEC", "or (PYDEC"),
-    ('(PYDEC if rel.endswith(".py") else JSPRE)', '(JSPRE if rel.endswith(".py") else PYDEC)'), ("seen += 1", "seen += 2"),
+    ("if raw is None: continue", "if raw is None: pass"), ("if NAPP.match(rel) or NAPI", "if NAPI"), ("or NAPI.match(rel) or (PYDEC", "or (PYDEC"),
+    ('(PYDEC if rel.endswith(".py") else JSPRE)', '(JSPRE if rel.endswith(".py") else PYDEC)'), ("len(todo)", "len(todo) + 1"),
+    # typed registrations: the `<...>` scan in opener, and where callargs looks for it
+    ('if m[i:i + 1] == "(": return i', 'if m[i:i + 1] == "(": return -1'), ("o = a = 0", "o = a = 1"),
+    ("min(len(m), i + 2000)", "i + 2000"), ("min(len(m), i + 2000)", "len(m)"), ("i + 2000", "i + 1999"), ("i + 2000", "i + 2001"),
+    ('if c in "([{": o += 1', 'if c in "([": o += 1'), ('if c in "([{": o += 1', 'if c in "({": o += 1'), ('if c in "([{": o += 1', 'if c in "[{": o += 1'),
+    ('elif c in ")]}":', 'elif c in ")]":'), ('elif c in ")]}":', 'elif c in ")}":'), ('elif c in ")]}":', 'elif c in "]}":'),
+    ("if o < 0: return -1", "pass"), ("elif o == 0:", "elif True:"), ('if c == "<": a += 1', 'if c == "<": a += 2'),
+    ('elif c == ">" and m[k - 1] != "=":', 'elif c == ">":'), ('elif c == ">" and m[k - 1] != "=":', 'elif c == ">" and m[k + 1] != "=":'),
+    ("a -= 1", "a -= 2"), ("a -= 1", "pass"), ("if a == 0:", "if a == 1:"),
+    ("OPEN.match(m, k + 1)", "OPEN.match(m, k)"), ("OPEN.match(m, k + 1)", "OPEN.match(m, k + 2)"), ("OPEN.match(m, k + 1)", "OPEN.search(m, k + 1)"),
+    (r'OPEN = re.compile(r"\s*\(")', r'OPEN = re.compile(r"\(")'), (r'OPEN = re.compile(r"\s*\(")', r'OPEN = re.compile(r"\s+\(")'),
+    ("return x.end() - 1 if x else -1", "return x.end() if x else -1"),
+    ('elif c == ";" or m[k:k + 2] in ("&&", "||"): return -1', 'elif m[k:k + 2] in ("&&", "||"): return -1'),
+    ('elif c == ";" or m[k:k + 2] in ("&&", "||"): return -1', 'elif c == ";" or m[k:k + 2] in ("||",): return -1'),
+    ('elif c == ";" or m[k:k + 2] in ("&&", "||"): return -1', 'elif c == ";" or m[k:k + 2] in ("&&",): return -1'),
+    ('elif c == ";" or m[k:k + 2] in ("&&", "||"): return -1', 'elif c == ";" or m[k:k + 1] in ("&&", "||"): return -1'),
+    (r'(?=[(<])" % names', r'(?=[(])" % names'), (r'(?=[(<])" % names', r'(?=[<])" % names'),
+    # hook handlers: what makes a hook gate, and which paths its text scopes or exempts
+    ("if w in dc and w not in seen: seen.add(w); sp.append(dc[w])", "if w in dc: seen.add(w); sp.append(dc[w])"),
+    ("seen.add(w); sp.append(dc[w])", "seen.add(w)"), ("for x, y in sp:  # grows as it goes", "for x, y in list(sp):  # grows as it goes"),
+    ('REFUSE.search("\\n".join(mk[x:y] for x, y in sp))', 'REFUSE.search("\\n".join(m[x:y] for x, y in sp))'),
+    ('CALL.search("\\n".join(m[x:y] for x, y in sp))', 'CALL.search("\\n".join(mk[x:y] for x, y in sp))'),
+    (r'or (re.fullmatch(r"[\w$.]+", m[a:b].strip()) and USE.search(m[a:b]))', "or False"),
+    (r're.fullmatch(r"[\w$.]+", m[a:b].strip())', r're.match(r"[\w$.]+", m[a:b].strip())'), ("and USE.search(m[a:b])", "and True"),
+    (r'r"[\w$.]+", m[a:b].strip()', r'r"[\w$]+", m[a:b].strip()'), (r"m[a:b].strip()) and USE", r"m[a:b]) and USE"),
+    ('"!" in m[o:g.start()]', '"!" in m[:g.start()]'), ('"!" in m[o:g.start()]', '"!" in m[o:]'), ('"!" in m[o:g.start()]', '"!" in m[o:c]'),
+    ('if "!" in m[o:g.start()]: return None', 'if "!" in m[o:g.start()]: pass'), ("scope.add(lit(mk, g))", "free.add(lit(mk, g))"),
+    ("scope.add(lit(mk, g))", 'scope.add((litpath(g), "?"))'), ("lits = {lit(mk, g) for", 'lits = {(litpath(g), "?") for'),
+    # lit: how the text tests a hook's path (`==`/`===` on either side against a plain name, `startsWith(`, anything else)
+    ('"=" if re.search(', '"?" if re.search('), ('"^" if re.search(', '"?" if re.search('),
+    (r'={2,3}\s*$", pre)', r'={3}\s*$", pre)'), (r'={2,3}\s*$", pre)', r'={2}\s*$", pre)'), (r'={2,3}\s*$", pre)', r'={2,3}$", pre)'),
+    (r'[\w$]\s*={2,3}\s*$", pre)', r'\s*={2,3}\s*$", pre)'), (r'[\w$]\s*={2,3}\s*$", pre)', r'[\w$)]\s*={2,3}\s*$", pre)'), (r'[\w$]\s*={2,3}\s*$", pre)', r'[\w$\]]\s*={2,3}\s*$", pre)'),
+    (LIT_POST, LIT_POST.replace("{2,3}", "{3}")), (LIT_POST, LIT_POST.replace("{2,3}", "{2}")), (LIT_POST, LIT_POST[3:]), (LIT_POST, LIT_POST.replace(r"\s*[\w$.]+(?=\s*[^\s\w$.?(\[])", "")),
+    (LIT_POST, LIT_POST.replace("(?!=)\\s*", "(?!=)")), (LIT_POST, LIT_POST.replace("[\\w$.]+", "[\\w$]+")), (LIT_POST, LIT_POST.replace("$.?(", "$.?")), (LIT_POST, LIT_POST.replace(r"?(\[", r"?(")),
+    (LIT_POST, LIT_POST.replace("$.?(", "$.(")),
+    (r'startsWith\(\s*$', r'startsWith\s*$'), ("mk[max(0, g.start() - 40):g.start()]", "mk[g.start():g.start()]"), ("mk[g.end():g.end() + 40]", "mk[g.end():g.end()]"),
+    ("return ([sorted(scope)] if scope else []) + groups, sorted(free)", "return ([sorted(free)] if free else []) + groups, sorted(scope)"),
+    ("LIT.finditer(mk, x, y)", "LIT.finditer(m, x, y)"), ("LIT.finditer(mk, x, y)", "LIT.finditer(mk, x)"), ("LIT.finditer(mk, x, y)", "LIT.finditer(mk, 0, y)"),
+    ("cut[x, y] = r.start() if r else y", "cut[x, y] = y"), ("cut[x, y] = r.start() if r else y", "cut[x, y] = x"), ("REFUSE.search(mk, x, y)", "REFUSE.search(m, x, y)"),
+    ("before = o < cut[span]", "before = True"), ("before = o < cut[span]", "before = o > cut[span]"),
+    ("if p[0] <= o < p[1]", "if o < p[1]"), ("if p[0] <= o < p[1]", "if p[0] <= o"), ("span = next((p for p in sp if p[0] <= o < p[1]), None)", "span = sp[0]"), ("if span is None: continue", "pass"),
+    ("if GATE.search(mk[s:e + 1]):\n            if not before: continue", "if GATE.search(mk[s:e + 1]):\n            pass"), ("elif not before: continue", "elif False: continue"),
+    ("if GATE.search(mk[s:e + 1]):", "if REFUSE.search(mk[s:e + 1]):"), ("if GATE.search(mk[s:e + 1]):", "if GATE.search(m[s:e + 1]):"),
+    ("for g in LIT.finditer(mk, o, c):", "for g in LIT.finditer(mk, s, e):"), ("elif BARE.search(m[s:e + 1]):", "elif BARE.search(mk[s:e + 1]):"),
+    ('if lits and "!" not in m[o:c]: free |= lits', "if lits: free |= lits"), ('if lits and "!" not in m[o:c]: free |= lits', 'if lits and "!" in m[o:c]: free |= lits'),
+    ('if lits and "!" not in m[o:c]: free |= lits', 'if lits and "!" not in m[o:]: free |= lits'), ('if lits and "!" not in m[o:c]: free |= lits', 'if lits and "!" not in m[:c]: free |= lits'),
+    ("elif lits: groups.append(sorted(lits))", "elif lits: free |= lits"),
+    (r'elif lits and re.search(r"&&|\|\|", m[o:c]): return None', "elif False: return None"), (r'elif lits and re.search(r"&&|\|\|", m[o:c]): return None', r'elif lits and re.search(r"\|\|", m[o:c]): return None'),
+    (r'elif lits and re.search(r"&&|\|\|", m[o:c]): return None', r'elif lits and re.search(r"&&", m[o:c]): return None'),
+    ("and SEC.search(mk[o:c])): return None", "and SEC.search(mk[o:c])): pass"), ("elif not (CALL.search(m[o:c]) or ", "elif not ("), ("CMP.search(mk[o:c]) and SEC", "SEC"), (" and SEC.search(mk[o:c])", ""),
+    ("CMP.search(mk[o:c]) and SEC", "CMP.search(mk[o:c]) or SEC"), ("and SEC.search(mk[o:c])", "and SEC.search(m[o:c])"), ("CALL.search(m[o:c]) or", "CALL.search(mk[o:c]) or"),
+    ("return ([sorted(scope)] if scope else []) + groups, sorted(free)", "return [sorted(scope)] + groups, sorted(free)"), ("return ([sorted(scope)] if scope else []) + groups, sorted(free)", "return ([sorted(scope)] if scope else []), sorted(free)"),
+    (r'\b(?:done|next)\(\s*\)', r'\b(?:next)\(\s*\)'), (r'\b(?:done|next)\(\s*\)', r'\b(?:done)\(\s*\)'), (r'\b(?:done|next)\(\s*\)', r'\b(?:done|next)\(\)'),
+    (r'\breturn\s*(?:;|\}|$)', r'\breturn\s*(?:;|$)'), (r'\breturn\s*(?:;|\}|$)', r'\breturn\s*(?:;|\})'), (r'\breturn\s*(?:;|\}|$)', r'\breturn\s*(?:\}|$)'), (r'\breturn\s*(?:;|\}|$)', r'\breturn\s+(?:;|\}|$)'),
+    # declarations at any indent
+    (r'DECL = re.compile(r"^([ \t]*)', r'DECL = re.compile(r"^()'), (r"^([ \t]*)(?:export\s+)?(?:async", r"^([ \t]*)(?:async"),
+    (r"(?:export\s+)?(?:async\s+)?(?:function|const|let|var)", r"(?:export\s+)?(?:function|const|let|var)"),
+    *each(r"(?:function|const|let|var)", "(?:", ")", "|"),
+    ("{t.group(2): (t.end()", "{t.group(1): (t.end()"),
+    # mount: the prefix a register call gives its plugin
+    ('ps[1][1].strip() if len(ps) > 1 else "{}"', 'ps[1][1].strip() if len(ps) > 1 else ""'), ('ps[1][1].strip() if len(ps) > 1 else "{}"', 'ps[1][1].strip() if len(ps) > 2 else "{}"'),
+    ('if o[:1] != "{" or "..." in o: return None', 'if "..." in o: return None'), ('if o[:1] != "{" or "..." in o: return None', 'if o[:1] != "{": return None'),
+    (r'if not re.search(r"\bprefix\b", o): return ""', r'if not re.search(r"\bprefix\b", o): return None'),
+    (r'LIT.pattern + r"\s*[,}]", o)', r'LIT.pattern + r"", o)'), (r'LIT.pattern + r"\s*[,}]", o)', r'LIT.pattern + r"\s*[,]", o)'), (r'LIT.pattern + r"\s*[,}]", o)', r'LIT.pattern + r"\s*[}]", o)'),
+    ('return g[2].rstrip("/") if g else None', 'return g[2] if g else None'), ('return g[2].rstrip("/") if g else None', 'return g[1].rstrip("/") if g else None'),
+    ('return g[2].rstrip("/") if g else None', 'return g[2].rstrip("/") if g else ""'),
+    # resolve: which scanned file an import names
+    ("posixpath.join(posixpath.dirname(rel), spec)", "posixpath.join(rel, spec)"),
+    ("posixpath.normpath(posixpath.join(posixpath.dirname(rel), spec))", "posixpath.join(posixpath.dirname(rel), spec)"),
+    (r'for c in (b, re.sub(r"\.jsx?$", "", b)):', "for c in (b,):"), (r're.sub(r"\.jsx?$", "", b)', r're.sub(r"\.js$", "", b)'),
+    ('("",) + EXT + tuple("/index" + e for e in EXT)', 'EXT + tuple("/index" + e for e in EXT)'), ('("",) + EXT + tuple("/index" + e for e in EXT)', '("",) + EXT'),
+    ("if c + s in known: return c + s", "if c + s in known: return b"),
+    # regs: the imports, the hooks and the register calls of a file
+    ("m, mk = mask(raw), mask(raw, True)", "m, mk = mask(raw, True), mask(raw, True)"),
+    ("for _, b in items(", "for b, _ in items("), ('re.sub(r"[{}]", "", t[1])', "t[1]"), ("resolve(rel, t[3], known)", "resolve(rel, t[2], known)"), ("for t in rx.finditer(mk):", "for t in rx.finditer(m):"),
+    (r"""from\s*(["'])(\.""", r"""from\s*(["'])("""), (r"""from\s*(["'])(\.""", r"""from\s*(["])(\."""), (r"""from\s*(["'])(\.""", r"""from\s*(['])(\."""),
+    (r"""\(\s*(["'])(\.""", r"""\(\s*(["'])("""), (r"""\(\s*(["'])(\.""", r"""\(\s*(["])(\."""), (r"""\(\s*(["'])(\.""", r"""\(\s*(['])(\."""),
+    (r"""\(\s*["'](\.""", r"""\(\s*["']("""), (r"""\(\s*["'](\.""", r"""\(\s*["](\."""), (r"""\(\s*["'](\.""", r"""\(\s*['](\."""),
+    (r"[Ff]astify|require", "Fastify|require"), (r"[Ff]astify|require", "fastify|require"), (r"""|require\(\s*["']fastify["']\s*\)""", ""), ('callargs(m, mk, "addHook", set(FRCV.findall(mk)))', 'callargs(m, mk, "addHook", set(FRCV.findall(m)))'),
+    ("set(RCV.findall(m)), set(FRCV.findall(mk))", "set(RCV.findall(m)), set(FRCV.findall(m))"),
+    ("INL.findall(ps[0][1])", "INL.findall(ps[0][0])"), ("imp.get(w)", "imp[w]"), (r' | {imp.get(w) for w in re.findall(r"[\w$]+", ps[0][0])}', ""),
+    ("len(ps) < 2 or ", ""), ("a = op + 2 + len(ps[0][0])", "a = op + 1 + len(ps[0][0])"), ("a = op + 2 + len(ps[0][0])", "a = op + 3 + len(ps[0][0])"),
+    ("if h: hooks", "if True: hooks"), ("hooks.setdefault(t[1], [])", "hooks.setdefault(None, [])"), ("(t.start(), block_end(m, t.start()), h)", "(0, block_end(m, t.start()), h)"),
+    ("(t.start(), block_end(m, t.start()), h)", "(t.start(), len(m), h)"), ("(t.start(), block_end(m, t.start()), h)", "(t.start(), 0, h)"),
+    ("[h for p, q, h in hooks.get(t[1], []) if p < t.start() < q]", "[h for v in hooks.values() for p, q, h in v if p < t.start() < q]"),
+    ("hooks.get(t[1], [])", "hooks[t[1]]"), ("hooks.get(t[1], []) if p < t.start() < q]", "hooks.get(t[1], []) if p < t.start()]"),
+    ("hooks.get(t[1], []) if p < t.start() < q]", "hooks.get(t[1], []) if t.start() < q]"), ("site = (mount(ps), ", 'site = ("", '),
+    # block_end, the direct calls and the hook handlers' registration, call_hs's own-receiver rule
+    ('m.rfind("\\n", 0, i) + 1', 'm.rfind("\\n", 0, i)'), ("outdent(m, i, n - 1) if n else len(m)", "outdent(m, i, n) if n else len(m)"), ("outdent(m, i, n - 1) if n else len(m)", "outdent(m, i, n - 1) if not n else len(m)"),
+    (r're.match(r"[ \t]*", m[', r're.match(r"[ \t]+", m['),
+    (r'ARG1 = re.compile(r"\s*([\w$]+)\s*[,)]")', r'ARG1 = re.compile(r"([\w$]+)\s*[,)]")'), (r'ARG1 = re.compile(r"\s*([\w$]+)\s*[,)]")', r'ARG1 = re.compile(r"\s*([\w$]+)[,)]")'),
+    (r'ARG1 = re.compile(r"\s*([\w$]+)\s*[,)]")', r'ARG1 = re.compile(r"\s*([\w$]+)\s*[,]")'), (r'ARG1 = re.compile(r"\s*([\w$]+)\s*[,)]")', r'ARG1 = re.compile(r"\s*([\w$]+)\s*[)]")'),
+    ("hooks.get(x and x[1], [])", "hooks.get(t[1], [])"), ("hooks.get(x and x[1], [])", 'hooks.get("app", [])'), ("hooks.get(x and x[1], [])", "hooks.get(None, [])"), ("hooks.get(x and x[1], [])", "hooks.get(x[1], [])"),
+    ("x = ARG1.match(m, t.end())", "x = None"), ("sites.append((imp[t[1]], (", "sites.append((None, ("), ('("", [h for p, q, h in hooks.get(x and x[1], [])', '(None, [h for p, q, h in hooks.get(x and x[1], [])'),
+    ("hooks.get(x and x[1], []) if p < t.start() < q]", "hooks.get(x and x[1], []) if p < t.start()]"), ("hooks.get(x and x[1], []) if p < t.start() < q]", "hooks.get(x and x[1], []) if t.start() < q]"),
+    ("for _, op, cl, _ in regs): continue", "for _, op, cl, _ in regs): pass"), ("if any(op < t.start() < cl for", "if any(op < t.start() for"), ("if any(op < t.start() < cl for", "if any(t.start() < cl for"),
+    ("if names else ()", "if True else ()"), ("[re.escape(w) for w, f in imp.items() if f]", "[w for w, f in imp.items() if f]"), (r'% "|".join(names)', r'% "".join(names)'),
+    (r'(?<![\w$.])(%s)\(', r'(?<![$.])(%s)\('), (r'(?<![\w$.])(%s)\(', r'(?<![\w.])(%s)\('), (r'(?<![\w$.])(%s)\(', r'(?<![\w$])(%s)\('), (r'(?<![\w$.])(%s)\(', r'(?<![\w$.])(%s)'),
+    ("len(ps) > 1 and not re.fullmatch", "len(ps) > 0 and not re.fullmatch"), ("r in frcv", "True"), (r' and not re.fullmatch(r"[\w$.]+", ps[1][0].strip())', ""), ("ps[1][0].strip()): continue", "ps[1][0].strip()): pass"),
+    (r"|preParsing)\1", r"|preParsing|onRoute)\1"), (r"|preParsing)\1", r"|preParsing|onListen)\1"), (r"|preParsing)\1", r"|preParsing|onSend)\1"),
+    # gated: the route (mount + route) against the hook's scope and exempt paths, at every registration site
+    ("bool(q) and ", ""), ('p == q or op == "^"', 'op == "^"'), ('p == q or op != "="', 'op != "="'), ('p.startswith(q + "/")', "p.startswith(q)"),
+    ('op == "^" and bool(q)', 'op != "=" and bool(q)'), ('p == q or op == "^" and bool(q)', "p == q or bool(q)"),
+    ('op != "=" and (op == "^" or bool(q))', '(op == "^" or bool(q))'), ('(op == "^" or bool(q))', "bool(q)"), ('(op == "^" or bool(q))', "True"),
+    ("bool(q)) and p.startswith(q)", 'bool(q)) and p.startswith(q + "/")'),
+    ("if not (sc or ex): return True", "pass"), ("if not (sc or ex): return True", "if not sc: return True"), ("if not (sc or ex): return True", "if not ex: return True"),
+    ("if pre is None: return False", "pass"), ('(pre + route).rstrip("/")', "pre + route"),
+    ("all(any(cover(p, q) for q in g) for g in sc)", "any(any(cover(p, q) for q in g) for g in sc)"), ("all(any(cover(p, q) for q in g) for g in sc)", "all(any(exempt(p, q) for q in g) for g in sc)"),
+    ("for g in sc)", "for g in sc[:1])"), ("and not any(exempt(p, q) for q in ex)", ""), ("and not any(exempt(p, q) for q in ex)", "and any(exempt(p, q) for q in ex)"),
+    ("and not any(exempt(p, q) for q in ex)", "and not any(cover(p, q) for q in ex)"),
+    ("any(ok(pre, *h) for h in hs)", "all(ok(pre, *h) for h in hs)"), ("all(any(ok(pre, *h)", "any(any(ok(pre, *h)"), ("return bool(sites) and all(", "return all("),
+    # scan: which files register which
+    ("known = set(files)", "known = set()"), ("cov.setdefault(f, []).append(site)", "cov[f] = [site]"), ("cov.get(rel)", "None"),
+    ("o -= 1", "o -= 2"), ("o -= 1", "pass"), ("    return -1\n\n\ndef callargs", "    return i\n\n\ndef callargs"),
+    ("opener(m, t.end())", "opener(m, t.end() - 1)"), ("opener(m, t.end())", "opener(m, t.end() + 1)"), ("close_of(m, op) if op > 0 else -1", "close_of(m, op)"),
+    ("sp, seen = [(a, b)], set()", "sp, seen = [], set()"), (r're.findall(r"[\w$]+", m[x:y])', r're.findall(r"\w+", m[x:y])'), (r're.findall(r"[\w$]+", ps[0][0])', r're.findall(r"\w+", ps[0][0])'),
+    (r"\s+([\w$]+)", r"\s+(\w+)"), ("for x, y in reach(m, dc, o, c + 1) for g in LIT", "for x, y in [(o, c + 1)] for g in LIT"),
+    ("for x, y in reach(m, dc, o, c + 1) for g in LIT", "for x, y in sp for g in LIT"), ("{}, decls(m), {}", "{}, {}, {}"),
+    ("for rx in IMP:", "for rx in IMP[:1]:"), ("for rx in IMP:", "for rx in IMP[1:]:"), ("a + len(ps[1][0]))", "a + len(ps[0][0]))"),
+    # analyze: a hook on the route's own receiver; scan: which files get wired
+    ('gated(sites, route) or meth != "GET" and gated([("", mine)], route)', "gated(sites, route)"), ('meth != "GET" and gated(', "gated("), ('meth != "GET" and gated(', 'meth == "GET" and gated('),
+    ('gated([("", mine)], route)', "gated([(None, mine)], route)"), ("hooks.get(rcv, ())", "hooks.get(None, ())"), ("hooks.get(rcv, ())", 'hooks.get("app", ())'),
+    ("hooks.get(rcv, ()) if p < pos < q]", "hooks.get(rcv, ()) if p < pos]"), ("hooks.get(rcv, ()) if p < pos < q]", "hooks.get(rcv, ()) if pos < q]"),
+    ('hooks, py = hooks or {}, rel.endswith(".py")', 'hooks, py = hooks, rel.endswith(".py")'), ("own.get(rel))", "None)"),
+    ('".register" in raw or "addHook" in raw', '".register" in raw'), ('".register" in raw or "addHook" in raw', '"addHook" in raw'),
     # main
     ("len(a) != 1 or not os.path.isdir(a[0])", "len(a) < 1 or not os.path.isdir(a[0])"), ("len(a) != 1 or not os.path.isdir(a[0])", "len(a) != 1"),
     ("print(\"usage: route_auth_map.py [--paths] DIR\", file=sys.stderr); return 2", "print(\"usage: route_auth_map.py [--paths] DIR\", file=sys.stderr); return 1"),

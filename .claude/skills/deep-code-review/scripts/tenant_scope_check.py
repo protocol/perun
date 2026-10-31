@@ -54,7 +54,7 @@ def mask(s, keep=False):
     o, i, n, q = list(s), 0, len(s), None
     def blank(a, b, text=False):
         if text and keep: return
-        for k in range(a, b):
+        for k in range(a, min(b, n)):  # a backslash ending the text inside a string has no character to escape
             if o[k] != "\n": o[k] = " "
     while i < n:
         c = s[i]
