@@ -3173,6 +3173,60 @@
         "Says BASE...HEAD (three dots) is wrong for a commit scan while BASE..HEAD is right",
         "Runs the scan and the push as separate steps so the hit is read before anything is pushed"
       ]
+    },
+    {
+      "id": "rerun-receipt-merged-not-replaced",
+      "prompt": "A pre-commit hook runs a 200-test suite and 3 tests fail. The hook re-runs only those 3 tests and they pass, and it records `Tests: 3/3` as the tree's test receipt. Is that the right receipt?",
+      "expected_output": "No: a rerun merges into the original run's receipt and never replaces it (pipeline-optimizer.md). Keep the original full count and swap each failure for its rerun result, both runs on the same tree: all 3 pass, so 200/200, and a failure that fails again leaves 199/200 and a receipt that stays red. Both runs' raw count strings stay beside the merged count. Recording 3/3 replaces the receipt with a total below the suite's size, so a later gate that requires the full Tests: X/X count refuses it and forces a second full run of the suite.",
+      "expectations": [
+        "Says `Tests: 3/3` is not the right receipt and merges the rerun into the original run's receipt (200/200 when all 3 reruns pass) instead of replacing it",
+        "Keeps the original full count and replaces each failure with its rerun result, both runs on the same tree",
+        "Says a failure that still fails on the rerun gives 199/200 and a receipt that stays red",
+        "Names the cost of a replacing receipt: a total below the suite's size makes a gate that requires the full count refuse it and force a second full run"
+      ]
+    },
+    {
+      "id": "rerun-receipt-after-fix-commit-needs-full-run",
+      "prompt": "A pre-commit hook runs a 200-test suite and 3 tests fail. The author commits a fix for them, and the hook re-runs only those 3 tests, which pass. It then records `Tests: 200/200` for the new tree, counting the 197 first-run passes plus the 3 rerun passes. Is that the right receipt?",
+      "expected_output": "No: a rerun merges into the original run's receipt only when both runs are on the same tree (pipeline-optimizer.md). The fix commit made a new tree, so the 197 first-run passes describe the old tree and say nothing about the code the fix changed, and the 3 reruns did not run the other 197 tests against it. The new tree needs its own full run, and that run's count is its receipt.",
+      "expectations": [
+        "Rejects `Tests: 200/200` because the fix commit made a different tree from the one the 197 first-run passes were measured on",
+        "Requires a full run on the new tree, whose own count is the receipt",
+        "Says a rerun merges into a receipt only when both runs are on the same tree"
+      ]
+    },
+    {
+      "id": "stale-union-built-before-previous-landing-settled",
+      "prompt": "Two trains share one browser-test slot. Train A's browser stage finishes and releases the slot, then A starts landing. Train B was waiting, gets the slot at once, and its union was composed before it queued. B spends its whole browser stage and then finds the base moved when A landed. How should B's stage be ordered, and does that mean holding the slot across the whole train?",
+      "expected_output": "No: the slot stays scoped to the contended command (merge-queue-worktrees.md, the heavy-slot sections), not the whole train, widened only by a bounded wait and the compose. The union the browser stage tests is composed after the grant, once the previous holder's landing has settled (landed or abandoned), on the base as it now stands. The slot sits idle during that wait, so it is bounded to about one landing, not a stage. A union composed earlier for the cheap checks is provisional and is recomposed when the base head differs. While the stage runs, compare the base head with the one the union was composed on and end the stage early when the base moved on a path a member also changes, then recompose instead of running to a green for a base that has gone. A move on paths no member touches does not end it, but that decides only when to abort the stage: landing still needs the base the union proved (merge-operations.md), because disjoint paths do not carry a green to a new base.",
+      "expectations": [
+        "Composes the tested union after acquiring the slot and after the previous holder's landing has settled (landed or abandoned), not before queueing",
+        "Keeps the slot scoped to the contended browser command rather than holding it across the whole train",
+        "Bounds the wait for the previous landing to settle (about one landing, not a whole stage, because the slot sits idle during it)",
+        "Ends the stage early and recomposes when the base moves on a path the union touches, but not for a move on paths no member changes, and says that decides only when to abort the stage: landing still needs the base the union proved"
+      ]
+    },
+    {
+      "id": "zero-worker-check-pool-alarm",
+      "prompt": "After a config edit two pre-merge check pools have 0 workers, and nothing errors. Pool A has PRs queued: someone feeds its queue by hand, and its batches start with 1 or 2 PRs although the configured batch size is 4. Pool B has an empty queue. What should monitoring report for each pool?",
+      "expected_output": "Pool A: alarm on the pair, worker count 0 while ready work waits, and name the pool and the waiting count (pipeline-optimizer.md). A zero-worker pool raises no error: it degrades into a hand-fed queue that reads as a slow queue, not a dead pool, and batches start under the configured size. Pool B: 0 workers with nothing waiting is idle, not stalled, so the alarm stays quiet for it. Batches of 1 or 2 under a larger configured size are the symptom, and a ready-PR age alarm sees only that symptom, and late.",
+      "expectations": [
+        "Alarms for pool A on worker count 0 while ready work is waiting, not on 0 workers alone",
+        "Keeps the alarm quiet for pool B: 0 workers with nothing waiting is idle, not stalled",
+        "Names the pool and the waiting count in the alarm",
+        "Treats batches of 1 or 2 under a larger configured size as the symptom, and notes a ready-PR age alarm sees only that symptom, and late"
+      ]
+    },
+    {
+      "id": "cheap-preconditions-before-heavy-slot",
+      "prompt": "A train job queues for the single browser-test slot, waits behind two other jobs, gets the slot, and fails seconds in on a merge conflict (it could as well be a missing receipt or lint). Everything queued behind it waited for nothing. What changes in the job's order of operations?",
+      "expected_output": "Run the cheap, fast-failing preconditions before queueing for the heavy slot (merge-queue-worktrees.md): mergeability, receipts present, base fresh, lint. They need no slot and fail in seconds, so a job never waits for the slot only to fail in seconds. It is the cheapest-first order of merge-operations.md, placed ahead of the slot queue. It does not replace the step after the grant: a base that was fresh before queueing can still move during the wait, so the tested union is still composed after the grant on a settled base.",
+      "expectations": [
+        "Moves mergeability, receipts present, base fresh and lint ahead of the queue for the slot",
+        "Gives the reason: those checks fail in seconds and need no slot, so no job waits for the slot only to fail",
+        "Ties it to the cheapest-first order in merge-operations.md",
+        "Says a base fresh before queueing can still move during the wait, so the union is still composed after the grant"
+      ]
     }
   ]
 }
