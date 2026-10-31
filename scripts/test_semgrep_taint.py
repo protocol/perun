@@ -63,11 +63,11 @@ app.get("/ok2", (req, res) => {
   fs.readFile(path.join(ROOT, f), () => {});
 });
 app.get("/n1", (req, res) => { m.get(req.query.k); document.body.innerHTML = "a"; });
-app.get("/n2", (req, res) => { const u = req.query.u; if (!H.has(u)) { log(); } fetch(u); });
+app.get("/n2", (req, res) => { const u = req.query.u; if (!H.has(u)) { log(); } fetch(u, { signal }); });
 app.get("/ok3", async (req, res) => {
   const u = new URL(req.query.url);
   if (!H.has(u.hostname)) { return res.status(400).end(); }
-  await fetch(u);
+  await fetch(u, { signal });
 });
 ''')
     env = dict(os.environ, HOME=d, SEMGREP_USER_HOME=d)
