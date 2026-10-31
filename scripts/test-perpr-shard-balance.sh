@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for the time balance of the CI `perpr` legs: scripts/ci-tests-shard.sh weighs every serial scripts/ci-tests.d
-# registration with scripts/ci-durations.tsv. On the committed table the 3 legs are predicted within 10% of equal, the
+# registration with scripts/ci-durations.tsv. On the committed table the legs ci.yml's perpr job runs (the N its legs pass in
+# SHARD=i/N, read from ci.yml, not assumed) are predicted within 10% of equal, the
 # slices stay disjoint and complete for N = 1..5, and a registration the table lacks (or has no valid row for) counts as
 # the table's median, so adding a test never needs a table edit. Background (*.bg.sh) registrations run beside the serial
 # ones and stay round-robin. The awk command CONTRIBUTING.md gives for rebuilding the table runs on synthetic job logs.
@@ -41,10 +42,13 @@ done
 # the table's median (the (n/2+1)-th smallest). Background tests are not counted: they run beside the serial ones.
 med="$(rows | cut -f2 | sort -n | awk '{ a[NR] = $1 } END { print NR ? a[int(NR / 2) + 1] : 1 }')"
 secs() { slice "$1" | awk -F'\t' -v t="$T" -v med="$med" 'BEGIN { while ((getline < t) > 0) w[$1] = $2 } !/\.bg\.sh$/ { s += ($0 in w) ? w[$0] : med } END { print s + 0 }'; }
-s1="$(secs 1/3)"; s2="$(secs 2/3)"; s3="$(secs 3/3)"
-tot=$((s1 + s2 + s3)); max=$s1; [ "$s2" -gt "$max" ] && max=$s2; [ "$s3" -gt "$max" ] && max=$s3
-[ "$tot" -gt 0 ] && [ $((max * 30)) -le $((tot * 11)) ]  # max <= 1.1 * tot / 3, in integers
-ok $? "N=3: the slowest leg is predicted within 1.1x of the mean (legs $s1/$s2/$s3 s, slowest $max, mean $((tot / 3)))"
+# N = what ci.yml's perpr legs pass in SHARD=i/N (the same read as scripts/test-perpr-shard.sh), so a matrix change re-aims this case.
+nlegs="$(awk '/^  [a-z]+:$/ { j = $1 } j == "perpr:"' "$ROOT/.github/workflows/ci.yml" | grep -oE 'SHARD: \$\{\{ matrix.shard \}\}/[0-9]+' | grep -oE '[0-9]+$' | sort -u)"
+case "$nlegs" in '' | *[!0-9]* | 0*) nlegs=0 ;; esac  # not exactly one positive N: the case below fails instead of dividing by it
+tot=0 max=0 per=""; i=1
+while [ "$i" -le "$nlegs" ]; do s="$(secs "$i/$nlegs")"; per="$per${per:+/}$s"; tot=$((tot + s)); [ "$s" -gt "$max" ] && max=$s; i=$((i + 1)); done
+[ "$tot" -gt 0 ] && [ $((max * nlegs * 10)) -le $((tot * 11)) ]  # max <= 1.1 * tot / nlegs, in integers
+ok $? "N=$nlegs, the legs of ci.yml's perpr job: the slowest leg is predicted within 1.1x of the mean (legs $per s, slowest $max, mean $((tot / (nlegs ? nlegs : 1))))"
 
 # A fixture root. Seconds: x1 10, x2 6, x3 6, x4 2, x5 2; u.sh has a malformed row (so no row); y.bg.sh and a stale row (gone.sh) carry
 # big seconds and weigh no leg. They are valid rows, so they count in the median like any other (7 rows: the 4th smallest is 6) but
@@ -73,7 +77,7 @@ printf '%s\n' "2026-10-30T23:59:58.2000000Z Current runner version" "2026-10-30T
   "2026-10-31T00:00:12.0000000Z == $D/r.bg.sh (started in the background)" >"$LG/leg1.log"
 printf '%s\n' "2026-10-31T00:01:00.0000000Z == $D/d.sh" "2026-10-31T00:01:01.5000000Z == $D/e.sh" >"$LG/leg2.log"
 printf '%s\n' "2026-10-31T00:05:00.0000000Z == $D/f.sh" "2026-10-31T00:05:07.0000000Z == $D/g.bg.sh (started in the background)" >"$LG/leg3.log"
-prog="$(grep -m1 "^  awk '" "$ROOT/CONTRIBUTING.md" | sed "s/^  awk '//; s/' leg1\.log.*//")"
+prog="$(grep -m1 "^  awk '" "$ROOT/CONTRIBUTING.md" | sed "s/^  awk '//; s/' leg.*//")"
 [ -n "$prog" ] && [ "$(cd "$LG" && awk "$prog" leg1.log leg2.log leg3.log | LC_ALL=C sort)" \
   = "$(printf '%s\t%s\n' "$D/a.sh" 5 "$D/b.sh" 1 "$D/c.sh" 4 "$D/d.sh" 2 "$D/f.sh" 7)" ]
 ok $? "CONTRIBUTING.md's table rebuild command: seconds between == lines, rounded, at least 1, midnight wrap, no row for a background wait or a file's last test"

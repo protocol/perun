@@ -106,13 +106,13 @@ jobs:
           # fail. Baseline growth vs the PR base is the next step below.
           bash scripts/ci-gates.sh rules --baseline scripts/rule-enforcement-baseline.tsv .
 
-  # Three legs, SHARD=i/3 like selftests: each runs only the scripts/ci-tests.d registrations that scripts/ci-tests-shard.sh lists
+  # Four legs, SHARD=i/4 (the i/N spelling selftests uses): each runs only the scripts/ci-tests.d registrations that scripts/ci-tests-shard.sh lists
   # for it, so the job takes as long as its slowest slice, not the sum. `gates` needs `perpr`, so it fails unless every leg passes.
   perpr:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -133,7 +133,7 @@ jobs:
       # This leg's registrations (serial and background) are listed once, here, into $RUNNER_TEMP/bg/leg; both steps read that list.
       - name: Start background per-PR tests (scripts/ci-tests.d/*.bg.sh)
         env:
-          SHARD: ${{ matrix.shard }}/3
+          SHARD: ${{ matrix.shard }}/4
         run: |
           mkdir -p "$RUNNER_TEMP/bg"
           date +%s >"$RUNNER_TEMP/bg/started"
@@ -145,7 +145,7 @@ jobs:
             f="$RUNNER_TEMP/bg/$(basename "$t")"
             : >"$f.log"
             # shellcheck disable=SC2016 # $1 and $2 expand in the child shell, on purpose
-            nohup bash -c 'timeout 900 bash -e "$1" >"$2.log" 2>&1; echo $? >"$2.rc.tmp"; mv "$2.rc.tmp" "$2.rc"' _ "$t" "$f" >/dev/null 2>&1 &
+            nohup bash -c 'timeout 900 bash -e "$1" >"$2.log" 2>&1; echo $? >"$2.rc.tmp"; date +%s >"$2.end"; mv "$2.rc.tmp" "$2.rc"' _ "$t" "$f" >/dev/null 2>&1 &
           done
 
       # Per-PR tests: a PR registers its test by adding scripts/ci-tests.d/<slug>.sh (one command line),
@@ -171,6 +171,8 @@ jobs:
             end=$(($(cat "$RUNNER_TEMP/bg/started") + ${BG_WAIT_S:-960})) # counted from the background start, not from here
             while [ ! -f "$f.rc" ] && [ "$(date +%s)" -lt "$end" ]; do sleep 1; done
             cat "$f.log"
+            took='?'; [ -f "$f.end" ] && took=$(($(cat "$f.end") - $(cat "$RUNNER_TEMP/bg/started")))
+            echo "bg elapsed: ${f##*/} $took s"
             [ -f "$f.rc" ] || { echo "FAIL: $t did not finish in time"; exit 1; }
             [ "$(cat "$f.rc")" = 0 ]
           done

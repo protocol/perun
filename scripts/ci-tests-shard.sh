@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ci-tests-shard.sh — list the scripts/ci-tests.d registrations that shard SHARD=i/N runs, one path per line, sorted.
-# Same SHARD=i/N spelling as scripts/test-ci-gates.sh (CI runs SHARD=i/3, one `perpr` matrix leg per slice); unset lists all.
+# Same SHARD=i/N spelling as scripts/test-ci-gates.sh (CI runs one `perpr` matrix leg per slice); unset lists all.
 # Serial (*.sh) registrations are balanced by recorded time: scripts/ci-durations.tsv (path<TAB>whole seconds, from one CI run)
 # is taken longest first (ties by name, C locale) and each test goes to the least-loaded leg (ties to the lowest index). A
 # registration with no valid row counts as the table's median (1 for an empty or missing table), so adding a test never needs

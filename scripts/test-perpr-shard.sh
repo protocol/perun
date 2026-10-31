@@ -83,6 +83,8 @@ for i in 1 2 3; do
   [ "$(sed -n 's/^== \([^ ]*\).*/\1/p' "$WORK/leg$i.out" | LC_ALL=C sort)" = "$(slice $i/3 "$FX/scripts/ci-tests-shard.sh")" ] || good=1
 done
 [ "$good" -eq 0 ]; ok $? "each leg runs exactly the registrations its dry listing names"
+el=0; for i in 1 2 3; do [ "$(grep -cE '^bg elapsed: [a-z]\.bg\.sh [0-9]+ s$' "$WORK/leg$i.out")" -eq 1 ] || el=1; done
+[ "$el" -eq 0 ]; ok $? "each leg's wait for its background test logs one 'bg elapsed: <test> <seconds> s' line (the end time is written before the .rc the wait polls)"
 body "Per-PR tests (scripts/ci-tests.d)" >"$WORK/solo.sh"; : >"$WORK/log"   # the per-PR step without the start step before it: no list
 solo=0; (cd "$FX" && PATH="$WORK/bin:$PATH" PERPR_LOG="$WORK/log" RUNNER_TEMP="$(mktemp -d "$WORK/rt.XXXXXX")" bash -e "$WORK/solo.sh") >"$WORK/solo.out" 2>&1 || solo=1
 [ "$solo" -eq 1 ] && [ ! -s "$WORK/log" ] && grep -q 'wrote no test list' "$WORK/solo.out"
