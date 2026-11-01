@@ -17,3 +17,5 @@ A JSON array in the `review_checks.sh` row shape (`file`, `line`, `rule`, `messa
 ## After the run
 
 Findings are leads: reproduce by hand and apply `appsec-verify.md` section 1. `clean` covers only the inputs probed; a limiter keyed per IP or a redirect on another route is not seen. Say so; do not write "no vulnerabilities found". A burst can trip a limiter that exists but sits above `--burst`: raise it before filing `no-rate-limit`.
+
+The static counterpart is `scripts/header_config.py`, run by `review_checks.sh --full`; a "not found in repo config" row is a lead to confirm with `dynamic_probe.py` on a running instance, not a finding.

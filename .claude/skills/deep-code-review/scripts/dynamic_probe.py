@@ -11,6 +11,7 @@ import http.client, json, ssl, sys
 from urllib.parse import urlsplit
 
 TOOL = "dynamic_probe"
+SECURITY_HEADERS = ("content-security-policy", "x-content-type-options", "referrer-policy")  # always expected; header_config.py reads this list too
 rows = []
 
 
@@ -68,7 +69,7 @@ def probe_headers(b):
     if not r:
         return row("/", "not-checked", "security headers: / unreachable")
     h = r[1]
-    want = ["content-security-policy", "x-content-type-options", "referrer-policy"]
+    want = list(SECURITY_HEADERS)
     if "frame-ancestors" not in h.get("content-security-policy", ""):
         want.append("x-frame-options")
     if b.scheme == "https":
