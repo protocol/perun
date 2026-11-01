@@ -3,9 +3,10 @@
 
 Each fix has a held-out variant (different value or wording from the frozen corpus) and a decoy that must stay
 allowed. Secret values are fake and assembled from fragments so this file never trips the privacy gate.
-Commands are only classified, never executed.
+Commands are only classified, never executed. Every guard call runs under a 5 s wall-clock bound and every privacy-gate
+call under 120 s: a case that outlives its bound is a FAIL line naming it and the run moves on, instead of spinning.
 """
-import importlib.util, pathlib, subprocess, sys, tempfile
+import importlib.util, pathlib, re, signal, subprocess, sys, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location("dg", ROOT / ".claude/skills/agentic-delivery/scripts/destructive_guard.py")
@@ -56,7 +57,49 @@ GOOD = [
 fail = []
 import time
 import shlex
-def best(blob, f=lambda b: dg.check(b)):
+CASE_S = 5  # wall-clock bound for one guard call; one privacy-gate call gets 120 s
+
+
+class Hung(BaseException):  # not an Exception, so nothing a guard rule does with `except Exception` can swallow the bound
+    pass
+
+
+def _hung(*_):
+    raise Hung
+
+
+signal.signal(signal.SIGALRM, _hung)
+
+
+# ponytail: SIGALRM is handled between bytecodes and at the regex engine's periodic signal check, so a C call that never checks for signals
+# is not interrupted, and a process has one alarm timer, so arming it per case replaces the runner's per-test alarm. Upgrade path: a forked
+# watchdog, as destructive_guard.py main() does.
+def bounded(f, arg):
+    """f(arg), or Hung when it takes longer than CASE_S seconds."""
+    signal.alarm(CASE_S)
+    try:
+        return f(arg)
+    finally:
+        signal.alarm(0)
+
+
+def blocked(c, f=dg.check, log=None):
+    """bool(f(c)) under the bound; None, after one FAIL line naming c (first 80 chars) in log (default: the run's failures), when f outlives it."""
+    try:
+        return bool(bounded(f, c))
+    except Hung:
+        (fail if log is None else log).append(f"FAIL  guard timed out after {CASE_S}s: {c[:80]}")
+
+
+# Self-check of the bound: a catastrophic regex must come back as one FAIL line well inside 7 s (the bound is 5 s), not spin.
+scratch, t0 = [], time.perf_counter()
+blocked("a" * 40 + "b", lambda s: re.match(r"(a+)+$", s), scratch)
+took = time.perf_counter() - t0
+if took > 7 or len(scratch) != 1:
+    fail.append(f"per-case bound: {len(scratch)} FAIL line(s) after {took:.1f}s for a catastrophic regex, want 1 within 7s")
+
+
+def best(blob, f=lambda b: bounded(dg.check, b)):
     f(blob)  # warm up once
     return min(t1 - t0 for t0, _, t1 in [(time.perf_counter(), f(blob), time.perf_counter()) for _ in range(7)])
 
@@ -70,24 +113,30 @@ def lex(blob):  # linear baseline measured in-process: the guard's dominant prim
 # runner (which slows guard and baseline alike) cannot trip it; 1 s is a loose absolute ceiling.
 for name, unit, n in (("dyn", "$x ", 8000), ("word", "a", 25000), ("colon", ":", 25000)):
     small, big = unit * (n // 10), unit * n
-    rs, rb = best(small) / best(small, lex), best(big) / best(big, lex)
-    if best(big) > 1 or rb / rs > 3:
-        fail.append(f"guard slow on 25KB {name}: {rb:.1f}x shlex vs {rs:.1f}x at 2.5KB")
+    try:
+        rs, rb = best(small) / best(small, lex), best(big) / best(big, lex)
+        if best(big) > 1 or rb / rs > 3:
+            fail.append(f"guard slow on 25KB {name}: {rb:.1f}x shlex vs {rs:.1f}x at 2.5KB")
+    except Hung:
+        fail.append(f"FAIL  guard timed out after {CASE_S}s on a {name} blob")
 for c in BAD:
-    if not dg.check(c):
+    if blocked(c) is False:
         fail.append(f"guard missed: {c}")
 for c in GOOD:
-    if dg.check(c):
+    if blocked(c):
         fail.append(f"guard false positive: {c}")
 with tempfile.TemporaryDirectory() as t:
     t = pathlib.Path(t)
     (t / ".banlist.txt").write_text((ROOT / ".banlist.txt").read_text())
 
-    def flagged(text):
+    def flagged(k, text):  # None, after one FAIL line naming case k, when the gate outlives 120 s
         (t / "x.txt").write_text(text + "\n")
-        return subprocess.run(["bash", str(ROOT / "scripts/ci-gates.sh"), "privacy", "--banlist", str(t / ".banlist.txt"),
-                               str(t / "x.txt")], capture_output=True).returncode != 0
-    fail += [f"gate missed: {k}" for k, v in LEAK.items() if not flagged("v=" + v)]
-    fail += [f"gate false positive: {k}" for k, v in OK.items() if flagged(v)]
+        try:
+            return subprocess.run(["bash", str(ROOT / "scripts/ci-gates.sh"), "privacy", "--banlist", str(t / ".banlist.txt"),
+                                   str(t / "x.txt")], capture_output=True, timeout=120).returncode != 0
+        except subprocess.TimeoutExpired:
+            fail.append(f"FAIL  privacy gate timed out after 120s: {k}")
+    fail += [f"gate missed: {k}" for k, v in LEAK.items() if flagged(k, "v=" + v) is False]
+    fail += [f"gate false positive: {k}" for k, v in OK.items() if flagged(k, v)]
 print("\n".join(fail) or f"PASS  security gates held-out ({len(BAD)}+{len(LEAK)} caught, {len(GOOD)}+{len(OK)} allowed)")
 sys.exit(1 if fail else 0)

@@ -53,7 +53,7 @@ class T(unittest.TestCase):
     def test_run_ci_tests_runs_each_test_through_scrub_env(self):
         # behavior is pinned by test_run_ci_gates.py (its ci-test asserts GH_TOKEN=invalid and no SSH_AUTH_SOCK); here: the line is live code
         lines = (ROOT / "scripts/run-ci-tests.sh").read_text().splitlines()
-        self.assertTrue([l for l in lines if "scrub_env.sh bash -e" in l and not l.lstrip().startswith("#")])
+        self.assertTrue([l for l in lines if "scrub_env.sh" in l and "bash -e" in l and not l.lstrip().startswith("#")])  # the per-test timeout wrapper sits between the two
 
     def test_proxy_refuses_a_connection_not_the_real_network(self):
         r = subprocess.run(["bash", str(SC / "scrub_env.sh"), sys.executable, "-c",
