@@ -63,9 +63,10 @@ def mask(s, keep=False):
             elif c == "\\": blank(i, i + 2, True); i += 2; continue
             elif c == q: q = None
             else: blank(i, i + 1, True)
-        elif s.startswith("//", i):
+        # ponytail: a `/` after a backslash is a regex escape (`/\/*$/`), never a comment opener; an unescaped `/*` inside a regex character class still opens a comment
+        elif s.startswith("//", i) and s[i - 1:i] != "\\":
             j = s.find("\n", i); j = n if j < 0 else j; blank(i, j); i = j; continue
-        elif s.startswith("/*", i):
+        elif s.startswith("/*", i) and s[i - 1:i] != "\\":
             j = s.find("*/", i + 2); j = n if j < 0 else j + 2; blank(i, j); i = j; continue
         elif c in "'\"`": q = c
         i += 1
