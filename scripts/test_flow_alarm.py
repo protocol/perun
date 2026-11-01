@@ -1,4 +1,4 @@
-"""flow_alarm.py: stop-starting hook, one symptom alarm, value-stream split."""
+"""flow_alarm.py: stop-starting hook (throughput exemption, denial log), one symptom alarm, value-stream split."""
 import importlib.util
 import io
 import json
@@ -16,9 +16,17 @@ GREEN = {"isDraft": False, "statusCheckRollup": [{"conclusion": "SUCCESS"}]}
 RED = {"isDraft": False, "statusCheckRollup": [{"conclusion": "FAILURE"}]}
 DRAFT = {"isDraft": True, "statusCheckRollup": [{"conclusion": "SUCCESS"}]}
 NOW = 1_800_000_000
+# A hermetic git for the repos below and for the hook under test: no inherited GIT_* (a hook's GIT_DIR or GIT_INDEX_FILE would aim git
+# at another repo), no user or system config, a fixed identity, and no search for a repo above the temp dir.
+ENV = {**{k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "PERUN_THROUGHPUT_"))},
+       "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CEILING_DIRECTORIES": tempfile.gettempdir(),
+       "GIT_AUTHOR_NAME": "Jane Smith", "GIT_AUTHOR_EMAIL": "jane@example.com",
+       "GIT_COMMITTER_NAME": "Jane Smith", "GIT_COMMITTER_EMAIL": "jane@example.com"}
+LEDGER, DENIALS = "perun-throughput.jsonl", "perun-flow-denials.jsonl"  # in the repo's git common dir
 
 
-def run(args, open_prs=(), merged=(), stdin="", fail=False, env=None):
+def run(args, open_prs=(), merged=(), stdin="", fail=False, env=None, cwd=None):
+    """flow_alarm.py `args` as a process (fake gh serving `open_prs` and `merged`) in `cwd`, by default a plain temp dir: no repo."""
     d = tempfile.mkdtemp()
     pathlib.Path(d, "open.json").write_text(json.dumps(list(open_prs)))
     pathlib.Path(d, "merged.json").write_text(json.dumps(list(merged)))
@@ -27,11 +35,29 @@ def run(args, open_prs=(), merged=(), stdin="", fail=False, env=None):
                   f'*"--state merged"*) cat {d}/merged.json;; esac\n')
     gh.chmod(0o755)
     return subprocess.run([sys.executable, str(SCRIPT), *args, "--now", str(NOW)], input=stdin, capture_output=True, text=True,
-                          env={**os.environ, "PERUN_GH": str(gh), **(env or {})})
+                          cwd=cwd or d, env={**ENV, "PERUN_GH": str(gh), **(env or {})})
 
 
 def hook(cmd, ready, env=None):
     return run([], [GREEN] * ready, stdin=json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}), env=env)
+
+
+def git(cwd, *a):
+    """stdout of `git a...` in `cwd` under ENV; raises on a non-zero exit."""
+    return subprocess.run(["git", *a], cwd=cwd, env=ENV, check=True, capture_output=True, text=True).stdout
+
+
+def branch(repo, name, files, base="origin/main", push=True):
+    """Check out `name` off `base`, commit `files` ({path: text}) and, with `push`, point `origin/<name>` at the commit."""
+    git(repo, "checkout", "-q", "--no-track", "-b", name, base)
+    for path, text in files.items():
+        f = pathlib.Path(repo, path)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", name)
+    if push:
+        git(repo, "update-ref", f"refs/remotes/origin/{name}", "HEAD")
 
 
 class T(unittest.TestCase):
@@ -294,9 +320,11 @@ class Gate(unittest.TestCase):
         spec.loader.exec_module(cls.fa)
 
     def rc(self, cmd, ready):
-        """The hook's exit code for `cmd` with `ready` ready-but-unmerged PRs (open_ready stubbed, cap 5)."""
+        """The hook's exit code for `cmd` with `ready` ready-but-unmerged PRs (open_prs stubbed, cap 5; git stubbed to fail, so
+        a denied command is never judged as throughput work and no denial log is written)."""
         stdin = io.StringIO(json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}))
-        with mock.patch.object(self.fa, "open_ready", lambda timeout=60: ready), mock.patch("sys.stdin", stdin), \
+        with mock.patch.object(self.fa, "open_prs", lambda timeout=60: [GREEN] * ready), \
+                mock.patch.object(self.fa, "_git", side_effect=OSError), mock.patch("sys.stdin", stdin), \
                 mock.patch.dict(os.environ, {"PERUN_STOP_STARTING_READY": "5"}), mock.patch("sys.stderr", io.StringIO()):
             return self.fa.hook()
 
@@ -368,6 +396,492 @@ class Gate(unittest.TestCase):
 
     def test_priority_override_still_passes_at_the_cap(self):
         self.assertEqual(self.rc(f"{self.CMD} --title x # priority: red trunk fix", 9), 0)
+
+
+class Throughput(unittest.TestCase):
+    """At the cap one lone `gh pr create` of a branch pushed to origin whose every changed file is a throughput path passes while
+    fewer than PERUN_THROUGHPUT_OPEN exempt PRs are open (ledger branches among the open PRs' head names); every other deny stands
+    and is logged by class: `work` for anything not judged or not throughput-only, `throughput-cap` when only the exempt cap blocked.
+    The repo has `src/app.py` on `main`, with `origin/main` and `origin/HEAD` at it (no remote configured unless a test adds one), so a
+    branch has a real merge base; `branch()` also points `origin/<name>` at its commit (the push). `work()` and `grant()` run the hook
+    and assert the verdict."""
+    FILES = {"tests/test_a.py": "x\n", ".github/workflows/ci.yml": "on: push\n"}
+    URL = "https://example.com/example-owner/repo.git"  # a fictional remote: nothing is fetched
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("fa_throughput", SCRIPT)
+        cls.fa = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.fa)
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = pathlib.Path(tmp.name, "repo")
+        (self.repo / "src").mkdir(parents=True)
+        git(self.repo, "init", "-q")
+        git(self.repo, "symbolic-ref", "HEAD", "refs/heads/main")
+        (self.repo / "src/app.py").write_text("x = 1\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "init")
+        git(self.repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+        git(self.repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+
+    def create(self, cmd="gh pr create --title x", heads=(), ready=5, cwd=None, env=None):
+        """The hook run on `cmd` in `cwd` (default the repo), with `ready` ready PRs open, the first ones named `heads`."""
+        prs = [{**GREEN, "headRefName": h} for h in heads] + [GREEN] * (ready - len(heads))
+        stdin = json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(cwd or self.repo)})
+        return run([], prs, stdin=stdin, env=env)
+
+    def lines(self, name):
+        """The JSON lines of a file in the repo's git dir ([] when it does not exist)."""
+        f = self.repo / ".git" / name
+        return [json.loads(line) for line in f.read_text().splitlines()] if f.exists() else []
+
+    def seed(self, *branches):
+        """Write a ledger that holds a grant for each of `branches`."""
+        (self.repo / ".git" / LEDGER).write_text("".join(json.dumps({"branch": b, "at": 1}) + "\n" for b in branches))
+
+    def work(self, cmd="gh pr create --title x", **kw):
+        """Run the hook on `cmd`; assert it is denied as class `work` (exit 2, one new denial, no new grant); return the process."""
+        denials, grants = self.lines(DENIALS), self.lines(LEDGER)
+        p = self.create(cmd, **kw)
+        self.assertEqual(p.returncode, 2, cmd)
+        self.assertEqual([d["class"] for d in self.lines(DENIALS)[len(denials):]], ["work"], cmd)
+        self.assertEqual(self.lines(LEDGER), grants, cmd)
+        return p
+
+    def grant(self, cmd="gh pr create --title x", **kw):
+        """Run the hook on `cmd`; assert it passes silently and appends one ledger line, which is returned."""
+        grants = self.lines(LEDGER)
+        p = self.create(cmd, **kw)
+        self.assertEqual((p.returncode, p.stderr), (0, ""), cmd)
+        new = self.lines(LEDGER)[len(grants):]
+        self.assertEqual(len(new), 1, cmd)
+        return new[0]
+
+    def release(self):
+        """`origin/release` stays at the init commit while `origin/main` moves on by a product file; the pushed `t1` is test-only
+        against main (the default base) but not against release."""
+        git(self.repo, "update-ref", "refs/remotes/origin/release", "HEAD")
+        branch(self.repo, "m2", {"src/new.py": "x\n"}, push=False)
+        git(self.repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+        branch(self.repo, "t1", self.FILES)
+
+    def stacked(self):
+        """`origin/tb` carries a product file and the pushed `t1` is test-only on top of it: judged against `tb` it passes, against
+        main (the default base) it does not."""
+        branch(self.repo, "tb", {"src/lib.py": "x\n"})
+        branch(self.repo, "t1", self.FILES, base="origin/tb")
+
+    def test_a_test_only_branch_passes_at_the_cap_and_is_recorded(self):
+        branch(self.repo, "t1", self.FILES)
+        p = self.create()
+        self.assertEqual((p.returncode, p.stderr), (0, ""))
+        self.assertEqual(self.lines(LEDGER), [{"branch": "t1", "at": NOW}])
+        self.assertEqual(self.lines(DENIALS), [])
+
+    def test_a_branch_with_a_product_file_is_denied_as_work(self):
+        branch(self.repo, "p1", {**self.FILES, "src/app.py": "x = 2\n"})
+        p = self.create()
+        self.assertEqual(p.returncode, 2)
+        self.assertIn("5 ready-but-unmerged", p.stderr)
+        self.assertIn("Queue-throughput work (only test or CI paths changed) passes as a lone `gh pr create` (body in `--body-file`) of "
+                      "a branch already pushed to origin, while fewer than 2 such PRs are open. Priority work:", p.stderr)
+        self.assertEqual(self.lines(DENIALS), [{"at": NOW, "class": "work", "ready": 5, "cap": 5}])
+        self.assertEqual(self.lines(LEDGER), [])
+
+    def test_a_product_file_moved_into_tests_is_still_a_product_change(self):
+        git(self.repo, "checkout", "-q", "--no-track", "-b", "mv1", "origin/main")
+        (self.repo / "tests").mkdir()
+        git(self.repo, "mv", "src/app.py", "tests/app.py")  # a rename: git lists only the new path unless told not to detect it
+        git(self.repo, "commit", "-q", "-m", "mv")
+        git(self.repo, "update-ref", "refs/remotes/origin/mv1", "HEAD")  # pushed: the diff is the only reason to deny
+        self.work()
+
+    def test_an_empty_diff_keeps_the_deny(self):
+        self.work()  # HEAD is origin/main: nothing to judge
+        git(self.repo, "checkout", "-q", "--no-track", "-b", "e1", "origin/main")
+        git(self.repo, "commit", "-q", "--allow-empty", "-m", "e1")
+        git(self.repo, "update-ref", "refs/remotes/origin/e1", "HEAD")
+        self.work()  # pushed as itself, but it changes no file
+
+    def test_the_exempt_cap_denies_the_next_test_only_branch(self):
+        self.seed("ex1", "ex2")
+        branch(self.repo, "t3", self.FILES)
+        p = self.create(heads=["ex1", "ex2"])
+        self.assertEqual(p.returncode, 2)
+        self.assertEqual(self.lines(DENIALS), [{"at": NOW, "class": "throughput-cap", "ready": 5, "cap": 5}])
+        self.assertEqual(len(self.lines(LEDGER)), 2)  # nothing recorded for the denied branch
+        self.assertEqual(self.create(heads=["ex1", "ex2"], env={"PERUN_THROUGHPUT_OPEN": "3"}).returncode, 0)
+        self.assertEqual([e["branch"] for e in self.lines(LEDGER)], ["ex1", "ex2", "t3"])
+
+    def test_a_ledger_branch_that_is_not_open_does_not_count(self):
+        self.seed("ex1", "ex2")  # ex2 has merged: it is not among the open PRs
+        branch(self.repo, "t3", self.FILES)
+        # ex1 is open and in the ledger; "feature" is open but never had a grant: one exempt PR, under the cap of 2
+        self.assertEqual(self.create(heads=["ex1", "feature"]).returncode, 0)
+        self.assertEqual(self.lines(DENIALS), [])
+
+    def test_a_pr_for_another_head_or_repo_keeps_the_deny(self):
+        branch(self.repo, "t1", self.FILES)
+        self.grant()  # the same branch with no such option
+        for opt in ("--head x", "--head=x", "-H x", "-fH x", "-Hx", "-R x/y", "-Rx/y", "-dR x/y", "--repo x/y", "--repo=x/y"):
+            self.work(f"gh pr create --title t {opt}")
+        self.work("GH_REPO=x/y gh pr create --title t")  # a variable in front is a word before `gh`: not judged
+
+    def test_unjudged_words_are_options_expansions_and_comments(self):
+        for tok in ("-R", "-H", "--repo", "--repo=x", "--head", "--head=x", "-fH", "-dB", "-dR", "-Brelease", "-B=x", "-fix", "-Hx",
+                    "#12", "$X", "a$b", "a`b", "{--base=main,}", "{a}", "x{a,b}", "--*", "*", "?", "-?", "[x]", "a*b", "Why?"):
+            self.assertTrue(self.fa.UNJUDGED(tok), tok)
+        for tok in ("--title", "Head of queue", "-f", "-d", "--fill", "--draft", "--base", "-B", "--base=main", "--body-file", "main",
+                    "x-H", "- item", "Fix #12", "-", "-1", "a-dB"):
+            self.assertFalse(self.fa.UNJUDGED(tok), tok)
+
+    def test_the_base_comes_from_the_command_and_the_last_one_wins(self):
+        branch(self.repo, "other", {"src/lib.py": "x\n"})
+        branch(self.repo, "t1", self.FILES, base="origin/other")  # test-only against `other`, product files against main
+        self.work()
+        for opt in ("--base other", "--base=other", "-B other", "--base main --base other", "-B main --base=other"):
+            self.grant(f"gh pr create --title x {opt}")
+        for opt in ("--base other --base main", "--base=other -B main", "--base nope"):
+            self.work(f"gh pr create --title x {opt}")  # the flag parser keeps the last; a base that does not exist: git fails
+
+    def test_a_base_option_without_a_value_keeps_the_deny(self):
+        self.release()
+        self.grant()  # the default base, where the branch is test-only
+        for opt in ("--base", '--base ""', "--base=", "-B"):
+            self.work(f"gh pr create --title x {opt}")  # not read as "no base": the diff against `origin/` fails
+
+    def test_a_bundled_or_joined_option_is_not_judged(self):
+        self.release()
+        self.grant()  # test-only against main, the default base
+        for opt in ("-dB release", "-fdB release", "-dB main", "-Brelease", "-Bmain", "-B=main", "-dBmain"):
+            self.work(f"gh pr create --title x {opt}")  # `-dB release` opens against release; `-Bmain`, joined, is not read as a base
+
+    def test_a_git_that_fails_keeps_the_deny(self):
+        branch(self.repo, "t1", self.FILES)
+        plain = self.repo.parent / "plain"
+        plain.mkdir()
+        self.assertEqual(self.create(cwd=plain).returncode, 2)  # not a repo
+        self.assertEqual(self.create("gh pr create --base nope").returncode, 2)  # a base that does not exist
+        self.assertEqual(self.create("gh pr create --base main").returncode, 0)  # the same branch with a base that does
+        git(self.repo, "symbolic-ref", "--delete", "refs/remotes/origin/HEAD")
+        self.assertEqual(self.create().returncode, 2)  # no default base
+        self.assertEqual([d["class"] for d in self.lines(DENIALS)], ["work", "work"])  # none for the dir that is not a repo
+
+    def test_a_git_that_times_out_keeps_the_deny(self):
+        seen = []
+
+        def hang(cmd, **kw):
+            seen.append(kw["timeout"])
+            raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+        stdin = io.StringIO(json.dumps({"tool_name": "Bash", "tool_input": {"command": "gh pr create"}, "cwd": str(self.repo)}))
+        with mock.patch.object(self.fa, "open_prs", lambda timeout=60: [GREEN] * 5), mock.patch.object(self.fa.subprocess, "run", hang), \
+                mock.patch("sys.stdin", stdin), mock.patch("sys.stderr", io.StringIO()) as err:
+            self.assertEqual(self.fa.hook(NOW), 2)
+        self.assertIn("Blocked `gh pr create`", err.getvalue())
+        self.assertEqual(set(seen), {5})  # every git call is bounded at 5 s
+
+    def test_any_error_while_judging_keeps_the_deny(self):
+        branch(self.repo, "t1", self.FILES)
+        (self.repo / ".git" / LEDGER).write_text("not json\n")
+        self.assertEqual(self.create().returncode, 2)  # an unreadable ledger
+        self.seed()
+        self.assertEqual(self.create(env={"PERUN_THROUGHPUT_OPEN": "many"}).returncode, 2)  # a cap that is not a number
+        self.assertEqual(self.create().returncode, 0)  # the same branch, once nothing is wrong
+        self.assertEqual([d["class"] for d in self.lines(DENIALS)], ["work", "work"])
+
+    def test_the_path_list_comes_from_the_env_and_replaces_the_default(self):
+        env = {"PERUN_THROUGHPUT_PATHS": "scripts/ci/*, bench/*"}  # blanks around a glob are dropped
+        branch(self.repo, "s1", {"scripts/ci/run.sh": "x\n", "bench/b.py": "x\n"})
+        self.assertEqual(self.create(env=env).returncode, 0)
+        self.assertEqual(self.create().returncode, 2)  # not in the default list
+        branch(self.repo, "d1", self.FILES)
+        self.assertEqual(self.create(env=env).returncode, 2)  # the default list is replaced, not extended
+        self.assertEqual(self.create(env={"PERUN_THROUGHPUT_PATHS": ""}).returncode, 2)  # an empty list exempts nothing
+
+    def test_the_default_globs(self):
+        globs = self.fa.THROUGHPUT.split(",")
+        for path in ("tests/a.py", "src/test/a.py", "web/__tests__/a.js", "e2e/login.ts", "spec/a_spec.rb", "src/a.test.ts",
+                     "web/a.spec.ts", "pkg/a_test.go", "scripts/test_a.py", "pkg/conftest.py", ".github/workflows/ci.yml",
+                     ".gitlab-ci.yml", ".circleci/config.yml", ".buildkite/pipeline.yml", "playwright.config.ts",
+                     "web/jest.config.js", "vitest.config.mts", "pytest.ini"):
+            self.assertTrue(self.fa._is_throughput(path, globs), path)
+        for path in ("src/app.py", "src/test_data/a.py", "test_dir/x.py", "latest/a.py", "testing/a.py", "contest.py",
+                     "docs/guide.md", "package.json", ".github/CODEOWNERS", "src/testsuite.py"):
+            self.assertFalse(self.fa._is_throughput(path, globs), path)
+
+    def test_below_the_cap_and_a_priority_marker_pass_untouched(self):
+        branch(self.repo, "p1", {"src/app.py": "x = 2\n"})
+        self.assertEqual(self.create(ready=4).returncode, 0)
+        self.assertEqual(self.create("gh pr create --title x # priority: red trunk fix", ready=9).returncode, 0)
+        self.assertEqual(self.create("gh pr list", ready=9).returncode, 0)
+        self.assertEqual((self.lines(LEDGER), self.lines(DENIALS)), ([], []))
+
+    def test_the_ledger_is_in_the_common_dir_for_a_subdirectory_and_a_linked_worktree(self):
+        branch(self.repo, "t1", self.FILES)
+        self.assertEqual(self.create(cwd=self.repo / "tests").returncode, 0)  # git prints the common dir relative to the subdirectory
+        wt = self.repo.parent / "wt"
+        git(self.repo, "worktree", "add", "-q", "--no-track", "-b", "t2", str(wt), "origin/main")
+        (wt / "tests").mkdir()
+        (wt / "tests/test_w.py").write_text("x\n")
+        git(wt, "add", "-A")
+        git(wt, "commit", "-q", "-m", "t2")
+        git(wt, "update-ref", "refs/remotes/origin/t2", "HEAD")
+        self.assertEqual(self.create(cwd=wt).returncode, 0)
+        self.assertEqual([e["branch"] for e in self.lines(LEDGER)], ["t1", "t2"])
+
+    def test_without_a_cwd_in_the_hook_json_the_process_cwd_is_used(self):
+        branch(self.repo, "t1", self.FILES)
+        stdin = json.dumps({"tool_name": "Bash", "tool_input": {"command": "gh pr create"}})
+        self.assertEqual(run([], [GREEN] * 5, stdin=stdin, cwd=self.repo).returncode, 0)
+        self.assertEqual(self.lines(LEDGER), [{"branch": "t1", "at": NOW}])
+
+    def test_a_denial_log_that_cannot_be_written_is_ignored(self):
+        (self.repo / ".git" / DENIALS).mkdir()  # a directory: opening it for append fails
+        p = self.create()
+        self.assertEqual(p.returncode, 2)
+        self.assertIn("Blocked `gh pr create`", p.stderr)
+
+    def test_the_queue_is_one_gh_call_that_also_names_the_heads(self):
+        calls = []
+
+        def fake(*a, timeout=60):
+            calls.append(a)
+            return [{**GREEN, "headRefName": "t1"}] * 5
+        stdin = io.StringIO(json.dumps({"tool_name": "Bash", "tool_input": {"command": "gh pr create"}}))
+        with mock.patch.object(self.fa, "gh_json", fake), mock.patch.object(self.fa, "_git", side_effect=OSError), \
+                mock.patch("sys.stdin", stdin), mock.patch("sys.stderr", io.StringIO()):
+            self.assertEqual(self.fa.hook(NOW), 2)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("headRefName", calls[0][-1])
+
+    def test_a_command_with_more_than_one_command_in_it_is_not_judged(self):
+        self.stacked()
+        self.grant("gh pr create --title x --base tb")  # judged against tb: test-only
+        for cmd in ("gh pr create --title a --base tb && gh pr create --title b",  # the second create has the default base
+                    "gh pr list --base tb && gh pr create --title x", "echo hi; gh pr create --title x --base tb",
+                    "gh pr create --title x --base tb;", "gh pr create --title x --base tb | cat", "gh pr create --title x --base tb &",
+                    "gh pr create --title x --base tb > /tmp/out", "(gh pr create --title x --base tb)",
+                    "gh pr create --title x --base tb\necho done", "gh pr create --title x --base tb 2>&1"):
+            self.work(cmd)
+
+    def test_a_word_in_front_of_gh_is_not_judged(self):
+        self.stacked()
+        for cmd in ("X=1 gh pr create --title x --base tb", "time gh pr create --title x --base tb",
+                    "command gh pr create --title x --base tb", "env gh pr create --title x --base tb",
+                    "/usr/bin/gh pr create --title x --base tb"):
+            self.work(cmd)
+
+    def test_a_branch_switch_or_push_before_the_create_is_not_judged(self):
+        branch(self.repo, "p", {"src/lib.py": "x\n"})
+        branch(self.repo, "t1", self.FILES)  # HEAD is test-only; the command would open the PR from `p`
+        self.grant()
+        for cmd in ("git checkout -q p && gh pr create --title x", "git switch -q p && gh pr create --title x",
+                    "git push -q origin p && gh pr create --title x", "cd /elsewhere && gh pr create --title x"):
+            self.work(cmd)
+
+    def test_an_expansion_a_substitution_or_a_heredoc_is_not_judged(self):
+        branch(self.repo, "p", {"src/lib.py": "x\n"})
+        branch(self.repo, "t1", self.FILES)
+        self.grant()
+        for cmd in ('gh pr create --title x --body "$(git switch -q p; echo hi)"',  # runs before gh, even in quotes
+                    "gh pr create --title x --body \"$(cat <<'EOF'\nbody\nEOF\n)\"", 'gh pr create --title "`git switch -q p`"',
+                    "gh pr create --title `git switch -q p`", "gh pr create --title x --base $B", "gh pr create --title $X",
+                    "gh pr create --title ${X}", "gh pr create --title x --body-file - <<'EOF'\nbody\nEOF"):
+            self.work(cmd)
+
+    def test_a_brace_word_that_may_add_a_later_base_is_not_judged(self):
+        self.stacked()
+        self.grant("gh pr create -B tb --title a")  # judged against tb: test-only
+        self.work("gh pr create -B tb {--base=main,} --title a")  # bash makes it `-B tb --base=main --title a`: the last base is main
+
+    def test_a_brace_word_that_may_add_a_later_repo_is_not_judged(self):
+        branch(self.repo, "t1", self.FILES)
+        self.grant("gh pr create --title x")
+        self.work("gh pr create --title x {--repo=example-owner/other,}")  # bash makes it `--repo=example-owner/other`
+        self.work('gh pr create --title "a {b} c"')  # quoted, so not expanded, but a brace is never judged: the safe side
+
+    def test_a_glob_word_is_not_judged(self):
+        self.release()  # t1 is test-only against main, the default base, but holds a product file against release
+        self.grant()
+        for cmd in ("gh pr create --title x --*", "gh pr create --title x *", "gh pr create --title x --b?se=release",
+                    "gh pr create --title x --base=[r]elease",
+                    'gh pr create --title "Fix [x]"', 'gh pr create --title "Why?"', 'gh pr create --title "a*b"'):  # quotes are not seen
+            self.work(cmd)  # no file matches the glob: the shell passes it on as is
+        (self.repo / "--base=release").write_text("")  # the trap: bash expands `--*` into it, so gh opens the PR against release
+        self.work("gh pr create --title x --*")
+
+    def test_a_lone_create_with_its_usual_words_passes(self):
+        branch(self.repo, "t1", self.FILES)
+        for cmd in ("gh pr create --title x --body-file /tmp/pr-body.md", 'gh pr create --title "Fix #12" --body "plain text"',
+                    'gh pr create --fill --body "- item one\n- item two"', "gh pr create",
+                    'gh pr new --title "gh pr create"',  # the alias is gated only where the text `gh pr create` is also in the command
+                    "gh pr create \\\n  --title x \\\n  --body-file /tmp/pr-body.md"):  # a continuation is one line to the shell
+            self.grant(cmd)
+
+    def test_a_line_continuation_does_not_hide_an_option(self):
+        self.release()
+        for cmd in ("gh pr create --title x \\\n--base release", "gh pr create --title x \\\n  --base release"):
+            self.work(cmd)  # judged against release, where the branch holds a product file
+
+    def test_a_comment_that_looks_like_an_option_is_not_judged(self):
+        self.stacked()
+        self.grant("gh pr create --title x --base tb")
+        for cmd in ("gh pr create --title x # --base tb", "gh pr create --title x #--base tb"):
+            self.work(cmd)  # the shell drops the comment: the PR opens against the default base
+
+    def test_a_configured_merge_base_keeps_the_deny_unless_the_command_names_a_base(self):
+        self.release()
+        self.grant()
+        git(self.repo, "config", "branch.t1.gh-merge-base", "release")
+        self.work()  # gh opens the PR against release, not the default branch
+        self.grant("gh pr create --title x --base main")  # an explicit base wins
+
+    def test_a_relative_diff_setting_does_not_hide_files_outside_the_directory(self):
+        branch(self.repo, "j", {"src/lib.py": "x\n", "tests/test_j.py": "x\n"})
+        git(self.repo, "config", "diff.relative", "true")
+        self.assertEqual(git(self.repo / "tests", "diff", "--name-only", "origin/main...HEAD").split(), ["test_j.py"])  # the trap
+        self.work(cwd=self.repo / "tests")
+
+    def test_a_submodule_change_counts_when_the_config_ignores_submodules(self):
+        git(self.repo, "checkout", "-q", "--no-track", "-b", "s1", "origin/main")
+        git(self.repo, "update-index", "--add", "--cacheinfo", f"160000,{git(self.repo, 'rev-parse', 'HEAD').strip()},vendor/lib")
+        (self.repo / "tests").mkdir()
+        (self.repo / "tests/test_s.py").write_text("x\n")
+        git(self.repo, "add", "tests")
+        git(self.repo, "commit", "-q", "-m", "s1")
+        git(self.repo, "update-ref", "refs/remotes/origin/s1", "HEAD")
+        git(self.repo, "config", "diff.ignoreSubmodules", "all")
+        self.assertEqual(git(self.repo, "diff", "--name-only", "origin/main...HEAD").split(), ["tests/test_s.py"])  # the trap
+        self.work()
+
+    def test_a_branch_that_is_not_pushed_as_itself_is_not_judged(self):
+        branch(self.repo, "t1", self.FILES, push=False)
+        self.work()  # no origin/t1: what is judged may differ from what gh opens
+        git(self.repo, "update-ref", "refs/remotes/origin/other-name", "HEAD")
+        self.work()  # a remote ref at HEAD, but not under the branch's name
+        git(self.repo, "update-ref", "refs/remotes/origin/t1", "HEAD")
+        self.work()  # two remote refs at HEAD
+        git(self.repo, "update-ref", "-d", "refs/remotes/origin/other-name")
+        git(self.repo, "update-ref", "refs/remotes/upstream/t1", "HEAD")
+        self.work()  # a second remote at the same commit
+        git(self.repo, "update-ref", "-d", "refs/remotes/upstream/t1")
+        self.assertEqual(self.grant(), {"branch": "t1", "at": NOW})  # exactly origin/t1 at HEAD
+
+    def test_a_pushed_copy_that_is_not_at_head_is_not_judged(self):
+        branch(self.repo, "p", {"src/lib.py": "x\n"})
+        branch(self.repo, "t1", self.FILES)
+        for where in ("HEAD~1", "refs/remotes/origin/p"):  # behind HEAD; a product commit
+            git(self.repo, "update-ref", "refs/remotes/origin/t1", where)
+            self.work()
+        git(self.repo, "update-ref", "refs/remotes/origin/t1", "HEAD")
+        (self.repo / "src/late.py").write_text("x\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "late")
+        git(self.repo, "update-ref", "refs/remotes/origin/t1", "HEAD")
+        git(self.repo, "reset", "-q", "--hard", "HEAD~1")  # the pushed copy is ahead and holds a product file; HEAD is test-only
+        self.work()
+
+    def test_a_second_remote_keeps_the_deny_because_gh_may_open_the_pr_on_it(self):
+        self.release()  # t1 is test-only against origin/main, which carries a product commit that origin/release lacks
+        git(self.repo, "remote", "add", "origin", self.URL)
+        self.grant()  # origin is the only remote
+        git(self.repo, "update-ref", "refs/remotes/upstream/main", "refs/remotes/origin/release")
+        self.assertIn("src/new.py", git(self.repo, "diff", "--name-only", "upstream/main...HEAD").split())  # the trap: the diff gh opens
+        for name in ("upstream", "fork"):  # gh prefers `upstream`, but any name besides origin is not judged
+            git(self.repo, "remote", "add", name, self.URL)
+            self.work()
+            git(self.repo, "remote", "remove", name)
+
+    def test_a_default_repo_other_than_origin_keeps_the_deny(self):
+        branch(self.repo, "t1", self.FILES)
+        git(self.repo, "remote", "add", "origin", self.URL)
+        for value in ("example-owner/parent", ""):  # `gh repo set-default` on a fork writes the parent's name
+            git(self.repo, "config", "remote.origin.gh-resolved", value)
+            self.work()
+
+    def test_one_origin_remote_is_judged(self):
+        branch(self.repo, "t1", self.FILES)
+        git(self.repo, "remote", "add", "origin", self.URL)
+        self.assertEqual(self.grant(), {"branch": "t1", "at": NOW})
+
+    def test_a_default_repo_set_to_base_is_judged(self):
+        branch(self.repo, "t1", self.FILES)
+        git(self.repo, "remote", "add", "origin", self.URL)
+        git(self.repo, "config", "remote.origin.gh-resolved", "base")  # `gh repo set-default` on origin itself
+        self.assertEqual(self.grant(), {"branch": "t1", "at": NOW})
+
+    def test_every_default_repo_value_must_be_base(self):
+        branch(self.repo, "t1", self.FILES)
+        git(self.repo, "remote", "add", "origin", self.URL)
+        for values in (["example-owner/parent", "base"], ["base", "example-owner/parent"], ["base", ""], ["base\nbase"]):
+            for v in values:  # `git config --get` reads only the last value; a value with a newline is one value, not two
+                git(self.repo, "config", "--add", "remote.origin.gh-resolved", v)
+            self.work()
+            git(self.repo, "config", "--unset-all", "remote.origin.gh-resolved")
+        for values in (["base"], ["base", "base"]):
+            for v in values:
+                git(self.repo, "config", "--add", "remote.origin.gh-resolved", v)
+            self.grant()
+            git(self.repo, "config", "--unset-all", "remote.origin.gh-resolved")
+
+    def test_every_configured_merge_base_value_is_read(self):
+        self.release()
+        for values in (("release", ""), ("", "release"), (" ",)):  # `--get` reads only the last value; a blank one is still a value
+            for v in values:
+                git(self.repo, "config", "--add", "branch.t1.gh-merge-base", v)
+            self.work()
+            self.grant("gh pr create --title x --base main")  # an explicit base wins
+            git(self.repo, "config", "--unset-all", "branch.t1.gh-merge-base")
+        git(self.repo, "config", "branch.t1.gh-merge-base", "")
+        self.grant()  # an empty value names no base
+
+    def test_a_config_read_gives_every_value_exact_and_raises_unless_the_key_is_unset(self):
+        git(self.repo, "config", "--add", "a.b", "x\ny")
+        git(self.repo, "config", "--add", "a.b", "")
+        with mock.patch.dict(os.environ, ENV, clear=True):  # the module runs git with the process's environment
+            self.assertEqual(self.fa._values(self.repo, "a.b"), ["x\ny", ""])  # a newline stays inside its value
+            self.assertEqual(self.fa._values(self.repo, "a.none"), [])  # git exits 1
+            (self.repo / ".git" / "config").write_text("[a\n")
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.fa._values(self.repo, "a.b")  # a config git cannot read is not an unset key
+
+    def test_a_remote_or_ref_name_that_only_looks_like_origin_is_another_name(self):
+        branch(self.repo, "t1", self.FILES, push=False)
+        git(self.repo, "remote", "add", "origin", self.URL)
+        for space in ("\u00a0", "\u2028", "\u0085"):  # git allows each in a name: str.split() drops it, str.splitlines() splits at two
+            git(self.repo, "update-ref", f"refs/remotes/origin/t1{space}", "HEAD")
+            self.work()  # no origin/t1, only a name that reads as it
+            git(self.repo, "update-ref", "refs/remotes/origin/t1", "HEAD")
+            self.work()  # two remote refs at HEAD
+            git(self.repo, "update-ref", "-d", f"refs/remotes/origin/t1{space}")
+            self.grant()  # exactly origin/t1 at HEAD
+            for name in (f"origin{space}", f"origin{space}origin"):  # a second remote: a name that reads as origin, or as two of it
+                git(self.repo, "remote", "add", name, self.URL)
+                self.work()
+                git(self.repo, "remote", "remove", name)
+            git(self.repo, "config", "--rename-section", "remote.origin", f"remote.origin{space}")
+            self.work()  # the only remote, named like origin
+            git(self.repo, "config", "--rename-section", f"remote.origin{space}", "remote.origin")
+            self.grant()
+            git(self.repo, "update-ref", "-d", "refs/remotes/origin/t1")
+
+    def test_an_unpushed_branch_is_a_work_deny_even_at_the_exempt_cap(self):
+        self.seed("ex1", "ex2")
+        branch(self.repo, "t3", self.FILES, push=False)
+        self.work(heads=["ex1", "ex2"])  # not `throughput-cap`: the push check comes first
+
+    def test_the_deny_message_names_the_parsed_exempt_cap_or_none(self):
+        branch(self.repo, "p1", {"src/app.py": "x = 2\n"})
+        for raw in ("3", "03", " 3 "):
+            self.assertIn("while fewer than 3 such PRs are open.", self.create(env={"PERUN_THROUGHPUT_OPEN": raw}).stderr, raw)
+        p = self.create(env={"PERUN_THROUGHPUT_OPEN": "many"})
+        self.assertEqual(p.returncode, 2)
+        self.assertIn("Blocked `gh pr create`", p.stderr)
+        self.assertNotIn("Queue-throughput", p.stderr)  # no clause rather than a number that is not the cap
+        self.assertNotIn("many", p.stderr)
 
 
 if __name__ == "__main__":

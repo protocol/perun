@@ -44,9 +44,36 @@
                                      `waiting-to-start`, `coding`, `ready-to-merged` (queued->started, started->ready, ready->
                                      merged) and the largest stage; rows missing a timestamp are skipped. Exit 2 on bad input.
 
+Throughput exemption, only where the hook would deny (at the cap): one lone `gh pr create` passes when the pushed branch's diff against
+`origin/<base>` holds only throughput paths, by name, and fewer than PERUN_THROUGHPUT_OPEN (default 2) exempt PRs are open, so test and CI
+work is not stuck behind the queue it would shorten. Judged only when the command's words (`_tokens`, a backslash-newline joined) start
+`gh pr create` (or `new`) and hold no operator (`;`, `&&`, `|`, `&`, `(`, newline, backtick, redirect, heredoc), no word with a `$`, `*`,
+`?`, `[`, `{` or backtick (the shell may expand it into other words: a glob into a file named `--base=release`, a brace word into later
+options; quotes are not seen, so a quoted title holding one keeps the deny too: put the text in `--body-file`), no word starting `#`, no
+`-R`, `-H`, `--repo` or `--head`, and no bundle or joined value (a dash, a letter, more: `-dB`, `-Brelease`). Base: the last `--base V`,
+`--base=V` or `-B V`, else origin/HEAD (a `gh-merge-base` branch config with any non-empty value keeps the deny). Files: `git diff
+--name-only origin/<base>...HEAD` in the hook's `cwd` (else the process's), renames off, `diff.relative` off, submodules shown. HEAD must be
+the one commit `refs/remotes/origin/<branch>` points at, with no other remote ref there, so the ledger name is the PR's head name. `git
+remote` must list no name but `origin`, and every value of `remote.origin.gh-resolved` (what `gh repo set-default` writes) must be `base`,
+or none set: gh opens the PR on its own base repo (it prefers a remote named `upstream`), so the diff against origin/<base> may not be the
+PR's diff. Names and config values are compared whole, split only at a newline (a NUL for config): git allows U+0085, U+2028 and Unicode
+spaces in a name, so `origin` plus one of them is another remote or ref. Paths:
+PERUN_THROUGHPUT_PATHS (comma-separated fnmatch globs) replaces the default, THROUGHPUT (test dirs and files, CI config, test-runner
+config); a glob without `/` matches the file name, one with `/` the path or any tail of it. The deny stands (class `work`) for anything
+not judged, an empty diff, a path outside the list, a git call that fails or takes over 5 s, and any exception while judging (only reading
+the queue fails open). A grant appends {"branch","at"} to `<git-common-dir>/perun-throughput.jsonl`; exempt PRs open = ledger branches
+among the open PRs' head names, from the same `gh` call that counts the ready ones. A deny appends {"at","class","ready","cap"} to
+`<git-common-dir>/perun-flow-denials.jsonl`: class `throughput-cap` when only the exempt cap blocked a judged branch, else `work`; no file
+names or command text; a write error is ignored. Residuals: globs match names, not contents (a CI-config edit passes whatever it changes;
+`spec/`, `*.spec.*` and `test_*.py` can name product files: narrow the list with PERUN_THROUGHPUT_PATHS); creation only (later pushes are
+not re-judged); the ledger is local (another host's grants are not seen); two sessions can race for the last slot; a GH_REPO exported in
+the shell is not seen; with over 100 open PRs an exempt PR can fall outside the list, so grants can exceed the cap.
+
 Ready = open, not draft, at least one check and every check SUCCESS/NEUTRAL/SKIPPED. `PERUN_GH` overrides the gh binary (tests).
-`--now EPOCH` pins the clock. Side effects: none (read-only).
+`--now EPOCH` pins the clock. Side effects: the stop-starting hook appends to the two files above, the ledger on a grant and the denial
+log on a deny; everything else is read-only.
 """
+import fnmatch
 import json
 import os
 import re
@@ -77,6 +104,14 @@ SAFE = {"echo", "printf", "cat", "grep", "egrep", "fgrep", "rg", "head", "tail",
         "test", "[", "true", "false", "date", "jq", "column", "fold", "nl", "git", "gh"}  # text tools: none runs its arguments
 GIT_READ = {"log", "show", "diff", "grep", "status", "blame", "commit", "add"}  # read or record only: the rest may run or write
 ASSIGN_EXP = re.compile(r"\$\{[^}]*=").search  # `${NAME:=value}` expands and assigns NAME, which may be an exported EDITOR
+# fnmatch globs of the paths whose PRs shorten the queue: test dirs and files, CI config, test-runner config (a project adds its own)
+THROUGHPUT = ("test/*,tests/*,__tests__/*,e2e/*,spec/*,*.test.*,*.spec.*,*_test.*,test_*.py,conftest.py,.github/workflows/*,"
+              ".gitlab-ci.yml,.circleci/*,.buildkite/*,playwright.config.*,jest.config.*,vitest.config.*,pytest.ini")
+# a word the hook will not judge: one that sends the PR elsewhere (`-R`, `-H`, `--repo*`, `--head*`), a short-option bundle or joined value
+# (`-dB`, `-Brelease`), a comment start (the shell drops the rest of the line), or an expansion (DYN's characters and a backtick): `$(..)`
+# runs before gh, even in quotes, a brace word (`{--base=main,}`) becomes later words and a glob (`--*`) may become a file named
+# `--base=release`, none of them seen by the hook. Quotes are not seen either, so a quoted word holding one of them is not judged.
+UNJUDGED = re.compile(r"^(?:-[RH]\Z|--(?:repo|head)|-[A-Za-z]\S|#)|[$*?[{`]").search
 
 
 def ts(v):
@@ -100,9 +135,15 @@ def ready(pr):
             and all((c.get("conclusion") or c.get("state") or "").upper() in OK for c in ch))
 
 
+def open_prs(timeout=60):
+    """The open PRs, one `gh` call: `ready` counts them and the throughput ledger reads their head names (`headRefName`)."""
+    return gh_json("pr", "list", "--state", "open", "--limit", "100", "--json", "isDraft,statusCheckRollup,headRefName",
+                   timeout=timeout)
+
+
 def open_ready(timeout=60):
-    return sum(ready(p) for p in gh_json("pr", "list", "--state", "open", "--limit", "100", "--json", "isDraft,statusCheckRollup",
-                                         timeout=timeout))
+    """How many open PRs are ready (the count `symptom` reports)."""
+    return sum(map(ready, open_prs(timeout)))
 
 
 def _holds(text):
@@ -295,24 +336,144 @@ def gated(cmd, strip=True):
     return gated(cmd, False) if hd and cmt else _fails("\n".join(kept))
 
 
-def hook():
+def _git(cwd, *a):
+    """stdout of `git a...` run in `cwd` (None: the process's); raises on a non-zero exit and after 5 s."""
+    return subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True, timeout=5, check=True).stdout
+
+
+def _entries(cwd, *a, sep="\n"):
+    """The entries of `git a...` stdout, each ended by `sep`, split there and nowhere else: str.split() and str.splitlines() also break at
+    Unicode spaces and at U+0085, U+2028 and U+2029, which git allows in a ref or remote name, so a name could read as two or as another."""
+    return _git(cwd, *a).split(sep)[:-1]
+
+
+def _values(cwd, key):
+    """Every value of the git config `key`, exact, in order; [] when it is unset (git exits 1). `-z` ends each value with a NUL, so a value
+    may hold a newline. Raises on any other failure, so the caller keeps the deny. (`--default` does not combine with `--get-all`.)"""
+    try:
+        return _entries(cwd, "config", "-z", "--get-all", key, sep="\0")
+    except subprocess.CalledProcessError as e:
+        if e.returncode != 1:
+            raise
+        return []
+
+
+def _common(cwd):
+    """The repo's common git dir (shared by its worktrees), where the throughput ledger and the denial log live."""
+    return os.path.join(cwd or ".", _git(cwd, "rev-parse", "--git-common-dir").rstrip("\n"))
+
+
+def _base(toks):
+    """The PR base: the value of the last `--base V`, `--base=V` or `-B V` (the flag parser keeps the last), else None. An option with
+    no word after it gives "": the diff against `origin/` then fails and the deny stands."""
+    base = None
+    for i, t in enumerate(toks):
+        if t in ("--base", "-B"):
+            base = "".join(toks[i + 1:i + 2])
+        elif t.startswith("--base="):
+            base = t[7:]
+    return base
+
+
+def _open_cap():
+    """PERUN_THROUGHPUT_OPEN (default 2) as an int: how many exempt PRs may be open. Raises ValueError when it is not a number."""
+    return int(os.environ.get("PERUN_THROUGHPUT_OPEN", "2"))
+
+
+def _is_throughput(path, globs):
+    """True when `path` matches a glob: one without `/` is matched against the file name, one with `/` against the path or any tail
+    of it (`tests/*` matches `src/tests/a.py`, `test_*.py` matches `a/test_b.py` but not `test_dir/b.py`)."""
+    parts = path.split("/")
+    return any(fnmatch.fnmatchcase(c, g) for g in globs
+               for c in (["/".join(parts[i:]) for i in range(len(parts))] if "/" in g else parts[-1:]))
+
+
+def _throughput(cmd, cwd, prs, now):
+    """Judge a gated `gh pr create` at the cap: "" when it is one lone invocation (see the module docstring) of a branch pushed to
+    origin whose diff against its base holds only throughput paths and fewer than PERUN_THROUGHPUT_OPEN exempt PRs are open (the grant
+    is appended to the ledger), else the denial class: `throughput-cap` (judged throughput-only, exempt cap reached) or `work` (not
+    judged, or not throughput-only). Raises on a git failure or timeout, an unreadable ledger or a bad env value: the caller keeps
+    the deny."""
+    toks = _tokens(cmd.replace("\\\n", ""))  # a backslash-newline continues the line: the shell joins it
+    # one lone `gh pr create`: another word first, an operator, or a word that sends the PR elsewhere or may expand is not judged
+    if (toks[:3] not in (["gh", "pr", "create"], ["gh", "pr", "new"]) or any(t and not t.strip(PUNCT) for t in toks)
+            or any(map(UNJUDGED, toks))):
+        return "work"
+    # gh opens the PR on its own base repo, which the diff against origin/<base> read only if origin is it: another remote (gh prefers
+    # `upstream`) or a `gh repo set-default` that names another repo is not judged
+    if _entries(cwd, "remote") not in ([], ["origin"]) or set(_values(cwd, "remote.origin.gh-resolved")) - {"base"}:
+        return "work"
+    branch = _git(cwd, "symbolic-ref", "--short", "HEAD").rstrip("\n")
+    base = _base(toks)
+    # without --base gh reads the branch's `gh-merge-base` config, else the default branch
+    if base is None and any(_values(cwd, f"branch.{branch}.gh-merge-base")):
+        return "work"
+    ref = "origin/HEAD" if base is None else f"origin/{base}"
+    # diff.relative off: a user's setting would list only paths under cwd; --no-renames: a product file moved into tests/ lists both
+    # paths; --ignore-submodules=none: a pointer bump counts; `--` ends the revisions (a file may not stand in for one)
+    out = _git(cwd, "-c", "diff.relative=false", "diff", "--name-only", "-z", "--no-renames", "--ignore-submodules=none",
+               f"{ref}...HEAD", "--")
+    files = [f for f in out.split("\0") if f]
+    globs = [g.strip() for g in os.environ.get("PERUN_THROUGHPUT_PATHS", THROUGHPUT).split(",") if g.strip()]
+    if not files or not all(_is_throughput(f, globs) for f in files):
+        return "work"
+    # gh opens the PR from origin/<branch>: it must be the one remote ref at HEAD (a branch not pushed, a copy behind or ahead, or a
+    # second remote at the same commit is not judged), so the ledger name is the PR's head name
+    if _entries(cwd, "for-each-ref", "--format=%(refname)", "--points-at", "HEAD", "refs/remotes/") != [f"refs/remotes/origin/{branch}"]:
+        return "work"
+    ledger = os.path.join(_common(cwd), "perun-throughput.jsonl")
+    try:
+        with open(ledger) as f:
+            seen = {json.loads(line)["branch"] for line in f}
+    except FileNotFoundError:
+        seen = set()
+    if len(seen & {p.get("headRefName") for p in prs}) >= _open_cap():
+        return "throughput-cap"
+    # ponytail: read, then append, without a lock: two sessions racing can both take the last slot (flock the ledger if it matters)
+    with open(ledger, "a") as f:
+        f.write(json.dumps({"branch": branch, "at": int(now)}) + "\n")
+    return ""
+
+
+def hook(now=None):
+    """PreToolUse(Bash) stop-starting check. Exit 2 (reason on stderr) for a gated `gh pr create` at the cap unless it is throughput
+    work; 0 otherwise, and on a failed or slow `gh` or unparseable input. Side effects: the ledger append on a grant, the denial-log
+    append on a deny. `now` (epoch) stamps both; default the clock."""
     try:
         data = json.load(sys.stdin)
         cmd = (data.get("tool_input") or {}).get("command") or ""
         if data.get("tool_name", "Bash") != "Bash" or not gated(cmd) or "# priority:" in cmd:
             return 0
-        n, cap = open_ready(10), int(os.environ.get("PERUN_STOP_STARTING_READY", "5"))
+        prs, cap = open_prs(10), int(os.environ.get("PERUN_STOP_STARTING_READY", "5"))
+        n = sum(map(ready, prs))
     except subprocess.TimeoutExpired:
         print("flow_alarm: gh timed out (10s); stop-starting check skipped this call", file=sys.stderr)
         return 0
     except Exception:
         return 0
-    if n >= cap:
-        print(f"Blocked `gh pr create`: {n} ready-but-unmerged PRs (cap {cap}). Waiting work is queue; help it land "
-              "(review, merge, unblock) before starting more. Priority work: add `# priority: <reason>` to the command.",
-              file=sys.stderr)
-        return 2
-    return 0
+    if n < cap:
+        return 0
+    now, cwd = time.time() if now is None else now, data.get("cwd") or None
+    try:
+        why = _throughput(cmd, cwd, prs, now)
+    except Exception:  # an unread diff or ledger proves nothing: the deny stands (only reading the queue fails open)
+        why = "work"
+    if not why:
+        return 0
+    try:  # best effort: no file names or command text, and a log that cannot be written never changes the verdict
+        with open(os.path.join(_common(cwd), "perun-flow-denials.jsonl"), "a") as f:
+            f.write(json.dumps({"at": int(now), "class": why, "ready": n, "cap": cap}) + "\n")
+    except Exception:
+        pass
+    try:
+        hint = ("Queue-throughput work (only test or CI paths changed) passes as a lone `gh pr create` (body in `--body-file`) of a "
+                f"branch already pushed to origin, while fewer than {_open_cap()} such PRs are open. ")
+    except ValueError:  # a cap that is not a number: say nothing about it
+        hint = ""
+    print(f"Blocked `gh pr create`: {n} ready-but-unmerged PRs (cap {cap}). Waiting work is queue; help it land "
+          f"(review, merge, unblock) before starting more. {hint}Priority work: add `# priority: <reason>` to the command.",
+          file=sys.stderr)
+    return 2
 
 
 def symptom(argv, now):
@@ -360,7 +521,7 @@ def split(path):
 def main(argv):
     now = float(argv[argv.index("--now") + 1]) if "--now" in argv else time.time()
     if not argv or argv[0] == "--now":
-        return hook()
+        return hook(now)
     if argv[0] == "symptom":
         return symptom(argv, now)
     if argv[0] == "split" and len(argv) >= 2:
