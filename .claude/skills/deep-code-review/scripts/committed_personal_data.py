@@ -44,14 +44,14 @@ publish is the reviewer's call.
 Repository total (default 50, `--repo-threshold N`): addresses spread thin, one or two in each of dozens of per-person or per-record
 files, never reach the file threshold. So the distinct addresses of all the files that stay below it are also counted together, and the
 total is reported when it reaches N. A file already reported is left out, so no address is counted twice, and an address that appears in
-many files counts once. 50 is five times the file threshold: a leak of per-record files runs to hundreds of addresses (the audit behind
-this check found about 850), while a small repository seldom scatters 50 different mailboxes through its docs and headers. A large one
+many files counts once. 50 is five times the file threshold: a leak of per-record files runs to hundreds of addresses, while a small
+repository seldom scatters 50 different mailboxes through its docs and headers. A large one
 may, and then gets one lead row. `--threshold 1` lists the files behind the total.
 
 FIXTURE SIGNALS
 ---------------
-Test and mock data holds invented addresses and an export holds real ones, and every flagged file used to need a manual look to tell which (in an
-audit of 43 repositories, 30 of 38 single-file rows were test or mock data). So each `email-addresses` file row also counts, over all the distinct
+Test and mock data holds invented addresses and an export holds real ones, and every flagged file used to need a manual look to tell which (in a
+multi-repository audit, most single-file rows were test or mock data). So each `email-addresses` file row also counts, over all the distinct
 addresses of the file with the reserved names the file count leaves out put back (so the counts do not change with `--include-reserved`), how many
 have a placeholder-style local part and how many are on a reserved domain. Placeholder-style: the letters left after digits and `._%+-` are dropped are
 only these words, back to back: john, jane, doe, test, tester, testing, user, foo, bar, baz, qux, alice, bob, eve, demo, dummy, fake, mock, sample,
