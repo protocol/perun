@@ -3,6 +3,14 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.634.0] — 2026-11-01
+
+### Fixed
+- `lane_resume_nudge.py` no longer tells the coordinator to resume a lane that went idle long ago. It compared a new lane's description with every subagent meta file in the session, however old, so in a session that ran for days it could name a lane whose last activity was days earlier. It now skips a lane whose last activity is older than `LANE_RESUME_MAX_AGE_H` hours (default 6; a missing, non-numeric or non-positive value means 6). Last activity is the mtime of the lane's `agent-<id>.jsonl` beside its meta file when that exists, else the meta file's own mtime; a lane whose mtime cannot be read is skipped. The nudge stays advisory only and still fails open.
+
+### Changed
+- Tests: `python3 .claude/skills/agentic-delivery/scripts/lane_resume_nudge.py --selftest` (already run by CI) goes from 6 to 11 cases. The new cases pin a 7 h old jsonl as silent even when the meta file is fresh, a 5 h old jsonl as advising even when the meta file is old, a lane with no jsonl and a 7 h old meta file as silent, the env var both narrowing and widening the window, and a non-numeric, `nan`, zero, negative or empty value acting as 6.
+
 ## [1.633.0] — 2026-10-31
 
 ### Fixed
