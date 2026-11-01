@@ -84,6 +84,9 @@ import sys
 import time
 from datetime import datetime, timezone
 
+sys.dont_write_bytecode = True  # never litter __pycache__ into a checksummed skill tree
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 OK = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 MENTION = re.compile(r"\bgh\s+pr\s+create\b", re.I)  # the command's text, in any case; a command without it is never gated
 PUNCT = ";()<>|&\n`"  # characters shlex splits at in gated(); a run of them is one operator token
@@ -130,7 +133,10 @@ def gh_json(*a, timeout=60):
 
 
 def ready(pr):
-    ch = pr.get("statusCheckRollup") or []
+    """Not a draft, with at least one check, every one passed. The train's own progress marker is not a check (`landing_watchdog._stage`,
+    the rule `green` uses): `merge_train.py stage` posts it pending on each PR it queued, so counting it would hide the very queue counted here."""
+    from landing_watchdog import _stage  # lazy: only a gated `gh pr create` and `symptom` reach here
+    ch = [c for c in pr.get("statusCheckRollup") or [] if not _stage(c)]
     return (not pr.get("isDraft") and bool(ch)
             and all((c.get("conclusion") or c.get("state") or "").upper() in OK for c in ch))
 
