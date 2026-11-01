@@ -102,6 +102,8 @@ seed() { rm -f "$WORK/ledger.jsonl"; for i in 1 2 3; do python3 "$SC/train_yield
 out=$(run t1 1 2 3); rc=$?
 [ $rc -eq 3 ] && grep -q '^CANT: flake t1 never fails on the base' <<<"$out" && [ "$(last '["outcome"]')" = "" ] && [ "$(last '["heads"]["2"]')" = "$H2" ]
 ok $? "the intermittent-regression CANT is not ledgered flaky; the ride records each PR's head sha"
+[ "$(last '["start"]')" -gt 1000000000 ] && [ "$(last '["start"]')" -le "$(last '["at"]')" ]
+ok $? "the ride records the epoch second the train started, no later than its end stamp"
 out=$(RR=rerun2.sh TRAIN_SPLIT_DEPTH=0 run t2 1 2 3); rc=$?
 [ $rc -eq 3 ] && grep -q 'CANT: no culprit pinned for the real failures' <<<"$out" && [ "$(last '["outcome"]')" = unpinned ]
 ok $? "no culprit (every PR passes the failing ids alone) is ledgered unpinned"
@@ -131,10 +133,17 @@ grep -q '1 PR(s) left (not landed): #2' <<<"$out" && [ "$(cat "$WORK/merged.log"
 ok $? "one PR left after the solo landing is reported as left (not landed), not silently skipped"
 
 for roll in '[{"__typename":"CheckRun","status":"COMPLETED","conclusion":"FAILURE"}]' '[{"__typename":"CheckRun","status":"IN_PROGRESS","conclusion":""}]' '[]' \
-            '[{"__typename":"StatusContext","state":"FAILURE"}]'; do
+            '[{"__typename":"StatusContext","state":"FAILURE"}]' '[{"__typename":"StatusContext","context":"perun/train-stage","state":"FAILURE"}]'; do
   echo "$roll" >"$WORK/roll1"; seed "1" "1:$H1"; out=$(run t7 1 2 3)
   grep -q '#1 rode >= 3 flaky-only or unpinned trains but its head has no all-green checks' <<<"$out" && ! grep -q 'merged 1' "$WORK/merged.log" && [ -s "$WORK/verified" ]
   ok $? "solo candidate with checks $roll is not landed alone and stays in the train"
+done; rm -f "$WORK/roll1"
+# The train's own progress marker (perun/train-stage) is pending or failure on every open PR, so it is not a check: a head whose other checks all passed lands alone.
+for st in FAILURE PENDING; do
+  echo '[{"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"},{"__typename":"StatusContext","context":"perun/train-stage","state":"'$st'"}]' >"$WORK/roll1"
+  seed "1" "1:$H1"; out=$(run t7m 1 2 3)
+  grep -q 'landing alone' <<<"$out" && [ "$(head -1 "$WORK/merged.log")" = "merged 1" ] && [ -s "$WORK/verified" ]
+  ok $? "solo candidate whose passing checks sit beside the train's own $st marker still lands alone"
 done; rm -f "$WORK/roll1"
 seed "1" "1:deadbeef"; out=$(run t8 1 2 3)
 ! grep -q 'landing alone' <<<"$out" && [ ! -s "$WORK/merged.log" ]; ok $? "head drift: rides recorded at an older head do not count toward solo"

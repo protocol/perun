@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Tests for train_yield.py and its landing_watchdog line: yield, re-rides, empty ledger, zero trains."""
+"""Tests for train_yield.py and its landing_watchdog line: yield, re-rides, empty ledger, zero trains, the "at" and "start" stamps and sizes_since."""
+import json
 import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -81,6 +83,78 @@ class T(unittest.TestCase):
         for i in range(4):
             ty.record(self.p, f"t{i}", [1, 2], [])
         self.assertIn("0 of 4", lw._train_yield("/nonexistent"))
+
+    def test_record_stamps_at_from_the_function_and_the_cli(self):
+        before = int(time.time())
+        ty.record(self.p, "t1", [1, 2], [])
+        r = subprocess.run([sys.executable, ty.__file__, "record", "t2", "3", ""], env={**os.environ, "PERUN_TRAIN_LEDGER": self.p}, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        after = int(time.time())
+        recs = [json.loads(ln) for ln in Path(self.p).read_text().splitlines()]
+        self.assertEqual([r["tag"] for r in recs], ["t1", "t2"])
+        for r in recs:
+            self.assertIsInstance(r["at"], int)
+            self.assertTrue(before <= r["at"] <= after, (before, r["at"], after))
+
+    def test_sizes_since_counts_the_trains_stamped_at_or_after_whatever_their_outcome(self):
+        Path(self.p).write_text("\n".join([
+            '{"prs": ["1", "2"], "at": 100}',
+            '{"prs": ["3"], "outcome": "red", "at": 200}',
+            '{"prs": ["1", "2", "3"]}',  # no "at": never after a decision
+            "not json",
+            '{"prs": ["4", "5", "6", "7"], "at": 300}',
+            '{"prs": 5, "at": 400}',
+            '{"at": 400}',
+            '{"prs": ["1"], "at": "100"}',
+        ]) + "\n")
+        self.assertEqual(ty.sizes_since(self.p, 200), [1, 4])
+        self.assertEqual(ty.sizes_since(self.p, 100), [2, 1, 4])
+        self.assertEqual(ty.sizes_since(self.p, 301), [])
+
+    def test_sizes_since_is_empty_for_a_missing_or_unreadable_ledger(self):
+        self.assertEqual(ty.sizes_since(self.p, 0), [])
+        self.assertEqual(ty.sizes_since(os.path.dirname(self.p), 0), [])
+
+    def test_sizes_since_reads_only_the_window(self):
+        for i in range(ty.WINDOW + 5):
+            ty.record(self.p, f"t{i}", [1], [])
+        self.assertEqual(ty.sizes_since(self.p, 0), [1] * ty.WINDOW)
+
+    def test_record_stores_start_only_when_given(self):
+        ty.record(self.p, "a", [1], [])
+        ty.record(self.p, "b", [1], [], "", None, 1234)
+        ty.record(self.p, "c", [1], [], "flaky", {1: "abc"}, "1235")
+        a, b, c = [json.loads(ln) for ln in Path(self.p).read_text().splitlines()]
+        self.assertNotIn("start", a)
+        self.assertEqual((b["start"], c["start"], c["heads"]), (1234, 1235, {"1": "abc"}))
+
+    def test_cli_record_takes_start_as_the_seventh_argument_and_ignores_a_bad_one(self):
+        env = {**os.environ, "PERUN_TRAIN_LEDGER": self.p}
+
+        def run(*a):
+            r = subprocess.run([sys.executable, ty.__file__, "record", "t", "1 2", "", *a], env=env, capture_output=True, text=True)
+            self.assertEqual((r.returncode, r.stderr), (0, ""))
+            return json.loads(Path(self.p).read_text().splitlines()[-1])
+
+        self.assertEqual(run("", "1:abc", "1700000000")["start"], 1700000000)
+        self.assertEqual(run("", "", "1700000001")["start"], 1700000001)  # empty HEADS still lets START through
+        self.assertNotIn("heads", run("", "", "1700000001"))
+        self.assertNotIn("start", run("", "1:abc"))  # the six-argument form is unchanged
+        for bad in ("", "abc", "-5", "1.5", "\u0661\u0662\u0663", "9" * 11, "9" * 5000):
+            self.assertNotIn("start", run("", "1:abc", bad), bad[:12])
+
+    def test_sizes_since_counts_a_train_by_when_it_began_else_by_its_end_stamp(self):
+        Path(self.p).write_text("\n".join([
+            '{"prs": ["1", "2", "3"], "start": 100, "at": 500}',  # began before 200, ended after: not counted
+            '{"prs": ["1", "2", "3", "4"], "start": 300, "at": 600}',
+            '{"prs": ["5"], "at": 250}',  # recorded before "start" existed: its end stamp stands in
+            '{"prs": ["6", "7"], "start": 400}',  # a start alone is enough
+            '{"prs": ["8"], "start": "x", "at": 900}',  # an unusable start is skipped, not read as its end stamp
+            '{"prs": ["9"]}',
+        ]) + "\n")
+        self.assertEqual(ty.sizes_since(self.p, 200), [4, 1, 2])
+        self.assertEqual(ty.sizes_since(self.p, 301), [2])
+        self.assertEqual(ty.sizes_since(self.p, 0), [3, 4, 1, 2])
 
 
 if __name__ == "__main__":

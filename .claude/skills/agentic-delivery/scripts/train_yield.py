@@ -5,12 +5,14 @@ WHY: merges per hour hides a train that keeps starting and landing nothing. One 
 PRs which stayed open; 3 landed (about 15%), and one PR rode 22 trains. That points at infra (a timebox, host load),
 not at the PR, and only the yield and the re-ride count show it.
 
-  train_yield.py record TAG "PR PR ..." "LANDED_PR ..." [OUTCOME ["PR:SHA ..."]]   append one started train (train_land.sh calls this on exit)
+  train_yield.py record TAG "PR PR ..." "LANDED_PR ..." [OUTCOME ["PR:SHA ..." [START]]]   append one started train (train_land.sh calls this on exit)
   train_yield.py report                                   print yield and the PRs that re-rode, then the alarm if any
   train_yield.py solo PR:SHA...                           print the PRs that rode >= TRAIN_SOLO_AFTER (default 3, 0 = off) culprit-less ("unpinned"/"flaky") trains at that same head SHA
 
-Ledger: env PERUN_TRAIN_LEDGER, else <git-common-dir>/train-yield.jsonl, one {"tag","prs","landed","outcome","heads"} per started train
-("heads" = the head SHA each PR rode with; a record without it never counts toward `solo`).
+Ledger: env PERUN_TRAIN_LEDGER, else <git-common-dir>/train-yield.jsonl, one {"tag","prs","landed","outcome","at","start","heads"} per started train
+("at" = the epoch second it was recorded, which is the train's end; "start" = the epoch second the train began, when the caller passes START (train_land.sh does;
+a START that is not 1 to 10 ASCII digits is ignored); landing_watchdog.py compares a recorded decision with "start", else with "at" for a record without one;
+"heads" = the head SHA each PR rode with, and a record without "heads" never counts toward `solo`).
 Only the last WINDOW records count; a record with outcome "red" (BASE RED or a CULPRIT: the base or a PR failed, not infra) is
 skipped. A record with outcome "unpinned" (every PR passed the failing ids alone, no culprit) or "flaky" (no REAL id, nothing blamed) still counts as a ride and is what
 `solo` counts; the "may be an intermittent regression" CANT is ledgered as neither (outcome ""). yield = trains with at least one PR landed / trains started. A PR's re-rides = trains it rode minus one, for PRs that
@@ -20,8 +22,10 @@ zero trains, a missing ledger and unreadable lines give None (never a divide by 
 """
 import json
 import os
+import re
 import subprocess
 import sys
+import time
 
 WINDOW, YIELD_FLOOR, RERIDE_AT, MIN_TRAINS, SOLO_AT = 50, 0.5, 5, 4, 3
 SOLO_OUTCOMES = ("flaky", "unpinned")  # culprit-less ride outcomes that `solo` counts
@@ -36,11 +40,14 @@ def ledger_path(cwd=None):
     return os.path.join(top.stdout.strip(), "train-yield.jsonl")
 
 
-def record(path, tag, prs, landed, outcome="", heads=None):
-    """Append one started train. `heads` ({pr: head sha} each PR rode with) is stored when given."""
-    r = {"tag": tag, "prs": [str(p) for p in prs], "landed": [str(p) for p in landed], "outcome": outcome}
+def record(path, tag, prs, landed, outcome="", heads=None, start=None):
+    """Append one started train, stamped with "at" (int epoch seconds, now: the train's end). `heads` ({pr: head sha} each PR rode with) and `start` (the epoch
+    second the train began) are stored when given."""
+    r = {"tag": tag, "prs": [str(p) for p in prs], "landed": [str(p) for p in landed], "outcome": outcome, "at": int(time.time())}
     if heads:
         r["heads"] = {str(p): h for p, h in heads.items()}
+    if start is not None:
+        r["start"] = int(start)
     with open(path, "a") as f:
         f.write(json.dumps(r) + "\n")
 
@@ -71,6 +78,27 @@ def stats(path):
         for p in set(prs) - done:
             rides[p] = rides.get(p, 0) + 1
     return len(recs), sum(bool(landed) for _, landed in recs), {p: n - 1 for p, n in rides.items() if n > 1}
+
+
+def sizes_since(path, at):
+    """PR counts (len of "prs") of the trains among the last WINDOW records that began at or after epoch `at`, oldest first, whatever their outcome.
+
+    A train began at its "start", else (a record written without one) at its "at", the time it was recorded, which is its end. A record with neither usable
+    never counts as after `at`; a missing or unreadable ledger or line gives nothing for it (never raises)."""
+    try:
+        with open(path) as f:
+            lines = f.read().splitlines()[-WINDOW:]
+    except OSError:
+        return []
+    out = []
+    for ln in lines:
+        try:
+            r = json.loads(ln)
+            if (r["start"] if "start" in r else r["at"]) >= at:
+                out.append(len(r["prs"]))
+        except (ValueError, KeyError, TypeError):
+            continue
+    return out
 
 
 def solo(path, heads, at=None):
@@ -116,8 +144,9 @@ def alarm(path):
 def main(argv):
     try:
         path = ledger_path()
-        if argv[:1] == ["record"] and len(argv) in (4, 5, 6):
-            record(path, argv[1], argv[2].split(), argv[3].split(), argv[4] if len(argv) > 4 else "", parse_heads(argv[5].split()) if len(argv) == 6 else None)
+        if argv[:1] == ["record"] and len(argv) in (4, 5, 6, 7):
+            start = argv[6] if len(argv) == 7 and re.fullmatch(r"[0-9]{1,10}", argv[6]) else None
+            record(path, argv[1], argv[2].split(), argv[3].split(), argv[4] if len(argv) > 4 else "", parse_heads(argv[5].split()) if len(argv) > 5 else None, start)
             return 0
         if argv[:1] == ["solo"]:
             print(" ".join(solo(path, parse_heads(argv[1:]))))

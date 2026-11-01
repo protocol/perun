@@ -47,7 +47,26 @@ Train landing yield (always on, no policy key): train_land.sh records each start
 yield: L of S trains landed ..." fires when fewer than half the recent trains landed a PR or one PR re-rode 5+ trains, and says it points
 at infra (timebox or load), not the PR. No ledger or zero trains = silent. Warn-only; shares the throttle, cache and CLI.
 
-Throttle: the remote is asked (one `git fetch` of the default branch, one `gh pr list`) at most once per 15 minutes
+Train liveness and decision effect (always on, no policy key): the train's progress marker is the `perun/train-stage` status on each open PR (merge_train.py `stage`).
+`gh pr list` shows that status but not its description, so while it shows one, one `gh api graphql` call reads the markers of the open PRs into the branch: stage = first
+word of the description, time = its `at=<epoch>` unless that is more than 5 min ahead of the clock, else the status `createdAt`, eta = `eta<=Ns` (at most 24 h); a marker with
+no stage word or no time is skipped, and no marker means no extra call. green() ignores that marker (it is not a check), so a PR left in a dead run or skipped once still
+counts as waiting. The last train activity is the newest of every marker, whatever its run (a run id is minted per `merge_train.py stage` call, not per train, so it groups
+nothing), and the newest first-parent commit on the branch (one local `git log -1`; a failure, or a time more than 5 min ahead of the clock, reads as none); an outcome beats a marker on a tie.
+"Train run stuck: run R posted <stage> on K PRs X min ago (expected <= Y min), no outcome since. ..." fires only when that last activity is itself a queued, gating or
+landing marker older than 1.5 x its eta (default 60 min), K counting the PRs that carry that run and stage. Any newer marker or any landing supersedes a live marker, so a
+dead run's marker on a PR no later train touched stays quiet. When the stall line fires and the last activity is not a live marker but older than max(1.5 x expected, the check
+window), the stall line gains " No train run in X min: start the train or check its runner."; a stuck run gets the stuck line and no clause, and fresh outcome markers
+(trains that run but fail) get none. No markers at all = silent, so a repo without trains never alarms. `landing_watchdog.py expect 'train_size>=N' [--hours H]` (quote the
+first argument, an unquoted `>=` is a shell redirect; N and H integers >= 1, H default 24; anything else exits 2) appends a decision to <git-common-dir>/perun-decisions.jsonl
+(env PERUN_DECISIONS overrides), and "Decision not in effect: train_size>=N set X h ago; the K trains since carried a median of M PRs. ..." fires while the newest
+unexpired decision is unmet by the median PR count of the >= 2 ledger trains started since it (train_yield.py stamps each train with its start time, else its end time; a
+record with neither never counts), so a decision the runner never applied does not read as a slow train. Residuals: any landing supersedes a live marker, so a hand merge,
+or a landing stage that hangs after its first merge, silences the stuck line (the stall line still fires once nothing merges for the window); markers come only from the
+current heads of open PRs, so a re-push or a close mid-run drops one, and a failed second call reads as no markers; the `createdAt` fallback is the post time, not the run
+start; train_size reads the local ledger only, so another host's trains are not seen. Warn-only; shares the throttle, cache and CLI; fails open.
+
+Throttle: the remote is asked (one `git fetch` of the default branch, one `gh pr list`, and one `gh api graphql` while an open PR carries a train marker) at most once per 15 minutes
 per repo; the verdict is cached between probes, so a standing stall costs no network call; a prompt's line is emitted once per
 session and again when it changes or after 15 minutes; a spawn always gets it, and a payload without session_id is not deduped. The cache is one small JSON file per repo under $PERUN_LANDING_DIR, else <cache>/perun/landing-watchdog
 (<cache> = $XDG_CACHE_HOME or ~/.cache, beside the other Perun hook state). The stamp is written before the calls, so a
@@ -68,6 +87,8 @@ import hashlib
 import json
 import math
 import os
+import re
+import statistics
 import subprocess
 import sys
 import time
@@ -86,6 +107,16 @@ AGE = "Ready PRs aging: p50 {a:.1f} h (limit {t}), p90 {b:.1f} h (limit {u}), {k
 LANE = "Lane stalled: {l} has {k} ready PRs, last merge {h} (limit {t} h). Land that lane before new work."
 LKG = "Last-known-good is {h:.1f} h old (limit {t} h): no full ci-tests pass recorded since. Check the merge gate."
 LINE = "Landing stalled: 0 merged to {b} in {n} min, {k} green PRs waiting. Fix landing before starting new work."
+TRAIN_STAGE = "perun/train-stage"  # the train's progress marker; same string as merge_train's STAGE_CONTEXT (merge_train imports this module, so not imported here)
+LIVE = ("queued", "gating", "landing")  # stages with no outcome yet
+ETA_S = 3600  # expected run time when a marker carries no eta
+STUCK = "Train run stuck: run {r} posted {s} on {k} PRs {x:.0f} min ago (expected <= {y:.0f} min), no outcome since. Check the train runner, not the PRs."
+IDLE = " No train run in {x:.0f} min: start the train or check its runner."  # appended to the stall line
+DECISION = "Decision not in effect: train_size>={n} set {h:.1f} h ago; the {k} trains since carried a median of {m:g} PRs. Check that the runner reads it."
+STAGES_Q = ("query($owner:String!,$repo:String!,$base:String!){repository(owner:$owner,name:$repo){pullRequests(states:OPEN,baseRefName:$base,first:100,"
+            "orderBy:{field:CREATED_AT,direction:DESC}){nodes{commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typename "
+            "...on StatusContext{context,description,createdAt}}}}}}}}}}}")
+EXPECT_USAGE = "usage: landing_watchdog.py expect 'train_size>=N' [--hours H]  (quote the first argument; N and H integers >= 1, H default 24)"
 
 
 def _run(args, cwd, timeout=15):
@@ -117,13 +148,19 @@ def blocker(pr, allow_forks=False):
     return ""
 
 
+def _stage(r):
+    """True for the train's own progress marker (a StatusContext named TRAIN_STAGE), which is not a check."""
+    return r.get("__typename") == "StatusContext" and r.get("context") == TRAIN_STAGE
+
+
 def green(pr, allow_forks=False):
     """True when the PR is queue-eligible (see blocker) with at least one check, all finished successfully.
 
     mergeable=UNKNOWN is GitHub still computing: counted as eligible here so stall signals do not flicker, while the
-    train itself still blocks it.
+    train itself still blocks it. The train's progress marker is ignored (pending while a run is live, failure after a
+    skip), as merge_train judges check runs only; any other pending status still blocks.
     """
-    rolls = pr.get("statusCheckRollup") or []
+    rolls = [r for r in pr.get("statusCheckRollup") or [] if not _stage(r)]
     return blocker(pr, allow_forks) in ("", "mergeable=UNKNOWN") and bool(rolls) and all(_check_ok(r) for r in rolls)
 
 
@@ -217,8 +254,42 @@ def p0_exempt(prs, cwd, now):
     return 0
 
 
+def _stages(prs, branch, cwd):
+    """The train's progress markers on the open PRs into `branch` (their current heads), as statuses with a `description` and `createdAt`; [] when there are none.
+
+    `gh pr list --json statusCheckRollup` exports a status's context, state and start time but not its description (checked on gh 2.99), and the stage, run id and
+    time live there. So when its output shows a marker, one `gh api graphql` call reads them; no marker, no extra call. Fails open: any gh or shape problem gives []."""
+    if not any(_stage(s) for p in prs for s in p.get("statusCheckRollup") or []):
+        return []
+    try:
+        out = json.loads(_run(["gh", "api", "graphql", "-f", "query=" + STAGES_Q, "-f", "base=" + branch, "-F", "owner={owner}", "-F", "repo={repo}"], cwd, timeout=30))
+        return [s for p in out["data"]["repository"]["pullRequests"]["nodes"] for c in p["commits"]["nodes"]
+                for s in (c["commit"]["statusCheckRollup"] or {}).get("contexts", {}).get("nodes", []) if _stage(s)]
+    except Exception:  # no marker is read, no line is added
+        return []
+
+
+def _marks(stages, now=None):
+    """[(run, stage, at, eta_s)] for the train progress markers in `stages` (see _stages): stage = first word of the status description, at = its `at=<epoch>` unless that
+    is more than 300 s ahead of the clock, else the status createdAt, eta_s = `eta<=Ns` capped at 86400 else 0, run = `run=<id>` else "?". A marker with no stage word or no
+    time is skipped, never guessed. The patterns are bounded, so a hand-made status cannot overflow a number or grow a line, and a made-up eta or future time cannot
+    keep a dead run from ever reading as stuck."""
+    now, out = now or time.time(), []
+    for r in stages:
+        d = str(r.get("description") or "")
+        at, eta, run = (re.search(x, d) for x in (r"\bat=(\d{1,10})\b", r"\beta<=(\d{1,9})s\b", r"\brun=([\w.-]{1,16})"))
+        try:
+            t = int(at[1]) if at and int(at[1]) <= now + 300 else _ts(r["createdAt"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        if d.split():
+            out.append((run[1] if run else "?", d.split()[0], t, min(int(eta[1]), 86400) if eta else 0))
+    return out
+
+
 def probe(cwd, minutes, allow_forks=False):
-    """(branch, merged_count, green_count, open_non_draft_count, green_ages_hours). Raises on any git/gh problem; callers fail open."""
+    """(branch, merged_count, green_count, open_non_draft_count, green_ages_hours, train_markers, landed_at). `landed_at` is the epoch second of the newest first-parent
+    commit on origin/<branch>, None when that local `git log` fails. Raises on any other git/gh problem; callers fail open."""
     branch = default_branch(cwd)
     _run(["git", "fetch", "-q", "origin", branch], cwd, timeout=20)
     merged = _run(["git", "log", "--first-parent", f"--since={minutes} minutes ago", "--format=%H", "origin/" + branch], cwd)
@@ -226,7 +297,11 @@ def probe(cwd, minutes, allow_forks=False):
                            "--json", "isDraft,mergeable,isCrossRepository,statusCheckRollup,createdAt,body,labels"], cwd, timeout=30))
     now = time.time()
     ages = [a for a in (_age_h(p, now) for p in prs if green(p, allow_forks)) if a is not None]
-    return branch, len(merged.split()), sum(green(p, allow_forks) for p in prs), sum(not p.get("isDraft") for p in prs) - p0_exempt(prs, cwd, now), ages
+    try:
+        landed = int(_run(["git", "log", "-1", "--first-parent", "--format=%ct", "origin/" + branch], cwd))
+    except Exception:  # fail open: no landing time, the markers alone judge
+        landed = None
+    return branch, len(merged.split()), sum(green(p, allow_forks) for p in prs), sum(not p.get("isDraft") for p in prs) - p0_exempt(prs, cwd, now), ages, _marks(_stages(prs, branch, cwd), now), landed
 
 
 def settings():
@@ -334,9 +409,9 @@ def cache_file(cwd):
     return os.path.join(base, hashlib.sha1(top.encode()).hexdigest()[:16] + ".json")
 
 
-def _stall(branch, merged, k, n_open, minutes, cap):
-    """The stall line and/or the WIP line, newline-joined, or None when neither applies."""
-    lines = [LINE.format(b=branch, n=minutes, k=k)] if merged == 0 and k else []
+def _stall(branch, merged, k, n_open, minutes, cap, idle=None):
+    """The stall line and/or the WIP line, newline-joined, or None when neither applies. `idle` (minutes since the last train activity, from _runs) is appended to the stall line."""
+    lines = [LINE.format(b=branch, n=minutes, k=k) + (IDLE.format(x=idle) if idle else "")] if merged == 0 and k else []
     if cap and n_open > cap:
         lines.append(WIP.format(n=n_open, c=cap))
     return "\n".join(lines) or None
@@ -350,6 +425,73 @@ def _train_yield(cwd):
         return train_yield.alarm(train_yield.ledger_path(cwd))
     except Exception:
         return None
+
+
+def _runs(marks, landed, minutes, now=None):
+    """(stuck line or None, idle minutes or None). `marks` is [(run, stage, at, eta_s)] (see _marks), `landed` the epoch second of the newest first-parent commit on the branch
+    or None; no markers = (None, None), so a repo without trains never alarms.
+
+    The last activity is the newest of every marker and, when known and not more than 300 s ahead of the clock, a landing counted as an outcome at `landed`; on a tie in time an
+    outcome is the newer. Run ids do not
+    group markers: a run id is minted per `merge_train.py stage` call, not per train, so one train posts several.
+    Stuck: the last activity is itself a queued, gating or landing marker older than 1.5 x its expected time (eta, else ETA_S); the line names its run and stage and counts the
+    PRs carrying both. Any newer marker or any landing supersedes a live marker, so a dead run's marker on a PR no later train touched stays quiet. Residual: a hand merge, or a
+    landing stage that hangs after its first merge, therefore silences it (the stall line still fires once nothing merges for the window).
+    Idle: the last activity is not a live marker and is older than max(1.5 x expected, the check window); its age in minutes, which _stall appends to the stall line. A repo
+    that merges has no stall line, so a skipped marker from days ago never alarms there."""
+    if not marks:
+        return None, None
+    now = now or time.time()
+    last = max(marks + ([("", "landed", landed, 0)] if landed and landed <= now + 300 else []), key=lambda m: (m[2], m[1] not in LIVE))
+    age, eta = now - last[2], last[3] or ETA_S
+    if last[1] in LIVE:
+        return (STUCK.format(r=last[0], s=last[1], k=sum(m[:2] == last[:2] for m in marks), x=age / 60, y=eta / 60) if age > 1.5 * eta else None), None
+    return None, age / 60 if age > max(1.5 * eta, minutes * 60) else None
+
+
+def decisions_path(cwd=None):
+    """Decision file: env PERUN_DECISIONS, else perun-decisions.jsonl under the git common dir of cwd (as train_yield.ledger_path). Raises RuntimeError outside a repo."""
+    return os.environ.get("PERUN_DECISIONS") or os.path.join(_run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd), "perun-decisions.jsonl")
+
+
+def expect(argv, now=None):
+    """Record `'train_size>=N' [--hours H]` (H default 24) in the decision file and return a one-line receipt (main prints it); quote the first argument, an unquoted `>=` is a shell redirect.
+
+    Only the metric train_size with `>=`, N >= 1 and a whole-number H >= 1 are accepted; anything else raises ValueError(EXPECT_USAGE) and writes nothing.
+    Side effect: appends {"metric","op","value","at","until"} (epoch seconds) to decisions_path(). Raises OSError or RuntimeError when it cannot write."""
+    m = re.fullmatch(r"train_size>=([0-9]{1,9})", argv[0]) if argv else None
+    hours = "24" if len(argv) == 1 else argv[2] if len(argv) == 3 and argv[1] == "--hours" else ""
+    if not (m and re.fullmatch(r"[0-9]{1,9}", hours) and int(m[1]) >= 1 and int(hours) >= 1):
+        raise ValueError(EXPECT_USAGE)
+    at = int(now or time.time())
+    with open(decisions_path(os.getcwd()), "a") as f:
+        f.write(json.dumps({"metric": "train_size", "op": ">=", "value": int(m[1]), "at": at, "until": at + int(hours) * 3600}) + "\n")
+    return f"decision recorded: train_size>={int(m[1])} for {int(hours)} h"
+
+
+def _decision(cwd, now=None):
+    """Decision-effect line, or None: the newest unexpired `train_size>=N` decision (see expect) while the >= 2 ledger trains started since it (train_yield.sizes_since) carried a median
+    of fewer than N PRs, i.e. the decision is not in effect. Met, expired, fewer than 2 trains, a record without a time, a missing or unreadable file = silent.
+    Fails open: never drops the other lines."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import train_yield
+        now, ds = now or time.time(), []
+        with open(decisions_path(cwd)) as f:
+            for ln in f.read().splitlines():
+                try:
+                    d = json.loads(ln)
+                    if d["metric"] == "train_size" and d["op"] == ">=" and d["value"] >= 1 and d["at"] <= now < d["until"]:
+                        ds.append(d)
+                except (ValueError, KeyError, TypeError):
+                    continue
+        d = max(ds, key=lambda x: x["at"], default=None)
+        sizes = train_yield.sizes_since(train_yield.ledger_path(cwd), d["at"]) if d else []
+        if len(sizes) > 1 and (m := statistics.median(sizes)) < d["value"]:
+            return DECISION.format(n=d["value"], h=(now - d["at"]) / 3600, k=len(sizes), m=m)
+    except Exception:  # no file, no repo, no ledger: silent
+        pass
+    return None
 
 
 def _lkg(cwd):
@@ -414,7 +556,8 @@ def _all(cwd, probed, minutes, cap, ages_lim=None, lanes=None):
         lane = _lanes(cwd, b, lanes if lanes is not None else lane_cfg())
     except Exception:  # fail open: lane lines never drop the others
         lane = None
-    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap), extra, lane, _train_yield(cwd), _lkg(cwd), _red(cwd), _installer(cwd), _age(rest[0] if rest else [], ages_lim if ages_lim is not None else age_limits())) if x) or None
+    stuck, idle = _runs(rest[1] if len(rest) > 1 else [], rest[2] if len(rest) > 2 else None, minutes)
+    return "\n".join(x for x in (_stall(b, merged, k, n_open, minutes, cap, idle), extra, lane, _train_yield(cwd), stuck, _decision(cwd), _lkg(cwd), _red(cwd), _installer(cwd), _age(rest[0] if rest else [], ages_lim if ages_lim is not None else age_limits())) if x) or None
 
 
 def _event(data):
@@ -494,6 +637,13 @@ def check(argv):
 def main():
     if sys.argv[1:2] == ["check"]:
         return check(sys.argv[2:])
+    if sys.argv[1:2] == ["expect"]:
+        try:
+            print(expect(sys.argv[2:]))
+            return 0
+        except (ValueError, OSError, RuntimeError) as e:
+            sys.stderr.write(f"landing_watchdog: {e}\n")
+            return 2
     try:
         data = json.load(sys.stdin)
         line = hook(data)
