@@ -23,24 +23,29 @@ ENV = {**{k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "PERU
        "GIT_AUTHOR_NAME": "Jane Smith", "GIT_AUTHOR_EMAIL": "jane@example.com",
        "GIT_COMMITTER_NAME": "Jane Smith", "GIT_COMMITTER_EMAIL": "jane@example.com"}
 LEDGER, DENIALS = "perun-throughput.jsonl", "perun-flow-denials.jsonl"  # in the repo's git common dir
+WIDE_FAILED = "flow_alarm: queue read past 100 PRs failed; counted on the newest 100\n"  # the hook's notice for a failed second read
 
 
 def run(args, open_prs=(), merged=(), stdin="", fail=False, env=None, cwd=None, fail_files=False, compare=None, fail_compare=False,
-        recount=None):
+        recount=None, wide=None, fail_wide=False):
     """flow_alarm.py `args` as a process (fake gh serving `open_prs` and `merged`) in `cwd`, by default a plain temp dir: no repo.
     The per-lane recount's two calls: `compare` (a JSON-able reply, default `{}`) answers `gh api .../compare/...`, which `fail_compare`
     fails alone; `recount` (default `open_prs`: a list of PRs, or a str written as it is) answers the `gh pr list` that asks for `files`,
-    which `fail_files` fails alone."""
+    which `fail_files` fails alone. The wide read (`--limit 500`, no `files`: the hook's second read of the queue, and `symptom`'s) answers
+    `wide` (default `open_prs`, so both reads agree) and `fail_wide` fails it alone; the first read (`--limit 100`) answers `open_prs`.
+    With the lanes variable set the hook's second read asks for `files` too, so `recount` answers it and `fail_files` fails it."""
     d = tempfile.mkdtemp()
     pathlib.Path(d, "open.json").write_text(json.dumps(list(open_prs)))
     pathlib.Path(d, "merged.json").write_text(json.dumps(list(merged)))
     pathlib.Path(d, "compare.json").write_text(json.dumps({} if compare is None else compare))
     pathlib.Path(d, "recount.json").write_text(recount if isinstance(recount, str) else json.dumps(list(open_prs if recount is None else recount)))
+    pathlib.Path(d, "wide.json").write_text(json.dumps(list(open_prs if wide is None else wide)))
     gh = pathlib.Path(d, "gh")
     # the compare's arguments may hold `files` (a branch named so): its case comes first
     gh.write_text(f'#!/bin/sh\n[ {int(fail)} -eq 1 ] && exit 1\ncase "$*" in\n'
                   f'*compare*) [ {int(fail_compare)} -eq 1 ] && exit 1; cat {d}/compare.json;;\n'
                   f'*files*) [ {int(fail_files)} -eq 1 ] && exit 1; cat {d}/recount.json;;\n'
+                  f'*"--limit 500"*) [ {int(fail_wide)} -eq 1 ] && exit 1; cat {d}/wide.json;;\n'
                   f'*"--state open"*) cat {d}/open.json;;\n'
                   f'*"--state merged"*) cat {d}/merged.json;;\nesac\n')
     gh.chmod(0o755)
@@ -1056,21 +1061,84 @@ class Lanes(unittest.TestCase):
         self.denies([self.WEB, self.WEB, self.API, self.API], "api", 2)  # ready, they fill it
         self.passes([self.WEB, self.WEB, lane_pr("api/x.py", state=RED), lane_pr("api/x.py", state=DRAFT)])
 
-    def inproc(self, ticks, prs=None, recount=None, command="gh pr create --title x", compare=None, judged=None, lanes=LANES):
+    def test_a_lane_is_recounted_when_the_wide_read_puts_the_queue_at_the_cap(self):
+        branch(self.repo, "w1", {"web/a.ts": "x\n"})
+        page = [lane_pr("docs/x.md", state=DRAFT)] * 99  # the newest 100 hold one ready PR, under the cap of 2: the second is behind them
+        wide = [self.WEB, self.WEB, *page]  # with lanes set the wide read asks for `files`: the fake gh answers it as the recount
+        self.denies([self.WEB, *page], "web", 2, recount=wide)
+        self.assertEqual(self.lines(DENIALS)[-1]["ready"], 2)  # the wide count is the one recorded
+        p = self.go([self.WEB, *page], recount=wide, fail_files=True)  # only the wide read fails: the first read's count, under the cap
+        self.assertEqual((p.returncode, p.stderr), (0, WIDE_FAILED))
+
+    QUIET = lane_pr("docs/x.md", state=DRAFT)
+
+    def test_with_lanes_the_wide_read_lists_the_files_and_is_the_recount(self):
+        first = [self.WEB] + [self.QUIET] * 99  # 100 PRs, 1 ready: under the cap of 2
+        wide = [self.WEB] * 3 + [self.QUIET] * 127  # 130 PRs, 3 ready, all in `web`: the queue is at the cap
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        rc, err, _ = self.inproc([100.0] * 5, first, recount=wide)
+        self.assertEqual((rc, err), (0, ""))  # the new PR is in `api`, which has room
+        self.assertEqual([a[0] for a, _, _ in self.calls], ["pr", "pr", "api"])  # the first list, the wide list, the compare: no third list
+        self.assertEqual([(a[a.index("--limit") + 1], a[-1]) for a, _, _ in self.calls[:2]],
+                         [("100", "isDraft,statusCheckRollup,headRefName"), ("500", "isDraft,statusCheckRollup,headRefName,files,changedFiles")])
+        branch(self.repo, "w1", {"web/a.ts": "x\n"})
+        rc, _, _ = self.inproc([100.0] * 5, first, recount=wide)  # the new PR is in `web`, which holds the 3 ready PRs
+        self.assertEqual((rc, self.last(), len(self.calls)), (2, ("web", 3), 3))
+        self.assertEqual(self.lines(DENIALS)[-1]["ready"], 3)  # the wide count is the one recorded
+
+    def test_the_wide_list_is_counted_even_when_the_budget_is_spent_by_then(self):
+        first = [self.WEB] + [self.QUIET] * 99
+        wide = [self.WEB] * 3 + [self.QUIET] * 127
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        # ticks: the hook's start, before the wide read (14 s left), `_lane_ready`'s opening check (3 s left), the compare after its base
+        # lookup (2 s left), and the check before the recount (1.5 s left: a list call of its own would be skipped, and the deny would stand)
+        rc, _, _ = self.inproc([100.0, 101.0, 112.0, 113.0, 113.5], first, recount=wide)
+        self.assertEqual((rc, [t for _, t, _ in self.calls]), (0, [10, 14.0, 2.0]))  # `api` has room, counted from the wide list
+        self.assertEqual([a[0] for a, _, _ in self.calls], ["pr", "pr", "api"])
+
+    def test_a_failed_or_slow_wide_read_with_lanes_keeps_the_first_read_and_says_so(self):
+        first = [self.WEB] + [self.QUIET] * 99  # 1 ready: under the cap of 2
+        for bad in (RuntimeError("gh failed"), subprocess.TimeoutExpired("gh", 14)):
+            rc, err, _ = self.inproc([100.0] * 5, first, recount=bad)  # only the call that asks for `files` fails: the wide read
+            self.assertEqual((rc, err, len(self.calls)), (0, WIDE_FAILED, 2))  # no lane work, as the first read alone
+        self.assertEqual(self.lines(DENIALS), [])
+
+    def test_a_wide_list_of_500_may_be_cut_and_keeps_the_deny(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        first = [self.WEB] + [self.QUIET] * 99
+        rc, _, _ = self.inproc([100.0] * 5, first, recount=[self.WEB] * 2 + [self.QUIET] * 498)  # 500 PRs back
+        self.assertEqual((rc, self.last(), len(self.calls)), (2, ("api", None), 3))  # the lane is known, not counted; no list call of its own
+        rc, _, _ = self.inproc([100.0] * 5, first, recount=[self.WEB] * 2 + [self.QUIET] * 497)  # 499: the whole list
+        self.assertEqual((rc, len(self.calls)), (0, 3))
+
+    def test_a_first_read_at_the_cap_leaves_the_recount_its_own_list_call(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        for first in ([self.WEB] * 2, [self.WEB] * 2 + [self.QUIET] * 98):  # at the cap of 2, short of a full page and a full page
+            self.assertEqual(self.inproc([100.0] * 4, first)[0], 0)  # `api` has room
+            self.assertEqual([a[0] for a, _, _ in self.calls], ["pr", "api", "pr"])  # the first list, the compare, the recount's list
+            self.assertEqual([a[a.index("--limit") + 1] for a, _, _ in self.calls if a[0] == "pr"], ["100", "500"])
+            self.assertEqual(self.calls[2][0][-1], "isDraft,statusCheckRollup,headRefName,files,changedFiles")
+
+    def inproc(self, ticks, prs=None, recount=None, command="gh pr create --title x", compare=None, judged=None, lanes=LANES, wide=None):
         """fa.hook() in this process on `command`, in the repo's current branch, with real git reads, at a cap of 2. `gh_json` logs
         (args, timeout, cwd) in `self.calls` and answers the compare with `compare` (default: the branch's own files), the first read with
-        `prs` (default: two ready `api` PRs, a full lane) and the recount with `recount` (default `prs`); an exception is raised. The
-        monotonic clock reads `ticks` in turn: the hook's start, before the compare, before the recount. `judged` replaces `_judged`
-        (default: a spy on the real one); `lanes` None leaves the variable unset. Returns (exit code, stderr, the `_judged` mock)."""
+        `prs` (default: two ready `api` PRs, a full lane), the wide read without files (`--limit 500`, lanes unset) with `wide` and a
+        read that asks for `files` with `recount` (both default `prs`): the per-lane recount, or with lanes set the wide read itself; an
+        exception is raised. The monotonic clock reads `ticks` in turn: the hook's start, before the wide read (only one that is made),
+        and with lanes the opening check of `_lane_ready`, the compare's after its base lookup, and one before the recount (read whether
+        or not a list call of its own follows).
+        `judged` replaces `_judged` (default: a spy on the real one); `lanes` None leaves the variable unset. Returns (exit code,
+        stderr, the `_judged` mock)."""
         self.calls, ticks = [], iter(ticks)
         prs = [self.API, self.API] if prs is None else prs
         recount = prs if recount is None else recount
+        wide = prs if wide is None else wide
         if compare is None:
             compare = listing(*git(self.repo, "diff", "--name-only", "origin/main...HEAD").split())
 
         def gh(*a, timeout=60, cwd=None):
             self.calls.append((a, timeout, cwd))
-            out = compare if a[0] == "api" else recount if "files" in a[-1] else prs
+            out = compare if a[0] == "api" else recount if "files" in a[-1] else wide if "500" in a else prs
             if isinstance(out, Exception):
                 raise out
             return out
@@ -1090,47 +1158,72 @@ class Lanes(unittest.TestCase):
 
     def test_the_command_is_judged_once_per_hook_call(self):
         branch(self.repo, "a1", {"api/x.py": "x\n"})
-        rc, _, spy = self.inproc([100.0] * 3)  # a deny in a full lane: the recount and the throughput judgement share one judging
+        rc, _, spy = self.inproc([100.0] * 4)  # a deny in a full lane: the recount and the throughput judgement share one judging
         self.assertEqual((rc, spy.call_count), (2, 1))
-        rc, _, spy = self.inproc([100.0] * 3, judged=mock.Mock(side_effect=OSError))  # a raise is class `work`, and is not retried
+        rc, _, spy = self.inproc([100.0] * 4, judged=mock.Mock(side_effect=OSError))  # a raise is class `work`, and is not retried
         self.assertEqual((rc, spy.call_count, self.lines(DENIALS)[-1]["class"]), (2, 1, "work"))
         branch(self.repo, "t1", Throughput.FILES)
         for lanes in (self.LANES, None):  # a grant in a full lane; the same with the variable unset
-            rc, _, spy = self.inproc([100.0] * 3, lanes=lanes)
+            rc, _, spy = self.inproc([100.0] * 4, lanes=lanes)
             self.assertEqual((rc, spy.call_count), (0, 1))
 
     def test_each_gh_call_of_the_recount_gets_what_is_left_of_the_budget(self):
         branch(self.repo, "a1", {"api/x.py": "x\n"})
         web = [self.WEB, self.WEB]  # `api` has room
-        self.assertEqual(self.inproc([100.0, 101.0, 103.0], web)[0], 0)
+        # ticks: the hook's start, the check before the compare, the compare after its base lookup, the check before the recount
+        self.assertEqual(self.inproc([100.0, 101.0, 102.0, 104.0], web)[0], 0)
         (first, t1, _), (compare, t2, cwd), (recount, t3, _) = self.calls
-        self.assertEqual((t1, t2, t3), (10, 14.0, 12.0))  # the first read keeps its 10 s; each recount call gets what is left of 15 s
+        self.assertEqual((t1, t2, t3), (10, 13.0, 11.0))  # the first read keeps its 10 s; each recount call gets what is left of 15 s
         self.assertEqual((compare[0], cwd), ("api", str(self.repo)))  # gh resolves {owner}/{repo} where the command runs
         self.assertEqual((first[first.index("--limit") + 1], recount[recount.index("--limit") + 1]), ("100", "500"))
         self.assertEqual(first[-1], "isDraft,statusCheckRollup,headRefName")  # the first call stays light
         self.assertEqual(recount[-1], "isDraft,statusCheckRollup,headRefName,files,changedFiles")  # the same fields, and the files
-        self.assertEqual(self.inproc([100.0, 113.0, 113.0], web)[0], 0)  # 2 s left: both calls are made
+        self.assertEqual(self.inproc([100.0, 113.0, 113.0, 113.0], web)[0], 0)  # 2 s left: both calls are made
         self.assertEqual([t for _, t, _ in self.calls], [10, 2.0, 2.0])
         rc, err, _ = self.inproc([100.0, 113.5, 113.5], web)  # under 2 s left for the compare: no lane, no recount, the deny stands
         self.assertEqual((rc, len(self.calls), self.last()), (2, 1, (None, None)))
         self.assertIn("Blocked `gh pr create`", err)
-        rc, _, _ = self.inproc([100.0, 101.0, 113.5], web)  # under 2 s left for the recount: the lane is known, not counted
+        rc, _, _ = self.inproc([100.0, 101.0, 113.5, 113.5], web)  # under 2 s left after the base lookup: the compare is skipped too
+        self.assertEqual((rc, len(self.calls), self.last()), (2, 1, (None, None)))
+        rc, _, _ = self.inproc([100.0, 101.0, 101.0, 113.5], web)  # under 2 s left for the recount: the lane is known, not counted
         self.assertEqual((rc, len(self.calls), self.last()), (2, 2, ("api", None)))
         for slow in ({"compare": subprocess.TimeoutExpired("gh", 14)}, {"recount": subprocess.TimeoutExpired("gh", 12)}):
-            rc, err, _ = self.inproc([100.0, 101.0, 103.0], web, **slow)  # a slow call: a deny, not the fail-open exit of a slow first read
+            rc, err, _ = self.inproc([100.0, 101.0, 101.0, 103.0], web, **slow)  # a slow call: a deny, not the fail-open exit of a slow first read
             self.assertEqual(rc, 2)
             self.assertNotIn("skipped this call", err)
         self.assertEqual(self.last(), ("api", None))
 
+    def test_the_compare_gets_what_is_left_after_a_slow_base_lookup(self):
+        now, seen = [100.0], []
+
+        def compare(lag, base=None):
+            """`_compare` with t0 100.0 when the lookup of origin/HEAD's branch takes `lag` s; `seen` holds the timeout it passed."""
+            now[0], seen[:] = 100.0, []
+
+            def lookup(cwd, *a):
+                now[0] += lag
+                return "refs/remotes/origin/main\n"
+
+            def gh(*a, timeout=60, cwd=None):
+                seen.append(timeout)
+                return listing("api/x.py")
+            with mock.patch.object(self.fa, "_git", lookup), mock.patch.object(self.fa, "gh_json", gh), \
+                    mock.patch.object(self.fa, "time", mock.Mock(monotonic=lambda: now[0])):
+                return self.fa._compare(None, ("a1", ["api/x.py"], base), 100.0)
+        for lag, left in ((0.0, 15.0), (4.0, 11.0), (13.0, 2.0)):  # the lookup uses some of the budget: the call gets the rest of it
+            self.assertEqual((compare(lag), seen), (["api/x.py"], [left]))
+        self.assertEqual((compare(13.5), seen), (None, []))  # under 2 s left after the lookup: the call is skipped
+        self.assertEqual((compare(13.5, base="rel"), seen), (["api/x.py"], [15.0]))  # a `--base` value needs no lookup
+
     def test_the_compare_names_the_base_and_the_url_quoted_branch(self):
         branch(self.repo, "feat/a#1", {"api/x.py": "x\n"})
-        self.inproc([100.0] * 3)
+        self.inproc([100.0] * 4)
         self.assertEqual(self.calls[1][0], ("api", "repos/{owner}/{repo}/compare/main...feat/a%231?per_page=1"))  # origin/HEAD's branch
         git(self.repo, "update-ref", "refs/remotes/origin/rel/1#a", "origin/main")
-        self.inproc([100.0] * 3, command="gh pr create --title x --base rel/1#a")
+        self.inproc([100.0] * 4, command="gh pr create --title x --base rel/1#a")
         self.assertEqual(self.calls[1][0], ("api", "repos/{owner}/{repo}/compare/rel/1%23a...feat/a%231?per_page=1"))  # `--base`: `/` kept
         git(self.repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/rel/1#a")  # a default branch other than `main`
-        self.inproc([100.0] * 3)
+        self.inproc([100.0] * 4)
         self.assertEqual(self.calls[1][0], ("api", "repos/{owner}/{repo}/compare/rel/1%23a...feat/a%231?per_page=1"))
 
     def test_a_test_only_branch_of_a_full_lane_still_gets_the_throughput_grant(self):
@@ -1148,6 +1241,75 @@ class Lanes(unittest.TestCase):
             self.assertEqual(p.returncode, 2)  # no per-lane cap: the global count denies
             self.assertNotIn("Lane `", p.stderr)
         self.assertEqual(self.lines(DENIALS), [{"at": NOW, "class": "work", "ready": 2, "cap": 2}] * 3)  # the old keys, no more
+
+
+class WideRead(unittest.TestCase):
+    """The hook's first read is the newest 100 open PRs. When it holds 100 and its ready count is under the cap, a second read of up to 500
+    (`--limit 500`, the same fields, no files) replaces its list and count, so ready PRs beyond the first 100 count too; a failed or slow
+    second read keeps the first and prints one stderr line. Throughput's repo (HEAD at `origin/main`: an empty diff, so a deny is class `work`). `create` runs the
+    hook as a process whose fake gh answers the two reads with different lists, at the default cap of 5; `inproc` (Lanes') runs it in this
+    process at a cap of 2, logging the gh calls and on a clock the test sets; `FIRST` is a first read of 100 PRs with one ready."""
+    setUp, lines, seed = Throughput.setUp, Throughput.lines, Throughput.seed
+    setUpClass = classmethod(Throughput.setUpClass.__func__)
+    inproc = Lanes.inproc
+    FIRST = [GREEN] + [DRAFT] * 99
+
+    def create(self, first, wide, **kw):
+        """The hook on a lone `gh pr create` in the repo: the first read (`--limit 100`) lists `first`, the wide read lists `wide`."""
+        stdin = json.dumps({"tool_name": "Bash", "tool_input": {"command": "gh pr create --title x"}, "cwd": str(self.repo)})
+        return run([], first, stdin=stdin, wide=wide, **kw)
+
+    def test_ready_prs_beyond_the_first_100_are_counted(self):
+        first = [GREEN] * 3 + [DRAFT] * 97  # 100 PRs, 3 ready: under the cap of 5
+        p = self.create(first, [GREEN] * 6 + [DRAFT] * 124)  # 130 PRs, 6 ready: three of them were behind the first 100
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("6 ready-but-unmerged PRs (cap 5)", p.stderr)
+        self.assertEqual(self.lines(DENIALS), [{"at": NOW, "class": "work", "ready": 6, "cap": 5}])  # the wide count is the one recorded
+        p = self.create(first, [GREEN] * 4 + [DRAFT] * 126)  # the wide count decides: 4 is under the cap; a read that worked prints nothing
+        self.assertEqual((p.returncode, p.stderr), (0, ""))
+        self.assertEqual(self.create(first, [GREEN] * 5 + [DRAFT] * 125).returncode, 2)  # and 5 is the cap
+
+    def test_a_wide_read_that_fails_or_is_slow_keeps_the_first_read(self):
+        first, wide = [GREEN] * 3 + [DRAFT] * 97, [GREEN] * 6 + [DRAFT] * 124
+        p = self.create(first, wide, fail_wide=True)  # only the wide read fails: the first read's 3 are under the cap, as before
+        self.assertEqual((p.returncode, p.stderr), (0, WIDE_FAILED))  # one stderr line says the count is on the newest 100
+        # a failed call, one that outlasted its timeout, a reply that is no list of PRs: the same
+        for bad in (RuntimeError("gh failed"), subprocess.TimeoutExpired("gh", 11.0), "oops", [GREEN, "oops"]):
+            self.assertEqual(self.inproc([100.0, 104.0], self.FIRST, wide=bad, lanes=None)[:2], (0, WIDE_FAILED))
+            self.assertEqual(len(self.calls), 2)  # the wide read was made
+        self.assertEqual(self.lines(DENIALS), [])
+
+    def test_one_list_call_unless_the_first_read_is_a_full_page_under_the_cap(self):
+        for prs, limits, rc in (([GREEN] + [DRAFT] * 98, ["100"], 0),  # 99 PRs: nothing can be behind them
+                                ([GREEN] * 2 + [DRAFT] * 98, ["100"], 2),  # 100 PRs, already at the cap of 2
+                                (self.FIRST, ["100", "500"], 0)):  # 100 PRs under it: the wide read, which here agrees
+            self.assertEqual(self.inproc([100.0, 100.0], prs, lanes=None)[0], rc)
+            self.assertEqual([a[a.index("--limit") + 1] for a, _, _ in self.calls], limits)
+
+    def test_the_wide_read_asks_for_the_same_fields_in_what_is_left_of_the_budget(self):
+        wide = [GREEN] * 3 + [DRAFT] * 97
+        self.assertEqual(self.inproc([100.0, 104.0], self.FIRST, wide=wide, lanes=None)[0], 2)
+        (first, t1, _), (second, t2, _) = self.calls
+        self.assertEqual((t1, t2), (10, 11.0))  # the first read keeps its 10 s; the second gets what is left of 15 s
+        self.assertEqual((first[first.index("--limit") + 1], second[second.index("--limit") + 1]), ("100", "500"))
+        self.assertEqual((first[-1], second[-1]), ("isDraft,statusCheckRollup,headRefName",) * 2)  # the same fields, no files
+        self.assertEqual(self.inproc([100.0, 113.0], self.FIRST, wide=wide, lanes=None)[0], 2)  # 2 s left: the read is made
+        self.assertEqual([t for _, t, _ in self.calls], [10, 2.0])
+        self.assertEqual(self.inproc([100.0, 113.5], self.FIRST, wide=wide, lanes=None)[0], 0)  # under 2 s left: skipped, 1 ready passes
+        self.assertEqual(len(self.calls), 1)
+
+    def test_the_wide_list_is_the_one_the_throughput_judgement_reads(self):
+        branch(self.repo, "t1", Throughput.FILES)  # test and CI paths only: it passes while fewer than 2 exempt PRs are open
+        self.seed("ex1", "ex2")
+        wide = [{**GREEN, "headRefName": "ex1"}, {**GREEN, "headRefName": "ex2"}, GREEN] + [DRAFT] * 97  # both exempt PRs are behind the first 100
+        self.assertEqual(self.inproc([100.0, 100.0], self.FIRST, wide=wide, lanes=None)[0], 2)
+        self.assertEqual(self.lines(DENIALS), [{"at": NOW, "class": "throughput-cap", "ready": 3, "cap": 2}])
+        self.assertEqual(len(self.lines(LEDGER)), 2)  # no new grant
+
+    def test_symptom_counts_ready_prs_beyond_the_first_100(self):
+        stale = [{"mergedAt": "2027-01-15T05:00:00Z"}]
+        r = run(["symptom"], [DRAFT] * 100, stale, wide=[DRAFT] * 100 + [GREEN])  # the one ready PR is the 101st
+        self.assertEqual((r.returncode, r.stdout), (1, "ALARM flow: 1 ready PR(s) and nothing merged in 3.0h\n"))
 
 
 if __name__ == "__main__":
