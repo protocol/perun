@@ -18,21 +18,31 @@ DRAFT = {"isDraft": True, "statusCheckRollup": [{"conclusion": "SUCCESS"}]}
 NOW = 1_800_000_000
 # A hermetic git for the repos below and for the hook under test: no inherited GIT_* (a hook's GIT_DIR or GIT_INDEX_FILE would aim git
 # at another repo), no user or system config, a fixed identity, and no search for a repo above the temp dir.
-ENV = {**{k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "PERUN_THROUGHPUT_"))},
+ENV = {**{k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "PERUN_THROUGHPUT_", "PERUN_STOP_STARTING_"))},
        "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CEILING_DIRECTORIES": tempfile.gettempdir(),
        "GIT_AUTHOR_NAME": "Jane Smith", "GIT_AUTHOR_EMAIL": "jane@example.com",
        "GIT_COMMITTER_NAME": "Jane Smith", "GIT_COMMITTER_EMAIL": "jane@example.com"}
 LEDGER, DENIALS = "perun-throughput.jsonl", "perun-flow-denials.jsonl"  # in the repo's git common dir
 
 
-def run(args, open_prs=(), merged=(), stdin="", fail=False, env=None, cwd=None):
-    """flow_alarm.py `args` as a process (fake gh serving `open_prs` and `merged`) in `cwd`, by default a plain temp dir: no repo."""
+def run(args, open_prs=(), merged=(), stdin="", fail=False, env=None, cwd=None, fail_files=False, compare=None, fail_compare=False,
+        recount=None):
+    """flow_alarm.py `args` as a process (fake gh serving `open_prs` and `merged`) in `cwd`, by default a plain temp dir: no repo.
+    The per-lane recount's two calls: `compare` (a JSON-able reply, default `{}`) answers `gh api .../compare/...`, which `fail_compare`
+    fails alone; `recount` (default `open_prs`: a list of PRs, or a str written as it is) answers the `gh pr list` that asks for `files`,
+    which `fail_files` fails alone."""
     d = tempfile.mkdtemp()
     pathlib.Path(d, "open.json").write_text(json.dumps(list(open_prs)))
     pathlib.Path(d, "merged.json").write_text(json.dumps(list(merged)))
+    pathlib.Path(d, "compare.json").write_text(json.dumps({} if compare is None else compare))
+    pathlib.Path(d, "recount.json").write_text(recount if isinstance(recount, str) else json.dumps(list(open_prs if recount is None else recount)))
     gh = pathlib.Path(d, "gh")
-    gh.write_text(f'#!/bin/sh\n[ {int(fail)} -eq 1 ] && exit 1\ncase "$*" in *"--state open"*) cat {d}/open.json;; '
-                  f'*"--state merged"*) cat {d}/merged.json;; esac\n')
+    # the compare's arguments may hold `files` (a branch named so): its case comes first
+    gh.write_text(f'#!/bin/sh\n[ {int(fail)} -eq 1 ] && exit 1\ncase "$*" in\n'
+                  f'*compare*) [ {int(fail_compare)} -eq 1 ] && exit 1; cat {d}/compare.json;;\n'
+                  f'*files*) [ {int(fail_files)} -eq 1 ] && exit 1; cat {d}/recount.json;;\n'
+                  f'*"--state open"*) cat {d}/open.json;;\n'
+                  f'*"--state merged"*) cat {d}/merged.json;;\nesac\n')
     gh.chmod(0o755)
     return subprocess.run([sys.executable, str(SCRIPT), *args, "--now", str(NOW)], input=stdin, capture_output=True, text=True,
                           cwd=cwd or d, env={**ENV, "PERUN_GH": str(gh), **(env or {})})
@@ -898,6 +908,246 @@ class Throughput(unittest.TestCase):
         self.assertIn("Blocked `gh pr create`", p.stderr)
         self.assertNotIn("Queue-throughput", p.stderr)  # no clause rather than a number that is not the cap
         self.assertNotIn("many", p.stderr)
+
+
+def listing(*names):
+    """GitHub's compare reply for a branch that changes `names`: the per-lane recount's source of the new PR's files."""
+    return {"files": [{"filename": n} for n in names]}
+
+
+def lane_pr(*files, total=None, state=GREEN):
+    """A PR in `state` (default ready) that changes `files`, as the per-lane recount's `gh pr list` returns it; `total` (default all of
+    them) is its `changedFiles`, so a larger one stands for a file list that GitHub cut short."""
+    return {**state, "files": [{"path": f} for f in files], "changedFiles": len(files) if total is None else total}
+
+
+class Lanes(unittest.TestCase):
+    """PERUN_STOP_STARTING_LANES: at the global cap (2 here) the new PR passes when fewer than 2 ready PRs sit in its own lane. Throughput's
+    repo, with lanes `web=web/*;api=` (`api` is the fallback) unless a test says otherwise; the fake gh serves the same PRs to both lists
+    and answers the compare with the branch's own files. Every failure of the recount keeps the deny."""
+    setUp, lines = Throughput.setUp, Throughput.lines  # the repo fixture and the JSON-lines reader, without Throughput's own tests
+    setUpClass = classmethod(Throughput.setUpClass.__func__)  # loads the script as `cls.fa`
+    LANES = "web=web/*;api="
+    WEB, API = lane_pr("web/a.ts"), lane_pr("api/x.py")
+
+    def go(self, prs, lanes=LANES, compare=None, **kw):
+        """The hook on a lone `gh pr create` with the ready PRs `prs` open; `lanes` None leaves the variable unset. The compare answers
+        with the branch's own files (what the local diff lists when the base is fetched) unless `compare` is given."""
+        env = {"PERUN_STOP_STARTING_READY": "2", **({} if lanes is None else {"PERUN_STOP_STARTING_LANES": lanes})}
+        stdin = json.dumps({"tool_name": "Bash", "tool_input": {"command": "gh pr create --title x"}, "cwd": str(self.repo)})
+        if compare is None:
+            compare = listing(*git(self.repo, "diff", "--name-only", "origin/main...HEAD").split())
+        return run([], prs, stdin=stdin, env=env, compare=compare, **kw)
+
+    def passes(self, prs, **kw):
+        """The hook lets the PR through silently and writes no denial and no ledger entry."""
+        before = self.lines(DENIALS), self.lines(LEDGER)
+        p = self.go(prs, **kw)
+        self.assertEqual((p.returncode, p.stderr), (0, ""))
+        self.assertEqual((self.lines(DENIALS), self.lines(LEDGER)), before)
+
+    def denies(self, prs, lane, count, **kw):
+        """The hook denies and writes one denial that names `lane` and `count` (None: unknown); returns the process."""
+        seen = len(self.lines(DENIALS))
+        p = self.go(prs, **kw)
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertEqual([(d["lane"], d["lane_ready"]) for d in self.lines(DENIALS)[seen:]], [(lane, count)])
+        self.assertEqual(count is not None, "Lane `" in p.stderr)  # the message names a lane only when it counted it
+        return p
+
+    def test_a_lane_with_room_passes_and_a_full_one_denies(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        self.passes([self.WEB, self.WEB])  # the global count is at the cap, but `api` holds no ready PR
+        branch(self.repo, "w1", {"web/a.ts": "x\n"})
+        self.passes([self.WEB, self.API])  # one ready PR in `web`: room
+        p = self.denies([self.WEB, self.WEB], "web", 2)
+        self.assertIn("(cap 2). Lane `web`: 2 ready (cap 2 per lane). Waiting work is queue;", p.stderr)
+        self.assertEqual(self.lines(DENIALS), [{"at": NOW, "class": "work", "ready": 2, "cap": 2, "lane": "web", "lane_ready": 2}])
+
+    def test_the_first_lane_with_a_matching_glob_is_the_lane(self):
+        branch(self.repo, "m1", {"web/a.ts": "x\n", "api/b.py": "x\n"})
+        self.denies([self.WEB, self.WEB], "web", 2)
+        self.passes([self.API, self.API])  # the fallback `api` does not take a PR that `web` matched
+        self.denies([self.WEB, self.WEB], "web", 2, lanes="api=;web=web/*")  # the fallback may be written first
+        self.denies([self.WEB, self.WEB], "web", 2, lanes="web=web/*;api=api/*")  # two lanes with globs: the order written decides
+        self.denies([self.API, self.API], "api", 2, lanes="api=api/*;web=web/*")
+        self.passes([self.WEB, self.WEB], lanes="api=api/*;web=web/*")
+        branch(self.repo, "m2", {"web/deep/a/b.ts": "x\n"})
+        self.denies([lane_pr("web/c/d.ts")] * 2, "web", 2)  # `*` crosses `/`
+        branch(self.repo, "m3", {"src/web/a.ts": "x\n"})
+        self.passes([self.WEB, self.WEB])  # no tail matching: `src/web/a.ts` is not in `web`, it falls to `api`
+
+    def test_a_pr_of_unknown_lane_counts_in_every_lane(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        cut = lane_pr("web/a.ts", total=3)  # GitHub lists at most 100 files: the other two are not seen
+        self.passes([self.WEB, cut])  # one unknown PR counts: 1 < 2
+        self.denies([cut, cut], "api", 2)
+        for bare in ({**GREEN, "files": None, "changedFiles": 1}, GREEN):  # files null; files missing
+            self.denies([cut, bare], "api", 2)
+
+    def test_a_pr_that_matches_no_lane_counts_in_every_lane_unless_a_fallback_takes_it(self):
+        docs, strict = lane_pr("docs/x.md"), "web=web/*;api=api/*"
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        self.denies([docs, docs], "api", 2, lanes=strict)  # no fallback: both count in `api`, which would hold none otherwise
+        self.passes([docs, docs], lanes=f"{strict};misc=")  # `misc` takes them
+        branch(self.repo, "d1", {"docs/x.md": "x\n"})
+        self.denies([self.WEB, self.WEB], None, None, lanes=strict)  # no lane for the new PR: the deny stands
+        self.passes([self.WEB, self.WEB], lanes=f"{strict};misc=")
+
+    def test_a_malformed_map_keeps_the_deny(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        # no `=`; a repeated name (read leniently, either entry would take the new PR's `api/x.py`); two fallbacks; no name; no lane
+        for lanes in ("web", "web=a/*;web=b/*", "web=web/*;web=api/*", "web=api/*;web=web/*", "a=;b=", "=x/*", "=api/*;web=", " ; "):
+            self.denies([self.WEB, self.WEB], None, None, lanes=lanes)
+        spaced = " web = web/* , api/* ; ; api = "  # blanks around names and globs, a blank entry
+        self.denies([self.WEB, self.WEB], "web", 2, lanes=spaced)  # `api/x.py` matches the second glob of `web`
+        branch(self.repo, "d1", {"docs/x.md": "x\n"})
+        self.passes([self.WEB, self.WEB], lanes=spaced)  # the fallback `api`
+
+    def test_a_pr_that_is_not_judged_keeps_the_deny(self):
+        self.denies([self.WEB, self.WEB], None, None)  # HEAD is origin/main: an empty diff has no lane
+        branch(self.repo, "a1", {"api/x.py": "x\n"}, push=False)
+        self.denies([self.WEB, self.WEB], None, None)  # not pushed to origin: its diff may not be the PR's
+
+    def test_a_recount_that_cannot_read_the_queue_keeps_the_deny(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        self.passes([self.WEB, self.WEB])  # the same PRs with a readable queue: room in `api`
+        self.denies([self.WEB, self.WEB], "api", None, fail_files=True)  # only the call that asks for `files` fails
+        self.denies([self.WEB] * 500, "api", None)  # 500 back: the list may be cut
+        self.passes([self.WEB] * 499)
+
+    def test_the_lane_comes_from_the_compare_not_the_local_diff(self):
+        branch(self.repo, "up", {"web/base.ts": "x\n"}, push=False)  # a base commit that the local origin/main lacks
+        branch(self.repo, "s1", {"api/x.py": "x\n"}, base="up")
+        self.assertEqual(git(self.repo, "diff", "--name-only", "origin/main...HEAD").split(), ["api/x.py", "web/base.ts"])  # a superset
+        full = [self.API, self.API]
+        p = self.denies(full, "api", 2, compare=listing("api/x.py"))  # GitHub lists the branch's own file: its lane is full
+        self.assertIn("Lane `api`: 2 ready", p.stderr)
+        self.passes(full, compare=listing("web/base.ts", "api/x.py"))  # the superset puts the PR in `web`, which has room
+
+    def test_a_compare_that_cannot_name_the_files_keeps_the_deny(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        many = [f"api/f{i}.py" for i in range(300)]
+        self.passes([self.WEB, self.WEB])  # the same PRs with a readable compare: room in `api`
+        self.passes([self.WEB, self.WEB], compare=listing(*many[:299]))  # GitHub lists at most 300: 299 is the whole list
+        bad = ({"fail_compare": True}, {"compare": listing(*many)},  # a failed call; 300 files, the list may be cut
+               {"compare": listing()}, {"compare": {}}, {"compare": {"files": None}},  # no files; an empty list; no list
+               {"compare": []}, {"compare": {"files": [{"path": "api/x.py"}]}})  # a reply that is no object; an entry with no name
+        for kw in bad:
+            self.denies([self.WEB, self.WEB], None, None, **kw)
+
+    def test_a_ready_pr_with_files_but_no_file_count_is_of_unknown_lane(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        bare = {**GREEN, "files": [{"path": "web/a.ts"}]}  # no `changedFiles` to tell whether the list is whole
+        self.passes([{**bare, "changedFiles": 1}] * 2)  # with the count they are `web` PRs: room in `api`
+        self.denies([bare, bare], "api", 2)  # missing
+        self.denies([{**bare, "changedFiles": None}, bare], "api", 2)  # null, and missing
+
+    def test_a_recount_that_does_not_confirm_the_first_read_keeps_the_deny(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        self.passes([self.WEB, self.WEB], recount=[self.WEB, self.WEB])  # confirmed: room in `api`
+        draft = lane_pr("web/a.ts", state=DRAFT)
+        # prints nothing (exit 0); one ready PR, short of the cap; two PRs but one a draft
+        for recount in ("", [self.WEB], [self.WEB, draft]):
+            self.denies([self.WEB, self.WEB], "api", None, recount=recount)
+
+    def test_a_red_or_draft_pr_in_the_full_lane_does_not_count(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        self.denies([self.WEB, self.WEB, self.API, self.API], "api", 2)  # ready, they fill it
+        self.passes([self.WEB, self.WEB, lane_pr("api/x.py", state=RED), lane_pr("api/x.py", state=DRAFT)])
+
+    def inproc(self, ticks, prs=None, recount=None, command="gh pr create --title x", compare=None, judged=None, lanes=LANES):
+        """fa.hook() in this process on `command`, in the repo's current branch, with real git reads, at a cap of 2. `gh_json` logs
+        (args, timeout, cwd) in `self.calls` and answers the compare with `compare` (default: the branch's own files), the first read with
+        `prs` (default: two ready `api` PRs, a full lane) and the recount with `recount` (default `prs`); an exception is raised. The
+        monotonic clock reads `ticks` in turn: the hook's start, before the compare, before the recount. `judged` replaces `_judged`
+        (default: a spy on the real one); `lanes` None leaves the variable unset. Returns (exit code, stderr, the `_judged` mock)."""
+        self.calls, ticks = [], iter(ticks)
+        prs = [self.API, self.API] if prs is None else prs
+        recount = prs if recount is None else recount
+        if compare is None:
+            compare = listing(*git(self.repo, "diff", "--name-only", "origin/main...HEAD").split())
+
+        def gh(*a, timeout=60, cwd=None):
+            self.calls.append((a, timeout, cwd))
+            out = compare if a[0] == "api" else recount if "files" in a[-1] else prs
+            if isinstance(out, Exception):
+                raise out
+            return out
+        spy = judged or mock.Mock(wraps=self.fa._judged)
+        env = {**ENV, "PERUN_STOP_STARTING_READY": "2", **({} if lanes is None else {"PERUN_STOP_STARTING_LANES": lanes})}
+        stdin = io.StringIO(json.dumps({"tool_name": "Bash", "tool_input": {"command": command}, "cwd": str(self.repo)}))
+        clock = mock.Mock(monotonic=lambda: next(ticks), time=lambda: NOW)
+        with mock.patch.object(self.fa, "gh_json", gh), mock.patch.object(self.fa, "_judged", spy), \
+                mock.patch.object(self.fa, "time", clock), mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch("sys.stdin", stdin), mock.patch("sys.stderr", io.StringIO()) as err:
+            return self.fa.hook(NOW), err.getvalue(), spy
+
+    def last(self):
+        """(lane, lane_ready) of the latest denial."""
+        d = self.lines(DENIALS)[-1]
+        return d["lane"], d["lane_ready"]
+
+    def test_the_command_is_judged_once_per_hook_call(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        rc, _, spy = self.inproc([100.0] * 3)  # a deny in a full lane: the recount and the throughput judgement share one judging
+        self.assertEqual((rc, spy.call_count), (2, 1))
+        rc, _, spy = self.inproc([100.0] * 3, judged=mock.Mock(side_effect=OSError))  # a raise is class `work`, and is not retried
+        self.assertEqual((rc, spy.call_count, self.lines(DENIALS)[-1]["class"]), (2, 1, "work"))
+        branch(self.repo, "t1", Throughput.FILES)
+        for lanes in (self.LANES, None):  # a grant in a full lane; the same with the variable unset
+            rc, _, spy = self.inproc([100.0] * 3, lanes=lanes)
+            self.assertEqual((rc, spy.call_count), (0, 1))
+
+    def test_each_gh_call_of_the_recount_gets_what_is_left_of_the_budget(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        web = [self.WEB, self.WEB]  # `api` has room
+        self.assertEqual(self.inproc([100.0, 101.0, 103.0], web)[0], 0)
+        (first, t1, _), (compare, t2, cwd), (recount, t3, _) = self.calls
+        self.assertEqual((t1, t2, t3), (10, 14.0, 12.0))  # the first read keeps its 10 s; each recount call gets what is left of 15 s
+        self.assertEqual((compare[0], cwd), ("api", str(self.repo)))  # gh resolves {owner}/{repo} where the command runs
+        self.assertEqual((first[first.index("--limit") + 1], recount[recount.index("--limit") + 1]), ("100", "500"))
+        self.assertEqual(first[-1], "isDraft,statusCheckRollup,headRefName")  # the first call stays light
+        self.assertEqual(recount[-1], "isDraft,statusCheckRollup,headRefName,files,changedFiles")  # the same fields, and the files
+        self.assertEqual(self.inproc([100.0, 113.0, 113.0], web)[0], 0)  # 2 s left: both calls are made
+        self.assertEqual([t for _, t, _ in self.calls], [10, 2.0, 2.0])
+        rc, err, _ = self.inproc([100.0, 113.5, 113.5], web)  # under 2 s left for the compare: no lane, no recount, the deny stands
+        self.assertEqual((rc, len(self.calls), self.last()), (2, 1, (None, None)))
+        self.assertIn("Blocked `gh pr create`", err)
+        rc, _, _ = self.inproc([100.0, 101.0, 113.5], web)  # under 2 s left for the recount: the lane is known, not counted
+        self.assertEqual((rc, len(self.calls), self.last()), (2, 2, ("api", None)))
+        for slow in ({"compare": subprocess.TimeoutExpired("gh", 14)}, {"recount": subprocess.TimeoutExpired("gh", 12)}):
+            rc, err, _ = self.inproc([100.0, 101.0, 103.0], web, **slow)  # a slow call: a deny, not the fail-open exit of a slow first read
+            self.assertEqual(rc, 2)
+            self.assertNotIn("skipped this call", err)
+        self.assertEqual(self.last(), ("api", None))
+
+    def test_the_compare_names_the_base_and_the_url_quoted_branch(self):
+        branch(self.repo, "feat/a#1", {"api/x.py": "x\n"})
+        self.inproc([100.0] * 3)
+        self.assertEqual(self.calls[1][0], ("api", "repos/{owner}/{repo}/compare/main...feat/a%231?per_page=1"))  # origin/HEAD's branch
+        git(self.repo, "update-ref", "refs/remotes/origin/rel/1#a", "origin/main")
+        self.inproc([100.0] * 3, command="gh pr create --title x --base rel/1#a")
+        self.assertEqual(self.calls[1][0], ("api", "repos/{owner}/{repo}/compare/rel/1%23a...feat/a%231?per_page=1"))  # `--base`: `/` kept
+        git(self.repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/rel/1#a")  # a default branch other than `main`
+        self.inproc([100.0] * 3)
+        self.assertEqual(self.calls[1][0], ("api", "repos/{owner}/{repo}/compare/rel/1%23a...feat/a%231?per_page=1"))
+
+    def test_a_test_only_branch_of_a_full_lane_still_gets_the_throughput_grant(self):
+        branch(self.repo, "t1", Throughput.FILES)  # test and CI paths only: in `api`, the fallback
+        self.passes([self.WEB, self.WEB])  # `api` has room: through the lane check, no ledger entry
+        p = self.go([self.API, self.API])  # `api` is full: the throughput judgement goes on
+        self.assertEqual((p.returncode, p.stderr), (0, ""))
+        self.assertEqual(self.lines(LEDGER), [{"branch": "t1", "at": NOW}])
+        self.assertEqual(self.lines(DENIALS), [])
+
+    def test_with_the_variable_unset_or_blank_nothing_changes(self):
+        branch(self.repo, "a1", {"api/x.py": "x\n"})
+        for lanes in (None, "", "  "):
+            p = self.go([self.WEB, self.WEB], lanes=lanes)
+            self.assertEqual(p.returncode, 2)  # no per-lane cap: the global count denies
+            self.assertNotIn("Lane `", p.stderr)
+        self.assertEqual(self.lines(DENIALS), [{"at": NOW, "class": "work", "ready": 2, "cap": 2}] * 3)  # the old keys, no more
 
 
 if __name__ == "__main__":
