@@ -112,7 +112,7 @@ export PERUN_GITHUB_ACTIONS PERUN_JOBS
 rm -f "$LOG.red" "$LOG.flaky"
 LOCK=$(git rev-parse --git-dir)/train-land.lock
 LT=${LOCK_TIMEOUT_MIN:-30}
-TB=${TRAIN_BUDGET_MIN:-$(python3 "$HERE/perun_policy.py" get train_budget_min)} TR=${TRAIN_MAX_BISECT_ROUNDS:-$(python3 "$HERE/perun_policy.py" get train_max_bisect_rounds)} T0=$SECONDS UN=${TRAIN_BUDGET_UNIT_SECS:-60}  # UN: seconds per budget minute (a test seam)
+TB=${TRAIN_BUDGET_MIN:-$(python3 "$HERE/perun_policy.py" get train_budget_min)} TR=${TRAIN_MAX_BISECT_ROUNDS:-$(python3 "$HERE/perun_policy.py" get train_max_bisect_rounds)} T0=$SECONDS START=$(date +%s) UN=${TRAIN_BUDGET_UNIT_SECS:-60}  # UN: seconds per budget minute (a test seam)
 [[ $TB =~ ^[0-9]+$ && $TR =~ ^[0-9]+$ ]] || { echo "train_land: TRAIN_BUDGET_MIN / TRAIN_MAX_BISECT_ROUNDS must be integers >= 0" >&2; exit 2; }
 lock_take "$LOCK" 0 "$LT" || exit 1
 # Exclusive machine-wide heavy lease while the gate runs: heavy_gate.py denies other heavy commands ("gate running: wait").
@@ -144,7 +144,7 @@ unl() { local n; for n in $ALL; do [[ " $landed " == *" $n "* ]] || printf '%s '
 split_report() { [ "$split" -eq 1 ] || return 0; local u; u=$(unl); echo "SPLIT done: landed #${landed# }; CANT (not landed) #${u% }; gates=$gates"; }
 stage() { { [ "${TRAIN_STAGES:-1}" != 0 ] && [ $# -ge 3 ]; } || return 0; python3 "$HERE/merge_train.py" stage --base "$BASE_BRANCH" --stage "$1" ${2:+--eta "$2"} ${@:3} </dev/null >&2 || true; }  # stage NAME ETA_SECS PR...
 stage_end() { case $1 in 0) stage done "" $landed; stage skipped "" $(unl) ;; 4|5) stage deferred "" $(unl) ;; *) stage failed "" $(unl) ;; esac; }  # EXIT: landed = done; rc 0 with PRs unlanded (SKIP/REFUSE) = skipped; DEFER = deferred; else failed
-trap 'stage_end $?; kill "$HB" 2>/dev/null; rm -f "$TRAIN_LAND_COPY"; [ -z "$OWNP" ] || rm -f "$LOG.pid"; [ "$gates" -eq 0 ] || python3 "$HERE/train_yield.py" record "$T" "$ALL" "$landed" "$([ -e "$LOG.red" ] && echo red || { [ ! -e "$LOG.flaky" ] || cat "$LOG.flaky"; })" "$HEADS" || true; rm -f "$LOG.red" "$LOG.flaky"; split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
+trap 'stage_end $?; kill "$HB" 2>/dev/null; rm -f "$TRAIN_LAND_COPY"; [ -z "$OWNP" ] || rm -f "$LOG.pid"; [ "$gates" -eq 0 ] || python3 "$HERE/train_yield.py" record "$T" "$ALL" "$landed" "$([ -e "$LOG.red" ] && echo red || { [ ! -e "$LOG.flaky" ] || cat "$LOG.flaky"; })" "$HEADS" "$START" || true; rm -f "$LOG.red" "$LOG.flaky"; split_report; clean_union_dirs; lock_drop "$PQ" || true; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK" || true' EXIT  # a loud foreign-claim drop must not abort the rest of the cleanup
 # A landing train holds the push lock and is moving the base: wait it out before any gate work (a union composed mid-land is stale at its own land).
 lock_take "$PQ" "$PW" "$LT" || exit 1; lock_drop "$PQ"
 if [ -n "${CLEAN_ROOT:-}" ]; then  # start-of-train cleanup of your own finished work; never blocks the train
@@ -163,10 +163,10 @@ git checkout -q --detach "$REMOTE/$BASE_BRANCH"
 # HEAD (train_yield.py solo; an older head or no recorded head does not count) lands alone, no union, but only when every check on that exact head passed
 # (landing_watchdog._check_ok, at least one check) and the merge is pinned to that SHA. A PR whose checks are not all green stays in the train, as before.
 ci_head() { "$GH" pr view "$1" --json headRefOid,statusCheckRollup </dev/null 2>/dev/null | python3 -c 'import json,sys; sys.path.insert(0,sys.argv[1])
-from landing_watchdog import _check_ok
-d=json.load(sys.stdin); r=d["statusCheckRollup"]
+from landing_watchdog import _check_ok, _stage
+d=json.load(sys.stdin); r=[x for x in d["statusCheckRollup"] or [] if not _stage(x)]
 if r and all(map(_check_ok,r)): print(d["headRefOid"])
-else: sys.exit(1)' "$HERE"; }  # prints the head sha iff it has checks and all passed; a lookup or parse failure is not green
+else: sys.exit(1)' "$HERE"; }  # prints the head sha iff it has checks (the train's own perun/train-stage marker is not one) and all passed; a lookup or parse failure is not green
 cand=$(python3 "$HERE/train_yield.py" solo $HEADS 2>/dev/null) || cand=
 sol= pins=
 for n in $cand; do  # at most ONE solo landing per train: the first eligible PR; the others stay in the train and are re-tested on the new base by the next one

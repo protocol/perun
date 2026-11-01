@@ -539,7 +539,19 @@ three classes.
 A red train is first re-run **alone and at low load** (`merge_train.py verify --rerun-cmd`: only the failing checks or specs,
 `nice -n 19`, `PERUN_LOW_LOAD=1`). A pass there is a load flake: the batch lands and the flake is logged. Only a red that
 reproduces is bisected. Measure it with `landing_watchdog.py check`: a low yield (PRs per landed train) or merges per hour below
-target (policy `train_yield_floor`, `merges_per_hour_target`) says trains are being lost to reds or starved.
+target (policy `train_yield_floor`, `merges_per_hour_target`) says trains are being lost to reds or starved. It also tells a dead
+run from a slow one:
+
+- `Train run stuck: run 10617-70 posted landing on 3 PRs 140 min ago (expected <= 60 min), no outcome since. Check the train runner,
+  not the PRs.` The newest train activity is an in-flight marker past 1.5 times its expected time. Any later marker or landing
+  supersedes it, so a hand merge, or a landing stage that hangs after its first merge, silences this line; the stall line still
+  fires once nothing merges for the window.
+- `Landing stalled: 0 merged to main in 60 min, 2 green PRs waiting. Fix landing before starting new work. No train run in 200 min:
+  start the train or check its runner.` The clause rides the stall line when train markers exist and the last train activity
+  (marker or landing) was an old outcome.
+- After `landing_watchdog.py expect 'train_size>=12'` (quoted, or the shell reads `>=12` as a redirect): `Decision not in effect:
+  train_size>=12 set 2.0 h ago; the 2 trains since carried a median of 3 PRs. Check that the runner reads it.` A train counts by
+  when it began.
 
 ## A merge host is not accepted until it can be recovered without anyone's help
 
