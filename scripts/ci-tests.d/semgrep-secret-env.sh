@@ -1,0 +1,2 @@
+# Bundled semgrep rules perun.js.secret-env-fallback, perun.js.public-env-secret and perun.py.secret-env-fallback: annotated ruleid/ok fictional fixtures (live when semgrep is installed, SKIP otherwise) plus offline checks of the rule text (severity, test-path exclusion, the shared secret-name and literal regexes against must-match and must-not-match names, the public-prefix list, the pattern shapes).
+python3 scripts/test_semgrep_secret_env.py

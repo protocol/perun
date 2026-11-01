@@ -7,6 +7,7 @@
 # Also fetch-no-timeout (INFO: fetch(url) or fetch(url, {...}) with no signal key inside a Next route handler (export async function GET|POST|PUT|PATCH|DELETE), a pages API export default async function handler or an app.get|post|put|patch|delete|all("/path", ..., fn) callback; options with any signal value or a spread are skipped, as are test paths). ponytail: handlers are matched by shape, so a const-arrow export, a handler passed by name and a route path that is not a literal starting with / or * are not seen, and options held in a variable are read as unknown, not as missing a signal.
 # Also auth-cookie-flags (WARNING: a cookie whose literal name has session, sess, sessid, sessionid, phpsessid, sid, token, auth, authtoken or jwt as a whole word (the name is split at punctuation and at lower-to-upper camelCase boundaries, and a name holding csrf or xsrf is skipped because double-submit cookies must stay readable by scripts), set positionally or as one options object by <x>.cookie, <x>.setCookie, cookies().set, (await cookies()).set, a variable bound by X = await cookies() or X = cookies() in an enclosing block (const jar = await cookies(); jar.set(...)) or <x>.cookies.set on any receiver not named below, with httpOnly missing or the literal false, or with secure missing or the literal false; any other httpOnly or secure value passes; ctx.cookies.set, context.cookies.set, event.cookies.set, this.cookies.set and a bare cookies.set are reported only for a literal httpOnly false or secure false, because the cookies library behind Koa's ctx.cookies documents httpOnly as true by default and secure as true by default over HTTPS, and SvelteKit documents both as true by default (secure false in development); a receiver ending in req or request is a request-side cookie and is skipped, and a cookie cleared with an empty value, maxAge: 0 or expires: new Date(0) is skipped; test paths are skipped). ponytail: options must be an object literal (options held in a variable are not read and a spread is skipped), the browser cookieStore (a global, not bound from cookies()) is not seen, a bare cookies.set also covers other frameworks whose defaults were not checked, so their missing flags are not reported, and sameSite is not checked.
 # Also cors-credentials-any-origin (WARNING: a cors(...) or register(cors, ...) call with credentials true and an origin of true, the regex /.*/ or a callback that always allows ((o, cb) => cb(null, true), cb(null, o) or cb(null, !!o), written as an arrow expression, an arrow block or a function); or a function that copies req.get|header("origin") or headers.get("origin"), directly or through a variable, into Access-Control-Allow-Origin while it also sets Access-Control-Allow-Credentials to "true" or true, unless an if on a .has, .includes or .test call encloses or precedes the set call in the same block (an allowlist check); origin "*" is not reported because the cors packages send a literal * and browsers refuse it on credentialed requests; req.headers.origin is left to the registry cors-misconfiguration rule; test paths are skipped). ponytail: options held in a variable and a credentials header given as an object are not seen, any such if counts as an allowlist check whatever it tests and a lookup written another way (indexOf, some) is not read, and a callback with other statements or a conditional is not matched.
+# Also secret-env-fallback (WARNING: process.env.X, process.env["X"] or import.meta.env.X followed by || or ?? and a non-empty string literal, process.env.X or process.env["X"] assigned with ||= or ??= and a string literal, or a const, let or var destructuring default from process.env (const { X = "..." } = process.env, matched also with other keys around it), where X ends in a secret stem (pass, passwd, password, passcode, passphrase, secret, token, credential, credentials, api_key, apikey, a secret, private, signing, encryption, session, jwt, hmac, master, access, auth, client, app, service, service_role or webhook key compound, or _pwd) after an optional prefix that ends in _ or . or sits at a camelCase boundary; a name behind a public bundler prefix is left to public-env-secret, the literal rule is the one hardcoded-credential-compare uses plus a second check that skips a literal that looks like a file path (it starts with /, ./, ../ or ~/, or ends in .json, .pem, .key, .crt, .cer, .der, .p12, .pfx, .jks, .keystore, .yaml or .yml), and test, fixture and mock paths and playwright.config.*, vitest.config.*, jest.config.* and cypress.config.* files are skipped) and public-env-secret (WARNING: any use, a write included, of process.env.X, process.env["X"] or import.meta.env.X, with or without a fallback, where X starts with NEXT_PUBLIC_, VITE_, REACT_APP_, EXPO_PUBLIC_, NUXT_PUBLIC_, GATSBY_, PUBLIC_, STORYBOOK_ or VUE_APP_ and ends in secret, password, passwd, passcode, passphrase, _pwd, service_role, or a secret, private, signing, encryption or service_role key compound with or without the underscore (secret_key, secretkey), because a bundler inlines such variables into any client code that reads them, so the value can reach every visitor's browser; token, api_key, anon_key, publishable_key and site_key names are not reported because many browser keys are public by design; test, fixture and mock paths are skipped). ponytail: a chained fallback (a || b || "x"), a ternary, a non-null ! read, an alias of process.env, a renamed destructuring ({ K: alias = "x" }) and Deno.env.get are not seen, a template literal with a ${} substitution is not matched, and public-env-secret does not see a destructured read. Not followed: optional chaining (process?.env?.X || "x"), a value first copied to a variable (const s = process.env.X; s || "x") and a value-based fallback (a connection string holding a password under a non-secret name).
 rules:
 - id: perun.js.sqli
   mode: taint
@@ -696,6 +697,56 @@ rules:
         metavariable: $T
         regex: ^(?!typeof\b|.*[.\["'](?:alg|typ|kid)["']?\]?$)
     - focus-metavariable: $T
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.secret-env-fallback
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A secret read from the environment falls back to a hardcoded string, so wherever the variable is unset (a new deploy, a preview, a staging box) the service silently runs with a known secret. Fail at startup when the variable is unset instead of falling back.
+  patterns:
+  - pattern-either:
+    - pattern: process.env.$N || "$L"
+    - pattern: process.env.$N ?? "$L"
+    - pattern: process.env["$N"] || "$L"
+    - pattern: process.env["$N"] ?? "$L"
+    - pattern: process.env.$N ||= "$L"
+    - pattern: process.env.$N ??= "$L"
+    - pattern: process.env["$N"] ||= "$L"
+    - pattern: process.env["$N"] ??= "$L"
+    - pattern: import.meta.env.$N || "$L"
+    - pattern: import.meta.env.$N ?? "$L"
+    - pattern: const { $N = "$L" } = process.env
+    - pattern: let { $N = "$L" } = process.env
+    - pattern: var { $N = "$L" } = process.env
+  - metavariable-regex:
+      metavariable: $L
+      regex: ^(?!(?i:bearer|basic|none|null|undefined|true|false)$)(?:[\W_]*[^\W_]){2}
+  - metavariable-regex:
+      metavariable: $L
+      regex: ^(?!(?:/|\./|\.\./|~/)|.*\.(?i:json|pem|key|crt|cer|der|p12|pfx|jks|keystore|yaml|yml)$)
+  - metavariable-regex:
+      metavariable: $N
+      regex: ^(?:(?:.*(?:[._]|[a-z0-9](?=[A-Z])))?(?i:pass|passwd|password|passcode|passphrase|secret|token|credentials?|api_?key|(?:secret|private|signing|encryption|session|jwt|hmac|master|access|auth|client|app|service|service_role|webhook)_?key)|.*(?:_|[a-z0-9](?=[A-Z]))(?i:pwd))$
+  - metavariable-regex:
+      metavariable: $N
+      regex: ^(?!(?:NEXT_PUBLIC_|VITE_|REACT_APP_|EXPO_PUBLIC_|NUXT_PUBLIC_|GATSBY_|PUBLIC_|STORYBOOK_|VUE_APP_))
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*", "playwright.config.*", "vitest.config.*", "jest.config.*", "cypress.config.*"]
+- id: perun.js.public-env-secret
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A secret-looking variable carries a public bundler prefix, and a bundler inlines such variables into any client code that reads them, so the value can reach every visitor's browser. Keep secrets out of public-prefixed variables and read them server-side.
+  patterns:
+  - pattern-either:
+    - pattern: process.env.$N
+    - pattern: process.env["$N"]
+    - pattern: import.meta.env.$N
+  - metavariable-regex:
+      metavariable: $N
+      regex: ^(?:NEXT_PUBLIC_|VITE_|REACT_APP_|EXPO_PUBLIC_|NUXT_PUBLIC_|GATSBY_|PUBLIC_|STORYBOOK_|VUE_APP_)
+  - metavariable-regex:
+      metavariable: $N
+      regex: .*(?i:secret|password|passwd|passcode|passphrase|_pwd|(?:secret|private|signing|encryption|service_role)_?key|service_role)$
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
 - id: perun.js.date-parse-rollover

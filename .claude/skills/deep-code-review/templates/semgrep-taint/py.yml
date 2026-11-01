@@ -1,6 +1,7 @@
 # Bundled generic taint rules (Python). Sources: request data and function parameters (excluding self/cls).
 # Sinks: classic injection calls. A guard `if X not in ALLOW: raise|return` before the sink suppresses it for X.
 # Also hardcoded-credential-compare (a pass/secret/token/api-key name vs a non-empty string literal, WARNING) and hardcoded-basic-auth (a base64-decoded value vs a literal, ERROR); env reads, JWT header fields (alg, typ, kid), scheme/sentinel literals (bearer, none, true, ...), single-character literals and test/fixture paths are skipped. ponytail: template literals are not matched.
+# Also secret-env-fallback (WARNING: os.environ.get("X", "..."), os.getenv("X", "..."), os.environ.setdefault("X", "..."), the same with default="...", and os.environ.get("X") or "..." or os.getenv("X") or "...", also when environ or getenv comes from `from os import`, where X ends in a secret stem (pass, passwd, password, passcode, passphrase, secret, token, credential, credentials, api_key, apikey, a secret, private, signing, encryption, session, jwt, hmac, master, access, auth, client, app, service, service_role or webhook key compound, or _pwd) after an optional prefix that ends in _ or . or sits at a camelCase boundary; the literal rule is the one hardcoded-credential-compare uses plus a second check that skips a literal that looks like a file path (it starts with /, ./, ../ or ~/, or ends in .json, .pem, .key, .crt, .cer, .der, .p12, .pfx, .jks, .keystore, .yaml or .yml), no default, None, "" and non-literal defaults are skipped, and test, fixture and mock paths are skipped). ponytail: a chained or (a or b or "x"), a conditional expression, an f-string with a {} field and os.environ bound to another name first are not matched, and the public-prefix check (public-env-secret) exists for JavaScript only. Not followed: a value first copied to a variable (s = os.environ.get("X"); s or "x") and a value-based fallback (a connection string holding a password under a non-secret name).
 rules:
 - id: perun.py.sqli
   mode: taint
@@ -377,5 +378,30 @@ rules:
         metavariable: $T
         regex: ^(?!.*[.\["'](?:alg|typ|kid)["']?\]?$)
     - focus-metavariable: $T
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.py.secret-env-fallback
+  languages: [python]
+  severity: WARNING
+  message: A secret read from the environment falls back to a hardcoded string, so wherever the variable is unset (a new deploy, a preview, a staging box) the service silently runs with a known secret. Fail at startup when the variable is unset instead of falling back.
+  patterns:
+  - pattern-either:
+    - pattern: os.environ.get("$N", "$L")
+    - pattern: os.getenv("$N", "$L")
+    - pattern: os.environ.get("$N", default="$L")
+    - pattern: os.getenv("$N", default="$L")
+    - pattern: os.environ.setdefault("$N", "$L")
+    - pattern: os.environ.setdefault("$N", default="$L")
+    - pattern: os.environ.get("$N") or "$L"
+    - pattern: os.getenv("$N") or "$L"
+  - metavariable-regex:
+      metavariable: $L
+      regex: ^(?!(?i:bearer|basic|none|null|undefined|true|false)$)(?:[\W_]*[^\W_]){2}
+  - metavariable-regex:
+      metavariable: $L
+      regex: ^(?!(?:/|\./|\.\./|~/)|.*\.(?i:json|pem|key|crt|cer|der|p12|pfx|jks|keystore|yaml|yml)$)
+  - metavariable-regex:
+      metavariable: $N
+      regex: ^(?:(?:.*(?:[._]|[a-z0-9](?=[A-Z])))?(?i:pass|passwd|password|passcode|passphrase|secret|token|credentials?|api_?key|(?:secret|private|signing|encryption|session|jwt|hmac|master|access|auth|client|app|service|service_role|webhook)_?key)|.*(?:_|[a-z0-9](?=[A-Z]))(?i:pwd))$
   paths:
     exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]

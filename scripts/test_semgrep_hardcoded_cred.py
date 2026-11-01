@@ -5,11 +5,16 @@ import json, os, re, shutil, subprocess, sys, tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RULES = os.path.join(ROOT, ".claude", "skills", "deep-code-review", "templates", "semgrep-taint")
 
-# The shared name and literal regexes live in both rule files; they must not drift.
+# The shared name and literal regexes live in both rule files; they must not drift. The name regex is carried once per file;
+# the literal regex by each of hardcoded-credential-compare, hardcoded-basic-auth and secret-env-fallback in each file (read
+# per rule, so a rule that loses it fails even when another rule gains a copy).
 src = [open(os.path.join(RULES, f)).read() for f in ("js.yml", "py.yml")]
-for pat, n in ((r"regex: (\^\(\?:\(\?:\.\*\[\._\].+)", 1), (r"regex: (\^\(\?!\(\?i:bearer.+)", 2)):
-    rx = [re.findall(pat, s) for s in src]
-    assert len(rx[0]) == n and rx[0] == rx[1], rx
+rx = [re.findall(r"regex: (\^\(\?:\(\?:\.\*\[\._\].+)", s) for s in src]
+assert len(rx[0]) == 1 and rx[0] == rx[1], rx
+block = lambda s, rid: s.split(f"- id: {rid}\n")[1].split("\n- id:")[0]
+lits = [re.findall(r"regex: (\^\(\?!\(\?i:bearer.+)", block(s, f"perun.{lang}.{rule}")) for s, lang in zip(src, ("js", "py"))
+        for rule in ("hardcoded-credential-compare", "hardcoded-basic-auth", "secret-env-fallback")]
+assert all(len(l) == 1 and l == lits[0] for l in lits), lits
 
 JS = '''function gate(req, res, next, password, config, bypass, tokenType, type, body, token, secret, pwd, PWD, parts) {
   const [user, pass] = Buffer.from(req.headers.authorization.split(" ")[1], "base64").toString().split(":");
