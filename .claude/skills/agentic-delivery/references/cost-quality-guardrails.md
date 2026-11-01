@@ -64,7 +64,8 @@ range gate in CI as advisory, and its release squash commits carry both
 trailers.
 
 - **A terse-commit convention caps prose, never the required trailers.** This skill puts several **required**
-  trailer lines on a commit — `Tests: X/X` (`roles.md`), `Regression-Of:` / `Severity:` / `Cost-Cut:` (the
+  trailer lines on a commit — `Tests: X/X` from a run on the staged tree or `Tests: none (<where they run>)`
+  (`roles.md`), `Regression-Of:` / `Severity:` / `Cost-Cut:` (the
   escaped-defects section below), and the tier trailers this section gates (`Model:`, `Reviewed-By:`). A
   separate, generic terse-commit convention (a fixed line count for the whole body) collides with that
   requirement: one observed run exceeded a 5-line commit-body cap roughly 30% of the time trying to fit the

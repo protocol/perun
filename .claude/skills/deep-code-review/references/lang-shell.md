@@ -79,6 +79,13 @@ Read this when the target runs any shell — CI `run:` steps, hooks, Dockerfile 
   `ENV_OPTION_AFTER_ASSIGNMENT` rule. The error is loud but easy to miss when the command boots a
   backgrounded child: it lands in the child's own log while the harness reports only a readiness timeout.
   A harness that boots a child must fail fast on the child's early exit and print its log tail.
+- **A gate that calls a Linux-only tool turns red on macOS for a check that never ran.** `setsid`,
+  `flock`, `timeout` and `/proc` paths are absent from a stock macOS install (checked on macOS 26; other
+  BSDs are not guaranteed to have them), so a gate script that calls one exits 127 or reads nothing
+  there and posts FAIL for a check that never ran, and every developer on a Mac sees a red gate that is
+  not a finding. Probe first (`command -v <tool>`, or `uname`) and report the check
+  as **not run** when the tool is absent, never as failed or passed. Mechanized by `scripts/reaper_lint.py`'s
+  `LINUX_ONLY_NO_PREFLIGHT` rule.
 - **A script that gates on another tool's log, not its exit status.** Gate on
   the tool's exit status, captured to a file — never a pipe (pipe-hides-exit-code
   hazard: `language-stack-redflags.md`'s verification-shell section); the
