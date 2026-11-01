@@ -667,7 +667,7 @@ Moved from `full-map.md` **Worktrees and occupancy**; "the tree-sharing risk abo
   general-lane case).
 
 
-A hand-back pastes the test runner's exact count string (for example `Tests: 219/219`), not a paraphrase of it.
+A hand-back pastes the test runner's exact count string from a run on the staged tree (for example `Tests: 219/219`), not a paraphrase of it; otherwise it says `Tests: none (<where they run>)`.
 
 ## Done means verified
 

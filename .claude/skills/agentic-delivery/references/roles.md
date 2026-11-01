@@ -350,7 +350,7 @@ has.
 | Format check | commit | Implementer | Zero diffs |
 | Lint | commit | Implementer | Zero warnings |
 | Type check | commit | Implementer | Clean |
-| Unit tests (quick tier) + count in the message | commit | Implementer + QA | Green; `Tests: X/X` recorded so a future drop is visible |
+| Unit tests (quick tier) + count in the message | commit | Implementer + QA | Green; `Tests: X/X` copied from a suite run on the staged tree, so a future drop is visible. Suites that run later (a merge train, CI) leave `Tests: none (<where they run>)`, the parenthetical naming where they run with no count or pass word: a count no run printed on this tree is an over-claim |
 | Build + integration/E2E at the exact SHA | CI | QA | Green on the reviewed revision, local stack actually started (G5) |
 | Verify-visible-UX | CI | UX & QA | Real controls exercised in the running app; a disabled control **looks** disabled; unit-logic passing ≠ a working UI |
 | UX-evidence (screens-changed) | CI | UX | A page-changing diff shows the screens at a narrow + wide width, or an explicit `No UX change: <reason>` |

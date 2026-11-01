@@ -120,6 +120,56 @@ RULES (fail on any match not carrying the allow marker)
                   reaper on every commit kills every sibling lane's dev server
                   and headless browser (issue #1113); this is a path-scoped
                   rule, distinct from the shape-based rules above.
+  LINUX_ONLY_NO_PREFLIGHT
+                  a logical line whose command word is `setsid`, `flock` or
+                  `timeout` and has an argument (the command word is the first
+                  word after shell keywords, options, `sudo`, `nohup`, `env`,
+                  `time`, `nice`, `exec`, `xargs`, `command`, `stdbuf`,
+                  `ionice`, `chrt`, `taskset`, `NAME=value` and a Makefile
+                  recipe's leading `@`, `-` or `+`, so `grep timeout` or a
+                  `for` word list is not a call), or that has a bare
+                  `/proc/<path>` word or redirect source (no space, glob or
+                  regex character; never a `find` operand, the pattern or
+                  script operand of `grep`, `sed` or `awk`, nor a word `echo`
+                  or `printf` prints), in a file with no
+                  platform preflight for it. A stock macOS install has none of
+                  them (other BSDs are not guaranteed to), so the gate exits
+                  127 or reads nothing there and fails a check that never ran
+                  instead of reporting it as not run. A preflight anywhere in
+                  the file clears the line: `command -v`, `type`, `hash` or
+                  `which` naming that tool; any `uname`; `$OSTYPE` or
+                  `${OSTYPE`; a `-e`, `-d`, `-r`, `-f`, `-s` or `-x` test on a
+                  `/proc` path (for `/proc`) or on a path to the tool; the tool
+                  run as its own probe (`--version` or `--help` as its only
+                  argument, or `true` or `:` as its whole payload: `timeout 1
+                  true`). Not commands, so neither a call nor a preflight: a
+                  here-document body, the inside of a quoted string that spans
+                  lines,
+                  package.json outside `scripts`, the text after a `$(...)` or
+                  backtick inside double quotes, `(( ))` and `$(( ))`
+                  arithmetic, a Makefile or justfile assignment
+                  (`timeout := 5`). Skipped in `*.yml`/`*.yaml`, hook YAML
+                  (lefthook.yml, .pre-commit-config.yaml) included (a CI step
+                  runs on its runner's OS).
+                  Residuals, each a quiet miss or a line for the allow marker:
+                  `sh -c`, `bash -c` and `eval` strings, `find -exec` tails, a
+                  leading redirect, a variable as the command word,
+                  `$(shell ...)`, a `/proc` glob, a here-document
+                  body (even one that feeds `sh` or holds `$(...)`) and a
+                  `$(...)` that spans lines inside double quotes are not read;
+                  an option-argument wrapper hides the tool (`nice -n 10`,
+                  `env -u FOO`, `exec -a n`, `sudo -u root`); a preflight in a
+                  sourced file or a wrapper function is not seen, one later in
+                  the file than the call still counts, and clearing is
+                  file-wide and mention-blind (`echo uname` clears every
+                  line); a stray apostrophe hides the lines up to the next
+                  quote; `$(nproc)`-style substitutions and other GNU tools
+                  are not covered; another OS probe (`sw_vers`, `$MACHTYPE`)
+                  is not a preflight; calls to a function the file defines
+                  under the tool's name read as calls; a probe with option
+                  values (`timeout -s KILL 1 true`) reads as a call, and a
+                  quoted `'/proc/x'` given to a command other than `echo` or
+                  `printf` as a read.
 
 ALLOW MARKER
 -------------
@@ -231,6 +281,26 @@ _SED_SCRIPT_START_RE = re.compile(r"^['\"]?[sy][/#|,;]")
 # why the script that was authored and tested there ships broken.
 _ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_]\w*=")
 
+# Linux-only tools and procfs (rule LINUX_ONLY_NO_PREFLIGHT; checked on macOS 26:
+# no /usr/bin or /bin entry for any of the three tools, and no /proc).
+_LINUX_TOOLS = ("setsid", "flock", "timeout")
+# A bare /proc/<path> word, or one with a redirect glued on: not `/proc/` alone,
+# and nothing with a space, glob or regex character in it.
+_PROC_SRC_RE = re.compile(r"^(?:\d*[<>]+)?/proc/[^\s*?\[\]^|()]+$")
+_OSTYPE_RE = re.compile(r"\$\{?OSTYPE\b")
+# Words that may precede a segment's command word: shell keywords and wrappers
+# that run the next command (`then timeout ...`, `sudo flock ...`).
+_CMD_PREFIX = frozenset(
+    "! { if then else elif do while until time sudo nohup exec env nice xargs "
+    "command stdbuf ionice chrt taskset".split())
+_PATTERN_CMDS = frozenset(("grep", "egrep", "fgrep", "sed", "awk"))   # first operand: pattern or script
+_ASSIGN_OP_RE = re.compile(r"^(?:::?|[?+!])?=")   # `timeout := 5` (Makefile, justfile)
+_REDIR_RE = re.compile(r"^\d*[<>]")   # a redirect word: `>`, `2>`, `>/dev/null`, `<in`
+# Text with none of these has no use and no guard: the cheap test before the real parse.
+_LINUX_HINT_RE = re.compile(r"setsid|flock|timeout|uname|OSTYPE|/proc|\b(?:type|hash|which|command)\b")
+_JSON_SCRIPTS_RE = re.compile(r'^\s*"scripts"\s*:\s*\{\s*$')
+_HEREDOC_RE = re.compile(r"(?<!<)<<(-?)[ \t]*(?:'([^']+)'|\"([^\"]+)\"|\\?([A-Za-z_][\w.-]*))")
+
 # lsof short options that take a required / optional argument (the rest of the
 # cluster, or for a required one the next token when the cluster ends there).
 _LSOF_REQ_ARG = set("AcdDekmpu")
@@ -284,6 +354,14 @@ _MSG = {
         "a GNU-only flag with stderr piped to /dev/null -- on BSD/macOS this "
         "flag errors as invalid, the error is discarded, and the check reads "
         "as a false negative (no match) fleet-wide instead of erroring "
+        "(lang-shell.md)"
+    ),
+    "LINUX_ONLY_NO_PREFLIGHT": (
+        "Linux-only setsid/flock/timeout or /proc path and no platform "
+        "preflight in this file -- stock macOS has none of them (other BSDs "
+        "are not guaranteed to), so the gate exits 127 or reads nothing there "
+        "and fails instead of reporting \"not run\"; check `command -v <tool>` "
+        "(or `uname`) first and report the check as not run when it is absent "
         "(lang-shell.md)"
     ),
     "ENV_OPTION_AFTER_ASSIGNMENT": (
@@ -503,17 +581,26 @@ def _logical_lines(raw: list[str], is_json: bool) -> list[tuple[int, int, str]]:
     return out
 
 
-def _segments(text: str) -> list[str]:
+def _segments(text: str, strict: bool = False) -> list[str]:
     """Split a logical line into command segments at unquoted `| ; & ( )`,
     backticks, and `$(` (also inside double quotes). Quotes stay in the text.
+
+    `strict` (rule LINUX_ONLY_NO_PREFLIGHT only) keeps what is not a command
+    out of the result: the rest of a double-quoted string after a `$(...)` or
+    backtick in it, and `(( ))` / `$(( ))` arithmetic. A `$(...)` after a word
+    leaves a `0` word there, so `timeout $(secs) cmd` keeps an argument.
     """
     segs: list[str] = []
     buf: list[str] = []
-    stack: list[str] = []  # 'sq' | 'dq' | 'sub'
+    stack: list[str] = []  # 'sq' | 'dq' | 'sub' | 'bt' (a backtick in "...", strict only)
+    tail = False           # strict: buf is string text that follows a substitution
 
     def cut() -> None:
-        segs.append("".join(buf))
+        nonlocal tail
+        if not tail:
+            segs.append("".join(buf))
         buf.clear()
+        tail = False
 
     i, n = 0, len(text)
     while i < n:
@@ -527,13 +614,28 @@ def _segments(text: str) -> list[str]:
             buf.append(text[i:i + 2])
             i += 2
             continue
+        elif strict and top != "dq" and (text.startswith("((", i) or text.startswith("$((", i)):
+            depth, i = 2, i + (3 if ch == "$" else 2)
+            while i < n and depth:
+                depth += (text[i] == "(") - (text[i] == ")")
+                i += 1
+            continue
         elif ch == "$" and i + 1 < n and text[i + 1] == "(" and text[i + 2:i + 3] != "(":
+            if strict and top != "dq" and "".join(buf).strip():
+                buf.append(" 0")   # an argument of the word before it
             stack.append("sub")
             cut()
             i += 2
             continue
         elif ch == "`":
-            cut()
+            if strict and top == "bt":
+                stack.pop()
+                cut()
+                tail = stack[-1:] == ["dq"]
+            else:
+                if strict and top == "dq":
+                    stack.append("bt")
+                cut()
         elif top == "dq":
             buf.append(ch)
             if ch == '"':
@@ -547,6 +649,7 @@ def _segments(text: str) -> list[str]:
         elif ch == ")" and top == "sub":
             stack.pop()
             cut()
+            tail = strict and stack[-1:] == ["dq"]
         elif ch in "|;&()":
             cut()
         else:
@@ -814,6 +917,165 @@ def _gnu_flag_silenced_stderr(text: str) -> bool:
     return False
 
 
+def _command_word(toks: list[str]) -> tuple[int, str]:
+    """(index, basename) of a segment's command word, (-1, "") when none: its
+    first token that is not a shell keyword, a wrapper (`_CMD_PREFIX`), an
+    option or a `NAME=value` assignment. Not `_command_at`'s any-token match:
+    a bare `timeout` in `for c in git timeout; do` is a word, not a call, and
+    a lint that flags it posts the red gate it exists to prevent. The first
+    token loses a Makefile recipe's leading `@`, `-` and `+`."""
+    for k, t in enumerate(toks):
+        if k == 0:
+            t = t.lstrip("@-+")
+        n = t.rsplit("/", 1)[-1]
+        if t and not (t.startswith("-") or n in _CMD_PREFIX or _ENV_ASSIGN_RE.match(t)):
+            return k, n
+    return -1, ""
+
+
+def _args(toks: list[str], k: int) -> list[str]:
+    """Tokens after the command word at `k`, up to the first redirect word."""
+    rest = toks[k + 1:]
+    return rest[:next((j for j, t in enumerate(rest) if _REDIR_RE.match(t)), len(rest))]
+
+
+def _linux_only(text: str) -> tuple[set[str], set[str]]:
+    """(Linux-only things one logical line uses, things it guards) for rule
+    LINUX_ONLY_NO_PREFLIGHT. Pure: no I/O.
+
+    Used, from `_segments(strict=True)` minus a `name := value` segment: a
+    `_LINUX_TOOLS` name that is a segment's command word (`_command_word`)
+    with an argument after it (so not `timeout)` of a `case`, `timeout() {`
+    or a Make `$(timeout)`), or "/proc" for a bare `/proc/<path>` word or
+    redirect source (`_PROC_SRC_RE`) that is not an operand of `find`, the
+    pattern or script operand of `grep`/`sed`/`awk`, nor a word `echo` or
+    `printf` prints (an argument before its first redirect). Guarded, from
+    every plain segment: a tool named after `command -v`, `type`, `hash` or
+    `which`, or by a path in a `-e`/`-d`/`-r`/`-f`/`-s`/`-x` test
+    (`[ -x /usr/bin/flock ]`); a tool run as its own probe, with `--version`
+    or `--help` as its only argument or `true` or `:` as its whole payload
+    (`timeout 1 true`, `flock -n l :`); "/proc" by a test on a `/proc` path;
+    "*" (everything) by `uname` or `$OSTYPE`/`${OSTYPE`. The caller unions the
+    guards file-wide.
+    """
+    used: set[str] = set()
+    if not _LINUX_HINT_RE.search(text):
+        return used, set()
+    guarded = {"*"} if _OSTYPE_RE.search(text) else set()
+    for seg in _segments(text):
+        toks = _tokens(seg)
+        names = [t.rsplit("/", 1)[-1] for t in toks]
+        if "uname" in names:
+            guarded.add("*")
+        for i, n in enumerate(names):
+            if n in ("type", "hash", "which") or (n == "command" and toks[i + 1:i + 2] == ["-v"]):
+                guarded.update(names[i + 1:])
+                break   # a later guard word's names are a subset of these
+        for i, a in enumerate(toks[:-1]):
+            if a in ("-e", "-d", "-r", "-f", "-s", "-x"):   # a test on a path
+                b = toks[i + 1]
+                if b == "/proc" or b.startswith("/proc/"):
+                    guarded.add("/proc")
+                elif "/" in b:
+                    guarded.add(names[i + 1])   # `[ -x /usr/bin/timeout ]`
+        k, cmd = _command_word(toks)
+        if cmd in _LINUX_TOOLS:   # run as its own probe: `timeout --version`, `timeout 1 true`
+            args = _args(toks, k)
+            words = [a for a in args if not a.startswith("-")]
+            n = 1 if cmd == "setsid" else 2   # words allowed: `timeout`'s duration or `flock`'s lock, then the payload
+            if args in (["--version"], ["--help"]) or (len(words) <= n and words[-1:] in (["true"], [":"])):
+                guarded.add(cmd)
+    for seg in _segments(text, strict=True):
+        toks = _tokens(seg)
+        if toks[1:2] and _ASSIGN_OP_RE.match(toks[1]):
+            continue
+        k, cmd = _command_word(toks)
+        if cmd in _LINUX_TOOLS and k + 1 < len(toks):   # a call has an argument
+            used.add(cmd)
+        if cmd in ("echo", "printf"):   # prints its words: only a redirect target is read
+            del toks[k + 1:k + 1 + len(_args(toks, k))]
+        if cmd != "find":
+            pat = -1
+            if cmd in _PATTERN_CMDS:   # its first operand is a pattern or script, not a path
+                pat = next((j for j in range(k + 1, len(toks)) if not toks[j].startswith("-")), -1)
+            if any(j != pat and _PROC_SRC_RE.match(t) for j, t in enumerate(toks)):
+                used.add("/proc")
+    return used, guarded
+
+
+def _non_command_lines(raw: list[str], is_json: bool) -> set[int]:
+    """Raw line indexes LINUX_ONLY_NO_PREFLIGHT must not read as commands.
+
+    package.json: every line outside the `"scripts": {` object (a `name` or
+    `description` value is prose). Shell: a here-document body with its
+    closing delimiter line, and the interior and closing line of a quoted
+    string that spans lines. A here-document with no closing delimiter line
+    and a quote that never closes mark nothing, so `$(( a << b ))` (a shift)
+    and a stray apostrophe cannot hide the rest of the file.
+    """
+    skip: set[int] = set()
+    if is_json:
+        depth = 0
+        for i, line in enumerate(raw):
+            if depth:   # inside "scripts": braces in a string value do not count
+                depth += 0 if _JSON_PAIR_RE.match(line) else line.count("{") - line.count("}")
+            elif _JSON_SCRIPTS_RE.match(line):
+                depth = 1
+            else:
+                skip.add(i)
+        return skip
+    quote, span, i = "", [], 0
+    while i < len(raw):
+        line, j, docs = raw[i], 0, []
+        if quote:
+            span.append(i)
+        while j < len(line):
+            c = line[j]
+            if c == "\\" and quote != "'":
+                j += 2
+                continue
+            if quote:
+                if c == quote:
+                    quote = ""
+                    skip.update(span)
+                    span = []
+            elif c in "'\"":
+                quote = c
+            elif c == "#" and (j == 0 or line[j - 1] in " \t;&|()"):
+                break
+            else:
+                m = _HEREDOC_RE.match(line, j)
+                if m:
+                    docs.append((m.group(1), m.group(2) or m.group(3) or m.group(4)))
+                    j = m.end()
+                    continue
+            j += 1
+        for dash, word in docs if not quote else ():
+            end = next((k for k in range(i + 1, len(raw))
+                        if (raw[k].lstrip("\t") if dash else raw[k]) == word), -1)
+            if end >= 0:
+                skip.update(range(i + 1, end + 1))
+                i = end
+        i += 1
+    return skip
+
+
+def _linux_only_lines(raw: list[str], logical: list[tuple[int, int, str]], is_json: bool) -> set[int]:
+    """Logical-line indexes that use a Linux-only thing the file never
+    preflights (rule LINUX_ONLY_NO_PREFLIGHT). A preflight anywhere in the
+    file clears a line, a later one included; any `uname` or `$OSTYPE`
+    clears every line. Lines `_non_command_lines` names use and guard nothing."""
+    found = [_linux_only(text) for _, _, text in logical]
+    if not any(used for used, _ in found):
+        return set()   # no use anywhere: skip the quote scan
+    skip = _non_command_lines(raw, is_json)
+    found = [(set(), set()) if start in skip else f for (start, _, _), f in zip(logical, found)]
+    guarded = set().union(*(g for _, g in found))
+    if "*" in guarded:
+        return set()
+    return {li for li, (used, _) in enumerate(found) if used - guarded}
+
+
 def _captured_vars(text: str) -> list[str]:
     """Variable names a selector line's output lands in."""
     names: list[str] = []
@@ -943,6 +1205,8 @@ def _scan_text(
     file_kills = any(_FILE_KILLS_RE.search(t) for t in texts)
     is_hook = path is not None and _is_hook_path(path)
     is_yaml = path is not None and path.lower().endswith((".yml", ".yaml"))
+    # A CI step runs on its runner's OS, so YAML is skipped.
+    linux_hits = set() if is_yaml else _linux_only_lines(raw, logical, is_json)
     hits: dict[tuple[int, str], None] = {}
 
     def add(li: int, rule: str) -> None:
@@ -974,6 +1238,9 @@ def _scan_text(
 
         if _gnu_flag_silenced_stderr(text):
             add(li, "GNU_FLAG_SILENCED_STDERR")
+
+        if li in linux_hits:
+            add(li, "LINUX_ONLY_NO_PREFLIGHT")
 
         if _env_option_after_assignment(text):
             add(li, "ENV_OPTION_AFTER_ASSIGNMENT")
@@ -1211,6 +1478,185 @@ _CASES: tuple[tuple[str, str, str, int, str], ...] = (
      "env -u B A=1 cmd\n", OK, ""),
     ("env-option-arg-not-mistaken-for-cmd-fires", "a.sh",
      "env -u B A=1 -u C cmd\n", FAIL, "ENV_OPTION_AFTER_ASSIGNMENT"),
+    # LINUX_ONLY_NO_PREFLIGHT: setsid/flock/timeout or a /proc path with no
+    # platform preflight anywhere in the file fires; a preflight for that tool
+    # (any uname/$OSTYPE, or a test on /proc) anywhere in the file clears it.
+    ("linux-only-setsid-fires", "a.sh",
+     "setsid sh -c 'x'\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-flock-fires", "a.sh",
+     "flock /tmp/l cmd\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-timeout-fires", "a.sh",
+     "timeout 60 make test\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-proc-token-fires", "a.sh",
+     "cat /proc/loadavg\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-proc-redirect-fires", "a.sh",
+     "read a < /proc/meminfo\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-proc-glued-redirect-fires", "a.sh",
+     "read a </proc/meminfo\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-wrapped-tool-fires", "a.sh",
+     "sudo -n nohup flock -n /tmp/l cmd &\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-env-assign-prefix-fires", "a.sh",
+     "LC_ALL=C timeout 5 cmd\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-makefile-silent-recipe-fires", "Makefile",
+     "test:\n\t@timeout 60 make t\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-setsid-command-v-ok", "a.sh",
+     "command -v setsid >/dev/null || exit 0\nsetsid sh -c 'x'\n", OK, ""),
+    ("linux-only-flock-command-v-ok", "a.sh",
+     "command -v flock >/dev/null || exit 0\nflock /tmp/l cmd\n", OK, ""),
+    ("linux-only-timeout-command-v-ok", "a.sh",
+     "command -v timeout >/dev/null || exit 0\ntimeout 60 make test\n", OK, ""),
+    ("linux-only-type-hash-which-ok", "a.sh",
+     "type setsid >/dev/null 2>&1 || exit 0\nhash flock 2>/dev/null || exit 0\nwhich timeout || exit 0\n"
+     "setsid x\nflock l c\ntimeout 5 y\n", OK, ""),
+    ("linux-only-uname-case-ok", "a.sh",
+     "case \"$(uname)\" in Linux) setsid x;; esac\n", OK, ""),
+    ("linux-only-ostype-ok", "a.sh",
+     "[[ \"$OSTYPE\" == linux* ]] || exit 0\nsetsid x\nflock l c\ntimeout 5 y\ncat /proc/loadavg\n", OK, ""),
+    ("linux-only-ostype-brace-ok", "a.sh",
+     "case \"${OSTYPE}\" in linux*) cat /proc/loadavg;; esac\n", OK, ""),
+    ("linux-only-proc-readable-test-ok", "a.sh",
+     "[ -r /proc/loadavg ] && cat /proc/loadavg\n", OK, ""),
+    ("linux-only-preflight-after-call-ok", "a.sh",
+     "timeout 60 make test\ncommand -v timeout >/dev/null || exit 0\n", OK, ""),
+    ("linux-only-other-tool-preflight-fires", "a.sh",
+     "command -v flock >/dev/null || exit 0\ntimeout 60 make test\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-tool-preflight-not-for-proc-fires", "a.sh",
+     "command -v flock >/dev/null || exit 0\ncat /proc/loadavg\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-yaml-ok", "ci.yml",
+     "jobs:\n  t:\n    steps:\n      - run: timeout 60 make test\n      - run: cat /proc/loadavg\n", OK, ""),
+    ("linux-only-mention-ok", "a.sh",
+     "echo \"use setsid\"\necho 'see /proc/loadavg'\n", OK, ""),
+    ("linux-only-word-list-ok", "a.sh",
+     "for c in git timeout; do command -v \"$c\" >/dev/null || exit 1; done\n", OK, ""),
+    ("linux-only-grep-arg-ok", "a.sh",
+     "grep -rn timeout src\n", OK, ""),
+    ("linux-only-split-quote-fragment-ok", "a.sh",
+     "bad \"timeout rows: $(echo x)\"\n", OK, ""),
+    # LINUX_ONLY_NO_PREFLIGHT reads commands only: not a here-document body, a
+    # multi-line quoted string, a package.json value outside `scripts`, the text
+    # after a `$(...)` in double quotes, arithmetic, a Makefile or justfile
+    # assignment, or a `/proc` word that is a pattern, a glob or prose.
+    ("linux-only-heredoc-body-ok", "a.sh",
+     "cat <<'EOF'\ntimeout 60 is the default\nflock holds the lock\ncat /proc/loadavg\nEOF\n", OK, ""),
+    ("linux-only-heredoc-dash-tab-ok", "a.sh",
+     "if x; then\n\tcat <<-EOF\n\ttimeout 60 is the default\n\tEOF\nfi\n", OK, ""),
+    ("linux-only-after-heredoc-fires", "a.sh",
+     "cat <<EOF\nhello\nEOF\ntimeout 60 make test\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-shift-is-no-heredoc-fires", "a.sh",
+     "n=$(( 1 << width ))\ntimeout 60 make test\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-here-string-is-no-heredoc-fires", "a.sh",
+     "read x <<< EOF\ntimeout 5 y\nEOF\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-heredoc-forms-ok", "a.sh",
+     "cat <<\"EOF\"\ntimeout 60 is the default\nEOF\ncat <<\\EOF\nflock holds the lock\nEOF\n"
+     "cat <<A <<B\ntimeout 1 x\nA\nflock l c\nB\n", OK, ""),
+    ("linux-only-multiline-dq-string-ok", "a.sh",
+     "msg=\"usage\ntimeout is the default\"\necho \"$msg\"\n", OK, ""),
+    ("linux-only-multiline-sq-string-ok", "a.sh",
+     "msg='usage:\nflock /tmp/l cmd\ndone'\necho \"$msg\"\n", OK, ""),
+    ("linux-only-after-multiline-string-fires", "a.sh",
+     "msg=\"a\nb\"\ntimeout 60 make test\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-stray-quote-hides-nothing-fires", "a.sh",
+     "echo don't\ntimeout 60 make test\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-comment-apostrophe-fires", "a.sh",
+     "echo hi # don't\ntimeout 60 make test\necho \"it's\"\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-escaped-quote-fires", "a.sh",
+     "echo \"a \\\" b\"\ntimeout 60 x\necho \"x\"\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-backslash-in-single-quotes-fires", "a.sh",
+     "echo 'a\\'\ntimeout 60 x\necho 'y'\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-json-prose-value-ok", "package.json",
+     "{\n  \"name\": \"timeout helpers\",\n  \"scripts\": {\n    \"test\": \"echo {\"\n  },\n"
+     "  \"description\": \"flock helpers\"\n}\n", OK, ""),
+    ("linux-only-json-script-value-fires", "package.json",
+     "{\n  \"scripts\": {\n    \"test\": \"timeout 60 node t.js\"\n  }\n}\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-dq-subst-tail-ok", "a.sh",
+     "echo \"$(date) timeout exceeded\"\nlog \"$(date +%T) flock held\"\n", OK, ""),
+    ("linux-only-dq-backtick-tail-ok", "a.sh",
+     "echo \"`date` flock held\"\n", OK, ""),
+    ("linux-only-dq-subst-body-fires", "a.sh",
+     "out=\"$(timeout 5 make t)\"\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-dq-backtick-body-fires", "a.sh",
+     "out=\"`flock l c`\"\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-call-after-dq-subst-fires", "a.sh",
+     "echo \"$(date) x\"; timeout 5 y\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-arith-command-ok", "a.sh",
+     "while (( timeout > 0 )); do (( timeout-- )); done\n(( timeout > 0 )) || exit 1\n", OK, ""),
+    ("linux-only-arith-expansion-ok", "a.sh",
+     "n=$(( timeout * 2 ))\necho $(( (timeout + 1) * 2 ))\n", OK, ""),
+    ("linux-only-call-after-arith-fires", "a.sh",
+     "n=$(( 1 + 2 )) && timeout 5 x\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-arith-arg-fires", "a.sh",
+     "timeout $(( 2 * 3 )) make t\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-make-assignment-ok", "Makefile",
+     "timeout = 5\ntimeout := 5\ntimeout ::= 5\ntimeout ?= 5\ntimeout += 5\ntimeout != date\n", OK, ""),
+    ("linux-only-just-assignment-ok", "justfile",
+     "timeout := \"5\"\nflock := \"l\"\n", OK, ""),
+    ("linux-only-make-var-ref-ok", "Makefile",
+     "test:\n\tgo test -timeout $(timeout) ./...\n", OK, ""),
+    ("linux-only-make-var-arg-fires", "Makefile",
+     "test:\n\ttimeout $(secs) make t\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-case-arm-and-function-def-ok", "a.sh",
+     "case \"$c\" in\n  timeout) echo hi;;\nesac\ntimeout() { gtimeout \"$@\"; }\n", OK, ""),
+    ("linux-only-proc-grep-sed-awk-pattern-ok", "a.sh",
+     "grep '/proc/' f\nsed -n '/proc/p' f\ngrep '/proc/x' f\nawk '/proc/{print}' f\n", OK, ""),
+    ("linux-only-proc-find-operand-ok", "a.sh",
+     "find / -path '/proc/*' -prune -o -print\nfind / -path /proc/self -prune -o -print\n", OK, ""),
+    ("linux-only-proc-glob-or-prose-ok", "a.sh",
+     "tar --exclude '/proc/*' -cf x.tar .\ndie \"/proc/stat unreadable\"\nls /proc/\nls '/proc/[0-9]'\n"
+     "ls '/proc/?'\nls '/proc/a|b'\nls '/proc/(a)'\nls '/proc/^a'\n", OK, ""),
+    ("linux-only-proc-grep-file-operand-fires", "a.sh",
+     "grep MemTotal /proc/meminfo\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-proc-sed-file-operand-fires", "a.sh",
+     "sed -n 1p /proc/meminfo\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-proc-var-path-fires", "a.sh",
+     "cat /proc/$pid/stat\ncat /proc/${pid}/stat\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    *((f"linux-only-proc-test{f}-ok", "a.sh", f"[ {f} /proc/loadavg ] && cat /proc/loadavg\n", OK, "")
+      for f in ("-e", "-d", "-f")),
+    ("linux-only-guard-names-in-one-segment-ok", "a.sh",
+     "command -v setsid flock timeout >/dev/null || exit 0\nsetsid x\nflock l c\ntimeout 5 y\n", OK, ""),
+    ("linux-only-path-test-guard-ok", "a.sh",
+     "[ -x /usr/bin/timeout ] || exit 0\ntimeout 5 x\n[ -s /proc/loadavg ] && cat /proc/loadavg\n", OK, ""),
+    # One case per wrapper and recipe prefix: each must reach the tool word alone.
+    *((f"linux-only-{w.split()[0]}-wrapper-fires", "a.sh", f"{w} timeout 5 x\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT")
+      for w in ("command", "stdbuf -oL", "ionice -c3", "chrt --idle", "taskset -c0")),
+    ("linux-only-make-dash-recipe-fires", "Makefile",
+     "test:\n\t-timeout 5 x\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-make-at-dash-plus-recipe-fires", "Makefile",
+     "test:\n\t@-+timeout 5 x\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    # A tool run as its own probe is a preflight (file-wide, like `command -v`); a probe of
+    # another tool, a call with more arguments and a mere mention are not.
+    ("linux-only-self-probe-version-ok", "a.sh",
+     "if ! timeout --version >/dev/null 2>&1; then echo \"not run: no timeout\"; exit 0; fi\n", OK, ""),
+    ("linux-only-self-probe-true-ok", "a.sh",
+     "if timeout 1 true 2>/dev/null; then HAVE=1; fi\n", OK, ""),
+    *((f"linux-only-self-probe-{t}-version-clears-call-ok", "a.sh",
+       f"{t} --version >/dev/null 2>&1 || exit 0\n{t} 60 make test\n", OK, "")
+      for t in _LINUX_TOOLS),
+    *((f"linux-only-self-probe-{n}-clears-call-ok", "a.sh", c, OK, "")
+      for n, c in (("help", "timeout --help >/dev/null 2>&1 || exit 0\ntimeout 60 make test\n"),
+                   ("spaced-redirect", "timeout --version > /dev/null 2>&1 || exit 0\ntimeout 60 make test\n"),
+                   ("stdin-redirect", "timeout --version </dev/null || exit 0\ntimeout 60 make test\n"),
+                   ("true", "if timeout 1 true 2>/dev/null; then HAVE=1; fi\ntimeout 60 make test\n"),
+                   ("colon", "timeout 1 : || exit 0\ntimeout 60 make test\n"),
+                   ("setsid-true", "setsid true || exit 0\nsetsid make test\n"),
+                   ("option-then-payload","flock -n l true || exit 0\nflock l make test\n"))),
+    ("linux-only-self-probe-other-tool-fires", "a.sh",
+     "timeout --version >/dev/null 2>&1\nflock l c\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    ("linux-only-self-probe-payload-version-fires", "a.sh",
+     "timeout 60 make --version\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    *((f"linux-only-self-probe-{n}-script-argument-fires", "a.sh", c, FAIL, "LINUX_ONLY_NO_PREFLIGHT")
+      for n, c in (("timeout", "timeout 60 ./deploy.sh true\n"), ("setsid", "setsid ./deploy.sh true\n"))),
+    ("linux-only-self-probe-mention-fires", "a.sh",
+     "echo timeout --version\ntimeout 60 make test\n", FAIL, "LINUX_ONLY_NO_PREFLIGHT"),
+    # `echo` and `printf` print a /proc word; only a redirect target is read.
+    ("linux-only-proc-echo-literal-ok", "a.sh", "echo '/proc/loadavg'\n", OK, ""),
+    ("linux-only-proc-printed-words-ok", "a.sh",
+     "printf '%s\\n' /proc/loadavg\necho -n /proc/loadavg\necho /proc/loadavg > out.txt\n", OK, ""),
+    *((f"linux-only-proc-{n}-redirect-target-fires", "a.sh", c, FAIL, "LINUX_ONLY_NO_PREFLIGHT")
+      for n, c in (("echo-spaced", "echo 1 > /proc/sys/vm/drop_caches\n"),
+                   ("echo-glued", "echo 1 >/proc/sys/vm/drop_caches\n"),
+                   ("printf", "printf 3 > /proc/sys/vm/drop_caches\n"))),
+    ("linux-only-allow-marker-suppresses", "a.sh",
+     "setsid sh -c 'x'  # reaper-lint: allow linux container only\n", OK, ""),
 )
 
 

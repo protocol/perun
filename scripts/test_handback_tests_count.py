@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""handback.py tests-count: a done claim needs Tests: X/X with X>0 (or No-Tests-Reason:). Reuses test_handback.py's fixture."""
+"""handback.py tests-count: a done claim needs Tests: X/X with X>0, Tests: none (<place>) or No-Tests-Reason:. Reuses test_handback.py's fixture."""
 import os
 import sys
 import unittest
@@ -50,6 +50,23 @@ class Count(unittest.TestCase):
 
     def test_failing_line_beats_later_valid_line(self):
         self.bad("work\n\nTests: 5/6\nTests: 9/9")
+
+    def test_stated_no_run_is_green(self):
+        self.assertEqual(self.run_hb("work\n\nTests: none (suites run in the merge train)").returncode, 0)
+
+    def test_stated_no_run_variants_are_green(self):  # prefixes, any case, a colon and digits (no count) inside the place
+        r = self.run_hb("work\n\n> Tests (unit): NONE (CI)\n- tests: None (CI: runs after merge)\nTests: none (see 3/3 in CI)\nTests: none (see 0/0 in CI)")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_bare_or_empty_no_run_is_unverified(self):
+        for t in ("Tests: none", "Tests: none ()", "Tests: none (   )"):
+            with self.subTest(t=t):
+                self.setUp()
+                self.bad("work\n\n" + t)
+                self.tearDown()
+
+    def test_stated_no_run_does_not_hide_a_bad_line(self):
+        self.bad("work\n\nTests: none (train)\nTests: 5/6")
 
     def test_reason_trailer_waives(self):
         self.assertEqual(self.run_hb("work\n\nTests: 0/0\nNo-Tests-Reason: docs only").returncode, 0)

@@ -13,7 +13,7 @@ Runs in order and stops at the first red step, printing `handback RED: <step>` a
   ff        BASE is an ancestor of SHA, so BASE can fast-forward to it; otherwise rebase first.
   diff      `git diff --check BASE...SHA` is clean.
   fragment  the range adds a file under --fragment-dir (default changelog.d; pass '' to skip).
-  tests     the commits' `Tests:` lines (BASE..SHA) must all be X/X with total X>0, or carry a `No-Tests-Reason:` trailer (a BLOCKED/WIP head
+  tests     the commits' `Tests:` lines (BASE..SHA) must all be X/X with total X>0 or `none (<where the suites run>)`, or carry a `No-Tests-Reason:` trailer (a BLOCKED/WIP head
             subject is exempt). Run last, before any merge. HANDBACK_TESTS_COUNT=enforce exits 4 `UNVERIFIED: no passing test count`;
             default shadow only warns; off skips.
   mode      each findings claim in --body-file for a review mode (security, perf, ...) has a `mode: ran (N files)` or `mode: NOT RUN (reason)`
@@ -176,13 +176,16 @@ def required_checks(slug, base, sha, timeout, strict=False):
 def tests_claim(msgs):
     """Why the lane's commit messages (base..sha, newest first) prove no passing test run, or '' when they do.
     Each `Tests: ...` line (leading space, `>`, `*`, `-` allowed) needs every X/Y on it with X==Y and total Y>0; one bad line fails
-    the lot. A non-empty `No-Tests-Reason:` trailer or a BLOCKED/WIP head subject (not a done claim) waives it."""
+    the lot. A non-empty `No-Tests-Reason:` trailer or a BLOCKED/WIP head subject (not a done claim) waives it. A `none (<where the suites run>)`
+    line with a non-empty parenthetical is a stated no-run that counts as a good line (digits inside it are no count; a bare `none` or `none ()` fails)."""
     if re.search(r"^No-Tests-Reason:[ \t]*\S", msgs, re.M) or re.match(r"\s*(blocked|wip)\b", msgs, re.I):
         return ""
     lines = re.findall(r"^[ \t>*-]*Tests?\b[^:\n]*:(.*)$", msgs, re.M | re.I)
     if not lines:
         return "no `Tests: X/X` line"
     for t in lines:
+        if re.fullmatch(r"\s*none\s*\(\s*[^\s)].*\)\s*", t, re.I):
+            continue
         c = re.findall(r"(\d+)/(\d+)", t)
         if not c or any(x != y for x, y in c) or sum(int(y) for _, y in c) == 0:
             return f"`Tests:{t}` is not X/X with X>0"
@@ -309,7 +312,7 @@ def main(argv):
     rc, msgs = (0, "") if mode == "off" else run(["git", "log", "--format=%B", f"{a.base}..{a.sha}"], cwd=a.worktree)
     why = "cannot read commit message" if rc else tests_claim(msgs) if mode != "off" else ""
     if why:
-        print(f"handback tests-count {'UNVERIFIED: no passing test count' if mode == 'enforce' else 'shadow'}: {why}; add a real count or a No-Tests-Reason: trailer")
+        print(f"handback tests-count {'UNVERIFIED: no passing test count' if mode == 'enforce' else 'shadow'}: {why}; add a real count, a Tests: none (<where they run>) line or a No-Tests-Reason: trailer")
         if unverified:
             print(f"handback UNVERIFIED: {unverified} checks could not run")
         if mode == "enforce":
