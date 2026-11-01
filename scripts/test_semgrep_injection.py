@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Tests for the injection rules in the bundled semgrep templates: perun.js.postgrest-filter-injection,
 perun.js.git-argument-injection and perun.py.git-argument-injection, plus the app-router sources and unsafe raw-SQL sinks added
-to perun.js.sqli and the app-router sources added to perun.js.command-injection (js.yml, py.yml).
+to perun.js.sqli, the app-router sources added to perun.js.command-injection, perun.js.ssrf, perun.js.path-traversal and
+perun.js.open-redirect, and the NextResponse.redirect and Response.redirect sinks added to perun.js.open-redirect (js.yml, py.yml).
 
 Fixtures are annotated like semgrep's own tests: a `// ruleid: <id>` (or `# ruleid: <id>`) comment marks the NEXT line as a
 required finding, an `// ok: <id>` comment marks the next line as one that must stay clean, and every unannotated line must stay
@@ -13,8 +14,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RULES = os.environ.get("RULES") or os.path.join(ROOT, ".claude", "skills", "deep-code-review", "templates", "semgrep-taint")
 SQLI, CMD = "perun.js.sqli", "perun.js.command-injection"
 PG, GIT, PYGIT = "perun.js.postgrest-filter-injection", "perun.js.git-argument-injection", "perun.py.git-argument-injection"
+SSRF, TRAV, REDIR = "perun.js.ssrf", "perun.js.path-traversal", "perun.js.open-redirect"
 NEW = (PG, GIT, PYGIT)
-IDS = (SQLI, CMD, *NEW)
+APP3 = (SSRF, TRAV, REDIR)  # older rules that gained the app-router sources
+IDS = (SQLI, CMD, *NEW, *APP3)
 
 # sqli with an Express-style source: unsafe raw-SQL sinks, and tagged templates (they bind their values) that stay clean.
 SQLI_EXPRESS_TS = r'''
@@ -178,9 +181,12 @@ export async function PUT(request: Request, context: { params: { id: string } })
 '''
 
 # Not a route handler: a helper, a function that is not exported, an export under another name, a default export, and a handler
-# name in another case. Their request reads are not sources for sqli, postgrest or git, even though the sinks are the same.
+# name in another case. Their request reads are not sources for sqli, postgrest, git, ssrf, path-traversal or open-redirect, even
+# though the sinks are the same.
 NOT_HANDLER_TS = r'''
+import fs from "node:fs";
 import { exec, execFile } from "node:child_process";
+import { NextResponse } from "next/server";
 
 declare const pool: any;
 declare const db: any;
@@ -209,6 +215,15 @@ export default async function POST(request: Request) {
   const body = await request.json();
   // ok: perun.js.sqli
   return pool.query("select * from acme_items where owner = '" + body.owner + "'");
+}
+export async function loadData(request: Request) {
+  const u = new URL(request.url).searchParams.get("u") as string;
+  // ok: perun.js.ssrf
+  const r = await fetch(u, { signal: AbortSignal.timeout(5000) });
+  // ok: perun.js.path-traversal
+  const f = fs.readFileSync(u);
+  // ok: perun.js.open-redirect
+  return NextResponse.redirect(new URL(u, request.url));
 }
 '''
 
@@ -571,10 +586,213 @@ def safe(url, ref):
     return "ok"
 '''
 
+# ssrf, app-router handlers: a request value as the URL of fetch, axios.get or https.get, from each source and in each handler form
+# (export async function, export function, export const NAME = async (...) =>). Every fetch passes a signal, so fetch-no-timeout
+# stays out. A constant URL, a value from the environment and a value checked against an allowlist first are clean.
+APP_SSRF_TS = r'''
+import { NextRequest, NextResponse } from "next/server";
+import axios from "axios";
+import https from "node:https";
+
+declare const ALLOWED: Set<string>;
+
+export async function GET(request: NextRequest) {
+  const a = request.nextUrl.searchParams.get("a");
+  // ruleid: perun.js.ssrf
+  await fetch(a as string, { signal: AbortSignal.timeout(5000) });
+  // ruleid: perun.js.ssrf
+  await fetch(new URL(request.url).searchParams.get("b") as string, { signal: AbortSignal.timeout(5000) });
+  const url = new URL(request.url);
+  // ruleid: perun.js.ssrf
+  await fetch(`${url.searchParams.get("c")}/v1/items`, { signal: AbortSignal.timeout(5000) });
+  // ok: perun.js.ssrf
+  await fetch("https://api.acme.example/v1/items", { signal: AbortSignal.timeout(5000) });
+  // ok: perun.js.ssrf
+  await fetch(process.env.ACME_UPSTREAM as string, { signal: AbortSignal.timeout(5000) });
+  return NextResponse.json({ ok: true });
+}
+export const HEAD = async (request: NextRequest): Promise<Response> => {
+  const { searchParams } = new URL(request.url);
+  // ruleid: perun.js.ssrf
+  await axios.get(searchParams.get("d") as string, { timeout: 5000 });
+  return new Response(null);
+};
+export function OPTIONS(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+  // ruleid: perun.js.ssrf
+  https.get(searchParams.get("e") as string, () => {});
+  return new Response(null);
+}
+export async function POST(request: Request) {
+  const body = await request.json();
+  // ruleid: perun.js.ssrf
+  await fetch(body.url, { method: "POST", signal: AbortSignal.timeout(5000) });
+  return new Response("ok");
+}
+export const PUT = async (request: Request) => {
+  const { url, mirror } = await request.json();
+  // ruleid: perun.js.ssrf
+  await axios.get(url, { timeout: 5000 });
+  if (!ALLOWED.has(mirror)) return new Response("not found", { status: 404 });
+  // ok: perun.js.ssrf
+  await axios.get(mirror, { timeout: 5000 });
+  return new Response("ok");
+};
+export async function PATCH(request: Request) {
+  const form = await request.formData();
+  // ruleid: perun.js.ssrf
+  await fetch(form.get("url") as string, { method: "PATCH", signal: AbortSignal.timeout(5000) });
+  // ruleid: perun.js.ssrf
+  await fetch((await request.formData()).get("url") as string, { method: "PATCH", signal: AbortSignal.timeout(5000) });
+  return new Response("ok");
+}
+export async function DELETE(request: Request) {
+  const text = await request.text();
+  // ruleid: perun.js.ssrf
+  await fetch(text, { method: "DELETE", signal: AbortSignal.timeout(5000) });
+  return new Response("ok");
+}
+'''
+
+# path-traversal, app-router handlers: a request value as the path of fs.readFile, fs.readFileSync, fs.createReadStream or fsp.readFile,
+# from each source and in each handler form. A constant path, a value from the environment, path.basename and a value checked
+# against an allowlist first are clean.
+APP_TRAV_TS = r'''
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import { NextRequest } from "next/server";
+
+declare const ROOT: string;
+declare const FILES: Set<string>;
+
+export async function GET(request: NextRequest) {
+  const a = request.nextUrl.searchParams.get("a") as string;
+  // ruleid: perun.js.path-traversal
+  fs.readFileSync(path.join(ROOT, a));
+  // ruleid: perun.js.path-traversal
+  fs.readFileSync(`${ROOT}/${new URL(request.url).searchParams.get("b")}`);
+  const url = new URL(request.url);
+  // ruleid: perun.js.path-traversal
+  await fsp.readFile(path.resolve(ROOT, url.searchParams.get("c") as string));
+  // ok: perun.js.path-traversal
+  fs.readFileSync(path.join(ROOT, "acme-notice.txt"));
+  // ok: perun.js.path-traversal
+  fs.readFileSync(process.env.ACME_NOTICE_PATH as string);
+  // ok: perun.js.path-traversal
+  fs.readFileSync(path.join(ROOT, path.basename(a)));
+  return new Response("ok");
+}
+export const HEAD = async (request: NextRequest): Promise<Response> => {
+  const { searchParams } = new URL(request.url);
+  // ruleid: perun.js.path-traversal
+  fs.readFile(searchParams.get("d") as string, () => {});
+  return new Response(null);
+};
+export function OPTIONS(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+  // ruleid: perun.js.path-traversal
+  fs.createReadStream(searchParams.get("e") as string);
+  return new Response(null);
+}
+export async function POST(request: Request) {
+  const body = await request.json();
+  // ruleid: perun.js.path-traversal
+  await fsp.readFile(body.path);
+  return new Response("ok");
+}
+export const PUT = async (request: Request) => {
+  const { file, other } = await request.json();
+  // ruleid: perun.js.path-traversal
+  fs.readFileSync(path.join(ROOT, file));
+  if (!FILES.has(other)) return new Response("not found", { status: 404 });
+  // ok: perun.js.path-traversal
+  fs.readFileSync(path.join(ROOT, other));
+  return new Response("ok");
+};
+export async function PATCH(request: Request) {
+  const form = await request.formData();
+  // ruleid: perun.js.path-traversal
+  fs.readFileSync(path.join(ROOT, form.get("file") as string));
+  // ruleid: perun.js.path-traversal
+  fs.readFileSync(path.join(ROOT, (await request.formData()).get("file") as string));
+  return new Response("ok");
+}
+export async function DELETE(request: Request) {
+  const text = await request.text();
+  // ruleid: perun.js.path-traversal
+  fs.readFileSync(text);
+  return new Response("ok");
+}
+'''
+
+# open-redirect, app-router handlers: a request value as the target of NextResponse.redirect or Response.redirect, from each source and
+# in each handler form. A constant target, NextResponse.redirect(new URL("/login", request.url)) and a value from the environment are
+# clean. The rule has no guard: a startsWith("/") test that also rejects "//" does not make a target safe, because the URL parser reads
+# /\evil.example and /<tab>/evil.example as another host, so a target checked that way is still reported.
+APP_REDIR_TS = r'''
+import { NextRequest, NextResponse } from "next/server";
+
+export async function GET(request: NextRequest) {
+  const next = request.nextUrl.searchParams.get("next") ?? "/";
+  // ruleid: perun.js.open-redirect
+  const a = NextResponse.redirect(new URL(next, request.url));
+  // ruleid: perun.js.open-redirect
+  const b = NextResponse.redirect(new URL(request.url).searchParams.get("b") as string);
+  const url = new URL(request.url);
+  // ruleid: perun.js.open-redirect
+  const c = Response.redirect(url.searchParams.get("c") as string, 302);
+  // ok: perun.js.open-redirect
+  const d = NextResponse.redirect(new URL("/login", request.url));
+  // ok: perun.js.open-redirect
+  const e = NextResponse.redirect("https://acme.example/welcome");
+  // ok: perun.js.open-redirect
+  const f = Response.redirect(process.env.ACME_LOGIN_URL as string, 302);
+  return a;
+}
+export const HEAD = async (request: NextRequest): Promise<Response> => {
+  const { searchParams } = new URL(request.url);
+  // ruleid: perun.js.open-redirect
+  return NextResponse.redirect(searchParams.get("next") as string);
+};
+export function OPTIONS(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+  // ruleid: perun.js.open-redirect
+  return Response.redirect(searchParams.get("next") as string, 303);
+}
+export async function POST(request: Request) {
+  const body = await request.json();
+  // ruleid: perun.js.open-redirect
+  return NextResponse.redirect(new URL(body.next, request.url), 303);
+}
+export const PUT = async (request: Request) => {
+  const { next } = await request.json();
+  if (next.startsWith("/") && !next.startsWith("//")) {
+    // ruleid: perun.js.open-redirect
+    return NextResponse.redirect(new URL(next, request.url));
+  }
+  // ok: perun.js.open-redirect
+  return NextResponse.redirect(new URL("/", request.url));
+};
+export async function PATCH(request: Request) {
+  const form = await request.formData();
+  const next = form.get("next") as string;
+  if (!next.startsWith("/") || next.startsWith("//")) return new Response("bad target", { status: 400 });
+  // ruleid: perun.js.open-redirect
+  return NextResponse.redirect(new URL(next, request.url));
+}
+export async function DELETE(request: Request) {
+  const text = await request.text();
+  // ruleid: perun.js.open-redirect
+  return Response.redirect(text, 302);
+}
+'''
+
 FILES = {
     "server/acme-sql.ts": SQLI_EXPRESS_TS, "app/api/acme/report/route.ts": APP_URL_TS, "app/api/acme/forms/route.ts": APP_FORMS_TS,
     "lib/acme-helpers.ts": NOT_HANDLER_TS, "app/api/acme/items/route.ts": PG_APP_TS, "server/acme-items.js": PG_EXPRESS_JS,
     "app/api/acme/repo/route.ts": GIT_APP_TS, "server/acme-repo.js": GIT_EXPRESS_JS, "svc/acme_repo.py": GIT_PY,
+    "app/api/acme/proxy/route.ts": APP_SSRF_TS, "app/api/acme/files/route.ts": APP_TRAV_TS, "app/api/acme/go/route.ts": APP_REDIR_TS,
 }
 ANN = re.compile(r"^\s*(?://|#)\s*(ruleid|ok):\s*(\S+)\s*$")
 
@@ -586,8 +804,9 @@ def annotated(body, kind):
     return out
 
 
-# Offline: the floor of 3 findings and 3 near misses per new rule, counted over distinct fixtures; every fixture has both kinds.
-for rid in NEW:
+# Offline: the floor of 3 findings and 3 near misses per new rule and per rule that gained app-router sources, counted over distinct
+# fixtures; every fixture has both kinds.
+for rid in (*NEW, *APP3):
     for kind in ("ruleid", "ok"):
         n = sum(1 for body in {*FILES.values()} for _, r in annotated(body, kind) if r == rid)
         assert n >= 3, (rid, kind, n)
@@ -631,9 +850,9 @@ for src, rid, lang in ((JS, PG, "[javascript, typescript]"), (JS, GIT, "[javascr
     assert msg.endswith(".") and len(msg.split()) >= 12 and "`" not in msg and not msg.startswith(("'", '"')), f"{rid} has a plain message: risk, then fix"
     assert "focus-metavariable: $" in b and re.search(r"^\s+# ponytail: ", b, re.M), f"{rid} states its limit in a rule comment"
 
-# App-router sources: the same block, word for word, in the four JS rules that read it; perun.js.xss-response is left as it was.
+# App-router sources: the same block, word for word, in the seven JS rules that read it; perun.js.xss-response is left as it was.
 APP = re.compile(r"^    # App-router input.*?\n(?=  (?:#|pattern-sinks:))", re.M | re.S)
-apps = [APP.search(block(JS, rid)) for rid in (SQLI, CMD, PG, GIT)]
+apps = [APP.search(block(JS, rid)) for rid in (SQLI, CMD, PG, GIT, *APP3)]
 assert all(apps) and len({a[0] for a in apps}) == 1, "one app-router block, no drift between rules"
 ab = apps[0][0]
 for s in ("export async function $H($R, ...) { ... }", "export function $H($R, ...) { ... }", "export const $H = async ($R, ...) => { ... }",
@@ -646,10 +865,23 @@ assert all(re.match(hn, s) for s in ("GET", "HEAD", "POST", "PUT", "PATCH", "DEL
 assert not any(re.match(hn, s) for s in ("Get", "GET2", "handler", "getAll", "POSTS", "ALL", "")), hn
 xb = block(JS, "perun.js.xss-response")
 assert "export" not in xb and not re.search(r"\$H\b", xb) and "await" not in xb, "xss-response keeps its own sources"
-for rid in (SQLI, CMD, PG, GIT):
+for rid in (SQLI, CMD, PG, GIT, *APP3):
     b = block(JS, rid)
     for f in ("req.query.$P", "req.body", "req.params.$P", "req.cookies", "request.headers.$P", "request.query"):
         assert f"- pattern: {f}\n" in b, (rid, f)  # the Express-style sources stay
+
+# ssrf, path-traversal and open-redirect: the old sinks, guards and sanitizers stay (48 and 28 guard exclusions, one path.basename
+# sanitizer); open-redirect gains NextResponse.redirect and Response.redirect as sinks and no guard or sanitizer, since a prefix
+# check does not make a redirect target safe, and next/navigation redirect() is not a sink.
+srb, trb, orb = (block(JS, rid) for rid in APP3)
+for b, n, old in ((srb, 48, ("fetch", "axios", "axios.$M", "got", "http.get", "https.get")),
+                  (trb, 28, ("fs.readFile", "fs.readFileSync", "fs.createReadStream", "fsp.readFile", "res.sendFile", "res.download", "response.sendFile"))):
+    assert all(f"- pattern: {s}($S, ...)\n" in b for s in old) and b.count("pattern-not-inside: |\n") == n, "old sinks and guards stay"
+assert "pattern-sanitizers" not in srb and re.findall(r"- pattern: (.*)", trb.split("  pattern-sanitizers:\n")[1]) == ["path.basename(...)"]
+assert all(f"- pattern: {s}\n" in orb for s in ("res.redirect($S)", "res.redirect($ST, $S)", "response.redirect($S)", "NextResponse.redirect($S, ...)", "Response.redirect($S, ...)"))
+code = "\n".join(l for l in orb.split("\n") if not l.lstrip().startswith("#"))
+assert orb.endswith("\n    - focus-metavariable: $S") and not re.search(r"- pattern: (?:permanentRedirect|redirect)\(", orb), "the two Next sinks, not next/navigation redirect()"
+assert not re.search(r"pattern-not|pattern-sanitizers|startsWith", code) and "ponytail: no guard or sanitizer" in orb, "open-redirect has no guard"
 
 # sqli: the old sources, sinks and sanitizers stay; the unsafe sinks and the tagged-template sanitizers are added.
 sb = block(JS, SQLI)
