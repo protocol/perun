@@ -121,12 +121,90 @@ export default async function handler(req, res) {
 }
 '''
 
+# Next route handlers declared as a const arrow (no parameters, one or two), with the methods HEAD and OPTIONS. A signal, a spread
+# options object and an export that is not a method name stay clean.
+FETCH_ARROWS = r'''
+export const GET = async () => {
+  // ruleid: perun.js.fetch-no-timeout
+  const r = await fetch("https://api.acme.example/v1/items");
+  return Response.json(await r.json());
+};
+export const POST = async (request) => {
+  const body = await request.json();
+  // ruleid: perun.js.fetch-no-timeout
+  const r = await fetch("https://api.acme.example/v1/items", { method: "POST", body: JSON.stringify(body) });
+  return Response.json(await r.json());
+};
+export const HEAD = async (request, context) => {
+  // ruleid: perun.js.fetch-no-timeout
+  const r = await fetch(`${UPSTREAM}/v1/items`, { method: "HEAD" });
+  return new Response(null, { status: r.status });
+};
+export const OPTIONS = async (request) => {
+  // ruleid: perun.js.fetch-no-timeout
+  const r = await fetch(`${UPSTREAM}/v1/items`, { method: "OPTIONS" });
+  return new Response(null, { status: r.status });
+};
+export const DELETE = async () => {
+  // ok: perun.js.fetch-no-timeout
+  const r = await fetch(`${UPSTREAM}/v1/items`, { method: "DELETE", signal: AbortSignal.timeout(5000) });
+  return new Response(null, { status: r.status });
+};
+export const PATCH = async (request) => {
+  // ok: perun.js.fetch-no-timeout
+  const r = await fetch(`${UPSTREAM}/v1/items`, { ...baseInit, method: "PATCH" });
+  return Response.json(await r.json());
+};
+export const getStats = async () => {
+  // ok: perun.js.fetch-no-timeout
+  const r = await fetch("https://api.acme.example/v1/stats");
+  return Response.json(await r.json());
+};
+'''
+
+# Next route handlers declared as a plain export function (not async): GET, HEAD and OPTIONS, with and without parameters.
+FETCH_FUNCS = r'''
+export function GET(request) {
+  // ruleid: perun.js.fetch-no-timeout
+  return fetch("https://api.acme.example/v1/items");
+}
+export function HEAD() {
+  // ruleid: perun.js.fetch-no-timeout
+  return fetch(`${UPSTREAM}/v1/items`, { method: "HEAD" });
+}
+export function OPTIONS(request, context) {
+  // ruleid: perun.js.fetch-no-timeout
+  return fetch(`${UPSTREAM}/v1/items`, { method: "OPTIONS" });
+}
+export function POST(request) {
+  // ok: perun.js.fetch-no-timeout
+  return fetch(UPSTREAM, { method: "POST", signal: AbortSignal.timeout(5000) });
+}
+export function PUT(request) {
+  // ok: perun.js.fetch-no-timeout
+  return fetch(UPSTREAM, { ...baseInit, method: "PUT" });
+}
+export function loadItems() {
+  // ok: perun.js.fetch-no-timeout
+  return fetch("https://api.acme.example/v1/items");
+}
+'''
+
 # A typed Next.js handler and typed pages API handler: the TypeScript parser must reach them too.
 FETCH_TS = r'''
 export async function GET(request: NextRequest): Promise<Response> {
   // ruleid: perun.js.fetch-no-timeout
   const r = await fetch(`https://api.acme.example/v1/items?q=${request.nextUrl.searchParams.get("q")}`);
   return Response.json(await r.json());
+}
+export const PUT = async (request: NextRequest): Promise<Response> => {
+  // ruleid: perun.js.fetch-no-timeout
+  const r = await fetch("https://api.acme.example/v1/items", { method: "PUT", body: await request.text() });
+  return Response.json(await r.json());
+};
+export function POST(request: NextRequest): Promise<Response> {
+  // ruleid: perun.js.fetch-no-timeout
+  return fetch("https://api.acme.example/v1/items", { method: "POST", body: request.body });
 }
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // ruleid: perun.js.fetch-no-timeout
@@ -509,9 +587,12 @@ FILES = {
     "app/api/acme-api/route.js": FETCH_APP, "app/api/acme-api/route.ts": FETCH_APP, "pages/api/acme-api/items.js": FETCH_PAGES,
     "pages/api/acme-api/typed.ts": FETCH_TS, "app/auth/login.js": COOKIE_JS, "app/auth/login.ts": COOKIE_JS,
     "app/web/cors.js": CORS_JS, "app/web/cors.ts": CORS_JS,
+    "app/api/acme-arrows/route.js": FETCH_ARROWS, "app/api/acme-arrows/route.ts": FETCH_ARROWS,
+    "app/api/acme-funcs/route.js": FETCH_FUNCS, "app/api/acme-funcs/route.ts": FETCH_FUNCS,
 }
 # Test, fixture and mock paths are excluded from every one of these rules: nothing in these copies may be reported.
-SKIPPED = {"tests/route.test.js": FETCH_APP, "app/login.spec.ts": COOKIE_JS, "app/fixtures/cors.js": CORS_JS}
+SKIPPED = {"tests/route.test.js": FETCH_APP, "app/login.spec.ts": COOKIE_JS, "app/fixtures/cors.js": CORS_JS,
+           "tests/arrows.test.js": FETCH_ARROWS, "app/funcs.spec.ts": FETCH_FUNCS}
 ANN = re.compile(r"^\s*(?://|#)\s*(ruleid|ok):\s*(\S+)\s*$")
 
 
@@ -562,7 +643,12 @@ for rid, sev in ((FETCH, "INFO"), (COOKIE, "WARNING"), (CORS, "WARNING")):
 rx = lambda b, mv: re.findall(rf"metavariable: \${mv}\n\s+regex: (.*)", b)
 fb, kb, cb = block(FETCH), block(COOKIE), block(CORS)
 assert fb.count("pattern-not: ") == 2 and fb.count("signal: $S") == 1 and "...$X" in fb, "a signal option or a spread exempts the call"
-assert "regex: ^[/*]" in fb and "GET|POST|PUT|PATCH|DELETE" in fb and "get|post|put|patch|delete|all" in fb, "route path and verb guards"
+assert "regex: ^[/*]" in fb and "get|post|put|patch|delete|all" in fb, "route path and verb guards"
+mh = rx(fb, "M")
+assert len(mh) == 1 and all(re.match(mh[0], s) for s in ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")), mh
+assert not any(re.match(mh[0], s) for s in ("Get", "GET2", "getStats", "handler", "ALL", "TRACE", "")), mh
+assert all(s in fb for s in ("export async function $M(...) {...}", "export function $M(...) {...}", "export const $M = async (...) => {...}")), "Next handler forms"
+assert "export default async function handler(...) {...}" in fb and fb.count("pattern-inside: $A.$H(") == 4, "pages and Express-callback branches stay"
 cn, cs = rx(kb, "N")
 cc, cx = rx(kb, "C")
 assert all(re.match(cn, s) for s in ("session", "connect.sid", "authToken", "auth_token", "access-token", "next-auth.session-token", "jwt",
