@@ -2,6 +2,8 @@
 # run-ci-tests.sh — local full ci-tests suite (every scripts/ci-tests.d/*.sh, as the CI "Per-PR tests" step runs them).
 # Also runs the privacy gate and the trigger lint (CI's "Prose lessons carry a mechanism") before the tests.
 # Exit 0 only when all pass; then records the last-known-good pointer (lkg.py record, HEAD). A failure records nothing.
+# PERUN_TEST_TIMEOUT_S: wall-clock seconds each test may run (default 900; a missing, non-numeric or non-positive value means 900). A test past it
+#   is killed and fails with "run-ci-tests: FAIL <test> (timed out after <secs>s)", like any other failure (a receipt records its rc, 142).
 # --affected [BASE]: run only the tests a changed file can reach. BASE = the argument, else RUN_CI_BASE, else BASE_SHA (the pre-push
 #   hook's resolved base), else merge-base with origin/main; none resolves: prints "affected: NOT RUN (no base)", exit 0 (never blocks a push).
 #   changed = BASE vs the working tree plus untracked files (NUL-delimited, unquoted names; a path that is not a file, symlink or deleted
@@ -130,18 +132,26 @@ if [ "$affected" -eq 1 ]; then
   tree="$(python3 .claude/skills/agentic-delivery/scripts/lkg.py tree 2>/dev/null)" || tree=  # the scanned state, before any suite can touch the tree
   res=(); for t in $sel; do res+=("$t=-"); done  # "-" = selected, not run (the loop below is fail-fast)
 fi
+# Wall-clock bound per test: PERUN_TEST_TIMEOUT_S seconds, 1 to 9 digits and positive, else 900 (`alarm 0` would mean no bound). Exit 142 = 128 + SIGALRM.
+# perl is on stock macOS and the CI image; `or exit 127` keeps a failed exec a failure (as tbox in review_checks.sh), never a silent 0.
+# The alarm sits inside the env scrubber so it lands on the test itself: perl wrapped around scrub_env.sh kills only the scrubber's shell and leaves the test running.
+# ponytail: the alarm kills the test's own process, not grandchildren it spawned (a ci-tests.d registration's commands are its children, and a hung one
+# can outlive it); a test that arms its own alarm replaces this one. Upgrade path: run each test in its own process group and kill the group.
+secs="${PERUN_TEST_TIMEOUT_S:-}"
+case "$secs" in ''|*[!0-9]*|??????????*) secs=900 ;; *) secs=$((10#$secs)); [ "$secs" -gt 0 ] || secs=900 ;; esac
+bound=(perl -e 'alarm shift; exec @ARGV or exit 127' "$secs")
 i=0 fail=
 for t in $sel; do
   echo "== $t"
   # (a ci-test that truly needs the network exports PERUN_ALLOW_NET=1 itself; see scrub_env.sh)
   # scrubbed child env: no real gh login/token/network, no git hook vars, no CLAUDE* session vars (scrub_env.sh)
   case "$t" in
-    *.py) SCRUB_PREFIXES="${SCRUB_PREFIXES:-CLAUDE}" bash .claude/skills/agentic-delivery/scripts/scrub_env.sh python3 "$t"; r=$? ;;
-    *) SCRUB_PREFIXES="${SCRUB_PREFIXES:-CLAUDE}" bash .claude/skills/agentic-delivery/scripts/scrub_env.sh bash -e "$t"; r=$? ;;
+    *.py) SCRUB_PREFIXES="${SCRUB_PREFIXES:-CLAUDE}" bash .claude/skills/agentic-delivery/scripts/scrub_env.sh "${bound[@]}" python3 "$t"; r=$? ;;
+    *) SCRUB_PREFIXES="${SCRUB_PREFIXES:-CLAUDE}" bash .claude/skills/agentic-delivery/scripts/scrub_env.sh "${bound[@]}" bash -e "$t"; r=$? ;;
   esac
   [ "$affected" -eq 0 ] || res[$i]="$t=$r"
   i=$((i + 1))
-  [ "$r" -eq 0 ] || { echo "run-ci-tests: FAIL $t" >&2; fail=1; break; }
+  [ "$r" -eq 0 ] || { echo "run-ci-tests: FAIL $t$([ "$r" -ne 142 ] || echo " (timed out after ${secs}s)")" >&2; fail=1; break; }
 done
 if [ "$affected" -eq 1 ]; then  # a partial run proves nothing about HEAD: a receipt for the tree, never the last-known-good pointer
   after="$(python3 .claude/skills/agentic-delivery/scripts/lkg.py tree 2>/dev/null)"  # a suite that edits the tree makes the scanned state unknowable: no receipt

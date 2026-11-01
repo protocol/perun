@@ -7,10 +7,50 @@ W="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-dg.XXXXXX")"   # left for the OS temp r
 fail=0; n=0; p=0
 ok() { n=$((n+1)); if [ "$1" -eq 0 ]; then p=$((p+1)); echo "PASS  $2"; else echo "FAIL  $2"; fail=1; fi; }
 
-python3 "$G" --selftest >/dev/null; ok $? "destructive_guard --selftest"
-python3 -I - "$G" <<'PY'; ok $? "bench corpus: recall >= 28/32, FP <= 1/30"
-import importlib.util, sys
+# Every guard call in the Python blocks below runs under a 5 s wall-clock bound: a case that outlives it prints a FAIL line naming it (first 80
+# chars) and fails its block, instead of spinning. py() runs a block (its stdin) after this prelude, which loads the guard as m.
+# ponytail: SIGALRM is handled between bytecodes and at the regex engine's periodic signal check, so a C call that never checks for signals is
+# not interrupted, and a process has one alarm timer, so arming it per case replaces the runner's per-test alarm. Upgrade path: a forked
+# watchdog, as destructive_guard.py main() does.
+cat >"$W/pre.py" <<'PY'
+import importlib.util, signal, sys
 s = importlib.util.spec_from_file_location("dg", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+CASE_S = 5
+hung = []
+
+
+class Hung(BaseException):  # not an Exception, so nothing a guard rule does with `except Exception` can swallow the bound
+    pass
+
+
+def _hung(*_):
+    raise Hung
+
+
+signal.signal(signal.SIGALRM, _hung)
+
+
+def chk(c):
+    """m.check(c) under the bound; None (not blocked), after one FAIL line naming c, when it outlives CASE_S seconds."""
+    signal.alarm(CASE_S)
+    try:
+        return m.check(c)
+    except Hung:
+        hung.append(c)
+        print(f"FAIL  guard timed out after {CASE_S}s: {c[:80]}")
+    finally:
+        signal.alarm(0)
+
+
+def verdict(BAD, GOOD):
+    bad = [c for c in BAD if not chk(c)]; fp = [c for c in GOOD if chk(c)]
+    print("missed", bad, "FP", fp)
+    sys.exit(1 if bad or fp or hung else 0)
+PY
+py() { python3 -I -c "$(cat "$W/pre.py"; cat)" "$G"; }
+
+python3 "$G" --selftest >/dev/null; ok $? "destructive_guard --selftest"
+py <<'PY'; ok $? "bench corpus: recall >= 28/32, FP <= 1/30"
 D = [
 "rm -rf $TARGET", 'rm -rf "$HOME/$DIR"', "rm -rf ${BUILD_DIR}/*", "rm -rf $(pwd)/..",
 "rm -rf `echo /`", "rm -rf ~/", "bash -c 'rm -rf $DIR'", 'sh -c "rm -rf /var/$X"',
@@ -33,9 +73,9 @@ B = [
 'echo "rm -rf /" > notes.txt', 'git commit -m "docs: explain git reset --hard"',
 ]
 assert len(D) == 32 and len(B) == 30
-hit = sum(bool(m.check(c)) for c in D); fp = [c for c in B if m.check(c)]
-print(f"recall {hit}/32  FP {len(fp)}/30 {fp}  missed {[c for c in D if not m.check(c)]}")
-sys.exit(0 if hit >= 28 and len(fp) <= 1 else 1)
+got = [chk(c) for c in D]; hit = sum(map(bool, got)); fp = [c for c in B if chk(c)]
+print(f"recall {hit}/32  FP {len(fp)}/30 {fp}  missed {[c for c, g in zip(D, got) if not g]}")
+sys.exit(0 if hit >= 28 and len(fp) <= 1 and not hung else 1)
 PY
 hook() { printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$1" | CLAUDE_PROJECT_DIR="$W" python3 "$G" 2>"$W/err"; }
 hook 'git reset --hard'; [ $? -eq 2 ] && grep -q 'git stash' "$W/err"; ok $? "hook: exit 2 with the safe alternative on stderr"
@@ -46,9 +86,7 @@ echo '{"tool_name":"Bash","tool_input":{"command":["git","reset","--hard"]}}' | 
 echo '{"tool_name":"Bash","tool_input":{"command":7}}' | python3 "$G"; ok $? "hook: non-string command without a hit allows, no crash"
 echo '[1]' | python3 "$G"; ok $? "hook: wrong-shaped JSON does not crash"
 hook "echo \\\"rm -rf \$X"; [ $? -eq 2 ]; ok $? "hook: shlex failure (unbalanced quote) with a hit blocks"
-python3 -I - "$G" <<'PY'; ok $? "bypass regressions denied, daily commands allowed"
-import importlib.util, sys
-s = importlib.util.spec_from_file_location("dg", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+py <<'PY'; ok $? "bypass regressions denied, daily commands allowed"
 BAD = [
 "{ rm -rf $X; }", "if true; then rm -rf $X; fi", "while true; do rm -rf $X; done", "! rm -rf $X",
 "bash -lc 'rm -rf $X'", "sh -ec 'rm -rf $X'", "zsh -c 'git reset --hard'",
@@ -73,13 +111,9 @@ GOOD = [
 "python3 -c 'import os; os.remove(\"out.txt\")'", "curl -s https://example.com/x | jq .", "echo $(date)",
 "git --git-dir /x/.git status", "git -C /x log",
 ]
-bad = [c for c in BAD if not m.check(c)]; fp = [c for c in GOOD if m.check(c)]
-print("missed", bad, "FP", fp)
-sys.exit(1 if bad or fp else 0)
+verdict(BAD, GOOD)
 PY
-python3 -I - "$G" <<'PY'; ok $? "round-2 bypass regressions denied, daily commands allowed"
-import importlib.util, sys
-s = importlib.util.spec_from_file_location("dg", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+py <<'PY'; ok $? "round-2 bypass regressions denied, daily commands allowed"
 BAD = [
 # 1 option tables, env -S
 "sudo -n rm -rf $X", "sudo -u root rm -rf $X", "sudo -E rm -rf $X", "env -i rm -rf $X", "env -u A rm -rf $X",
@@ -123,13 +157,9 @@ GOOD = [
 "git switch main", "git switch -c feat/y", "git clean --dry-run -d", "git clean -nd", "git reset --soft HEAD~1", "git branch --list",
 "rm -rf build/out", "rm -rf node_modules", "rm -rf ./build", "rm -rf /tmp/claude/a/b", "rm -f a b", "rm a/../b",
 ]
-bad = [c for c in BAD if not m.check(c)]; fp = [c for c in GOOD if m.check(c)]
-print("missed", bad, "FP", fp)
-sys.exit(1 if bad or fp else 0)
+verdict(BAD, GOOD)
 PY
-python3 -I - "$G" <<'PY'; ok $? "round-3 bypass regressions denied, daily commands allowed"
-import importlib.util, sys
-s = importlib.util.spec_from_file_location("dg", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+py <<'PY'; ok $? "round-3 bypass regressions denied, daily commands allowed"
 BAD = [
 "find . -exec sudo rm {} \\;", "find . -exec env rm {} \\;", "find . -execdir nice rm {} +",
 "ls | xargs -J % rm -rf %", "ls | xargs -J X rm -rf X", "ls | xargs -S 255 rm -rf",
@@ -157,22 +187,20 @@ GOOD = [
 "dd if=/dev/zero of=./i bs=1", "dd if=x of=/dev/null", "dd if=x of=/dev/../dev/null",
 'grep "rm -rf" docs/', "git status", "find . -name x",
 ]
-bad = [c for c in BAD if not m.check(c)]; fp = [c for c in GOOD if m.check(c)]
-print("missed", bad, "FP", fp)
-sys.exit(1 if bad or fp else 0)
+verdict(BAD, GOOD)
 PY
 echo '{"tool_name":"Bash","tool_input":{"command":"git reset --hard"}}' | python3 "$G" 2>"$W/err"; [ $? -eq 2 ] && grep -q '`!` prefix' "$W/err"; ok $? "block message tells the owner to run it with the ! prefix"
 printf 'destructive-guard-allow: git reset --hard\n' >"$W/CLAUDE.md"
 echo '{"tool_name":"Bash","tool_input":{"command":"git reset --hard"}}' | CLAUDE_PROJECT_DIR="$W" DCR_OWNER_EMAIL=owner@example.com python3 "$G" 2>/dev/null; [ $? -eq 2 ]; ok $? "no grant mechanism: a CLAUDE.md allow line does not unblock"
-python3 -I - "$G" <<'PY'; ok $? "B64EXEC is not a ReDoS; kubectl delete skips option values"
-import importlib.util, sys, time
-s = importlib.util.spec_from_file_location("dg", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+py <<'PY'; ok $? "B64EXEC is not a ReDoS; kubectl delete skips option values"
+import time
 B64 = "Zm9vYmFyYmF6cXV4cXV1eHF1dXV4"
 for c in ("sh " * 5000 + "$(" * 5000, "$(" * 2000 + "echo " + B64 + " | base64 -d" + ")" * 2000, "sh " * 5000 + "eval $(echo " + B64 + " | base64 -d)"):
-    t = time.time(); r = m.check(c); assert time.time() - t < 0.5, time.time() - t
-assert m.check("eval $(echo " + B64 + " | base64 -d)") and m.check("$(" * 2000 + "eval $(echo " + B64 + " | base64 -d)"), "B64EXEC must still block"
-assert m.check("kubectl delete -n foo ns bar") and m.check("kubectl delete --namespace=foo namespace bar")
-assert m.check("kubectl delete -l a=b -n x ns bar")
-assert not m.check("kubectl delete -n foo pod bar")
+    t = time.time(); r = chk(c); assert time.time() - t < 0.5, time.time() - t
+assert chk("eval $(echo " + B64 + " | base64 -d)") and chk("$(" * 2000 + "eval $(echo " + B64 + " | base64 -d)"), "B64EXEC must still block"
+assert chk("kubectl delete -n foo ns bar") and chk("kubectl delete --namespace=foo namespace bar")
+assert chk("kubectl delete -l a=b -n x ns bar")
+assert not chk("kubectl delete -n foo pod bar")
+assert not hung  # a hung case reads as "not blocked" above, which the last assert would accept
 PY
 echo "Tests: $p/$n passed"; exit "$fail"
