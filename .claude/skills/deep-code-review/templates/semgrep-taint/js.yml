@@ -8,6 +8,7 @@
 # Also auth-cookie-flags (WARNING: a cookie whose literal name has session, sess, sessid, sessionid, phpsessid, sid, token, auth, authtoken or jwt as a whole word (the name is split at punctuation and at lower-to-upper camelCase boundaries, and a name holding csrf or xsrf is skipped because double-submit cookies must stay readable by scripts), set positionally or as one options object by <x>.cookie, <x>.setCookie, cookies().set, (await cookies()).set, a variable bound by X = await cookies() or X = cookies() in an enclosing block (const jar = await cookies(); jar.set(...)) or <x>.cookies.set on any receiver not named below, with httpOnly missing or the literal false, or with secure missing or the literal false; any other httpOnly or secure value passes; ctx.cookies.set, context.cookies.set, event.cookies.set, this.cookies.set and a bare cookies.set are reported only for a literal httpOnly false or secure false, because the cookies library behind Koa's ctx.cookies documents httpOnly as true by default and secure as true by default over HTTPS, and SvelteKit documents both as true by default (secure false in development); a receiver ending in req or request is a request-side cookie and is skipped, and a cookie cleared with an empty value, maxAge: 0 or expires: new Date(0) is skipped; test paths are skipped). ponytail: options must be an object literal (options held in a variable are not read and a spread is skipped), the browser cookieStore (a global, not bound from cookies()) is not seen, a bare cookies.set also covers other frameworks whose defaults were not checked, so their missing flags are not reported, and sameSite is not checked.
 # Also cors-credentials-any-origin (WARNING: a cors(...) or register(cors, ...) call with credentials true and an origin of true, the regex /.*/ or a callback that always allows ((o, cb) => cb(null, true), cb(null, o) or cb(null, !!o), written as an arrow expression, an arrow block or a function); or a function that copies req.get|header("origin") or headers.get("origin"), directly or through a variable, into Access-Control-Allow-Origin while it also sets Access-Control-Allow-Credentials to "true" or true, unless an if on a .has, .includes or .test call encloses or precedes the set call in the same block (an allowlist check); origin "*" is not reported because the cors packages send a literal * and browsers refuse it on credentialed requests; req.headers.origin is left to the registry cors-misconfiguration rule; test paths are skipped). ponytail: options held in a variable and a credentials header given as an object are not seen, any such if counts as an allowlist check whatever it tests and a lookup written another way (indexOf, some) is not read, and a callback with other statements or a conditional is not matched.
 # Also secret-env-fallback (WARNING: process.env.X, process.env["X"] or import.meta.env.X followed by || or ?? and a non-empty string literal, process.env.X or process.env["X"] assigned with ||= or ??= and a string literal, or a const, let or var destructuring default from process.env (const { X = "..." } = process.env, matched also with other keys around it), where X ends in a secret stem (pass, passwd, password, passcode, passphrase, secret, token, credential, credentials, api_key, apikey, a secret, private, signing, encryption, session, jwt, hmac, master, access, auth, client, app, service, service_role or webhook key compound, or _pwd) after an optional prefix that ends in _ or . or sits at a camelCase boundary; a name behind a public bundler prefix is left to public-env-secret, the literal rule is the one hardcoded-credential-compare uses plus a second check that skips a literal that looks like a file path (it starts with /, ./, ../ or ~/, or ends in .json, .pem, .key, .crt, .cer, .der, .p12, .pfx, .jks, .keystore, .yaml or .yml), and test, fixture and mock paths and playwright.config.*, vitest.config.*, jest.config.* and cypress.config.* files are skipped) and public-env-secret (WARNING: any use, a write included, of process.env.X, process.env["X"] or import.meta.env.X, with or without a fallback, where X starts with NEXT_PUBLIC_, VITE_, REACT_APP_, EXPO_PUBLIC_, NUXT_PUBLIC_, GATSBY_, PUBLIC_, STORYBOOK_ or VUE_APP_ and ends in secret, password, passwd, passcode, passphrase, _pwd, service_role, or a secret, private, signing, encryption or service_role key compound with or without the underscore (secret_key, secretkey), because a bundler inlines such variables into any client code that reads them, so the value can reach every visitor's browser; token, api_key, anon_key, publishable_key and site_key names are not reported because many browser keys are public by design; test, fixture and mock paths are skipped). ponytail: a chained fallback (a || b || "x"), a ternary, a non-null ! read, an alias of process.env, a renamed destructuring ({ K: alias = "x" }) and Deno.env.get are not seen, a template literal with a ${} substitution is not matched, and public-env-secret does not see a destructured read. Not followed: optional chaining (process?.env?.X || "x"), a value first copied to a variable (const s = process.env.X; s || "x") and a value-based fallback (a connection string holding a password under a non-secret name).
+# Also xss-url, xss-response and xss-markdown (WARNING each; DOMPurify.sanitize, sanitizeHtml, escapeHtml, encodeURIComponent, Number, parseInt and parseFloat clear the value in all three, and no test path is skipped, as in xss). xss-url follows location.search and location.hash (also under window. and document., or destructured from location or window.location as search or hash), through new URLSearchParams(...).get or .getAll, decodeURIComponent, string methods, a ?? default, template literals and concatenation, into .innerHTML = and +=, .outerHTML =, the second argument of .insertAdjacentHTML, document.write and document.writeln, and into the __html value of an object literal or an assigned .__html property; textContent, innerText, a redirect through location.href or location.assign, pathname and href reads and constant strings stay clean. xss-response follows request.nextUrl.searchParams and new URL(request.url).searchParams, with or without a base argument (any handler parameter name; read directly, through a variable that holds the URL or its searchParams, or destructured as searchParams) into the first argument of new Response or new NextResponse whose same call has an inline init object with a headers object literal setting a content-type key (any case) to a string literal that starts, after optional spaces, with text/html in any case; Response.json, NextResponse.json, no init and a text/plain or application/json type stay clean. xss-markdown follows the result of marked(...), marked.parse(...), marked.parseInline(...) and a showdown converter's .makeHtml(...) on an argument that is not a string literal into the __html value of an object literal or an assigned .__html property (inline in dangerouslySetInnerHTML or built in a variable first) and the DOM sinks of xss-url; markdown-it render (it escapes raw HTML by default) is not a source, and markdown read straight from fs.readFileSync or readFile (as the argument, or a const declared from it in an enclosing scope) is skipped as repo content. ponytail: only the browser location counts as a URL source (an alias such as const loc = window.location, a renamed destructuring such as { search: s } and a URL built from location.href and a pathname are not followed), a value placed inside an inline script string after encodeURIComponent is treated as safe, route params are not a source for xss-response, headers built elsewhere (a variable, a Headers object, a helper) are not followed, fetched data without markdown, other markdown libraries and a new Marked() instance are not matched, a sink reached inside a helper function or a value returned from a callback such as useMemo is not followed, a markdown variable declared with let or var (reassigned or not), a file read through a helper and a front-matter parser are still reported while reads of user-chosen file paths, uploads included, are skipped like repo content, and Vue, Svelte and Angular templates are not covered.
 rules:
 - id: perun.js.sqli
   mode: taint
@@ -609,6 +610,135 @@ rules:
   pattern-sanitizers:
   - pattern: escapeHtml(...)
   - pattern: encodeURIComponent(...)
+- id: perun.js.xss-url
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: Browser URL input (location search or hash) is written into markup without escaping.
+  pattern-sources:
+  - pattern-either:
+    - pattern: location.search
+    - pattern: location.hash
+    - pattern: window.location.search
+    - pattern: window.location.hash
+    - pattern: document.location.search
+    - pattern: document.location.hash
+    - patterns:
+      - pattern-either:
+        - pattern: '{ ..., $K, ... } = location'
+        - pattern: '{ ..., $K, ... } = window.location'
+      - metavariable-regex:
+          metavariable: $K
+          regex: ^(?:search|hash)$
+      - focus-metavariable: $K
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: '({ ..., __html: $S, ... })'
+      - pattern: $O.__html = $S
+      - pattern: $E.innerHTML = $S
+      - pattern: $E.innerHTML += $S
+      - pattern: $E.outerHTML = $S
+      - pattern: $E.insertAdjacentHTML($P, $S)
+      - pattern: document.write($S)
+      - pattern: document.writeln($S)
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: DOMPurify.sanitize(...)
+  - pattern: sanitizeHtml(...)
+  - pattern: escapeHtml(...)
+  - pattern: encodeURIComponent(...)
+  - pattern: Number(...)
+  - pattern: parseInt(...)
+  - pattern: parseFloat(...)
+- id: perun.js.xss-response
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A request URL parameter is written into an HTML response body without escaping.
+  pattern-sources:
+  - pattern-either:
+    - pattern: $R.nextUrl.searchParams
+    - pattern: new URL($R.url, ...).searchParams
+    - patterns:
+      - pattern-inside: |
+          $U = new URL($R.url, ...);
+          ...
+      - pattern: $U.searchParams
+    - patterns:
+      - pattern-either:
+        - pattern: '{ ..., $K, ... } = new URL($R.url, ...)'
+        - pattern: '{ ..., $K, ... } = $R.nextUrl'
+      - metavariable-regex:
+          metavariable: $K
+          regex: ^searchParams$
+      - focus-metavariable: $K
+  # Only an inline object-literal headers value counts; headers built elsewhere (a variable, a Headers object, a helper) are not followed.
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: 'new Response($S, { ..., headers: { ..., $HK: $HV, ... }, ... })'
+      - pattern: 'new NextResponse($S, { ..., headers: { ..., $HK: $HV, ... }, ... })'
+    - metavariable-regex:
+        metavariable: $HK
+        regex: ^["']?(?i:content-type)["']?$
+    - metavariable-regex:
+        metavariable: $HV
+        regex: ^["'`]\s*(?i:text/html)
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: DOMPurify.sanitize(...)
+  - pattern: sanitizeHtml(...)
+  - pattern: escapeHtml(...)
+  - pattern: encodeURIComponent(...)
+  - pattern: Number(...)
+  - pattern: parseInt(...)
+  - pattern: parseFloat(...)
+- id: perun.js.xss-markdown
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: Markdown rendered to HTML from non-constant input is written into markup without sanitizing.
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern: marked($A, ...)
+      - pattern: marked.parse($A, ...)
+      - pattern: marked.parseInline($A, ...)
+      - pattern: $C.makeHtml($A, ...)
+    - pattern-not: $F("...", ...)
+    # A markdown string read straight from fs.readFileSync or readFile (as the argument, or a const declared from it in an enclosing scope; a let or var variable may be reassigned, so it is still reported) is skipped, whatever the path.
+    - metavariable-regex:
+        metavariable: $A
+        regex: ^(?!(?:await\s+)?(?:[\w$]+\.)*(?:readFileSync|readFile)\()
+    - pattern-not-inside:
+        patterns:
+        - pattern: |
+            const $A = $V;
+            ...
+        - metavariable-regex:
+            metavariable: $V
+            regex: ^(?:await\s+)?(?:[\w$]+\.)*(?:readFileSync|readFile)\(
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: '({ ..., __html: $S, ... })'
+      - pattern: $O.__html = $S
+      - pattern: $E.innerHTML = $S
+      - pattern: $E.innerHTML += $S
+      - pattern: $E.outerHTML = $S
+      - pattern: $E.insertAdjacentHTML($P, $S)
+      - pattern: document.write($S)
+      - pattern: document.writeln($S)
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: DOMPurify.sanitize(...)
+  - pattern: sanitizeHtml(...)
+  - pattern: escapeHtml(...)
+  - pattern: encodeURIComponent(...)
+  - pattern: Number(...)
+  - pattern: parseInt(...)
+  - pattern: parseFloat(...)
 - id: perun.js.open-redirect
   mode: taint
   languages: [javascript, typescript]

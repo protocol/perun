@@ -1,0 +1,2 @@
+# Bundled semgrep rules perun.js.xss-url, perun.js.xss-response and perun.js.xss-markdown: annotated ruleid/ok fictional fixtures (live when semgrep is installed, SKIP otherwise) plus offline checks of the rule text (ids, message, languages, severity, no test-path exclusion, the sanitizer list, the source and sink patterns, the metavariable regexes against must-match and must-not-match text).
+python3 scripts/test_semgrep_xss.py
