@@ -29,7 +29,7 @@ These categories are dropped by default unless the candidate also shows a concre
 |---|---|
 | `dos-only` | denial of service with no confidentiality or integrity impact |
 | `resource-exhaustion` | memory or CPU exhaustion without a privilege or data consequence |
-| `missing-rate-limit` | absent rate limiting is the only issue (a limiter that fails open on a credential or payment path is a flow finding, see `appsec-flows.md`) |
+| `missing-rate-limit` | absent rate limiting is the only issue (a limiter that fails open on a credential or payment path is a flow finding, see `appsec-flows.md`; a password, one-time-code or reset-code check with no attempt limit is an account-takeover lead, not this slug: `scripts/attempt_limit_map.py` lists those with no attempt-limit evidence in their file or package) |
 | `test-only` | code that ships only in tests, fixtures or examples and is never deployed |
 | `theoretical-no-path` | the pattern looks risky but no attacker-reachable input arrives at it |
 | `generic-input-validation` | missing validation with no demonstrated impact |
