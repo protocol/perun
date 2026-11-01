@@ -24,7 +24,7 @@
 # zstd, xz, 7z, lz4, bzip2, avro, pdf, zlib; the list and its ceilings are in committed_personal_data.py). gitleaks looks for secrets, not for exported personal data.
 # Built-in too, base mode only (a --full scan has no diff): sibling_sweep.py lists the unchanged call sites, in non-test code, of a function whose call arguments the diff changed elsewhere (tool `sibling-sweep`,
 # rule `unchanged-sibling-call`, message starts "lead:"): the sibling route a fix may have missed. Leads to open, never findings; a name with more than 25 call sites is skipped; scope and ceilings are in its docstring.
-# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler with no authentication evidence; SKIPPED without handlers). gitleaks runs once over the working tree. gitleaks drops
+# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler with no authentication evidence; SKIPPED without handlers) and header_config.py (tool `header-config`: a security header the repo config never names, a lead to confirm with dynamic_probe.py; SKIPPED without a supported web app; a package.json, .conf file or directory it could not read gives not-checked rows instead). gitleaks runs once over the working tree. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
 # gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row per top fixture dir when it has >3 (every other rule, and name-only matches, stay rows); REVIEW_FIXTURE_ROWS=all lists every hit.
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
@@ -32,7 +32,7 @@
 # REVIEW_LEASE_WAIT s, default 120) and releases it afterwards. If the lease is still full after the wait the scanners
 # run degraded without the lease (`nice -n 19` when nice works, plus `--jobs 1` for semgrep and `--parallel 1` for trivy,
 # dropped on a crash and retried once) and the summary labels them "(degraded: lease full, ...)"; REVIEW_LEASE_FULL=skip restores the old skip.
-# A summary "N findings; N files excluded; analyzers ran: ...; skipped (not installed): ..." goes to stderr (N counts every row but the not-checked ones, which are surface nobody covered, not findings; a "K not-checked row(s)" line follows when there are any), then "NOT RUN: <tool> (<why>), ..." (or "none"); a tool
+# A summary "N findings; N files excluded; analyzers ran: ...; skipped (not installed): ..." goes to stderr (N counts every row but the not-checked ones, which are surface nobody covered, not findings; lead rows such as `unchanged-sibling-call` and `header-not-found` count in N too; a "K not-checked row(s)" line follows when there are any), then "NOT RUN: <tool> (<why>), ..." (or "none"); a tool
 # that timed out, crashed or (REVIEW_LEASE_FULL=skip) lost the lease is listed there (once, with a not-checked row on stdout) and never under "ran", so it cannot read as zero findings; a tool that is merely not installed stays under "skipped (not installed)". `--tests` also runs the command
 # declared in env REVIEW_TEST_CMD (opt-in; it executes project code). Never installs anything. A missing tool
 # or a timeout prints "review_checks: not run: <tool> (<why>)" on stderr and is not a failure. A semgrep scan that emitted findings but
@@ -825,6 +825,14 @@ if [ "$full" = 1 ]; then
     else
       echo "route-auth: heuristic; scanned $n handlers; silence is not proof of authentication" >&2
       while IFS=$'\t' read -r p l m; do add route-auth "$p" "$l" missing-auth "$m"; done < <(sed -nE 's/^(.+):([0-9]+): HIGH: (.*)$/\1\t\2\t\3/p' "$out")
+    fi
+  fi
+  # header_config.py: header-not-found and not-checked rows; header-found and header-middleware rows stay in the script's own output. SKIPPED when no supported web app is found.
+  if have python3 && run_one header-config python3 -I "$here/header_config.py" "$PWD" && scan_ok header-config; then
+    if grep -q 'header-config: no supported web app found' "$out"; then skip header-config "SKIPPED: no supported web app"
+    else
+      grep -E '^header-config: ' "$out" >&2 || true
+      while IFS=$'\t' read -r f l r m; do case "$r" in header-not-found|not-checked) add header-config "$f" "$l" "$r" "$m" ;; esac; done <"$out"
     fi
   fi
 fi
