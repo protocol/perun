@@ -1,0 +1,2 @@
+# Bundled semgrep rules perun.js.postgrest-filter-injection, perun.js.git-argument-injection and perun.py.git-argument-injection, plus the app-router sources and unsafe raw-SQL sinks of perun.js.sqli and perun.js.command-injection: annotated ruleid/ok fictional fixtures (live when semgrep is installed, SKIP otherwise) plus offline checks of the rule text (ids, order, message, languages, severity, the shared app-router source block, the sinks, sanitizers and guards, the metavariable regexes against must-match and must-not-match text).
+python3 scripts/test_semgrep_injection.py

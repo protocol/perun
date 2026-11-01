@@ -9,6 +9,7 @@
 # Also cors-credentials-any-origin (WARNING: a cors(...) or register(cors, ...) call with credentials true and an origin of true, the regex /.*/ or a callback that always allows ((o, cb) => cb(null, true), cb(null, o) or cb(null, !!o), written as an arrow expression, an arrow block or a function); or a function that copies req.get|header("origin") or headers.get("origin"), directly or through a variable, into Access-Control-Allow-Origin while it also sets Access-Control-Allow-Credentials to "true" or true, unless an if on a .has, .includes or .test call encloses or precedes the set call in the same block (an allowlist check); origin "*" is not reported because the cors packages send a literal * and browsers refuse it on credentialed requests; req.headers.origin is left to the registry cors-misconfiguration rule; test paths are skipped). ponytail: options held in a variable and a credentials header given as an object are not seen, any such if counts as an allowlist check whatever it tests and a lookup written another way (indexOf, some) is not read, and a callback with other statements or a conditional is not matched.
 # Also secret-env-fallback (WARNING: process.env.X, process.env["X"] or import.meta.env.X followed by || or ?? and a non-empty string literal, process.env.X or process.env["X"] assigned with ||= or ??= and a string literal, or a const, let or var destructuring default from process.env (const { X = "..." } = process.env, matched also with other keys around it), where X ends in a secret stem (pass, passwd, password, passcode, passphrase, secret, token, credential, credentials, api_key, apikey, a secret, private, signing, encryption, session, jwt, hmac, master, access, auth, client, app, service, service_role or webhook key compound, or _pwd) after an optional prefix that ends in _ or . or sits at a camelCase boundary; a name behind a public bundler prefix is left to public-env-secret, the literal rule is the one hardcoded-credential-compare uses plus a second check that skips a literal that looks like a file path (it starts with /, ./, ../ or ~/, or ends in .json, .pem, .key, .crt, .cer, .der, .p12, .pfx, .jks, .keystore, .yaml or .yml), and test, fixture and mock paths and playwright.config.*, vitest.config.*, jest.config.* and cypress.config.* files are skipped) and public-env-secret (WARNING: any use, a write included, of process.env.X, process.env["X"] or import.meta.env.X, with or without a fallback, where X starts with NEXT_PUBLIC_, VITE_, REACT_APP_, EXPO_PUBLIC_, NUXT_PUBLIC_, GATSBY_, PUBLIC_, STORYBOOK_ or VUE_APP_ and ends in secret, password, passwd, passcode, passphrase, _pwd, service_role, or a secret, private, signing, encryption or service_role key compound with or without the underscore (secret_key, secretkey), because a bundler inlines such variables into any client code that reads them, so the value can reach every visitor's browser; token, api_key, anon_key, publishable_key and site_key names are not reported because many browser keys are public by design; test, fixture and mock paths are skipped). ponytail: a chained fallback (a || b || "x"), a ternary, a non-null ! read, an alias of process.env, a renamed destructuring ({ K: alias = "x" }) and Deno.env.get are not seen, a template literal with a ${} substitution is not matched, and public-env-secret does not see a destructured read. Not followed: optional chaining (process?.env?.X || "x"), a value first copied to a variable (const s = process.env.X; s || "x") and a value-based fallback (a connection string holding a password under a non-secret name).
 # Also xss-url, xss-response and xss-markdown (WARNING each; DOMPurify.sanitize, sanitizeHtml, escapeHtml, encodeURIComponent, Number, parseInt and parseFloat clear the value in all three, and no test path is skipped, as in xss). xss-url follows location.search and location.hash (also under window. and document., or destructured from location or window.location as search or hash), through new URLSearchParams(...).get or .getAll, decodeURIComponent, string methods, a ?? default, template literals and concatenation, into .innerHTML = and +=, .outerHTML =, the second argument of .insertAdjacentHTML, document.write and document.writeln, and into the __html value of an object literal or an assigned .__html property; textContent, innerText, a redirect through location.href or location.assign, pathname and href reads and constant strings stay clean. xss-response follows request.nextUrl.searchParams and new URL(request.url).searchParams, with or without a base argument (any handler parameter name; read directly, through a variable that holds the URL or its searchParams, or destructured as searchParams) into the first argument of new Response or new NextResponse whose same call has an inline init object with a headers object literal setting a content-type key (any case) to a string literal that starts, after optional spaces, with text/html in any case; Response.json, NextResponse.json, no init and a text/plain or application/json type stay clean. xss-markdown follows the result of marked(...), marked.parse(...), marked.parseInline(...) and a showdown converter's .makeHtml(...) on an argument that is not a string literal into the __html value of an object literal or an assigned .__html property (inline in dangerouslySetInnerHTML or built in a variable first) and the DOM sinks of xss-url; markdown-it render (it escapes raw HTML by default) is not a source, and markdown read straight from fs.readFileSync or readFile (as the argument, or a const declared from it in an enclosing scope) is skipped as repo content. ponytail: only the browser location counts as a URL source (an alias such as const loc = window.location, a renamed destructuring such as { search: s } and a URL built from location.href and a pathname are not followed), a value placed inside an inline script string after encodeURIComponent is treated as safe, route params are not a source for xss-response, headers built elsewhere (a variable, a Headers object, a helper) are not followed, fetched data without markdown, other markdown libraries and a new Marked() instance are not matched, a sink reached inside a helper function or a value returned from a callback such as useMemo is not followed, a markdown variable declared with let or var (reassigned or not), a file read through a helper and a front-matter parser are still reported while reads of user-chosen file paths, uploads included, are skipped like repo content, and Vue, Svelte and Angular templates are not covered.
+# Also postgrest-filter-injection (WARNING: a request value inside a template literal or a + concatenation passed to .or(...) of a PostgREST client, inline or through a local variable assigned one earlier in the same block, or in the third argument of .filter(col, "in", v) or .not(col, "in", v), where it can add filter conditions) and git-argument-injection (WARNING: a request value as an element of the argv array literal passed to execFile, execFileSync, spawn or spawnSync, bare or child_process.-prefixed, when the command is the string git or a path ending /git and no -- or --end-of-options comes before it, so a leading dash makes it an option; an if (value.startsWith("-")) return or throw before the call skips it). sqli, command-injection and these two also read app-router input (the URL searchParams and the json, formData and text body of an exported route handler's request); sqli also sinks $X.$queryRawUnsafe, $X.$executeRawUnsafe, sql.raw and sql.unsafe and treats a sql or Prisma.sql tagged template as bound unless it holds a sql.raw call.
 rules:
 - id: perun.js.sqli
   mode: taint
@@ -37,6 +38,38 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
+    - patterns:
+      - pattern-either:
+        - pattern-inside: |
+            export async function $H($R, ...) { ... }
+        - pattern-inside: |
+            export function $H($R, ...) { ... }
+        - pattern-inside: |
+            export const $H = async ($R, ...) => { ... }
+      - metavariable-regex:
+          metavariable: $H
+          regex: ^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$
+      - pattern-either:
+        - pattern: $R.nextUrl.searchParams
+        - pattern: new URL($R.url, ...).searchParams
+        - patterns:
+          - pattern-inside: |
+              $U = new URL($R.url, ...);
+              ...
+          - pattern: $U.searchParams
+        - patterns:
+          - pattern-either:
+            - pattern: '{ ..., $K, ... } = new URL($R.url, ...)'
+            - pattern: '{ ..., $K, ... } = $R.nextUrl'
+          - metavariable-regex:
+              metavariable: $K
+              regex: ^searchParams$
+          - focus-metavariable: $K
+        - pattern: await $R.json()
+        - pattern: await $R.formData()
+        - pattern: await $R.text()
+  # ponytail: sql.raw and sql.unsafe are matched only on a receiver named sql. A tagged template whose tag is sql or Prisma.sql binds its values and is not reported, but one that holds a sql.raw(...) call is not treated as safe, so every request value in it is reported, bound ones included.
   pattern-sinks:
   - patterns:
     - pattern-either:
@@ -47,9 +80,106 @@ rules:
         metavariable: $DB
         regex: ^(db|pool|client|conn|connection|knex|sequelize|mysql|pg)$
     - focus-metavariable: $S
+  - patterns:
+    - pattern-either:
+      - pattern: $X.$queryRawUnsafe($S, ...)
+      - pattern: $X.$executeRawUnsafe($S, ...)
+      - pattern: sql.raw($S)
+      - pattern: sql.unsafe($S, ...)
+    - focus-metavariable: $S
   pattern-sanitizers:
   - pattern: parseInt(...)
   - pattern: Number(...)
+  - patterns:
+    - pattern-either:
+      - pattern: sql`...`
+      - pattern: Prisma.sql`...`
+    - pattern-not: $T`...${<... sql.raw(...) ...>}...`
+- id: perun.js.postgrest-filter-injection
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A request value is built into a PostgREST filter string, so it can add filter conditions of its own. Pass it to .eq(), .in() or another value method instead.
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.query.$P
+    - pattern: req.query
+    - pattern: req.body.$P
+    - pattern: req.body
+    - pattern: req.params.$P
+    - pattern: req.params
+    - pattern: req.cookies.$P
+    - pattern: req.cookies
+    - pattern: req.headers.$P
+    - pattern: req.headers
+    - pattern: request.query.$P
+    - pattern: request.query
+    - pattern: request.body.$P
+    - pattern: request.body
+    - pattern: request.params.$P
+    - pattern: request.params
+    - pattern: request.cookies.$P
+    - pattern: request.cookies
+    - pattern: request.headers.$P
+    - pattern: request.headers
+    # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
+    - patterns:
+      - pattern-either:
+        - pattern-inside: |
+            export async function $H($R, ...) { ... }
+        - pattern-inside: |
+            export function $H($R, ...) { ... }
+        - pattern-inside: |
+            export const $H = async ($R, ...) => { ... }
+      - metavariable-regex:
+          metavariable: $H
+          regex: ^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$
+      - pattern-either:
+        - pattern: $R.nextUrl.searchParams
+        - pattern: new URL($R.url, ...).searchParams
+        - patterns:
+          - pattern-inside: |
+              $U = new URL($R.url, ...);
+              ...
+          - pattern: $U.searchParams
+        - patterns:
+          - pattern-either:
+            - pattern: '{ ..., $K, ... } = new URL($R.url, ...)'
+            - pattern: '{ ..., $K, ... } = $R.nextUrl'
+          - metavariable-regex:
+              metavariable: $K
+              regex: ^searchParams$
+          - focus-metavariable: $K
+        - pattern: await $R.json()
+        - pattern: await $R.formData()
+        - pattern: await $R.text()
+  # ponytail: only a template literal or a + concatenation passed to .or(...), inline or through a local variable assigned one earlier in the same block (an assignment inside an if, else or try block, with the call outside it, is not followed), is a sink; an .or(...) argument built by a helper call (a join, a map, a function result) is not followed, and a schema-library .or(...) is a call or a schema value, so it is skipped.
+  pattern-sinks:
+  - patterns:
+    - pattern: $Q.or($S, ...)
+    - pattern-either:
+      - pattern: $Q.or($A + $B, ...)
+      - pattern: $Q.or(`...`, ...)
+    - focus-metavariable: $S
+  - patterns:
+    - pattern: $Q.or($S, ...)
+    - pattern-either:
+      - pattern-inside: |
+          $S = `...`;
+          ...
+      - pattern-inside: |
+          $S = $A + $B;
+          ...
+    - focus-metavariable: $S
+  - patterns:
+    - pattern-either:
+      - pattern: $Q.filter($C, "in", $S)
+      - pattern: $Q.not($C, "in", $S)
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern: Number(...)
+  - pattern: parseInt(...)
+  - pattern: parseFloat(...)
 - id: perun.js.command-injection
   mode: taint
   languages: [javascript, typescript]
@@ -77,6 +207,37 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
+    - patterns:
+      - pattern-either:
+        - pattern-inside: |
+            export async function $H($R, ...) { ... }
+        - pattern-inside: |
+            export function $H($R, ...) { ... }
+        - pattern-inside: |
+            export const $H = async ($R, ...) => { ... }
+      - metavariable-regex:
+          metavariable: $H
+          regex: ^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$
+      - pattern-either:
+        - pattern: $R.nextUrl.searchParams
+        - pattern: new URL($R.url, ...).searchParams
+        - patterns:
+          - pattern-inside: |
+              $U = new URL($R.url, ...);
+              ...
+          - pattern: $U.searchParams
+        - patterns:
+          - pattern-either:
+            - pattern: '{ ..., $K, ... } = new URL($R.url, ...)'
+            - pattern: '{ ..., $K, ... } = $R.nextUrl'
+          - metavariable-regex:
+              metavariable: $K
+              regex: ^searchParams$
+          - focus-metavariable: $K
+        - pattern: await $R.json()
+        - pattern: await $R.formData()
+        - pattern: await $R.text()
   pattern-sinks:
   - patterns:
     - pattern-either:
@@ -152,6 +313,116 @@ rules:
   pattern-sanitizers:
   - pattern: parseInt(...)
   - pattern: Number(...)
+- id: perun.js.git-argument-injection
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A request value is passed to git as an argument with no -- before it, so a value that starts with a dash is read as an option. Put -- before it or reject values that start with a dash.
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.query.$P
+    - pattern: req.query
+    - pattern: req.body.$P
+    - pattern: req.body
+    - pattern: req.params.$P
+    - pattern: req.params
+    - pattern: req.cookies.$P
+    - pattern: req.cookies
+    - pattern: req.headers.$P
+    - pattern: req.headers
+    - pattern: request.query.$P
+    - pattern: request.query
+    - pattern: request.body.$P
+    - pattern: request.body
+    - pattern: request.params.$P
+    - pattern: request.params
+    - pattern: request.cookies.$P
+    - pattern: request.cookies
+    - pattern: request.headers.$P
+    - pattern: request.headers
+    # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
+    - patterns:
+      - pattern-either:
+        - pattern-inside: |
+            export async function $H($R, ...) { ... }
+        - pattern-inside: |
+            export function $H($R, ...) { ... }
+        - pattern-inside: |
+            export const $H = async ($R, ...) => { ... }
+      - metavariable-regex:
+          metavariable: $H
+          regex: ^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$
+      - pattern-either:
+        - pattern: $R.nextUrl.searchParams
+        - pattern: new URL($R.url, ...).searchParams
+        - patterns:
+          - pattern-inside: |
+              $U = new URL($R.url, ...);
+              ...
+          - pattern: $U.searchParams
+        - patterns:
+          - pattern-either:
+            - pattern: '{ ..., $K, ... } = new URL($R.url, ...)'
+            - pattern: '{ ..., $K, ... } = $R.nextUrl'
+          - metavariable-regex:
+              metavariable: $K
+              regex: ^searchParams$
+          - focus-metavariable: $K
+        - pattern: await $R.json()
+        - pattern: await $R.formData()
+        - pattern: await $R.text()
+  # ponytail: only an element of the array literal in the call counts, and one with constant text before the value (--opt=${v}) is not reported; an argv array built elsewhere (a variable, a spread, a push) is not followed, and neither is a call through an alias or a promisified wrapper. Only an if (value.startsWith("-")) guard that returns or throws counts, alone or joined to other conditions with ||.
+  pattern-sinks:
+  - patterns:
+    - pattern: $F($B, [..., $E, ...], ...)
+    - metavariable-regex:
+        metavariable: $F
+        regex: ^(?:child_process\.)?(?:execFile|execFileSync|spawn|spawnSync)$
+    - metavariable-regex:
+        metavariable: $B
+        regex: ^["'`](?:git|[^"'`]*/git)["'`]$
+    - metavariable-regex:
+        metavariable: $E
+        regex: ^(?!["']|`(?!\$\{))
+    - pattern-not: $F($B, [..., "--", ..., $E, ...], ...)
+    - pattern-not: $F($B, [..., "--end-of-options", ..., $E, ...], ...)
+    - pattern-not-inside: |
+        if ($E.startsWith("-")) return ...;
+        ...
+    - pattern-not-inside: |
+        if ($E.startsWith("-")) { ... return ...; }
+        ...
+    - pattern-not-inside: |
+        if ($E.startsWith("-")) throw ...;
+        ...
+    - pattern-not-inside: |
+        if ($E.startsWith("-")) { ... throw ...; }
+        ...
+    - pattern-not-inside: |
+        if (<... ($A || $E.startsWith("-")) ...>) return ...;
+        ...
+    - pattern-not-inside: |
+        if (<... ($A || $E.startsWith("-")) ...>) { ... return ...; }
+        ...
+    - pattern-not-inside: |
+        if (<... ($A || $E.startsWith("-")) ...>) throw ...;
+        ...
+    - pattern-not-inside: |
+        if (<... ($A || $E.startsWith("-")) ...>) { ... throw ...; }
+        ...
+    - pattern-not-inside: |
+        if (<... ($E.startsWith("-") || $A) ...>) return ...;
+        ...
+    - pattern-not-inside: |
+        if (<... ($E.startsWith("-") || $A) ...>) { ... return ...; }
+        ...
+    - pattern-not-inside: |
+        if (<... ($E.startsWith("-") || $A) ...>) throw ...;
+        ...
+    - pattern-not-inside: |
+        if (<... ($E.startsWith("-") || $A) ...>) { ... throw ...; }
+        ...
+    - focus-metavariable: $E
 - id: perun.js.path-traversal
   mode: taint
   languages: [javascript, typescript]
