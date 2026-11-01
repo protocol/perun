@@ -99,6 +99,22 @@ class T(unittest.TestCase):
                 env={"PERUN_STOP_STARTING_READY": "4"})
         self.assertEqual(r.returncode, 0)  # 3 ready < 4
 
+    def test_the_train_marker_is_not_a_check(self):
+        ok = {"__typename": "CheckRun", "status": "COMPLETED", "conclusion": "SUCCESS"}
+        marker = {"__typename": "StatusContext", "context": "perun/train-stage", "state": "PENDING"}
+        queued = {"isDraft": False, "statusCheckRollup": [ok, marker]}
+        dropped = {"isDraft": False, "statusCheckRollup": [ok, dict(marker, state="FAILURE")]}
+        other = {"isDraft": False, "statusCheckRollup": [ok, dict(marker, context="ci/other")]}
+        alone = {"isDraft": False, "statusCheckRollup": [dict(marker, state="SUCCESS")]}
+        stale, alarm = [{"mergedAt": "2027-01-15T05:00:00Z"}], (1, "ALARM flow: 1 ready PR(s) and nothing merged in 3.0h\n")
+        # Still ready: queued or dropped by the train (any marker state, as landing_watchdog.green() reads it), and with the
+        # script's own directory off sys.path (PYTHONSAFEPATH, like python3 -P or -I). A crash also exits 1, so stdout is checked.
+        for pr, env in ((queued, None), (dropped, None), (queued, {"PYTHONSAFEPATH": "1"})):
+            r = run(["symptom"], [pr], stale, env=env)
+            self.assertEqual((r.returncode, r.stdout), alarm)
+        self.assertEqual(run(["symptom"], [other, alone], stale).returncode, 0)  # another pending status blocks; the marker alone is no check
+        self.assertEqual(run([], [queued] * 5, stdin='{"tool_input":{"command":"gh pr create --title x"}}').returncode, 2)  # the cap counts the train's queue
+
     def test_symptom_ready_but_nothing_landed(self):
         r = run(["symptom"], [GREEN], [{"mergedAt": "2027-01-15T05:00:00Z"}])  # epoch 1.8e9 = 2027-01-15T08:00:00Z
         self.assertEqual((r.returncode, r.stdout), (1, "ALARM flow: 1 ready PR(s) and nothing merged in 3.0h\n"))
