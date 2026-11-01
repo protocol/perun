@@ -69,6 +69,33 @@ names or command text; a write error is ignored. Residuals: globs match names, n
 not re-judged); the ledger is local (another host's grants are not seen); two sessions can race for the last slot; a GH_REPO exported in
 the shell is not seen; with over 100 open PRs an exempt PR can fall outside the list, so grants can exceed the cap.
 
+Per-lane cap, opt-in: with PERUN_STOP_STARTING_LANES unset or blank nothing below applies and the denial record keeps its four keys. Where
+PRs ride separate merge trains, a full train would deny new work for an idle one, so `web=web/*,docs/*;api=` (lanes split by `;`, each
+`name=glob,glob`) applies the cap per lane. Globs are fnmatch patterns matched against the whole repo-relative path (`*` also crosses `/`; no
+tail matching, unlike PERUN_THROUGHPUT_PATHS). A PR's lane is the first lane, in the order written, with a glob that matches any of its
+changed files; a lane with no globs (`api=`) is the fallback for a PR that matched no other lane (at most one). Blank entries and spaces
+around names and globs are ignored; anything else malformed (no `=`, an empty or repeated name, a second fallback, no lane at all) is a parse
+error. Only where the global count already denies, and before the throughput judgement (which still reads the local diff), the hook
+recounts per lane. The new PR's files are the ones GitHub lists for it: `gh api repos/{owner}/{repo}/compare/<base>...<branch>?per_page=1`
+run in the command's directory, the `filename` of each entry, base the `--base` value else the default branch `refs/remotes/origin/HEAD`
+names, both URL-quoted. The local diff is not used: it reads the local `origin/<base>`, and when the branch holds base commits that ref
+lacks it lists more files than the PR has, which can put the PR in a lane with room while its real lane is full. A second call, `gh pr list
+--state open --limit 500 --json isDraft,statusCheckRollup,headRefName,files,changedFiles`, gives the other PRs' files; its count is used only
+when its own ready total is at least PERUN_STOP_STARTING_READY (it must confirm the first read). A lane with fewer ready PRs than that passes
+(exit 0, no ledger entry, no denial record); otherwise the throughput judgement and the deny go on as above, so a test-only branch of a full
+lane still gets its grant. A ready PR counts in a lane when it is in it or its lane is unknown; an unknown PR counts in every lane: its
+`files` list is missing, or shorter than `changedFiles` (GitHub returns at most 100), or `changedFiles` is missing or null, or its files
+match no lane and there is no fallback. The command is judged (`_judged`, the git reads) once per hook call: the throughput judgement reuses
+the result. Every failure of the recount keeps the deny (what fails open is unchanged: the hook input, the first queue read, the cap value):
+a parse error, a command or branch not judged (an empty local diff too), a compare list that is empty or holds 300 files (GitHub lists at
+most 300), files that match no lane, a failed or slow call, a recount whose ready total is under the cap, 500 PRs back (the list may be
+cut), any other exception. Each of the two calls gets what is left of a 15 s budget counted from the start of the hook (the templates set a
+20 s hook timeout, and a hook the harness kills lets the command run) and is skipped when under 2 s is left. With the variable set the
+denial record adds "lane" (the new PR's lane, null when unknown) and "lane_ready" (that lane's count, null when not counted), and the
+message adds `Lane <name>: <k> ready (cap <cap> per lane).` when both are known. Residuals: a renamed file counts by its new path only, as
+GitHub lists it on both sides; local git calls are not budgeted (5 s timeout each), so a slow git can still run the hook past its timeout,
+with or without lanes.
+
 Ready = open, not draft, at least one check and every check SUCCESS/NEUTRAL/SKIPPED. `PERUN_GH` overrides the gh binary (tests).
 `--now EPOCH` pins the clock. Side effects: the stop-starting hook appends to the two files above, the ledger on a grant and the denial
 log on a deny; everything else is read-only.
@@ -83,6 +110,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 sys.dont_write_bytecode = True  # never litter __pycache__ into a checksummed skill tree
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -125,8 +153,8 @@ def ts(v):
     return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).timestamp()
 
 
-def gh_json(*a, timeout=60):
-    r = subprocess.run([os.environ.get("PERUN_GH", "gh"), *a], capture_output=True, text=True, timeout=timeout)
+def gh_json(*a, timeout=60, cwd=None):
+    r = subprocess.run([os.environ.get("PERUN_GH", "gh"), *a], capture_output=True, text=True, timeout=timeout, cwd=cwd)
     if r.returncode:
         raise RuntimeError(r.stderr.strip() or "gh failed")
     return json.loads(r.stdout or "[]")
@@ -141,10 +169,11 @@ def ready(pr):
             and all((c.get("conclusion") or c.get("state") or "").upper() in OK for c in ch))
 
 
-def open_prs(timeout=60):
-    """The open PRs, one `gh` call: `ready` counts them and the throughput ledger reads their head names (`headRefName`)."""
-    return gh_json("pr", "list", "--state", "open", "--limit", "100", "--json", "isDraft,statusCheckRollup,headRefName",
-                   timeout=timeout)
+def open_prs(timeout=60, lanes=False):
+    """The open PRs, one `gh` call: `ready` counts them and the throughput ledger reads their head names (`headRefName`). `lanes`: up to
+    500, with their changed files (`files`, at most 100 each, and `changedFiles`, the true count) for the per-lane recount."""
+    return gh_json("pr", "list", "--state", "open", "--limit", "500" if lanes else "100", "--json",
+                   "isDraft,statusCheckRollup,headRefName" + (",files,changedFiles" if lanes else ""), timeout=timeout)
 
 
 def open_ready(timeout=60):
@@ -394,38 +423,51 @@ def _is_throughput(path, globs):
                for c in (["/".join(parts[i:]) for i in range(len(parts))] if "/" in g else parts[-1:]))
 
 
-def _throughput(cmd, cwd, prs, now):
-    """Judge a gated `gh pr create` at the cap: "" when it is one lone invocation (see the module docstring) of a branch pushed to
-    origin whose diff against its base holds only throughput paths and fewer than PERUN_THROUGHPUT_OPEN exempt PRs are open (the grant
-    is appended to the ledger), else the denial class: `throughput-cap` (judged throughput-only, exempt cap reached) or `work` (not
-    judged, or not throughput-only). Raises on a git failure or timeout, an unreadable ledger or a bad env value: the caller keeps
-    the deny."""
+def _judged(cmd, cwd):
+    """(branch, changed files, base) of the PR a gated `gh pr create` opens, for the throughput exemption and the lane recount (`base`: the
+    `--base` value, None when the command has none): None unless `cmd` is one lone invocation (see the module docstring) of a branch
+    pushed to origin as itself, whose diff against its base is not empty. Raises on a git failure or timeout: the caller keeps the deny."""
     toks = _tokens(cmd.replace("\\\n", ""))  # a backslash-newline continues the line: the shell joins it
     # one lone `gh pr create`: another word first, an operator, or a word that sends the PR elsewhere or may expand is not judged
     if (toks[:3] not in (["gh", "pr", "create"], ["gh", "pr", "new"]) or any(t and not t.strip(PUNCT) for t in toks)
             or any(map(UNJUDGED, toks))):
-        return "work"
+        return None
     # gh opens the PR on its own base repo, which the diff against origin/<base> read only if origin is it: another remote (gh prefers
     # `upstream`) or a `gh repo set-default` that names another repo is not judged
     if _entries(cwd, "remote") not in ([], ["origin"]) or set(_values(cwd, "remote.origin.gh-resolved")) - {"base"}:
-        return "work"
+        return None
     branch = _git(cwd, "symbolic-ref", "--short", "HEAD").rstrip("\n")
     base = _base(toks)
     # without --base gh reads the branch's `gh-merge-base` config, else the default branch
     if base is None and any(_values(cwd, f"branch.{branch}.gh-merge-base")):
-        return "work"
+        return None
     ref = "origin/HEAD" if base is None else f"origin/{base}"
     # diff.relative off: a user's setting would list only paths under cwd; --no-renames: a product file moved into tests/ lists both
     # paths; --ignore-submodules=none: a pointer bump counts; `--` ends the revisions (a file may not stand in for one)
     out = _git(cwd, "-c", "diff.relative=false", "diff", "--name-only", "-z", "--no-renames", "--ignore-submodules=none",
                f"{ref}...HEAD", "--")
     files = [f for f in out.split("\0") if f]
-    globs = [g.strip() for g in os.environ.get("PERUN_THROUGHPUT_PATHS", THROUGHPUT).split(",") if g.strip()]
-    if not files or not all(_is_throughput(f, globs) for f in files):
-        return "work"
     # gh opens the PR from origin/<branch>: it must be the one remote ref at HEAD (a branch not pushed, a copy behind or ahead, or a
     # second remote at the same commit is not judged), so the ledger name is the PR's head name
-    if _entries(cwd, "for-each-ref", "--format=%(refname)", "--points-at", "HEAD", "refs/remotes/") != [f"refs/remotes/origin/{branch}"]:
+    if not files or _entries(cwd, "for-each-ref", "--format=%(refname)", "--points-at", "HEAD", "refs/remotes/") != [f"refs/remotes/origin/{branch}"]:
+        return None
+    return branch, files, base
+
+
+def _throughput(cmd, cwd, prs, now, judged=False):
+    """Judge a gated `gh pr create` at the cap: "" when it is one lone invocation (see the module docstring) of a branch pushed to
+    origin whose diff against its base holds only throughput paths and fewer than PERUN_THROUGHPUT_OPEN exempt PRs are open (the grant
+    is appended to the ledger), else the denial class: `throughput-cap` (judged throughput-only, exempt cap reached) or `work` (not
+    judged, or not throughput-only). `judged`: `_judged(cmd, cwd)` when the caller already ran it (None: not judged), so the git reads
+    run once per hook call; False judges here. Raises on a git failure or timeout, an unreadable ledger or a bad env value: the caller
+    keeps the deny."""
+    if judged is False:
+        judged = _judged(cmd, cwd)
+    if judged is None:
+        return "work"
+    branch, files, _ = judged
+    globs = [g.strip() for g in os.environ.get("PERUN_THROUGHPUT_PATHS", THROUGHPUT).split(",") if g.strip()]
+    if not all(_is_throughput(f, globs) for f in files):
         return "work"
     ledger = os.path.join(_common(cwd), "perun-throughput.jsonl")
     try:
@@ -441,10 +483,83 @@ def _throughput(cmd, cwd, prs, now):
     return ""
 
 
+def _lanes(spec):
+    """PERUN_STOP_STARTING_LANES as {lane name: globs}, in the order written; the lane with no globs is the fallback. Raises ValueError
+    when it is malformed: an entry with no `=`, an empty or repeated name, a second fallback, no lane at all (blank entries are skipped)."""
+    lanes = {}
+    for entry in filter(None, (e.strip() for e in spec.split(";"))):
+        name, eq, globs = entry.partition("=")
+        name = name.strip()
+        if not eq or not name or name in lanes:
+            raise ValueError(f"malformed lane `{entry}`")
+        lanes[name] = [g.strip() for g in globs.split(",") if g.strip()]
+    if not lanes or sum(not g for g in lanes.values()) > 1:
+        raise ValueError("no lane, or a second fallback lane")
+    return lanes
+
+
+def _lane_of(files, lanes):
+    """The lane of a PR that changes `files`: the first lane, in order, with a glob that matches the whole path of one of them (`*` also
+    crosses `/`), else the fallback lane (the one with no globs), else None."""
+    hit = next((n for n, gs in lanes.items() if any(fnmatch.fnmatchcase(f, g) for f in files for g in gs)), None)
+    return hit or next((n for n, gs in lanes.items() if not gs), None)
+
+
+def _counts(pr, lane, lanes):
+    """True when a ready PR counts toward `lane`: it is in it, or its lane is unknown, so it counts in every lane (`files` missing, or
+    `changedFiles` missing or null, or `files` shorter than `changedFiles` because GitHub lists at most 100; or its files match no lane
+    and there is no fallback)."""
+    files, total = pr.get("files"), pr.get("changedFiles")
+    return files is None or total is None or len(files) < total or _lane_of([f["path"] for f in files], lanes) in (lane, None)
+
+
+def _compare(cwd, judged, timeout):
+    """The files GitHub lists for the PR `judged` (a `_judged` result) describes, as the new PR's own lane files: `gh api
+    repos/{owner}/{repo}/compare/<base>...<branch>` run in `cwd`, base the `--base` value, else the default branch that
+    `refs/remotes/origin/HEAD` names. The local diff is not used: it reads the local `origin/<base>` and lists more than the PR when the
+    branch holds base commits that ref lacks. None when the list is empty or holds 300 (GitHub lists at most 300: it may be cut). Raises
+    on a failed or slow call, an unexpected reply or a git failure."""
+    branch, _, base = judged
+    if base is None:
+        base = _git(cwd, "symbolic-ref", "refs/remotes/origin/HEAD").rstrip("\n").removeprefix("refs/remotes/origin/")
+    reply = gh_json("api", f"repos/{{owner}}/{{repo}}/compare/{quote(base)}...{quote(branch)}?per_page=1", timeout=timeout, cwd=cwd)
+    names = [f["filename"] for f in reply.get("files") or []]
+    return names if 0 < len(names) < 300 else None
+
+
+def _left(t0):
+    """Seconds left of the recount's 15 s budget, counted from `t0`, the hook's start: the templates set a 20 s hook timeout, and a hook
+    the harness kills lets the command run."""
+    return 15 - (time.monotonic() - t0)
+
+
+def _lane_ready(cwd, spec, cap, t0, judged):
+    """(lane, k) for the per-lane cap (see the module docstring): the lane of the PR `judged` (a `_judged` result, None: not judged)
+    describes, from GitHub's compare, and the ready open PRs in it, counted only when the recount's own ready total is at least `cap`,
+    so that it confirms the first read; None for what could not be told. Never raises: every failure, a timeout included, leaves the
+    deny standing. Each of the two gh calls gets what is left of the budget (`_left`) and is skipped when under 2 s is left."""
+    lane = k = None
+    try:
+        lanes, left = _lanes(spec), _left(t0)
+        if judged and left >= 2:
+            names = _compare(cwd, judged, left)
+            lane = _lane_of(names, lanes) if names else None
+        left = _left(t0)
+        if lane and left >= 2:
+            prs = open_prs(left, lanes=True)
+            # ponytail: one page, and at the limit the list may be cut: page it if a repo holds that many open PRs
+            if len(prs) < 500 and sum(map(ready, prs)) >= cap:
+                k = sum(ready(p) and _counts(p, lane, lanes) for p in prs)
+    except Exception:  # every failure keeps the deny
+        pass
+    return lane, k
+
+
 def hook(now=None):
     """PreToolUse(Bash) stop-starting check. Exit 2 (reason on stderr) for a gated `gh pr create` at the cap unless it is throughput
-    work; 0 otherwise, and on a failed or slow `gh` or unparseable input. Side effects: the ledger append on a grant, the denial-log
-    append on a deny. `now` (epoch) stamps both; default the clock."""
+    work or, with PERUN_STOP_STARTING_LANES set, its lane has room; 0 otherwise, and on a failed or slow `gh` or unparseable input.
+    Side effects: the ledger append on a grant, the denial-log append on a deny. `now` (epoch) stamps both; default the clock."""
+    t0 = time.monotonic()
     try:
         data = json.load(sys.stdin)
         cmd = (data.get("tool_input") or {}).get("command") or ""
@@ -460,15 +575,25 @@ def hook(now=None):
     if n < cap:
         return 0
     now, cwd = time.time() if now is None else now, data.get("cwd") or None
+    spec, lane, k, judged = os.environ.get("PERUN_STOP_STARTING_LANES", "").strip(), None, None, False
+    if spec:  # opt-in: the cap per lane, recounted before the throughput judgement; a lane with room touches no ledger or log
+        try:  # judged here, once: the throughput judgement reuses it, and a raise is class `work` there too
+            judged = _judged(cmd, cwd)
+        except Exception:
+            judged = None
+        lane, k = _lane_ready(cwd, spec, cap, t0, judged)
+        if k is not None and k < cap:
+            return 0
     try:
-        why = _throughput(cmd, cwd, prs, now)
+        why = _throughput(cmd, cwd, prs, now, judged)
     except Exception:  # an unread diff or ledger proves nothing: the deny stands (only reading the queue fails open)
         why = "work"
     if not why:
         return 0
     try:  # best effort: no file names or command text, and a log that cannot be written never changes the verdict
+        rec = {"at": int(now), "class": why, "ready": n, "cap": cap, **({"lane": lane, "lane_ready": k} if spec else {})}
         with open(os.path.join(_common(cwd), "perun-flow-denials.jsonl"), "a") as f:
-            f.write(json.dumps({"at": int(now), "class": why, "ready": n, "cap": cap}) + "\n")
+            f.write(json.dumps(rec) + "\n")
     except Exception:
         pass
     try:
@@ -476,7 +601,8 @@ def hook(now=None):
                 f"branch already pushed to origin, while fewer than {_open_cap()} such PRs are open. ")
     except ValueError:  # a cap that is not a number: say nothing about it
         hint = ""
-    print(f"Blocked `gh pr create`: {n} ready-but-unmerged PRs (cap {cap}). Waiting work is queue; help it land "
+    where = f"Lane `{lane}`: {k} ready (cap {cap} per lane). " if lane and k is not None else ""
+    print(f"Blocked `gh pr create`: {n} ready-but-unmerged PRs (cap {cap}). {where}Waiting work is queue; help it land "
           f"(review, merge, unblock) before starting more. {hint}Priority work: add `# priority: <reason>` to the command.",
           file=sys.stderr)
     return 2
