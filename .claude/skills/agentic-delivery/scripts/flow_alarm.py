@@ -44,6 +44,17 @@
                                      `waiting-to-start`, `coding`, `ready-to-merged` (queued->started, started->ready, ready->
                                      merged) and the largest stage; rows missing a timestamp are skipped. Exit 2 on bad input.
 
+Queue read: the hook counts the ready PRs on the newest 100 open ones (one `gh pr list --limit 100`). When that read holds 100 PRs and its
+ready count is under the cap, older ready PRs may lie outside it, so the hook reads once more with `--limit 500` (the same fields, no
+files; with PERUN_STOP_STARTING_LANES set it also asks `files` and `changedFiles`, see the per-lane cap), with what is left of the 15 s
+budget below as its timeout, skipped when under 2 s is left. A successful second read gives the list and the count for the deny, the
+throughput judgement and the denial record's `ready`; the per-lane path is entered on the wide count and, with lanes set, recounts on that
+list, with no third list call. A failed or slow second read keeps the first read's list and count and prints `flow_alarm: queue read past
+100 PRs failed; counted on the newest 100` to stderr: the same verdict as the first read alone (it fails open), at most the rest of the
+budget later. Under 100 PRs, or at the cap already, there is no second read. The second read shares the 15 s budget with the per-lane
+compare, so local git calls can start up to 15 s into the 20 s hook timeout (a 5 s margin). `symptom` counts on a `--limit 500` read.
+Residual: a repo with more than 500 open PRs is counted on the newest 500.
+
 Throughput exemption, only where the hook would deny (at the cap): one lone `gh pr create` passes when the pushed branch's diff against
 `origin/<base>` holds only throughput paths, by name, and fewer than PERUN_THROUGHPUT_OPEN (default 2) exempt PRs are open, so test and CI
 work is not stuck behind the queue it would shorten. Judged only when the command's words (`_tokens`, a backslash-newline joined) start
@@ -67,7 +78,8 @@ among the open PRs' head names, from the same `gh` call that counts the ready on
 names or command text; a write error is ignored. Residuals: globs match names, not contents (a CI-config edit passes whatever it changes;
 `spec/`, `*.spec.*` and `test_*.py` can name product files: narrow the list with PERUN_THROUGHPUT_PATHS); creation only (later pushes are
 not re-judged); the ledger is local (another host's grants are not seen); two sessions can race for the last slot; a GH_REPO exported in
-the shell is not seen; with over 100 open PRs an exempt PR can fall outside the list, so grants can exceed the cap.
+the shell is not seen; an exempt PR can fall outside the list when the first read is already at the cap (it is not read again) or the
+repo holds over 500 open PRs, so grants can exceed the cap.
 
 Per-lane cap, opt-in: with PERUN_STOP_STARTING_LANES unset or blank nothing below applies and the denial record keeps its four keys. Where
 PRs ride separate merge trains, a full train would deny new work for an idle one, so `web=web/*,docs/*;api=` (lanes split by `;`, each
@@ -79,19 +91,22 @@ error. Only where the global count already denies, and before the throughput jud
 recounts per lane. The new PR's files are the ones GitHub lists for it: `gh api repos/{owner}/{repo}/compare/<base>...<branch>?per_page=1`
 run in the command's directory, the `filename` of each entry, base the `--base` value else the default branch `refs/remotes/origin/HEAD`
 names, both URL-quoted. The local diff is not used: it reads the local `origin/<base>`, and when the branch holds base commits that ref
-lacks it lists more files than the PR has, which can put the PR in a lane with room while its real lane is full. A second call, `gh pr list
---state open --limit 500 --json isDraft,statusCheckRollup,headRefName,files,changedFiles`, gives the other PRs' files; its count is used only
-when its own ready total is at least PERUN_STOP_STARTING_READY (it must confirm the first read). A lane with fewer ready PRs than that passes
-(exit 0, no ledger entry, no denial record); otherwise the throughput judgement and the deny go on as above, so a test-only branch of a full
-lane still gets its grant. A ready PR counts in a lane when it is in it or its lane is unknown; an unknown PR counts in every lane: its
+lacks it lists more files than the PR has, which can put the PR in a lane with room while its real lane is full. The other PRs' files come
+from `gh pr list --state open --limit 500 --json isDraft,statusCheckRollup,headRefName,files,changedFiles`: the second queue read when made
+(it asks for these fields with this variable set), else a call of its own; its count is used only when its own ready total is at least
+PERUN_STOP_STARTING_READY (it must confirm the read that put the queue at the cap). A lane with fewer ready PRs than that passes (exit 0, no
+ledger entry, no denial record); otherwise the throughput judgement and the deny go on as above, so a test-only branch of a full lane still
+gets its grant. A ready PR counts in a lane when it is in it or its lane is unknown; an unknown PR counts in every lane: its
 `files` list is missing, or shorter than `changedFiles` (GitHub returns at most 100), or `changedFiles` is missing or null, or its files
 match no lane and there is no fallback. The command is judged (`_judged`, the git reads) once per hook call: the throughput judgement reuses
 the result. Every failure of the recount keeps the deny (what fails open is unchanged: the hook input, the first queue read, the cap value):
 a parse error, a command or branch not judged (an empty local diff too), a compare list that is empty or holds 300 files (GitHub lists at
 most 300), files that match no lane, a failed or slow call, a recount whose ready total is under the cap, 500 PRs back (the list may be
-cut), any other exception. Each of the two calls gets what is left of a 15 s budget counted from the start of the hook (the templates set a
-20 s hook timeout, and a hook the harness kills lets the command run) and is skipped when under 2 s is left. With the variable set the
-denial record adds "lane" (the new PR's lane, null when unknown) and "lane_ready" (that lane's count, null when not counted), and the
+cut), any other exception. The compare and the recount's own list call (made only when the second queue read did not list the files) each
+get what is left of a 15 s budget counted from the start of the hook (the templates set a 20 s hook timeout, and a hook the harness kills
+lets the command run) and are skipped when under 2 s is left; the compare's share is read after its base lookup, which a slow git may
+have used up, and the second queue read above draws on the same budget. With the variable set
+the denial record adds "lane" (the new PR's lane, null when unknown) and "lane_ready" (that lane's count, null when not counted), and the
 message adds `Lane <name>: <k> ready (cap <cap> per lane).` when both are known. Residuals: a renamed file counts by its new path only, as
 GitHub lists it on both sides; local git calls are not budgeted (5 s timeout each), so a slow git can still run the hook past its timeout,
 with or without lanes.
@@ -169,16 +184,21 @@ def ready(pr):
             and all((c.get("conclusion") or c.get("state") or "").upper() in OK for c in ch))
 
 
-def open_prs(timeout=60, lanes=False):
-    """The open PRs, one `gh` call: `ready` counts them and the throughput ledger reads their head names (`headRefName`). `lanes`: up to
-    500, with their changed files (`files`, at most 100 each, and `changedFiles`, the true count) for the per-lane recount."""
-    return gh_json("pr", "list", "--state", "open", "--limit", "500" if lanes else "100", "--json",
+def open_prs(timeout=60, lanes=False, wide=False):
+    """The open PRs, one `gh` call: `ready` counts them and the throughput ledger reads their head names (`headRefName`). The newest 100 by
+    default, the hook's first read; when it holds 100 PRs and its ready count is under the cap, the hook reads again with `wide` (up to
+    500, the same fields), so ready PRs beyond the first 100 are counted too. `lanes`: up to 500 as well, with their changed files
+    (`files`, at most 100 each, and `changedFiles`, the true count) for the per-lane recount; with PERUN_STOP_STARTING_LANES set the hook's
+    second read asks for both (`wide` and `lanes`) and the recount takes that list. A repo with more than 500 open PRs is counted on the
+    newest 500."""
+    return gh_json("pr", "list", "--state", "open", "--limit", "500" if lanes or wide else "100", "--json",
                    "isDraft,statusCheckRollup,headRefName" + (",files,changedFiles" if lanes else ""), timeout=timeout)
 
 
 def open_ready(timeout=60):
-    """How many open PRs are ready (the count `symptom` reports)."""
-    return sum(map(ready, open_prs(timeout)))
+    """How many open PRs are ready (the count `symptom` reports), on a read of up to 500: not a hook, so its 60 s timeout stands. The read
+    has no fallback: a failed read or the timeout raises, and `symptom` exits 2 (fail closed, as documented)."""
+    return sum(map(ready, open_prs(timeout, wide=True)))
 
 
 def _holds(text):
@@ -513,40 +533,47 @@ def _counts(pr, lane, lanes):
     return files is None or total is None or len(files) < total or _lane_of([f["path"] for f in files], lanes) in (lane, None)
 
 
-def _compare(cwd, judged, timeout):
+def _compare(cwd, judged, t0):
     """The files GitHub lists for the PR `judged` (a `_judged` result) describes, as the new PR's own lane files: `gh api
     repos/{owner}/{repo}/compare/<base>...<branch>` run in `cwd`, base the `--base` value, else the default branch that
     `refs/remotes/origin/HEAD` names. The local diff is not used: it reads the local `origin/<base>` and lists more than the PR when the
-    branch holds base commits that ref lacks. None when the list is empty or holds 300 (GitHub lists at most 300: it may be cut). Raises
-    on a failed or slow call, an unexpected reply or a git failure."""
+    branch holds base commits that ref lacks. The call gets what is left of the budget (`_left(t0)`) after that lookup, which a slow git
+    may have used up, and is skipped (None) when under 2 s is left. None too when the list is empty or holds 300 (GitHub lists at most
+    300: it may be cut). Raises on a failed or slow call, an unexpected reply or a git failure."""
     branch, _, base = judged
     if base is None:
         base = _git(cwd, "symbolic-ref", "refs/remotes/origin/HEAD").rstrip("\n").removeprefix("refs/remotes/origin/")
-    reply = gh_json("api", f"repos/{{owner}}/{{repo}}/compare/{quote(base)}...{quote(branch)}?per_page=1", timeout=timeout, cwd=cwd)
+    left = _left(t0)
+    if left < 2:
+        return None
+    reply = gh_json("api", f"repos/{{owner}}/{{repo}}/compare/{quote(base)}...{quote(branch)}?per_page=1", timeout=left, cwd=cwd)
     names = [f["filename"] for f in reply.get("files") or []]
     return names if 0 < len(names) < 300 else None
 
 
 def _left(t0):
-    """Seconds left of the recount's 15 s budget, counted from `t0`, the hook's start: the templates set a 20 s hook timeout, and a hook
-    the harness kills lets the command run."""
+    """Seconds left of the hook's 15 s budget for its optional `gh` calls, counted from `t0`, the hook's start: the second queue read
+    (`open_prs` with `wide`) and the per-lane compare and recount. The templates set a 20 s hook timeout, and a hook the harness kills
+    lets the command run."""
     return 15 - (time.monotonic() - t0)
 
 
-def _lane_ready(cwd, spec, cap, t0, judged):
+def _lane_ready(cwd, spec, cap, t0, judged, listed=None):
     """(lane, k) for the per-lane cap (see the module docstring): the lane of the PR `judged` (a `_judged` result, None: not judged)
     describes, from GitHub's compare, and the ready open PRs in it, counted only when the recount's own ready total is at least `cap`,
-    so that it confirms the first read; None for what could not be told. Never raises: every failure, a timeout included, leaves the
-    deny standing. Each of the two gh calls gets what is left of the budget (`_left`) and is skipped when under 2 s is left."""
+    so that it confirms the read that put the queue at the cap; None for what could not be told. `listed`: the open PRs, with their
+    files, that the hook's second queue read already listed (None: list them here), so no list call is made. Never raises: every
+    failure, a timeout included, leaves the deny standing. The compare and a list call of its own each get what is left of the budget
+    (`_left`) and are skipped when under 2 s is left; the compare reads it itself after its base lookup."""
     lane = k = None
     try:
         lanes, left = _lanes(spec), _left(t0)
         if judged and left >= 2:
-            names = _compare(cwd, judged, left)
+            names = _compare(cwd, judged, t0)
             lane = _lane_of(names, lanes) if names else None
         left = _left(t0)
-        if lane and left >= 2:
-            prs = open_prs(left, lanes=True)
+        if lane and (listed is not None or left >= 2):
+            prs = open_prs(left, lanes=True) if listed is None else listed
             # ponytail: one page, and at the limit the list may be cut: page it if a repo holds that many open PRs
             if len(prs) < 500 and sum(map(ready, prs)) >= cap:
                 k = sum(ready(p) and _counts(p, lane, lanes) for p in prs)
@@ -557,8 +584,9 @@ def _lane_ready(cwd, spec, cap, t0, judged):
 
 def hook(now=None):
     """PreToolUse(Bash) stop-starting check. Exit 2 (reason on stderr) for a gated `gh pr create` at the cap unless it is throughput
-    work or, with PERUN_STOP_STARTING_LANES set, its lane has room; 0 otherwise, and on a failed or slow `gh` or unparseable input.
-    Side effects: the ledger append on a grant, the denial-log append on a deny. `now` (epoch) stamps both; default the clock."""
+    work or, with PERUN_STOP_STARTING_LANES set, its lane has room; 0 otherwise, and on a failed or slow `gh` or unparseable input. A
+    first read of 100 PRs under the cap is read again, up to 500 (module docstring, "Queue read"). Side effects: the ledger append on a
+    grant, the denial-log append on a deny. `now` (epoch) stamps both; default the clock."""
     t0 = time.monotonic()
     try:
         data = json.load(sys.stdin)
@@ -572,16 +600,23 @@ def hook(now=None):
         return 0
     except Exception:
         return 0
+    spec, listed = os.environ.get("PERUN_STOP_STARTING_LANES", "").strip(), None
+    if len(prs) >= 100 and n < cap and (left := _left(t0)) >= 2:  # a full first page may hide ready PRs behind it: read up to 500
+        try:  # replaces list and count together; with lanes the read also lists the files, and the per-lane recount takes that list
+            wide = open_prs(left, lanes=bool(spec), wide=True)
+            prs, n, listed = wide, sum(map(ready, wide)), wide if spec else None
+        except Exception:  # any failure or timeout keeps the first read's list and count (its verdict), and says so
+            print("flow_alarm: queue read past 100 PRs failed; counted on the newest 100", file=sys.stderr)
     if n < cap:
         return 0
     now, cwd = time.time() if now is None else now, data.get("cwd") or None
-    spec, lane, k, judged = os.environ.get("PERUN_STOP_STARTING_LANES", "").strip(), None, None, False
+    lane, k, judged = None, None, False
     if spec:  # opt-in: the cap per lane, recounted before the throughput judgement; a lane with room touches no ledger or log
         try:  # judged here, once: the throughput judgement reuses it, and a raise is class `work` there too
             judged = _judged(cmd, cwd)
         except Exception:
             judged = None
-        lane, k = _lane_ready(cwd, spec, cap, t0, judged)
+        lane, k = _lane_ready(cwd, spec, cap, t0, judged, listed)
         if k is not None and k < cap:
             return 0
     try:
