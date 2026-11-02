@@ -31,7 +31,7 @@ run() { PATH="$T/bin:$PATH" bash "$RC" "$@" 2>"$T/err" || true; }
 has() { grep -q "\"file\": \"$1\"" <<<"$out"; }
 : >"$T/log"; out=$(run --base base); has new.txt && ! has old.txt; chk $? "diff mode scans only changed files"
 : >"$T/log"; out=$(run --full); has new.txt && has old.txt; chk $? "--full scans an untouched file"
-[ "$(wc -l <"$T/log")" -eq 1 ] && grep -qx . "$T/log"; chk $? "--full spawns gitleaks once over the working tree"
+[ "$(wc -l <"$T/log")" -eq 2 ] && ! grep -qvx . "$T/log"; chk $? "--full spawns gitleaks twice: working tree, then bounded history"
 printf '# c\nold.txt:generic-api-key:1\n' >.gitleaksignore; g add -A; g commit -q -m ignore
 out=$(run --full); ! has old.txt && has new.txt; chk $? ".gitleaksignore suppresses its fingerprint in --full"
 git branch -f base2 HEAD~1; echo more >new2.txt; g add -A; g commit -q -m more
