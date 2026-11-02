@@ -24,7 +24,7 @@
 # zstd, xz, 7z, lz4, bzip2, avro, pdf, zlib; the list and its ceilings are in committed_personal_data.py). gitleaks looks for secrets, not for exported personal data.
 # Built-in too, base mode only (a --full scan has no diff): sibling_sweep.py lists the unchanged call sites, in non-test code, of a function whose call arguments the diff changed elsewhere (tool `sibling-sweep`,
 # rule `unchanged-sibling-call`, message starts "lead:"): the sibling route a fix may have missed. Leads to open, never findings; a name with more than 25 call sites is skipped; scope and ceilings are in its docstring.
-# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler with no authentication evidence; SKIPPED without handlers), header_config.py (tool `header-config`: a security header the repo config never names, a lead to confirm with dynamic_probe.py; SKIPPED without a supported web app; a package.json, .conf file or directory it could not read gives not-checked rows instead) and attempt_limit_map.py (tool `attempt-limit`, rule `missing-attempt-limit`: a password, one-time-code or reset-code check with no attempt-limit evidence in its file or package, a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without a credential check or sign-in route). gitleaks runs once over the working tree. gitleaks drops
+# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler with no authentication evidence; SKIPPED without handlers), header_config.py (tool `header-config`: a security header the repo config never names, a lead to confirm with dynamic_probe.py; SKIPPED without a supported web app; a package.json, .conf file or directory it could not read gives not-checked rows instead) and attempt_limit_map.py (tool `attempt-limit`, rule `missing-attempt-limit`: a password, one-time-code or reset-code check with no attempt-limit evidence in its file or package, a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without a credential check or sign-in route). gitleaks runs once over the working tree, then (tool `gitleaks-history`) over the last REVIEW_HISTORY_MAX commits of HEAD (default 1000; 0 = skip, listed as "history not scanned"), so a secret removed from the tree but still in history is reported. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
 # gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row per top fixture dir when it has >3 (every other rule, and name-only matches, stay rows); REVIEW_FIXTURE_ROWS=all lists every hit.
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
@@ -53,7 +53,7 @@ set -euo pipefail
 lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin}
 case ":$PATH:" in *":$lb:"*) ;; *) [ -z "$lb" ] || [ ! -d "$lb" ] || PATH=$PATH:$lb ;; esac
 
-repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" nr="" failed="" missing="" gap="" dg="" w1="" nice19=0 lease=ok leased=0 full=0 wr=0 cov="" wired="" wiredx=""
+repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" nr="" failed="" missing="" gap="" dg="" w1="" nice19=0 lease=ok leased=0 full=0 wr=0 hmax= cov="" wired="" wiredx=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base=${2:?--base needs a ref}; case "$base" in -*) echo "review_checks: --base must not start with '-'" >&2; exit 2 ;; esac; shift 2 ;;
@@ -61,7 +61,7 @@ while [ $# -gt 0 ]; do
     --tests) tests=1; shift ;;
     --repo) repo=${2:?--repo needs a dir}; [ -d "$repo" ] || { echo "review_checks: --repo: not a directory: $repo" >&2; exit 2; }; shift 2 ;; # replaces `cd DIR && review_checks.sh` (bash guards block chains)
     --history) hist=1; shift ;;
-    --full) wr=1 full=1; shift ;;
+    --full) wr=1 full=1 hmax=${REVIEW_HISTORY_MAX:-1000}; shift ;;
     --full-history) hist=1 full=1; shift ;;
     *) echo "usage: review_checks.sh [--repo DIR] [--base REF] [--tests] [--history] [--full] [--timeout SECS]" >&2; exit 2 ;;
   esac
@@ -90,6 +90,12 @@ nex=$(( $(printf '%s\n' "$all" | grep -c . || true) - $(printf '%s\n' "$files" |
 rc=0
 [ -z "$files" ] || wired+=" gitleaks trufflehog semgrep trivy" # scanners with work this run (any changed file); osv-scanner and the hub add theirs below
 # wiredx: scanners that count toward "wired" but that provision_tools.sh cannot install, so they are never "fixable": shellcheck, ruff/pyflakes, gitleaks-history
+# --full also scans the last REVIEW_HISTORY_MAX (default 1000) commits of HEAD; 0 = off, said in the NOT RUN list. --history and --full-history keep their ranges.
+[ "$hist" = 0 ] || hmax=
+case $hmax in *[!0-9]*) hmax=1000 ;; esac
+if [ -n "$hmax" ]; then
+  if [ "$hmax" -eq 0 ] 2>/dev/null; then echo "review_checks: history not scanned (REVIEW_HISTORY_MAX=0)" >&2; nr+="${nr:+, }gitleaks-history (history not scanned: REVIEW_HISTORY_MAX=0)"; else hist=1; fi
+fi
 [ "$hist" = 0 ] || wiredx+=" gitleaks-history"
 
 # Existing changed files matching extended regex $1, one per line.
@@ -469,7 +475,7 @@ if have gitleaks; then
   fi
   if [ "$hist" = 1 ]; then # history: the commits BASE..HEAD adds, not just the final file state (never BASE...HEAD: that also scans every BASE-only commit when HEAD is behind)
     : >"$rep"
-    lo=(--log-opts "$base..HEAD"); [ "$full" = 0 ] || lo=() # default: only the commits since BASE (default origin/main, never a possibly stale local main)
+    lo=(--log-opts "$base..HEAD"); [ "$full" = 0 ] || lo=(); [ -z "$hmax" ] || lo=(--log-opts "--max-count=$hmax") # default: only the commits since BASE (default origin/main, never a possibly stale local main)
     if run_one gitleaks-history gitleaks detect --no-banner --exit-code 0 -f json -r "$rep" ${lo[@]+"${lo[@]}"} -s . && scan_ok gitleaks-history; then
       [ -s "$rep" ] || echo '[]' >"$rep"
       if sjson gitleaks "$rep" >"$tsv"; then while IFS=$'\t' read -r f l r m; do [[ $f =~ $XRE ]] || add gitleaks-history "$f" "$l" "$r" "$m"; done <"$tsv"
