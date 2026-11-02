@@ -1,4 +1,4 @@
-# Bundled generic taint rules (JavaScript/TypeScript). Sources: req/request query, body, params, cookies, headers.
+# Bundled generic taint rules (JavaScript/TypeScript). Sources: req/request query, body, params, cookies, headers. Koa ctx.* input and NestJS @Body/@Query/@Param/@Headers/@Req parameters count as sources in the same rules.
 # Sinks: classic injection calls on well-known receivers. A guard `if (!ALLOW.has(x)) return|throw` before the sink suppresses it for x.
 # Also hardcoded-credential-compare (a pass/secret/token/api-key name vs a non-empty string literal, WARNING) and hardcoded-basic-auth (a base64-decoded value vs a literal, ERROR); env reads, `typeof` checks, JWT header fields (alg, typ, kid), scheme/sentinel literals (bearer, none, true, ...), single-character literals and test/fixture paths are skipped. ponytail: template literals are not matched.
 # Also date-parse-rollover (INFO: a date accepted only because Number.isFinite/isNaN of an inline Date.parse(x) or new Date(x) passed, with no .toISOString() round trip in the enclosing function; V8 reads 2026-02-30 as 2 March; test paths are skipped) and gcm-no-auth-tag-length (WARNING: createDecipheriv with an *-gcm cipher and no authTagLength option, so a truncated tag is accepted, a forgery risk only when the tag length is attacker-controlled). ponytail: any .toISOString() in the enclosing function counts as the round trip, component compares such as getUTCDate are not recognised, a numeric-timestamp new Date(ts) check can report, and a check on a variable bound first (const d = new Date(x); isNaN(d)) is not flagged because those hits were mostly noise; a cipher name that is not a string literal (or a const bound to one) and an options argument that is not an object literal are skipped.
@@ -38,6 +38,60 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    # Koa context input and NestJS parameter decorators (@Body, @Query, @Param, @Headers; @Req or @Request read as .body, .query, .params, .headers). ponytail: a controller is recognized only as a class method with the decorator on a parameter; a Parse*Pipe argument clears the value; a custom decorator or a destructured parameter is not followed.
+    - pattern-either: &koa_nest_sources
+        - pattern: ctx.request.body.$P
+        - pattern: ctx.request.body
+        - pattern: ctx.request.query.$P
+        - pattern: ctx.request.query
+        - pattern: ctx.request.params.$P
+        - pattern: ctx.request.params
+        - pattern: ctx.request.headers.$P
+        - pattern: ctx.request.headers
+        - pattern: ctx.request.header.$P
+        - pattern: ctx.request.header
+        - pattern: ctx.request.files.$P
+        - pattern: ctx.request.files
+        - pattern: ctx.query.$P
+        - pattern: ctx.query
+        - pattern: ctx.params.$P
+        - pattern: ctx.params
+        - pattern: ctx.headers.$P
+        - pattern: ctx.headers
+        - pattern: ctx.header.$P
+        - pattern: ctx.header
+        - pattern: ctx.querystring
+        - pattern: ctx.cookies.get(...)
+        - pattern: ctx.get(...)
+        - patterns:
+          - pattern-inside: |
+              class $C { ... $M(..., @$D(...) $X, ...) { ... } }
+          - pattern-not-inside:
+              patterns:
+              - pattern: |
+                  class $C { ... $M(..., @$D(..., $PIPE, ...) $X, ...) { ... } }
+              - metavariable-regex:
+                  metavariable: $PIPE
+                  regex: ^(?:new\s+)?Parse(?:Int|Float|Bool|UUID|Enum|Date)Pipe\b
+          - metavariable-regex:
+              metavariable: $D
+              regex: ^(?:Body|Query|Param|Headers)$
+          - focus-metavariable: $X
+        - patterns:
+          - pattern-inside: |
+              class $C { ... $M(..., @$D(...) $R, ...) { ... } }
+          - metavariable-regex:
+              metavariable: $D
+              regex: ^(?:Req|Request)$
+          - pattern-either:
+            - pattern: $R.body
+            - pattern: $R.body.$P
+            - pattern: $R.query
+            - pattern: $R.query.$P
+            - pattern: $R.params
+            - pattern: $R.params.$P
+            - pattern: $R.headers
+            - pattern: $R.headers.$P
     # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
     - patterns:
       - pattern-either:
@@ -122,6 +176,7 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    - pattern-either: *koa_nest_sources
     # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
     - patterns:
       - pattern-either:
@@ -207,6 +262,7 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    - pattern-either: *koa_nest_sources
     # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
     - patterns:
       - pattern-either:
@@ -340,6 +396,7 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    - pattern-either: *koa_nest_sources
     # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
     - patterns:
       - pattern-either:
@@ -450,6 +507,7 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    - pattern-either: *koa_nest_sources
     # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
     - patterns:
       - pattern-either:
@@ -633,6 +691,7 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    - pattern-either: *koa_nest_sources
     # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
     - patterns:
       - pattern-either:
@@ -893,6 +952,7 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    - pattern-either: *koa_nest_sources
   pattern-sinks:
   - patterns:
     - pattern-either:
@@ -931,6 +991,7 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    - pattern-either: *koa_nest_sources
   pattern-sinks:
   - patterns:
     - pattern-either:
@@ -1099,6 +1160,7 @@ rules:
     - pattern: request.cookies
     - pattern: request.headers.$P
     - pattern: request.headers
+    - pattern-either: *koa_nest_sources
     # App-router input, read only inside an exported GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS route handler. ponytail: a handler is recognized only as export [async] function NAME or export const NAME = async (...) =>, with the request as its first parameter.
     - patterns:
       - pattern-either:
