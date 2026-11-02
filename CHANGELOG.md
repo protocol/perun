@@ -3,6 +3,11 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.643.0] — 2026-11-02
+
+### Changed
+- The JavaScript taint rules in `.claude/skills/deep-code-review/templates/semgrep-taint/js.yml` (`perun.js.sqli`, `postgrest-filter-injection`, `command-injection`, `git-argument-injection`, `path-traversal`, `ssrf`, `deserialize-eval`, `xss` and `open-redirect`) now also read Koa and NestJS request input as sources, so a value from it that reaches one of their sinks is reported. Koa: `ctx.query`, `ctx.params`, `ctx.headers`, `ctx.header`, `ctx.querystring`, `ctx.request.body`, `.query`, `.params`, `.headers`, `.header` and `.files` (with or without a property), `ctx.cookies.get(...)` and `ctx.get(...)`. NestJS: a class method parameter decorated with `@Body`, `@Query`, `@Param` or `@Headers`, and the `.body`, `.query`, `.params` and `.headers` of a parameter decorated with `@Req` or `@Request`. A `Parse*Pipe` argument (`ParseIntPipe`, `ParseFloatPipe`, `ParseBoolPipe`, `ParseUUIDPipe`, `ParseEnumPipe`, `ParseDatePipe`) clears the value. The shared source list is written once and reused by an anchor. On blind held-out probe sets the rules flagged 37/37 (set 1) and 29/30 (set 2) in-claim cases, with 0 clean-case hits outside test files and stray hits equal to the old rules. Left out: a destructured decorator parameter, a custom decorator, and a Koa context named other than `ctx`. Any object named `ctx` is read as a Koa context, so a non-Koa `ctx` that reaches a sink can be reported.
+
 ## [1.642.0] — 2026-11-02
 
 ### Added
