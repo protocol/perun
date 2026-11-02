@@ -70,13 +70,25 @@ app.get("/ok3", async (req, res) => {
   await fetch(u, { signal });
 });
 ''')
+    open(d + "/k.js", "w").write('''router.get("/a", async (ctx) => { db.query(`SELECT * FROM t WHERE n = '${ctx.query.n}'`); });
+router.post("/b", async (ctx) => { exec("convert " + ctx.request.body.f); });
+router.get("/ok", async (ctx) => { exec("convert logo.png"); });
+''')
+    open(d + "/n.ts", "w").write('''class C {
+  a(@Param("id") id: string) { return fs.readFileSync("/srv/" + id); }
+  b(@Body() b: any) { return fetch(b.url); }
+  c(@Req() req: any) { db.query(`SELECT * FROM t WHERE n = '${req.body.n}'`); }
+  d(@Param("id", ParseIntPipe) id: number) { return fs.readFileSync("/srv/" + id); }
+  e() { return fs.readFileSync("/srv/a.txt"); }
+}
+''')
     env = dict(os.environ, HOME=d, SEMGREP_USER_HOME=d)
     p = subprocess.run(["semgrep", "--config", os.path.join(SK, "templates", "semgrep-taint"), "--metrics=off",
                         "--disable-version-check", "--json", "--quiet", d], capture_output=True, text=True, env=env)
     r = json.loads(p.stdout)
     assert not r["errors"], r["errors"]
     hits = sorted((x["path"][-4:], x["start"]["line"]) for x in r["results"])
-    want = sorted([("v.py", 3), ("v.py", 4), ("v.py", 5), ("v.py", 6), ("v.py", 7), ("v.py", 16), ("v.py", 21), ("v.js", 1), ("v.js", 2), ("v.js", 3), ("v.js", 11)])
+    want = sorted([("v.py", 3), ("v.py", 4), ("v.py", 5), ("v.py", 6), ("v.py", 7), ("v.py", 16), ("v.py", 21), ("v.js", 1), ("v.js", 2), ("v.js", 3), ("v.js", 11), ("k.js", 1), ("k.js", 2), ("n.ts", 2), ("n.ts", 3), ("n.ts", 4)])
     assert hits == want, hits
     shutil.rmtree(d)
 print("ok")
