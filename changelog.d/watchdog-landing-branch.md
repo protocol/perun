@@ -1,0 +1,2 @@
+### Fixed
+- The landing watchdog no longer cries "Landing stalled" on a repo whose default branch is owner-gated and release-only while the merge train lands on another branch. Set the branch with env `PERUN_LANDING_BRANCH` or policy `landing_branch` (for example `perun_policy.py set landing_branch development`); unset keeps origin/HEAD, then main, then master. A branch missing on origin keeps the hook silent.

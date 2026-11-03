@@ -79,6 +79,9 @@ default `warn`. Only `warn` exists: the hook advises and never blocks a prompt.
 Fail open: no git repo, no origin, no gh, no auth, a failed fetch (a stale remote ref would fake a stall), bad stdin,
 an unreadable policy or cache and any other error print nothing and exit 0. gh_rest.py's macOS-sandbox TLS retry
 covers `gh api` only, not `gh pr list`, so under that sandbox this hook stays silent rather than guess.
+Branch: env PERUN_LANDING_BRANCH, else policy `landing_branch` (`perun_policy.py set landing_branch development`), else origin/HEAD,
+else main, else master. Set it when the default branch is release-only and the merge train lands on another one. A branch that
+is not on origin reads as no branch: silent, like the no-origin case. Every fetch, log and `gh pr list --base` uses it.
 Side effects: `git fetch origin <default branch>` (updates that remote-tracking ref only) and the cache file.
 """
 import calendar
@@ -164,8 +167,25 @@ def green(pr, allow_forks=False):
     return blocker(pr, allow_forks) in ("", "mergeable=UNKNOWN") and bool(rolls) and all(_check_ok(r) for r in rolls)
 
 
+def _policy_branch():
+    """Policy `landing_branch` ('' when unset or the policy is unreadable)."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import perun_policy
+        return perun_policy.load().get("landing_branch") or ""
+    except Exception:  # fail open
+        return ""
+
+
 def default_branch(cwd):
-    """origin's default branch: origin/HEAD, else main, else master. Raises when none exists."""
+    """The branch the merge train lands on: env PERUN_LANDING_BRANCH, else policy `landing_branch`, else origin/HEAD, else main, else master.
+    Raises when it is not on origin (the hook then stays silent)."""
+    pick = (os.environ.get("PERUN_LANDING_BRANCH") or "").strip() or _policy_branch()
+    if pick:
+        if not re.fullmatch(r"[A-Za-z0-9._][A-Za-z0-9._/-]*", pick) or ".." in pick:  # the policy schema's branch-name rule
+            raise RuntimeError("bad landing branch name")
+        _run(["git", "rev-parse", "--verify", "-q", "origin/" + pick], cwd)
+        return pick
     try:
         return _run(["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd).split("/", 1)[1]
     except RuntimeError:
@@ -599,6 +619,14 @@ def hook(data, now=None):
     return line
 
 
+def _branch(cwd):
+    """default_branch(cwd), or None when it does not resolve (a cache hit then never matches)."""
+    try:
+        return default_branch(cwd)
+    except RuntimeError:
+        return None
+
+
 def _line(data, now=None):
     mode, minutes = settings()
     if mode == "off" or not _event(data):
@@ -609,15 +637,15 @@ def _line(data, now=None):
     try:
         with open(path) as f:
             c = json.load(f)
-        if now - c["ts"] < THROTTLE_S and c.get("minutes") == minutes and c.get("cap") == cap and c.get("flow", [0, 0]) == list(flow_limits()) and c.get("age", [0, 0]) == list(alim) and c.get("lane", [0, {}]) == lcfg:
+        if now - c["ts"] < THROTTLE_S and c.get("minutes") == minutes and c.get("cap") == cap and c.get("flow", [0, 0]) == list(flow_limits()) and c.get("age", [0, 0]) == list(alim) and c.get("lane", [0, {}]) == lcfg and c.get("branch") == _branch(cwd):
             return c.get("line")
     except (OSError, ValueError, KeyError, TypeError):
         pass
     with open(path, "w") as f:  # stamp first: a failing or hanging remote is not retried on every prompt
-        json.dump({"ts": now, "minutes": minutes, "cap": cap, "flow": list(flow_limits()), "age": list(alim), "lane": lcfg, "line": None}, f)
+        json.dump({"ts": now, "minutes": minutes, "cap": cap, "flow": list(flow_limits()), "age": list(alim), "lane": lcfg, "branch": _branch(cwd), "line": None}, f)
     line = _all(cwd, probe(cwd, minutes), minutes, cap, alim, tuple(lcfg))
     with open(path, "w") as f:
-        json.dump({"ts": now, "minutes": minutes, "cap": cap, "flow": list(flow_limits()), "age": list(alim), "lane": lcfg, "line": line}, f)
+        json.dump({"ts": now, "minutes": minutes, "cap": cap, "flow": list(flow_limits()), "age": list(alim), "lane": lcfg, "branch": _branch(cwd), "line": line}, f)
     return line
 
 

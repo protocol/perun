@@ -22,6 +22,7 @@ globs, edit the file; default `[]` = the script's built-in workflow/hook/train/g
 `hold_labels` (non-empty JSON list of PR label names, compared case-insensitively, default `["do-not-merge"]`): merge_train.py skips a PR carrying any of them at plan time and again right before each merge (a read error also skips).
 `landing_watchdog` takes `off|warn` (default `warn`): whether landing_watchdog.py warns on a prompt when nothing merged to the default
 branch for `landing_stall_min` minutes (integer >= 1, default 60) while green PRs wait; env `PERUN_LANDING_WATCHDOG` overrides it.
+`landing_branch` (branch name, default unset = origin/HEAD): the branch the watchdog counts merges and green PRs on, for a repo whose default branch is release-only; env `PERUN_LANDING_BRANCH` overrides it.
 `stage_timeout_min` (integer >= 1, default 120): wall-clock limit stage_run.py puts on each train/pregate/hook stage before it kills the stage's process group.
 `train_gate` takes `shadow|enforce|off` (default `shadow`) and `heavy_trains` an integer >= 1 (default 1): stage_run.py admits at most `heavy_trains` live `train-browser` stages plus `heavy_trains` other `train-*` stages while one runs; `shadow` only logs WOULD-BLOCK, `enforce` holds the stage.
 `train_budget_min` (integer >= 0, default 90, 0 = off) and `train_max_bisect_rounds` (integer >= 0, default 8, 0 = off): train_land.sh stops itself, releases its locks and leases, prints the culprit-suspect PRs and exits 5 (DEFER; 4 means the heavy lease was held) once a train has run that many minutes or that many gate rounds (first gate plus split halves); env `TRAIN_BUDGET_MIN` / `TRAIN_MAX_BISECT_ROUNDS` override.
@@ -114,7 +115,7 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "hold_labels": ["do-not-merge"], "landing_watchdog": "warn", "landing_stall_min": 60, "stage_timeout_min": 120, "wip_cap": 0, "installer_unapplied_h": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "train_budget_min": 90, "train_max_bisect_rounds": 8, "ready_age_p50_h": 0, "ready_age_p90_h": 0, "lane_idle_h": 0, "lane_globs": {}, "lkg_gate": "shadow", "lkg_stale_h": 0, "red_uncovered_max": 0, "red_oldest_h": 0, "background_guard": "warn", "lockfile_skip_review": "off", "train_gate": "shadow", "heavy_trains": 1}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "landing_branch": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "hold_labels": ["do-not-merge"], "landing_watchdog": "warn", "landing_stall_min": 60, "stage_timeout_min": 120, "wip_cap": 0, "installer_unapplied_h": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "train_budget_min": 90, "train_max_bisect_rounds": 8, "ready_age_p50_h": 0, "ready_age_p90_h": 0, "lane_idle_h": 0, "lane_globs": {}, "lkg_gate": "shadow", "lkg_stale_h": 0, "red_uncovered_max": 0, "red_oldest_h": 0, "background_guard": "warn", "lockfile_skip_review": "off", "train_gate": "shadow", "heavy_trains": 1}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
@@ -141,7 +142,7 @@ def validate(raw: dict) -> dict:
             ok = isinstance(v, dict) and all(isinstance(g, list) and g and all(isinstance(x, str) and x for x in g) for g in v.values())
         elif k == "landing_watchdog":
             ok = v in ("off", "warn")
-        elif k == "auto_update_pr_base":  # '' = origin/HEAD; else a plain branch name (no option-like or `..` names)
+        elif k in ("auto_update_pr_base", "landing_branch"):  # '' = origin/HEAD; else a plain branch name (no option-like or `..` names)
             ok = isinstance(v, str) and (v == "" or (re.fullmatch(r"[A-Za-z0-9._/-]+", v) is not None and v[0] not in "-/" and v[-1] != "/" and ".." not in v and "//" not in v and v != "HEAD"))
         elif k in ("auto_update", "auto_update_pr", "auto_compact", "statusline", "spend_nudge", "lockfile_skip_review"):
             ok = v in ON_OFF
