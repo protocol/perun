@@ -641,7 +641,7 @@ fi
 while IFS= read -r f; do
   case $f in Dockerfile*|*/Dockerfile*|*.dockerfile) ;; *) continue ;; esac
   [ -f "$f" ] || continue
-  while IFS=: read -r l _; do add dockerfile-chmod "$f" "$l" world-writable-chmod "RUN makes files world-writable (chmod 777 / a+w / o+w); grant the service user ownership with chown or a narrower mode instead"; done < <(grep -nE '^[[:space:]]*RUN[[:space:]].*chmod[[:space:]]+(-[A-Za-z-]+[[:space:]]+)*(0?[0-7]?[0-7][0-7][2367]|[ugoa]*[oa][ugoa]*[+=][rxXst]*w)([[:space:]]|$|;|&)' "$f" || true)
+  while IFS=: read -r l _; do add dockerfile-chmod "$f" "$l" world-writable-chmod "RUN makes files world-writable (chmod 777 / a+w / o+w); grant the service user ownership with chown or a narrower mode instead"; done < <(grep -nE '^[[:space:]]*RUN[[:space:]].*chmod[[:space:]]+(-[A-Za-z-]+[[:space:]]+)*(0?[0-7]?[0-7][0-7][2367]|[ugoa]*[oa][ugoa]*[+=][rxXst]*w)([[:space:]]|$|[;&])' "$f" || true)
 done <"$td/files"
 
 # trivy: offline against the cached DB (no download); no DB or any crash reads as not-run, never as clean.
