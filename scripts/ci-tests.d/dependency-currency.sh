@@ -4,3 +4,4 @@ python3 scripts/test_dependency_currency_coverage.py
 bash scripts/test-review-checks-dep-currency.sh
 python3 scripts/test_dependency_currency_g5.py
 python3 scripts/test_dependency_currency_g5b.py
+python3 scripts/test_dependency_currency_g5c.py
