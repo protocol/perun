@@ -43,7 +43,7 @@ CLAIMS = [
     r"|\b(all|every)\s+([\w-]+\s+){0,2}(checks?|scans?|tests?|audits?)\s+(have\s+|were\s+|are\s+)?(pass\w*|clear\w*)\b",
 ]
 SCOPABLE = {0, 1, len(CLAIMS) - 1}  # tool-result counts: a tool prefix or "in <path>" scopes them
-NEGATOR = re.compile(r"(\bnot|\bnever|n't|\bcannot)\s+(claim|say|state|assert|imply|certify|guarantee|mean|show|prove)\b(?:(?!\b(?:and|but)\b)[^.;!?:,])*$")
+NEGATOR = re.compile(r"(\bnot|\bnever|n't|\bcannot)\s+(claim|say|state|assert|imply|certify|guarantee|mean|show|prove)\w*\b(?:(?!\b(?:but|however|yet)\b)[^.;!?:,])*$")
 CITE = re.compile(r"([^\s:#]+)(?::(\d+)(?:-(\d+))?)?")
 PROSE_PATH = re.compile(r"/?[\w.-]+(?:/[\w.-]+)*(?:\.\w{1,8})?(?::\d+.*|#L\d+.*)?")
 SEP = re.compile(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*")
