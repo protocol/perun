@@ -217,7 +217,7 @@ Google eng-practices: approve once the change **definitely improves overall
 code health** — never wave a Blocker/Critical, never approve a regression on
 another axis (principle 4).
 
-Report templates (`report-format.md`, `machine-report.md`, `example-review-report.md`, `whole-project-report.md`): `full-map-report.md` — **read** at Phase 5.
+Report templates (also `machine-report.md`, `whole-project-report.md`): `full-map-report.md` — **read** at Phase 5.
 
 ---
 

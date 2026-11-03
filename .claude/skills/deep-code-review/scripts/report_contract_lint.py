@@ -28,7 +28,7 @@ RISK = r"(vulnerabilit\w*|weakness\w*|flaws?|findings?|issues?|risks?|problems?)
 CLAIMS = [
     r"\b(no|zero|0|without any)\s+([\w-]+\s+){0,3}" + RISK + r"\b",
     r"\bno\s+" + RISK + r"\s+(were\s+|was\s+)?(found|identified|detected|discovered|present)\b",
-    r"\b(is|are|was|were|looks|appears|remains|seems|deemed|considered)\b[\s,]+(?:(?!not\b|without\b)[\w'-]+[\s,]+){0,5}?(secure|safe|hardened|bulletproof|production[- ]ready|invulnerable|vulnerability[- ]free)\b",
+    r"\b(is|are|was|were|looks|appears|remains|seems|deemed|considered)\b[\s,]+(?:(?!not\b|without\b(?!\s+(?:exception|doubt|question)\b))[\w'-]+[\s,]+){0,5}?(secure|safe|hardened|bulletproof|production[- ]ready|invulnerable|vulnerability[- ]free)\b",
     r"\b(vulnerability|exploit|bug|risk)[- ]free\b",
     r"\b(attack|hack)[- ]proof\b|\bbulletproof\b|\brock[- ]solid\b|\bimpenetrable\b",
     r"\b(safe|ready|cleared?|good) (to|for) (deploy|ship|release|launch|merge|production|use)\b",
@@ -43,7 +43,7 @@ CLAIMS = [
     r"|\b(all|every)\s+([\w-]+\s+){0,2}(checks?|scans?|tests?|audits?)\s+(have\s+|were\s+|are\s+)?(pass\w*|clear\w*)\b",
 ]
 SCOPABLE = {0, 1, len(CLAIMS) - 1}  # tool-result counts: a tool prefix or "in <path>" scopes them
-NEGATOR = re.compile(r"(\bnot|\bnever|n't|\bcannot)\s+(claim|say|state|assert|imply|certify|guarantee|mean|show|prove)\b[^.;!?:,]*$")
+NEGATOR = re.compile(r"(\bnot|\bnever|n't|\bcannot)\s+(claim|say|state|assert|imply|certify|guarantee|mean|show|prove)\b(?:(?!\b(?:and|but)\b)[^.;!?:,])*$")
 CITE = re.compile(r"([^\s:#]+)(?::(\d+)(?:-(\d+))?)?")
 PROSE_PATH = re.compile(r"/?[\w.-]+(?:/[\w.-]+)*(?:\.\w{1,8})?(?::\d+.*|#L\d+.*)?")
 SEP = re.compile(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*")
@@ -218,7 +218,7 @@ def lint(path, root):
         for sent in re.split(r"(?<=[.;!?])\s+|\s+\|\s+", " ".join(prose.split())):
             for k, rx in enumerate(CLAIMS):
                 for m in re.finditer(rx, sent, re.I):
-                    if NEGATOR.search(sent[:m.start()].lower()):
+                    if NEGATOR.search(sent[:m.start(m.lastindex or 0)].lower()):  # negator must reach the claim word
                         continue
                     if k in SCOPABLE:  # a tool result scoped by tool-name prefix or "in <path>"
                         pre = re.match(r"\s*[-*]?\s*`?([\w.-]+)`?\s*[:(]", sent)

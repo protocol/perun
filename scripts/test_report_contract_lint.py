@@ -78,6 +78,9 @@ class Contract(unittest.TestCase):
     def test_negated_and_quoted_text_not_a_claim(self):
         self.assertEqual(lint(report(extra="This report does not say the app is secure. `is_safe = True`\n"))[0], 0)
         self.assertEqual(lint(report(extra="I won't state a version is current or safe from memory.\n"))[0], 0)
+        self.bad(report(extra="I do not claim it is perfect and is secure.\n"), "safety-claim")
+        self.bad(report(extra="The app is, without exception, secure.\n"), "safety-claim")
+        self.bad(report(extra="The app is fast and secure.\n"), "safety-claim")
 
     # round 2: independent-review probes
     def test_scoped_tool_count_not_a_claim(self):

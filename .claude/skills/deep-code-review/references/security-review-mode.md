@@ -2,7 +2,7 @@
 
 Read this when the user asks for a security audit or security review of a whole app (not a diff). It is an orchestration layer: it says what to inventory, in what order to run the existing security references, how to chain their findings, and six gap checks they do not cover. Depth stays in `security-appsec.md` (and the `appsec-*.md` files it routes), `security-api.md`, `security-ai-agents.md`, `security-agent-skills.md`, `frontend-security.md`, `threat-modeling.md`, `appsec-supply.md` and `dependency-currency-and-upgrades.md`; this file links to them and never restates them. Sources are logged with fetch dates in `docs/standards-index.md`.
 
-**Required at every app size, a three-file app included:** step 1's tool pass, and, before you write the report, a read of `whole-project-report.md` whose headings and per-standard table the report uses verbatim. `scripts/report_contract_lint.py` fails a report without them.
+**Required at every app size, a three-file app included:** step 1's tool pass, and, before you write the report, a read of `whole-project-report.md` whose headings and per-standard table the report uses verbatim. `scripts/report_contract_lint.py` fails a report missing the template sections.
 
 ## 1. Whole-app mode: inventory first, then chains
 
