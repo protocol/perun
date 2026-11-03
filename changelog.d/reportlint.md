@@ -1,4 +1,0 @@
-### Added
-- `scripts/report_contract_lint.py REPORT.md --root REPO` checks a whole-project security audit report against the honesty contract: required per-standard table, NOT CHECKED, static-vs-runtime and dependency sections, a status on every item, no safety claim (paraphrases included), cited paths and lines that exist, guided passes with examined files and a quoted negative, no pass for a tool under NOT RUN, and at most 40% unexcused not-checked items. The template is the new `references/whole-project-report.md`.
-size-budget-raise: .claude/skills/deep-code-review/references/full-map-report.md 2328→2467 one routing sentence to the whole-project report template
-size-budget-raise: .claude/skills/deep-code-review/references/security-review-mode.md 10789→11605 the whole-app audit runs the tool pass and writes the report template at every app size (calibration: both were skipped on a three-file app)
