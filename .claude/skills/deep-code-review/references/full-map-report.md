@@ -9,6 +9,7 @@ Exact templates (machine table, plain-language report, invariants ledger):
 machine-readable findings file a program consumes (or a `PRIOR`
 re-verification) follows `machine-report.md`. Gate and dedupe rows with `scripts/merge_findings.py`. Worked
 fictional example: `references/example-review-report.md`.
+A whole-project security audit follows `whole-project-report.md` (**read when** writing one; `scripts/report_contract_lint.py` checks it).
 
 Default per Phase 5: chat BLUF + full table **out-of-tree**; never paste the
 machine table as the first chat bubble. In-repo `code-review/` only on

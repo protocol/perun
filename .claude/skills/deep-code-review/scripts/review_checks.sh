@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# review_checks.sh [--base REF] [--tests] [--history] [--full] [--timeout SECS] — run local, read-only analyzers over the files
+# review_checks.sh [--base REF] [--tests] [--history] [--full] [--hygiene] [--timeout SECS] — run local, read-only analyzers over the files
 # changed since REF (default origin/main, compared as REF...HEAD) and print findings as a JSON array on
 # stdout: [{"file","line","rule","message","text","tool"}]. `text` ("rule: message") is the key
 # scripts/score_review.py matches on. Findings are LEADS: verify each against the code before reporting.
@@ -24,7 +24,7 @@
 # zstd, xz, 7z, lz4, bzip2, avro, pdf, zlib; the list and its ceilings are in committed_personal_data.py). gitleaks looks for secrets, not for exported personal data.
 # Built-in too, base mode only (a --full scan has no diff): sibling_sweep.py lists the unchanged call sites, in non-test code, of a function whose call arguments the diff changed elsewhere (tool `sibling-sweep`,
 # rule `unchanged-sibling-call`, message starts "lead:"): the sibling route a fix may have missed. Leads to open, never findings; a name with more than 25 call sites is skipped; scope and ceilings are in its docstring.
-# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler with no authentication evidence; SKIPPED without handlers), header_config.py (tool `header-config`: a security header the repo config never names, a lead to confirm with dynamic_probe.py; SKIPPED without a supported web app; a package.json, .conf file or directory it could not read gives not-checked rows instead) and attempt_limit_map.py (tool `attempt-limit`, rule `missing-attempt-limit`: a password, one-time-code or reset-code check with no attempt-limit evidence in its file or package, a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without a credential check or sign-in route). gitleaks runs once over the working tree, then (tool `gitleaks-history`) over the last REVIEW_HISTORY_MAX commits of HEAD (default 1000; 0 = skip, listed as "history not scanned"), so a secret removed from the tree but still in history is reported. gitleaks drops
+# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler with no authentication evidence; SKIPPED without handlers), header_config.py (tool `header-config`: a security header the repo config never names, a lead to confirm with dynamic_probe.py; SKIPPED without a supported web app; a package.json, .conf file or directory it could not read gives not-checked rows instead) and attempt_limit_map.py (tool `attempt-limit`, rule `missing-attempt-limit`: a password, one-time-code or reset-code check with no attempt-limit evidence in its file or package, a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without a credential check or sign-in route) and cost_limit_map.py (tool `cost-limit`, rules `missing-cost-limit` and `unbounded-body`: an LLM or paid-API proxy, upload, search, export or client-sized-page handler with no rate or quota limit evidence in its file or package, or a handler that reads the whole request body, or a body-parser limit of 10 MB or more, with no byte cap; a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without an HTTP handler). gitleaks runs once over the working tree, then (tool `gitleaks-history`) over the last REVIEW_HISTORY_MAX commits of HEAD (default 1000; 0 = skip, listed as "history not scanned"), so a secret removed from the tree but still in history is reported. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
 # gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row per top fixture dir when it has >3 (every other rule, and name-only matches, stay rows); REVIEW_FIXTURE_ROWS=all lists every hit.
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
@@ -53,7 +53,7 @@ set -euo pipefail
 lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin}
 case ":$PATH:" in *":$lb:"*) ;; *) [ -z "$lb" ] || [ ! -d "$lb" ] || PATH=$PATH:$lb ;; esac
 
-repo=. base=origin/main tests=0 hist=0 tmo=60 ran="" nr="" failed="" missing="" gap="" dg="" w1="" nice19=0 lease=ok leased=0 full=0 wr=0 hmax= cov="" wired="" wiredx=""
+repo=. base=origin/main tests=0 hist=0 hyg=0 tmo=60 ran="" nr="" failed="" missing="" gap="" dg="" w1="" nice19=0 lease=ok leased=0 full=0 wr=0 hmax= cov="" wired="" wiredx=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base=${2:?--base needs a ref}; case "$base" in -*) echo "review_checks: --base must not start with '-'" >&2; exit 2 ;; esac; shift 2 ;;
@@ -61,9 +61,10 @@ while [ $# -gt 0 ]; do
     --tests) tests=1; shift ;;
     --repo) repo=${2:?--repo needs a dir}; [ -d "$repo" ] || { echo "review_checks: --repo: not a directory: $repo" >&2; exit 2; }; shift 2 ;; # replaces `cd DIR && review_checks.sh` (bash guards block chains)
     --history) hist=1; shift ;;
+    --hygiene) hyg=1; shift ;;
     --full) wr=1 full=1 hmax=${REVIEW_HISTORY_MAX:-1000}; shift ;;
     --full-history) hist=1 full=1; shift ;;
-    *) echo "usage: review_checks.sh [--repo DIR] [--base REF] [--tests] [--history] [--full] [--timeout SECS]" >&2; exit 2 ;;
+    *) echo "usage: review_checks.sh [--repo DIR] [--base REF] [--tests] [--history] [--full] [--hygiene] [--timeout SECS]" >&2; exit 2 ;;
   esac
 done
 case "$tmo" in ''|*[!0-9]*) echo "review_checks: --timeout must be an integer" >&2; exit 2 ;; esac
@@ -260,12 +261,36 @@ if [ -n "$json_files" ] && have jq; then
   done <<<"$json_files"
 fi
 
+# Hygiene tier: low-value rows (trivy LOW, hadolint info/style, checkov ids in HYG below) leave the findings unless --hygiene; sjson counts them in $td/hyg.
+export REVIEW_HYGIENE_SHOW=$hyg HYG_COUNT="$td/hyg"
 # Scanner JSON (file $2, may have log lines before the JSON, which starts a line) of kind $1 -> TSV: file, line, rule, message.
 # Fails closed: missing, empty or malformed JSON exits non-zero instead of reading as "no findings".
 sjson() {
   python3 - "$1" "$2" <<'PY'
 import collections, hashlib, json, os, pathlib, re, sys
 kind = sys.argv[1]
+show_hyg = os.environ.get("REVIEW_HYGIENE_SHOW") == "1"
+HYG = {"CKV_DOCKER_2", "CKV_AWS_23", "CKV_AWS_126", "CKV_AWS_135", "KSV-0125", "KSV0125", "KSV125", "AVD-KSV-0125"}  # checkov has no severity in this output: HEALTHCHECK, SG description, detailed monitoring, EBS optimized; trivy KSV-0125 (trusted registries) means nothing until a registry list is configured
+hidden = 0
+def keyline(path, start, end, words, skip=(), yaml=False):
+    """Line of the first word (a key or value the scanner named) near a flagged span, else start. Scanners anchor on the container or resource start, not the offending key.
+    YAML: search the enclosing --- document (span start onward, then the doc head); HCL and Dockerfile: only the span. Unreadable file or no hit: start."""
+    try: ls = open(path, encoding="utf-8", errors="replace").read().split("\n")
+    except OSError: return start
+    if not start or start > len(ls): return start
+    lo, hi = start - 1, max(end or start, start)
+    if yaml:
+        sep = lambda i: ls[i].startswith("---")
+        a = next((i + 1 for i in range(lo, -1, -1) if sep(i)), 0)
+        z = next((i for i in range(lo + 1, len(ls)) if sep(i)), len(ls))
+        order = list(range(lo, z)) + list(range(a, lo))
+    else: order = list(range(lo, min(hi, len(ls))))
+    for w in words:
+        if w in skip or not w: continue
+        r = re.compile(r"(?<![\w-])" + re.escape(w) + r"(?![\w-])")
+        for i in order:
+            if r.search(ls[i]): return i + 1
+    return start
 def nf(f):  # scanners echo the path they were given ("./.github/..."); rows must carry the changed-file form
     return os.path.normpath(f) if f else f
 cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package or file can be named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
@@ -346,8 +371,18 @@ if kind == "gitleaks":  # Secret/Match fields are deliberately never read
 elif kind.startswith("trivy"):
     for r in d.get("Results") or []:  # Secrets only in the secret-only fallback, and never the Match (it would leak the value)
         if kind == "trivy-secret": rows += [(r["Target"], s.get("StartLine", 0), s.get("RuleID"), s.get("Title", "secret detected")) for s in r.get("Secrets") or []]
-        rows += [(r["Target"], 0, v.get("VulnerabilityID"), f"{v.get('PkgName')}@{v.get('InstalledVersion')}: {v.get('Title', '')}") for v in r.get("Vulnerabilities") or []]
-        rows += [(r["Target"], (m.get("CauseMetadata") or {}).get("StartLine", 0), m.get("ID"), m.get("Title", "")) for m in r.get("Misconfigurations") or []]
+        lo = lambda x: not show_hyg and str(x.get("Severity")).upper() == "LOW"
+        hidden += sum(map(lo, (r.get("Vulnerabilities") or []) + (r.get("Misconfigurations") or [])))
+        rows += [(r["Target"], 0, v.get("VulnerabilityID"), f"{v.get('PkgName')}@{v.get('InstalledVersion')}: {v.get('Title', '')}") for v in r.get("Vulnerabilities") or [] if not lo(v)]
+        for m in r.get("Misconfigurations") or []:
+            if lo(m): continue
+            if not show_hyg and (m.get("ID") in HYG or m.get("AVDID") in HYG): hidden += 1; continue
+            cm = m.get("CauseMetadata") or {}
+            msg = m.get("Message") or ""
+            # names after a capitalised kind ("Container 'app' of Deployment 'web'") and the resource itself are not the offending key; the last dotted segment of the rest is
+            skip = set(re.findall(r"[A-Z]\w* '([^']+)'", msg)) | set(re.split(r"[/\s]+", cm.get("Resource") or ""))
+            words = [t.split(".")[-1] for t in re.findall(r"'([^']+)'", msg)]
+            rows.append((r["Target"], keyline(r["Target"], cm.get("StartLine", 0), cm.get("EndLine", 0), words, skip, r["Target"].lower().endswith((".yaml", ".yml"))), m.get("ID"), m.get("Title", "")))
 elif kind == "audit":
     # "-" placeholders: the caller's `read` collapses empty leading TSV fields; it supplies the lockfile path itself
     rows += [("-", 0, k, f"{v.get('severity')}: {v.get('name', k)}") for k, v in (d.get("vulnerabilities") or {}).items()]
@@ -355,7 +390,8 @@ elif kind == "audit":
     rows += [("-", 0, v.get("id"), f"{p.get('name')}@{p.get('version')}") for p in d.get("dependencies") or [] for v in p.get("vulns") or []]
 elif kind == "zizmor":  # row is 0-based in json-v1; fixes and snippets are never read
     for x in d:
-        l = ((x.get("locations") or [{}])[0])
+        ls = x.get("locations") or [{}]  # the Primary location is the offending line; ls[0] can be a Related span (the enclosing job, a line above)
+        l = next((c for c in ls if (c.get("symbolic") or {}).get("kind") == "Primary"), ls[0])
         f = (((l.get("symbolic") or {}).get("key") or {}).get("Local") or {}).get("verbatim_path")
         r = (((l.get("concrete") or {}).get("location") or {}).get("start_point") or {}).get("row", -1)
         rows.append((nf(f), r + 1, x.get("ident"), x.get("desc", "")))
@@ -372,9 +408,14 @@ elif kind == "grype":  # file comes from the caller (it scanned one target); "-"
 elif kind == "checkov":  # code_block is never read; "-" placeholder as for grype
     for x in ds:
         for c in x["results"].get("failed_checks") or []:
-            rows.append(("-", (c.get("file_line_range") or [0])[0], c.get("check_id"), c.get("check_name", "")))
+            if not show_hyg and c.get("check_id") in HYG: hidden += 1; continue
+            fr = (c.get("file_line_range") or [0, 0]) + [0]
+            ek = [([s for s in re.split(r"[./]", re.sub(r"\[\d+\]", "", str(k))) if s] or [""])[-1] for k in (c.get("check_result") or {}).get("evaluated_keys") or []]  # last non-index segment; checkov writes "access_logs/[0]/enabled"
+            rows.append(("-", keyline(c.get("file_abs_path") or "", fr[0], fr[1], ek), c.get("check_id"), c.get("check_name", "")))
 elif kind == "hadolint":
-    rows = [(r.get("file"), r.get("line", 0), r.get("code"), r.get("message", "")) for r in d]
+    hl = lambda r: not show_hyg and r.get("level") in ("info", "style")
+    hidden += sum(map(hl, d))
+    rows = [(r.get("file"), r.get("line", 0), r.get("code"), r.get("message", "")) for r in d if not hl(r)]
 elif kind == "actionlint":  # snippet is never read; the rule is actionlint's error kind
     rows = [(nf(r.get("filepath")), r.get("line", 0), r.get("kind"), r.get("message", "")) for r in d]
 elif kind == "semgrep":
@@ -432,6 +473,7 @@ if kind == "semgrep" and rc == 3:  # name what semgrep could not fully read, at 
     sc = {str(x) for x in sc} if isinstance(sc, list) else set()
     print(f"review_checks: partial: semgrep ran but reported errors (coverage incomplete; findings above are real) ({sum(by.values())} error(s) on {len(sc & set(gp))} of {len(sc)} scanned file(s): "
           + ", ".join(f"{k} x{n}" for k, n in sorted(by.items(), key=lambda kn: (-kn[1], kn[0]))) + ("; see not-checked rows)" if gp else ")"), file=sys.stderr)
+if hidden: open(os.environ["HYG_COUNT"], "a").write(f"{hidden}\n")
 for row in rows:
     print("\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in row))
 sys.exit(rc)
@@ -594,6 +636,13 @@ elif have semgrep; then
     add semgrep "" 0 not-checked "semgrep errored on $sgerr chunk(s) of up to 200 files; those files were not scanned"
   elif [ "$sgerr" -gt 0 ]; then ran=$sgwas; skip semgrep "scan errored, no findings"; fi
 fi
+
+# World-writable chmod in a Dockerfile RUN (777, a+w, o+w, incl. -R): no installed scanner (hadolint, checkov, trivy) has a rule for it.
+while IFS= read -r f; do
+  case $f in Dockerfile*|*/Dockerfile*|*.dockerfile) ;; *) continue ;; esac
+  [ -f "$f" ] || continue
+  while IFS=: read -r l _; do add dockerfile-chmod "$f" "$l" world-writable-chmod "RUN makes files world-writable (chmod 777 / a+w / o+w); grant the service user ownership with chown or a narrower mode instead"; done < <(grep -nE '^[[:space:]]*RUN[[:space:]].*chmod[[:space:]]+(-[A-Za-z-]+[[:space:]]+)*(0?[0-7]?[0-7][0-7][2367]|[ugoa]*[oa][ugoa]*[+=][rxXst]*w)([[:space:]]|$|;|&)' "$f" || true)
+done <"$td/files"
 
 # trivy: offline against the cached DB (no download); no DB or any crash reads as not-run, never as clean.
 # If the vuln+misconfig scan fails (check bundle unreachable in the sandbox), retry secret-only and say so.
@@ -849,6 +898,14 @@ if [ "$full" = 1 ]; then
       while IFS=$'\t' read -r f l r m; do case "$r" in missing-attempt-limit) add attempt-limit "$f" "$l" "$r" "$m" ;; esac; done <"$out"
     fi
   fi
+  # cost_limit_map.py: missing-cost-limit rows (a costly or unbounded endpoint with no rate or quota limit evidence); cost-limit-evidence rows stay in the script's own output. SKIPPED when no HTTP handler is found.
+  if have python3 && run_one cost-limit python3 -I "$here/cost_limit_map.py" "$PWD" && scan_ok cost-limit; then
+    if grep -q 'cost-limit: no HTTP handler found' "$out"; then skip cost-limit "SKIPPED: no HTTP handler"
+    else
+      grep -E '^cost-limit: ' "$out" >&2 || true
+      while IFS=$'\t' read -r f l r m; do case "$r" in missing-cost-limit|unbounded-body) add cost-limit "$f" "$l" "$r" "$m" ;; esac; done <"$out"
+    fi
+  fi
 fi
 
 lease_drop
@@ -874,6 +931,20 @@ if [ -n "$cf" ]; then
     pdok=0; run_one committed-data python3 "$pd" --stdin <<<"$cf" && scan_ok committed-data && pdok=1
     # flushed per row, as above: a timeout still yields the findings made so far
     if [ "$pdok" = 1 ] || [ "$rc" = 124 ] || [ "$rc" = 142 ]; then while IFS=$'\t' read -r f l r m; do add committed-data "$f" "$l" "$r" "$m"; done <"$out"; fi
+  fi
+fi
+
+# Built-in, no tool to install: dependency currency (dependency_currency.py). Reads each changed manifest, lockfile (direct + transitive), Dockerfile, workflow and runtime pin (vendored dirs are flagged), asks the ecosystem registries for the newest stable release,
+# OSV for known vulnerabilities and CISA KEV for exploited ones, and endoflife.date for end-of-life runtimes. Rows: tool dep-currency, rule kev|vulnerable|eol|outdated|drift|unpinned|vendored|not-checked (KEV first); a lookup that fails is a not-checked row (NOT RUN), never "up to date". Needs network; unleased.
+dc="$here/dependency_currency.py"
+dcf=$(printf '%s\n' "$all" | grep -E '(^|/)(package(-lock)?\.json|yarn\.lock|[^/]*(requirements|constraints?)[^/]*\.(txt|in)|(requirements?|reqs?)/[^/]+\.(txt|in)|poetry\.lock|Pipfile(\.lock)?|setup\.cfg|rust-toolchain(\.toml)?|gradle\.properties|go\.mod|pom\.xml|[^/]*\.gradle(\.kts)?|gradle\.lockfile|lockfile\.json|[^/]*\.versions\.toml|Cargo\.(toml|lock)|composer\.(json|lock)|Dockerfile[^/]*|[^/]*\.Dockerfile|\.nvmrc|\.node-version|\.python-version|\.ruby-version|pnpm-lock\.yaml|pyproject\.toml|(docker-)?compose[^/]*\.ya?ml|action\.ya?ml|\.github/(workflows|actions)/.*\.ya?ml)$' || true)
+dcy=$(printf '%s\n' "$all" | grep -E '\.ya?ml$' | tr '\n' '\0' | xargs -0 grep -lsE -m1 -- '^apiVersion:' || true)  # Kubernetes manifests: container images
+[ -n "$dcy" ] && dcf=$(printf '%s\n%s\n' "$dcf" "$dcy" | sed '/^$/d' | sort -u)
+if [ -n "$dcf" ]; then
+  if [ ! -f "$dc" ]; then skip dep-currency "dependency_currency.py missing"
+  else
+    dcok=0; run_one dep-currency python3 "$dc" --stdin --budget "$((tmo * 3 / 4))" <<<"$dcf" && scan_ok dep-currency && dcok=1
+    if [ "$dcok" = 1 ] || [ "$rc" = 124 ] || [ "$rc" = 142 ]; then while IFS=$'\t' read -r f l r m; do add dep-currency "$f" "$l" "$r" "$m"; done <"$out"; fi
   fi
 fi
 
@@ -983,4 +1054,5 @@ except OSError:
     pass
 PY
 echo "review_checks: NOT RUN: ${nr:-none}" >&2
+[ ! -s "$td/hyg" ] || echo "review_checks: hygiene: $(awk '{n+=$1} END{print n}' "$td/hyg") rows hidden (--hygiene shows them)" >&2
 [ -z "$gap" ] || echo "review_checks: missing tools: $gap" >&2
