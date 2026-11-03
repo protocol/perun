@@ -33,4 +33,5 @@ Needs a running system: deployed config, WAF, runtime authz, vault, infra outsid
 - `pass` needs a check that ran: `tool:<name>` whose tool is not under NOT RUN, or `guided:<id>`. A guided pass also lists the files it examined and a backtick-quoted negative that appears in a cited file. Cited paths resolve inside `--root`, as `path` or `path:line[-line]` only.
 - Every cited `path` or `path:line` exists under `--root`.
 - More than 40% of items `not-checked` without a NOT RUN reason (a `tool:` basis whose tool has a reason under NOT RUN) fails.
-- No safety claim ("no vulnerabilities", "is secure", "safe to deploy" and paraphrases; list in the script's `CLAIMS`). State what was checked, never that the project is safe.
+- No safety claim ("no vulnerabilities", "is secure", "safe to deploy" and paraphrases; list in the script's `CLAIMS`). State what was checked, never that the project is safe. A zero count starts with its tool (`trivy: 0 findings in package-lock.json`).
+- NOT RUN holds one `- <tool>: <reason>` line per tool that did not run, and nothing else; tools that ran go in the Basis column.

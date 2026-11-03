@@ -77,6 +77,7 @@ class Contract(unittest.TestCase):
 
     def test_negated_and_quoted_text_not_a_claim(self):
         self.assertEqual(lint(report(extra="This report does not say the app is secure. `is_safe = True`\n"))[0], 0)
+        self.assertEqual(lint(report(extra="I won't state a version is current or safe from memory.\n"))[0], 0)
 
     # round 2: independent-review probes
     def test_scoped_tool_count_not_a_claim(self):
@@ -86,6 +87,14 @@ class Contract(unittest.TestCase):
 
     def test_not_secure_is_not_a_claim(self):
         self.assertEqual(lint(report(extra="The app is not secure against CSRF.\n"))[0], 0)
+
+    def test_without_secure_listing_is_not_a_claim(self):
+        self.assertEqual(lint(report(extra="The cookie is set without httpOnly, secure.\n"))[0], 0)
+        self.bad(report(extra="The app is secure without any tuning.\n"), "safety-claim")
+
+    def test_route_paths_not_citations(self):
+        self.assertEqual(lint(report(extra="Routes `/admin/users`, `/notes/2`, `/preview`, `/login`, `GET /x`.\n"))[0], 0)
+        self.bad(report(extra="See `/etc/hosts` and `src/nope.py:1`.\n"), "bad-citation")
 
     def test_claim_after_distant_negator(self):
         self.bad(report(extra="We did not test X; the app is secure.\n"), "safety-claim")

@@ -28,7 +28,7 @@ RISK = r"(vulnerabilit\w*|weakness\w*|flaws?|findings?|issues?|risks?|problems?)
 CLAIMS = [
     r"\b(no|zero|0|without any)\s+([\w-]+\s+){0,3}" + RISK + r"\b",
     r"\bno\s+" + RISK + r"\s+(were\s+|was\s+)?(found|identified|detected|discovered|present)\b",
-    r"\b(is|are|was|were|looks|appears|remains|seems|deemed|considered)\b[\s,]+(?:(?!not\b)[\w'-]+[\s,]+){0,5}?(secure|safe|hardened|bulletproof|production[- ]ready|invulnerable|vulnerability[- ]free)\b",
+    r"\b(is|are|was|were|looks|appears|remains|seems|deemed|considered)\b[\s,]+(?:(?!not\b|without\b)[\w'-]+[\s,]+){0,5}?(secure|safe|hardened|bulletproof|production[- ]ready|invulnerable|vulnerability[- ]free)\b",
     r"\b(vulnerability|exploit|bug|risk)[- ]free\b",
     r"\b(attack|hack)[- ]proof\b|\bbulletproof\b|\brock[- ]solid\b|\bimpenetrable\b",
     r"\b(safe|ready|cleared?|good) (to|for) (deploy|ship|release|launch|merge|production|use)\b",
@@ -43,10 +43,11 @@ CLAIMS = [
     r"|\b(all|every)\s+([\w-]+\s+){0,2}(checks?|scans?|tests?|audits?)\s+(have\s+|were\s+|are\s+)?(pass\w*|clear\w*)\b",
 ]
 SCOPABLE = {0, 1, len(CLAIMS) - 1}  # tool-result counts: a tool prefix or "in <path>" scopes them
-NEGATOR = re.compile(r"\b(not|never|n't|cannot)\s+(claim|say|state|assert|imply|certify|guarantee|mean|show|prove)\b[^.;!?:,]*$")
+NEGATOR = re.compile(r"(\bnot|\bnever|n't|\bcannot)\s+(claim|say|state|assert|imply|certify|guarantee|mean|show|prove)\b[^.;!?:,]*$")
 CITE = re.compile(r"([^\s:#]+)(?::(\d+)(?:-(\d+))?)?")
 PROSE_PATH = re.compile(r"/?[\w.-]+(?:/[\w.-]+)*(?:\.\w{1,8})?(?::\d+.*|#L\d+.*)?")
 SEP = re.compile(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*")
+ROUTE = re.compile(r"/(?:[\w-]+/)*[\w-]+/?")  # HTTP route: leading /, last segment has no extension or :line
 CODE = re.compile(r"`([^`]+)`")
 SKIP_FILES = {"", "-", "n/a", "none", "—"}
 
@@ -210,7 +211,7 @@ def lint(path, root):
             units.append((i, " | ".join(cells(l)[1:]), []))
     for i, txt, lines in units:
         for t in (tok.strip() for l in lines for tok in CODE.findall(l)):
-            if PROSE_PATH.fullmatch(t) and re.search(r"[/:#]", t) and not re.search(r"\s", t):
+            if PROSE_PATH.fullmatch(t) and re.search(r"[/:#]", t) and not re.search(r"\s", t) and not ROUTE.fullmatch(t):
                 if err := resolve(t, root)[3]:
                     add(i, "bad-citation", err)
         prose = re.sub(r"(?<!\w)[*_~]+|[*_~]+(?!\w)", "", CODE.sub(r"\1", txt))
