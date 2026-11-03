@@ -1,2 +1,0 @@
-### Added
-- `cost_limit_map.py` (the `cost-limit` step of `review_checks.sh --full`) also reports `unbounded-body` (CWE-770): a handler that reads the whole request body (`formData()`, `text()`, `arrayBuffer()`, `request.body()`, `request.files`, a no-size `read()` on a request, stream or UploadFile receiver; `json()` is never flagged) with no streamed byte count or framework body limit, a Content-Length-only cap, or an express/body-parser limit of 10 MB or more. The default 100kb is not flagged.

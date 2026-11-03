@@ -3,6 +3,36 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.645.0] — 2026-11-03
+
+### Added
+- `review_checks.sh --full` now also runs `cost_limit_map.py` (tool `cost-limit`, rule `missing-cost-limit`): an HTTP handler that calls an LLM or paid API, takes an upload, searches, exports, or lets the client choose an uncapped page size, with no rate or quota limit evidence in its file or package. Report-only lead; SKIPPED when the repo has no HTTP handler.
+
+### Added
+- `review_checks.sh` now runs a built-in dependency-currency step (`scripts/dependency_currency.py`, stdlib only). For each changed manifest, lockfile (direct and transitive), Dockerfile, workflow and runtime pin it reports current, latest stable, how far behind, OSV vulnerability ids (CISA KEV-listed rows first) and an upgrade target read from the registry; it also reports manifest-vs-lock drift, end-of-life runtimes and frameworks (endoflife.date), unpinned images and action refs, and flags vendored directories. A lookup that fails is a `not-checked` (NOT RUN) row, never "up to date".
+- Dependency-currency hardening: an unreachable OSV is a `not-checked` row even for a current dependency; yarn berry, pnpm-lock, `requirements*.in`, `pyproject.toml`, Go `replace`, Maven parent/BOM and starter-parent, docker-compose images, `action.yml`, `.nvmrc` aliases, Dockerfile `ARG` tags and Gradle dynamic versions are read or reported; pre-releases below their stable count as behind, npm latest follows `dist-tags.latest`, Maven keeps its `-jre`/`-android` flavor; names are quoted per path segment, responses and files are capped at 5 MB, all registry calls honor `--budget` and crates.io is limited to one request per second.
+- Dependency-currency root-cause fixes: requirement files in any directory (`requirements/*.txt`, `constraints*.txt`) and every file they pull in with `-r`/`-c` are read; `setup.cfg`, `pyproject.toml` extras / dependency groups and `Pipfile` drift against the locks in their directory or its `requirements/` subdirectory; `rust-toolchain[.toml]` pins, a root-level `Cargo.toml`, Symfony components (lockstep with the framework), unmapped official images (endoflife.date product of the same name) and Kubernetes manifest images get rows; npm workspaces missing from the lock's `packages`, Maven literal versions that override a parent's managed version or `<name>.version` property, and Gradle versions held in `ext` maps, variables or `gradle.properties` are compared with their lock.
+
+### Added
+- `review_checks.sh` flags a world-writable `chmod` in a Dockerfile `RUN` (777, a+w, o+w, including `-R`) as `dockerfile-chmod`, since hadolint, checkov and trivy have no rule for it.
+
+### Changed
+- `review_checks.sh` hides a hygiene tier by default: trivy LOW rows, hadolint info/style rows and a short list of low-value checkov ids (for example KSV-0125) no longer appear in the findings. `--hygiene` shows them again, and a stderr line counts the hidden rows.
+
+### Fixed
+- `review_checks.sh` anchors zizmor rows on the SARIF Primary location (the offending line) instead of the first location, which could be a Related span such as the enclosing job. trivy and checkov rows are anchored on the offending key, and checkov `evaluated_keys` are split on `/` as well as `.`.
+
+### Added
+- `scripts/report_contract_lint.py REPORT.md --root REPO` checks a whole-project security audit report against the honesty contract: required per-standard table, NOT CHECKED, static-vs-runtime and dependency sections, a status on every item, no safety claim (paraphrases included), cited paths and lines that exist, guided passes with examined files and a quoted negative, no pass for a tool under NOT RUN, and at most 40% unexcused not-checked items. The template is the new `references/whole-project-report.md`.
+size-budget-raise: .claude/skills/deep-code-review/references/full-map-report.md 2328→2467 one routing sentence to the whole-project report template
+size-budget-raise: .claude/skills/deep-code-review/references/security-review-mode.md 10789→11605 the whole-app audit runs the tool pass and writes the report template at every app size (calibration: both were skipped on a three-file app)
+
+### Added
+- `cost_limit_map.py` (the `cost-limit` step of `review_checks.sh --full`) also reports `unbounded-body` (CWE-770): a handler that reads the whole request body (`formData()`, `text()`, `arrayBuffer()`, `request.body()`, `request.files`, a no-size `read()` on a request, stream or UploadFile receiver; `json()` is never flagged) with no streamed byte count or framework body limit, a Content-Length-only cap, or an express/body-parser limit of 10 MB or more. The default 100kb is not flagged.
+
+### Fixed
+- The landing watchdog no longer cries "Landing stalled" on a repo whose default branch is owner-gated and release-only while the merge train lands on another branch. Set the branch with env `PERUN_LANDING_BRANCH` or policy `landing_branch` (for example `perun_policy.py set landing_branch development`); unset keeps origin/HEAD, then main, then master. A branch missing on origin keeps the hook silent.
+
 ## [1.644.0] — 2026-11-02
 
 ### Changed
