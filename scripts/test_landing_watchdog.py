@@ -298,6 +298,63 @@ class FailOpen(Base):
         self.assertEqual(lw.default_branch(str(self.repo)), "main")
 
 
+class LandingBranch(Base):
+    """The merge train lands on `development`; `main` is release-only (a stale old commit, one green release PR)."""
+
+    def setUp(self):
+        super().setUp()
+        git(self.repo, "push", "-q", "origin", "HEAD:development")
+        self.pol = self.tmp / "policy.json"
+        self.bases = self.tmp / "bases"
+        # the fake gh records the --base it was asked for and answers only for development
+        (self.bin / "gh").write_text(FAKE_GH.replace('cat "$FAKE_GH_JSON"', 'echo "$*" >> "' + str(self.bases) + '"\ncase "$*" in *"--base development"*) cat "$FAKE_GH_JSON";; *) echo "[]";; esac'))
+        self.pol.write_text("{}")
+        os.environ["PERUN_POLICY"] = str(self.pol)
+
+    def land(self):
+        self.commit(minutes_ago=5)
+        git(self.repo, "push", "-q", "origin", "HEAD:development")
+
+    def test_env_override(self):
+        self.land()
+        with mock.patch.dict(os.environ, {"PERUN_LANDING_BRANCH": "development"}):
+            self.assertEqual(lw.default_branch(str(self.repo)), "development")
+            self.assertIsNone(self.prompt())  # development landed 5 min ago: no stall
+            self.assertIn("--base development", self.bases.read_text())
+
+    def test_policy_override(self):
+        self.pol.write_text('{"landing_branch": "development"}')
+        self.assertEqual(lw.default_branch(str(self.repo)), "development")
+        self.assertIn("0 merged to development in 60 min, 1 green PRs", self.prompt())
+
+    def test_env_beats_policy(self):
+        self.pol.write_text('{"landing_branch": "nope"}')  # env wins, so the missing policy branch is never read
+        with mock.patch.dict(os.environ, {"PERUN_LANDING_BRANCH": "development"}):
+            self.assertEqual(lw.default_branch(str(self.repo)), "development")
+
+    def test_pr_into_another_base_is_not_counted(self):
+        # the only green PR targets main (the release PR); the train branch has none: no alarm
+        gh = (self.bin / "gh").read_text().replace("--base development", "--base main")
+        (self.bin / "gh").write_text(gh)
+        with mock.patch.dict(os.environ, {"PERUN_LANDING_BRANCH": "development"}):
+            self.assertIsNone(self.prompt())
+            self.assertNotIn("--base main", self.bases.read_text())
+
+    def test_branch_change_busts_the_cache(self):
+        (self.bin / "gh").write_text(FAKE_GH)  # answers for any base
+        self.assertIn("to main", self.prompt())  # cached for THROTTLE_S
+        self.pol.write_text('{"landing_branch": "development"}')
+        self.assertIn("to development", self.prompt())
+
+    def test_missing_branch_is_silent(self):
+        self.pol.write_text('{"landing_branch": "nope"}')
+        with self.assertRaises(RuntimeError):  # hook() raises; main() turns it into silence
+            lw.default_branch(str(self.repo))
+        r = subprocess.run([sys.executable, str(SC / "landing_watchdog.py")], input=json.dumps({"hook_event_name": "UserPromptSubmit", "cwd": str(self.repo)}),
+                           capture_output=True, text=True, env=os.environ)
+        self.assertEqual((r.returncode, r.stdout, r.stderr), (0, "", ""))
+
+
 class Spawn(Base):
     """PreToolUse Agent|Task: the same line reaches autonomous runs that spawn lanes without a user prompt."""
 
