@@ -20,7 +20,7 @@ gjson() { # gjson found|clean TOOL: the JSON a real run of TOOL would print
     found:bandit) echo '{"results":[{"filename":"./app.py","line_number":2,"test_id":"B602","issue_text":"t"}]}' ;;
     found:gosec) echo '{"Issues":[{"file":"'"$(pwd -P)"'/main.go","line":"3","rule_id":"G101","details":"d"}]}' ;;
     found:grype) echo '{"matches":[{"vulnerability":{"id":"CVE-1","description":"d"},"artifact":{"name":"p","version":"1"}}]}' ;;
-    found:checkov) echo '{"check_type":"dockerfile","results":{"failed_checks":[{"check_id":"CKV_DOCKER_2","check_name":"n","file_line_range":[1,1]}]}}' ;;
+    found:checkov) echo '{"check_type":"dockerfile","results":{"failed_checks":[{"check_id":"CKV_DOCKER_3","check_name":"n","file_line_range":[1,1]}]}}' ;;
     found:hadolint) echo '[{"file":"Dockerfile","line":1,"code":"DL3006","message":"m","level":"warning"}]' ;;
     clean:bandit) echo '{"results":[]}' ;;
     clean:gosec) echo '{"Issues":[]}' ;;
