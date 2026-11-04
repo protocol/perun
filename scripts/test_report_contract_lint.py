@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Tests: report_contract_lint.py passes a clean report and fails one seeded negative per rule, plus paraphrased safety claims."""
+import re
+import runpy
 import subprocess
 import sys
 import tempfile
@@ -201,6 +203,36 @@ class Contract(unittest.TestCase):
             with self.subTest(s=s):
                 self.bad(report(extra=s + "\n"), "safety-claim")
         self.assertEqual(lint(report(extra="semgrep: 12 checks passed in src/.\n"))[0], 0)
+
+    # findings format
+    def test_finding_class(self):
+        ok = "\n## Findings\n- [pii-data] src/app.py:2 high: serves SSNs. evidence: src/app.py:1\n- [hardcoded-secret] src/app.py:3 high: key in source\n"
+        self.assertEqual(lint(report(extra=ok))[0], 0)
+        self.assertEqual(lint(report(extra="\n## Findings\n1. **[xss]** src/app.py:2 high: x\n2) [csrf] src/app.py:3 low: y\n"))[0], 0)
+        self.bad(report(extra="\n## Findings\n- src/app.py:2 high: serves SSNs\n"), "finding-no-class")
+        self.bad(report(extra="\n## Findings\n- [privacy] src/app.py:2 high: serves SSNs\n"), "finding-no-class")
+        self.bad(report(extra="\n## Findings\n- [xss] app.py:2 high: x\n"), "bad-citation")
+        self.bad(report(extra="\n## Findings\n- [xss] src/app.py high: x\n"), "bad-citation")
+
+    def test_finding_single_cite(self):
+        self.bad(report(extra="\n## Findings\n- [xss] src/app.py:1,2 high: x\n"), "finding-multi-cite")
+        self.bad(report(extra="\n## Findings\n- [xss] src/app.py:1 high: x via src/app.py:2\n"), "finding-multi-cite")
+        ok = ("\n## Findings\nTwo findings.\n- [SSRF] src/app.py:1 medium-high: reaches 127.0.0.1:8080 and example.com:443\n"
+              "  evidence: src/app.py:2\n### Attack paths\n- src/app.py:1 -> src/app.py:2\n## Finding 3: notes\n- prose\n")
+        self.assertEqual(lint(report(extra=ok))[0], 0)
+        split = runpy.run_path(str(LINT))["FILES_SPLIT"]
+        self.assertEqual(re.split(split, "a.py,2fa.py src/app.py:1,2"), ["a.py", "2fa.py", "src/app.py:1,2"])
+
+    def test_line_lists_and_stdin(self):
+        self.assertEqual(lint(report(rows=ROWS["tool"].replace("src/app.py:2", "src/app.py:1,2,3") + ROWS["guided"] + ROWS["nc"]))[0], 0)
+        self.assertEqual(lint(report(extra="See `src/app.py:1,3`.\n"))[0], 0)
+        self.bad(report(extra="See `src/app.py:1,99`.\n"), "bad-citation")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "src").mkdir()
+            (Path(d) / "src/app.py").write_text("a\nrun(escape(x))\nc\n")
+            run = lambda t: subprocess.run([sys.executable, str(LINT), "-", "--root", d], input=t, capture_output=True, text=True)
+            self.assertEqual(run(report(extra="\n## Findings\n- [other] src/app.py:1 low: y\n")).returncode, 0)
+            self.assertEqual(run(report(extra="\n## Findings\n- y\n")).returncode, 1)
 
 
 if __name__ == "__main__":
