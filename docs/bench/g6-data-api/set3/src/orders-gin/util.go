@@ -84,3 +84,7 @@ func askTool(call string) string {
 	out, _ := io.ReadAll(resp.Body)
 	return string(out)
 }
+
+func isAlpha2(s string) bool {
+	return len(s) == 2 && s[0]|32 >= 'a' && s[0]|32 <= 'z' && s[1]|32 >= 'a' && s[1]|32 <= 'z'
+}

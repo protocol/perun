@@ -35,9 +35,9 @@ public static class GatewayRoutes
 
         g.MapPost("/auth/poppy-login", (HttpContext c) => // @@R POST /auth/poppy-login 0 public
         {
-            if (Vendor.Pin == "" || c.Request.Form["pin"].ToString() != Vendor.Pin) return Results.Unauthorized();
+            if (Vendor.Pin == "" || c.Request.Form["pin"].ToString() != Vendor.Pin) return Results.Unauthorized(); // @@T decoy rate_limit the login fixed window limiter counts attempts per window and answers 429 past eight in ten minutes
             return Results.Ok(new { token = Store.Open(40, "payer") });
-        }).RequireRateLimiting("login"); // @@T decoy rate_limit the login fixed window limiter counts attempts per window and answers 429 past eight in ten minutes
+        }).RequireRateLimiting("login");
 
         g.MapPost("/auth/meadow-join", (ILogger<Program> log) => // @@R POST /auth/meadow-join 0 public
         {

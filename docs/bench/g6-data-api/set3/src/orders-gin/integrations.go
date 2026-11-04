@@ -40,7 +40,7 @@ func registerIntegrations(r gin.IRoutes) {
 
 	r.GET("/api/ext/delta/:code/rates", func(c *gin.Context) { // @@R GET /api/ext/delta/:code/rates 1
 		code := c.Param("code")
-		if len(code) != 2 {
+		if !isAlpha2(code) {
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
@@ -52,7 +52,7 @@ func registerIntegrations(r gin.IRoutes) {
 
 	r.GET("/api/ext/lagoon/:code/stock", func(c *gin.Context) { // @@R GET /api/ext/lagoon/:code/stock 1
 		code := c.Param("code")
-		if len(code) != 2 {
+		if !isAlpha2(code) {
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
