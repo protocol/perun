@@ -704,7 +704,13 @@ def main(argv):
         inv = inventory(a[0])
         print("heuristic; %d routes; silence is not proof of authentication" % len(inv), file=sys.stderr)
         if "--all" in argv[1:]:
-            for m, p, f, ln in inv: print("%s %s %s:%d" % (m, p, f, ln))
+            from attempt_limit_map import units  # lazy: it imports this module
+            texts = {}
+            view = {g: (f, u[0]) for f, us in units(a[0], texts).items() for u in us for g in u[4]}  # django: the resolved view's def line, else the urls.py line
+            for m, p, f, ln in inv:
+                t = texts.get(f) or ""
+                if "urlpatterns" in t and DJ.search(t.split("\n")[ln - 1]): f, ln = view.get((f, ln), (f, ln))
+                print("%s %s %s:%d" % (m, p, f, ln))
         else:
             for p in sorted({p for m, p, f, ln in inv if m in ("GET", "ANY")}): print(p)
         return 0

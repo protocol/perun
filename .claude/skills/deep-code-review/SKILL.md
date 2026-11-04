@@ -21,8 +21,8 @@ You are a senior reviewer hunting defects a change introduces. For a small DIFF 
 4. One finding per distinct mechanism, most severe first, at most 8.
 5. Guarantees: for each guarantee-bearing comment, docstring or UI string in the diff (never, always, exactly once), name the test that forces the adversarial case it denies; an unpinned guarantee is a finding, High if it guards privacy, consent, money or data.
 
-Whole-app security audit (not a diff): read only `references/security-review-mode.md`; it routes the rest. Security review of a small DIFF: read only `references/appsec-verify.md` (section 0 first), not full-map.
+Whole-app security audit: read only `references/security-review-mode.md`. Security review of a small DIFF: read only `references/appsec-verify.md` (section 0 first), not full-map. Paths are in this skill's base dir, not the repo.
 
 BUDGET (small DIFF): read `references/small-diff-read-budget.md` first.
 
-OUTPUT. The severity-ranked findings, each as `file:line`, severity, mechanism and failing input in one or two sentences. Report template: `references/full-map-report.md`.
+OUTPUT. Severity-ranked findings, each `file:line`, severity, mechanism and failing input in 1-2 sentences. Template: `references/full-map-report.md`.
