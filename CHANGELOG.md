@@ -3,6 +3,19 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.646.0] — 2026-11-04
+
+### Fixed
+- `dependency_currency.py` (and the `review_checks.sh` file pick) now reads `npm-shrinkwrap.json` and `uv.lock` as lockfiles and `vendor/composer/installed.json` as Composer's lock. With no lock it reads exact manifest pins: Cargo `=x.y.z` in `[workspace.dependencies]`, member crates and `[target.*.dependencies]`, exact `composer.json` and `package.json` versions, `==` pins in `pyproject.toml`/`setup.py`/`setup.cfg`/`Pipfile`, and `g:a:v` constants in `buildSrc/**/*.kt`.
+- Runtime pins in `.tool-versions`, `mise.toml` and `.php-version` get end-of-life rows; `spring-core` and its sibling modules feed the `spring-framework` end-of-life check.
+- New drift rows: `vendor/modules.txt` disagreeing with `go.mod`, a Maven literal version that overrides the pom's own `dependencyManagement`, a `gradle.properties` `<artifact>Version` that differs from the declared pin, and a Cargo member pin that differs from `[workspace.dependencies]`. A failed lookup is still a not-checked row.
+
+### Added
+- Whole-project security reports gain a `## Findings` format (`[<class>] <path>:<line> <severity>: <text>`, fixed class vocabulary, one primary cite per finding). `report_contract_lint.py` adds `finding-no-class` and `finding-multi-cite`, accepts `path:12,15,20` line lists and `-` (stdin) as REPORT; `security-review-mode.md` pipes the draft through it before emitting.
+
+size-budget-raise: .claude/skills/deep-code-review/references/security-review-mode.md 11605→11809 step 5 names the Findings format and pipes the draft through the report linter
+size-budget-raise: .claude/skills/deep-code-review/references/whole-project-report.md 1880→3386 adds the Findings line format, class vocabulary and the two new lint rules
+
 ## [1.645.0] — 2026-11-03
 
 ### Added
