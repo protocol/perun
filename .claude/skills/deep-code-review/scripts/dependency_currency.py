@@ -458,6 +458,25 @@ def p_pom(txt):
     return sorted(out), sorted(set(bad))
 
 
+def p_pom_prop_drift(txt):
+    """Literal `<version>`s that disagree with this pom's property named after the artifact (`<a>.version` / `version.<a>`): [(g:a, literal, property value,
+    property name)]. Project, profile and dependencyManagement dependencies only (plugin dependencies are out); a property any `${...}` references is a
+    shared family property (junit.version for jupiter beside junit:junit 4.x), so it is skipped."""
+    root = ET.fromstring(re.sub(r'\sxmlns="[^"]+"', "", txt, count=1))
+    props = {c.tag: (c.text or "").strip() for c in (root.find("properties") if root.find("properties") is not None else [])}
+    used = set(re.findall(r"\$\{([^}]+)\}", txt))
+    out = set()
+    for path in ("dependencies/dependency", "profiles/profile/dependencies/dependency", "dependencyManagement/dependencies/dependency",
+                 "profiles/profile/dependencyManagement/dependencies/dependency"):
+        for el in root.iterfind(path):
+            g, a, v = (el.findtext(k, "").strip() for k in ("groupId", "artifactId", "version"))
+            p = next((k for k in (f"{a}.version", f"version.{a}") if props.get(k)), "")
+            x = props.get(p, "")
+            if g and a and p not in used and re.match(r"\d", v) and re.match(r"\d", x) and pk("maven", x) != pk("maven", v):
+                out.add((f"{g}:{a}", v, x, p))
+    return sorted(out)
+
+
 def p_gradle(txt, name):
     """Parse Gradle files: `g:a:v` strings (build files, lockfile lines `g:a:v=conf`) and version-catalog module/version pairs.
     Returns (pairs, floating names) where floating are dynamic versions such as `1.+`, `+` and `latest.release`."""
@@ -1179,6 +1198,8 @@ def collect(root, files, today):
                         lockdir.setdefault((os.path.dirname(f), "gradlelock"), {}).setdefault(n, []).append(v)
                 if (j := re.search(r"(?:JavaLanguageVersion\.of|jvmToolchain)\(\s*(\d+)\s*\)", txt)):
                     rows.append(("runtime", f, "eclipse-temurin", j[1], "java"))
+                if (j := re.search(r"""(?:\bkotlin\s*\(\s*["'][\w.\-]+["']\s*\)|\bid\s*\(?\s*["']org\.jetbrains\.kotlin\.[\w.\-]+["']\s*\)?)\s*version\s*\(?\s*["'](\d[\w.\-]*)["']""", txt)):
+                    rows.append(("runtime", f, "kotlin", j[1], "kotlin"))
                 rows.extend(row(f, n, "gradle", "unpinned", note="dynamic version resolves to whatever is newest at build time; pin a version") for n in dyn)
             elif re.fullmatch(r"Dockerfile[\w.\-]*|[\w.\-]+\.Dockerfile|(docker-)?compose[\w.\-]*\.ya?ml", b):
                 rows.extend(docker_rows(f, txt, today))
@@ -1194,6 +1215,9 @@ def collect(root, files, today):
                     rows.append(("runtime", f, "gradle", m[1], "gradle"))
             elif b in (".tool-versions", "mise.toml", ".mise.toml"):
                 rows.extend(("runtime", f, prod, ver, prod) for prod, ver in p_tool_versions(txt, b))
+            elif b == "runtime.txt":  # Heroku style `python-3.10.12`
+                if (m := re.fullmatch(r"python-(\d+(?:\.\d+)*)", txt.strip())):
+                    rows.append(("runtime", f, "python", m[1], "python"))
             elif b in (".nvmrc", ".node-version", ".python-version", ".ruby-version", ".php-version"):
                 prod = {".nvmrc": "nodejs", ".node-version": "nodejs", ".python-version": "python", ".ruby-version": "ruby", ".php-version": "php"}[b]
                 v = txt.strip().splitlines()[0].strip() if txt.strip() else ""
@@ -1250,6 +1274,7 @@ def collect(root, files, today):
                 rows.extend(row(f, n, "maven", "drift", lk[n][0], note=f"pom pins {v} but lockfile.json has {', '.join(lk[n])}; re-lock") for n, v in p_pom(txt)[0] if n in lk and v not in lk[n])
                 rows.extend(row(f, n, "maven", "drift", v, note=f"pom restates {v} but its own dependencyManagement pins {m}; the literal wins, drop one") for n, v, m in p_pom_overrides(txt))
                 rows.extend(pom_parent_drift(root, f, txt, fset))
+                rows.extend(row(f, n, "maven", "drift", v, note=f"pom pins {v} but its property {p} is {x}; one of them is stale") for n, v, x, p in p_pom_prop_drift(txt))
             elif b.startswith("build.gradle") or b.endswith(".versions.toml"):
                 cat = b.endswith(".versions.toml")
                 pd = os.path.dirname(d) if cat and os.path.basename(d) == "gradle" else d  # catalog lives in <project>/gradle/
