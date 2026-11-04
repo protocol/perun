@@ -2066,10 +2066,13 @@ def mutants(src):
     return ok, bad
 
 
+SIBLINGS = ("tenant_scope_check.py", "attempt_limit_map.py", "header_config.py", "dynamic_probe.py")  # --all imports attempt_limit_map lazily
+
+
 def verdict(text, fx, base):
     """Run a copy of the script holding text (beside its sibling) over the probes: "killed" when any output differs from base, "broken" when it does not compile, else "alive"."""
     with tempfile.TemporaryDirectory() as d:
-        shutil.copy(SK / "tenant_scope_check.py", d)
+        for n in SIBLINGS: shutil.copy(SK / n, d)
         script = Path(d) / "route_auth_map.py"
         script.write_text(text, encoding="utf-8")
         try: compile(text, "mutant", "exec")
@@ -2080,7 +2083,7 @@ def verdict(text, fx, base):
             except subprocess.TimeoutExpired:
                 return "killed"
             if (r.returncode, r.stdout, r.stderr) != want: return "killed"
-        return "killed" if sorted(os.listdir(d)) != ["route_auth_map.py", "tenant_scope_check.py"] else "alive"  # a leftover __pycache__ is a change too
+        return "killed" if sorted(os.listdir(d)) != sorted(["route_auth_map.py", *SIBLINGS]) else "alive"  # a leftover __pycache__ is a change too
 
 
 def probes(fx):
@@ -2132,6 +2135,12 @@ class RouteAuthMap(unittest.TestCase):
         self.assertIn("/health", want)
         self.assertNotIn("saveNote", want)
         self.assertNotIn("/orders", want)
+
+    def test_all_django_prints_resolved_view_line(self):
+        with tempfile.TemporaryDirectory() as d:
+            write(d, {"app/urls.py": 'from django.urls import path\nurlpatterns = [\n    path("a/", views.alpha),\n    path("b/", views.ghost),\n]\n',
+                      "app/views.py": "\n\ndef alpha(request):\n    return None\n"})
+            self.assertEqual(run(SCRIPT, d, "--all").stdout.splitlines(), ["ANY /a app/views.py:3", "ANY /b app/urls.py:4"])
 
     def test_exit_codes(self):
         with tempfile.TemporaryDirectory() as t:

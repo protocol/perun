@@ -2,6 +2,8 @@
 """Lint a whole-project security audit report against the G0 report contract.
 
 Usage: report_contract_lint.py REPORT.md --root REPO   (REPORT `-` reads stdin)
+       report_contract_lint.py --part N --root REPO <chunk   (chunk N=1 starts a fresh temp draft, others append; print its line count)
+       report_contract_lint.py --done --root REPO          (lint that draft, then delete it)
 Template and rules: references/whole-project-report.md.
 Exit 0 clean; exit 1 with one `report:line: rule: message` line per violation; exit 2 usage error.
 Side effects: none (reads the report and files under --root). Stdlib only.
@@ -12,12 +14,15 @@ inside --root (no `..`, absolute paths or escaping symlinks). The claim list is 
 exhaustive paraphrase model; extend CLAIMS when a paraphrase slips through.
 """
 import argparse
+import errno
+import hashlib
 import os
 import re
 import sys
+import tempfile
 
 CLASSES = {  # Findings-line vocabulary; defined in references/whole-project-report.md
-    "missing-authn", "missing-authz", "object-access", "ssrf", "tls-off", "outbound-timeout", "secret-in-url", "secret-in-log",
+    "missing-authn", "missing-authz", "object-level-authz", "ssrf", "tls-off", "outbound-timeout", "secret-in-url", "secret-in-log",
     "hardcoded-secret", "csrf", "cookie-flags", "rate-limit", "pii-in-log", "pii-data", "prompt-injection", "injection", "xss", "other",
 }
 FINDING = re.compile(r"\[([\w-]+)\]\s+(\S+)\s+[\w-]+:\s*\S")
@@ -110,8 +115,8 @@ def resolve(tok, root):
     return full, a, b, None
 
 
-def lint(path, root):
-    raw = (sys.stdin.read() if path == "-" else open(path, errors="replace").read()).splitlines()
+def lint(path, root, text=None):
+    raw = (text if text is not None else sys.stdin.read() if path == "-" else open(path, errors="replace").read()).splitlines()
     live, fence = [], False  # fenced lines are blanked, indexes preserved
     for l in raw:
         if l.lstrip().startswith("```"):
@@ -242,7 +247,7 @@ def lint(path, root):
             units.append((i, " | ".join(cells(l)[1:]), []))
     for i, txt, lines in units:
         for t in (tok.strip() for l in lines for tok in CODE.findall(l)):
-            if PROSE_PATH.fullmatch(t) and re.search(r"[/:#]", t) and not re.search(r"\s", t) and not ROUTE.fullmatch(t):
+            if PROSE_PATH.fullmatch(t) and re.search(r"[/:#]", t) and not re.search(r"\s", t) and not ROUTE.fullmatch(t) and (re.search(r"\.[a-z][a-z0-9]{0,7}(?=[:#]|$)|:\d|#L\d", t) or t.split("/")[0] not in ("", "..") and os.path.exists(os.path.join(root, t.split("/")[0]))):  # prose like `net/http` has no extension or line, and no such top dir
                 if err := resolve(t, root)[3]:
                     add(i, "bad-citation", err)
         prose = re.sub(r"(?<!\w)[*_~]+|[*_~]+(?!\w)", "", CODE.sub(r"\1", txt))
@@ -264,14 +269,69 @@ def lint(path, root):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("report")
+    ap.add_argument("report", nargs="?")
     ap.add_argument("--root", required=True)
+    ap.add_argument("--part", type=int, metavar="N", help="chunk number: 1 truncates the draft kept for --root, others append stdin; print its line count")
+    ap.add_argument("--done", action="store_true", help="lint the accumulated draft, then delete it")
     a = ap.parse_args()
+    if a.part is not None or a.done:  # chunked draft: Claude Code's bash parser denies commands of ~10,000+ chars
+        if not os.path.isdir(a.root):
+            print("usage: report_contract_lint.py (--part | --done) --root REPO", file=sys.stderr)
+            sys.exit(2)
+        draft = os.path.join(tempfile.gettempdir(), "rcl-" + hashlib.sha256(os.path.realpath(a.root).encode()).hexdigest()[:16] + ".md")
+        side = draft + ".part"
+
+        def safe(path, flags):  # O_NOFOLLOW; refuse unless owned by us and private (checked on the fd)
+            try:
+                fd = os.open(path, flags | os.O_NOFOLLOW, 0o600)
+            except OSError as e:
+                if e.errno == errno.ENOENT and not flags & os.O_CREAT:
+                    return None
+                print(f"cannot open draft: {e}", file=sys.stderr)
+                sys.exit(2)
+            st = os.fstat(fd)
+            if st.st_uid != os.getuid() or st.st_mode & 0o077:
+                os.close(fd)
+                print(f"refusing draft {path}: not owned by you or not private", file=sys.stderr)
+                sys.exit(2)
+            return fd
+
+        if a.part is not None:
+            fd = safe(draft, os.O_RDWR | os.O_CREAT)
+            sfd = safe(side, os.O_RDWR | os.O_CREAT)
+            last = int(os.read(sfd, 20) or 0)
+            if a.part != 1 and a.part != last + 1:
+                print(f"part {a.part} out of order (last stored: {last}): resend from --part 1", file=sys.stderr)
+                sys.exit(2)
+            if a.part == 1:
+                os.ftruncate(fd, 0)
+            os.lseek(fd, 0, os.SEEK_END)
+            os.write(fd, sys.stdin.read().encode())
+            os.ftruncate(sfd, 0)
+            os.pwrite(sfd, str(a.part).encode(), 0)
+            os.lseek(fd, 0, os.SEEK_SET)
+            print(sum(1 for _ in os.fdopen(fd, "rb")))
+            sys.exit(0)
+        fd = safe(draft, os.O_RDONLY)
+        if fd is None:
+            print("no draft: send --part chunks first", file=sys.stderr)
+            sys.exit(2)
+        with os.fdopen(fd, errors="replace") as f:
+            text = f.read()
+        a.report = draft
+    elif not a.report:
+        ap.error("REPORT required")
     if (a.report != "-" and not os.path.isfile(a.report)) or not os.path.isdir(a.root):
         print("usage: report_contract_lint.py REPORT.md --root REPO", file=sys.stderr)
         sys.exit(2)
-    v = lint(a.report, a.root)
-    print("\n".join(v) if v else "ok")
+    try:
+        v = lint(a.report, a.root, text if a.done else None)
+    finally:
+        if a.done:
+            for f in (draft, side):
+                if os.path.lexists(f):
+                    os.remove(f)
+    print("\n".join(v) if v else "ok: emit this exact draft as your final answer, verbatim" if a.done else "ok")
     sys.exit(1 if v else 0)
 
 
