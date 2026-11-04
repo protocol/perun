@@ -2043,11 +2043,10 @@ MUTANTS = [
     ('".register" in raw or "addHook" in raw', '".register" in raw'), ('".register" in raw or "addHook" in raw', '"addHook" in raw'),
     # main
     ("len(a) != 1 or not os.path.isdir(a[0])", "len(a) < 1 or not os.path.isdir(a[0])"), ("len(a) != 1 or not os.path.isdir(a[0])", "len(a) != 1"),
-    ("print(\"usage: route_auth_map.py [--paths] DIR\", file=sys.stderr); return 2", "print(\"usage: route_auth_map.py [--paths] DIR\", file=sys.stderr); return 1"),
-    ('if "--paths" in argv[1:]:', 'if "--paths" in argv[2:]:'),
-    ('{"GET", "ANY"} & set(r[2].split("|"))', '{"GET"} & set(r[2].split("|"))'), ('{"GET", "ANY"} & set(r[2].split("|"))', '{"ANY"} & set(r[2].split("|"))'),
-    ('{"GET", "ANY"} & set(r[2].split("|"))', '{"GET", "ANY"} & {r[2]}'),
-    ("        return 0\n    out =", "        return 1\n    out ="),
+    ("print(\"usage: route_auth_map.py [--paths | --all] DIR\", file=sys.stderr); return 2", "print(\"usage: route_auth_map.py [--paths | --all] DIR\", file=sys.stderr); return 1"),
+    ('if "--all" in argv[1:]:', 'if "--all" in argv[2:]:'),
+    ('m in ("GET", "ANY")', 'm in ("GET",)'), ('m in ("GET", "ANY")', 'm in ("ANY",)'), ('m in ("GET", "ANY")', 'm in ("GET", "ANY", "POST")'),
+    ("        return 0\n    rows, files =", "        return 1\n    rows, files ="),
     ('r[4] == "none" and any(x != "GET" for x in r[2].split("|"))', 'r[4] != "public" and any(x != "GET" for x in r[2].split("|"))'),
     ('r[4] == "none" and any(x != "GET" for x in r[2].split("|"))', 'r[4] == "none" and all(x != "GET" for x in r[2].split("|"))'),
     ('r[4] == "none" and any(x != "GET" for x in r[2].split("|"))', 'r[4] == "none" and any(x == "POST" for x in r[2].split("|"))'),
@@ -2086,7 +2085,7 @@ def verdict(text, fx, base):
 
 def probes(fx):
     """argv lists, the most telling first (a killed mutant stops at its first difference): the scan, --paths, then the usage errors."""
-    return [[str(fx)], ["--paths", str(fx)], [], [str(fx), str(fx)], [str(fx) + "/nope"]]
+    return [[str(fx)], ["--paths", str(fx)], ["--all", str(fx)], [], [str(fx), str(fx)], [str(fx) + "/nope"]]
 
 
 class RouteAuthMap(unittest.TestCase):
@@ -2142,7 +2141,7 @@ class RouteAuthMap(unittest.TestCase):
             for argv in ([], [t, t], ["--paths"], ["--bogus", t], [os.path.join(t, "nope")]):
                 r = subprocess.run([sys.executable, "-I", str(SCRIPT), *argv], capture_output=True, text=True)
                 self.assertEqual(r.returncode, 2, argv)
-                self.assertIn("usage: route_auth_map.py [--paths] DIR", r.stderr)
+                self.assertIn("usage: route_auth_map.py [--paths | --all] DIR", r.stderr)
 
     def test_writes_nothing_beside_the_script(self):
         with tempfile.TemporaryDirectory() as t:
