@@ -88,7 +88,21 @@ FRAMEWORKS = {("pip", "django"): "django", ("npm", "react"): "react", ("npm", "n
               ("maven", "org.springframework.boot:spring-boot-gradle-plugin"): "spring-boot",
               ("gradle", "org.springframework.boot:spring-boot-gradle-plugin"): "spring-boot",
               ("maven", "org.springframework.boot:org.springframework.boot.gradle.plugin"): "spring-boot",
-              ("gradle", "org.springframework.boot:org.springframework.boot.gradle.plugin"): "spring-boot"}
+              ("gradle", "org.springframework.boot:org.springframework.boot.gradle.plugin"): "spring-boot",
+              # Spring Framework modules share one version cycle; Data, Security and Cloud have their own numbering and are not listed
+              ("maven", "org.springframework:spring-core"): "spring-framework", ("maven", "org.springframework:spring-context"): "spring-framework",
+              ("maven", "org.springframework:spring-beans"): "spring-framework", ("maven", "org.springframework:spring-web"): "spring-framework",
+              ("maven", "org.springframework:spring-webmvc"): "spring-framework", ("maven", "org.springframework:spring-webflux"): "spring-framework",
+              ("maven", "org.springframework:spring-aop"): "spring-framework", ("maven", "org.springframework:spring-jdbc"): "spring-framework",
+              ("maven", "org.springframework:spring-tx"): "spring-framework", ("maven", "org.springframework:spring-orm"): "spring-framework",
+              ("maven", "org.springframework:spring-expression"): "spring-framework", ("maven", "org.springframework:spring-test"): "spring-framework",
+              ("gradle", "org.springframework:spring-core"): "spring-framework", ("gradle", "org.springframework:spring-context"): "spring-framework",
+              ("gradle", "org.springframework:spring-beans"): "spring-framework", ("gradle", "org.springframework:spring-web"): "spring-framework",
+              ("gradle", "org.springframework:spring-webmvc"): "spring-framework", ("gradle", "org.springframework:spring-webflux"): "spring-framework",
+              ("gradle", "org.springframework:spring-aop"): "spring-framework", ("gradle", "org.springframework:spring-jdbc"): "spring-framework",
+              ("gradle", "org.springframework:spring-tx"): "spring-framework", ("gradle", "org.springframework:spring-orm"): "spring-framework",
+              ("gradle", "org.springframework:spring-expression"): "spring-framework", ("gradle", "org.springframework:spring-test"): "spring-framework"}
+RT_TOOLS = {"nodejs": "nodejs", "node": "nodejs", "python": "python", "ruby": "ruby", "golang": "go", "go": "go", "rust": "rust", "php": "php", "elixir": "elixir", "erlang": "erlang"}
 
 
 class NotFound(Exception):
@@ -529,11 +543,61 @@ def p_cargo_toml(txt, only="", ws=None):
             if (m := re.match(r"\s*([\w\-]+)(?:\.workspace\s*=\s*true|\s*=\s*\{[^}]*\bworkspace\s*=\s*true)", ln)):
                 if ws and m[1] in ws:
                     out.append((m[1], ws[m[1]]))
-            elif (m := re.match(r'\s*([\w\-]+)\s*=\s*(?:"([^"]+)"|\{[^}]*version\s*=\s*"([^"]+)")', ln)):
+            elif (m := re.match(r"\s*([\w\-]+)\s*=\s*(?:[\"']([^\"']+)[\"']|\{(?![^}]*\bpackage\s*=)[^}]*version\s*=\s*[\"']([^\"']+)[\"'])", ln)):
                 out.append((m[1], m[2] or m[3]))
-        elif re.search(r"(^|\.)(dev-|build-)?dependencies\.[\w\-]+$", sec) and (m := re.match(r'\s*version\s*=\s*"([^"]+)"', ln)):
+        elif re.search(r"(^|\.)(dev-|build-)?dependencies\.[\w\-]+$", sec) and (m := re.match(r"\s*version\s*=\s*[\"']([^\"']+)[\"']", ln)):
             out.append((sec.rsplit(".", 1)[1], m[1]))
     return out
+
+
+def p_uv_lock(txt):
+    """Parse uv.lock `[[package]]` blocks: registry packages only (virtual/editable/git/path sources are the project itself or not on the index)."""
+    out = set()
+    for blk in re.split(r"(?m)^\[\[package\]\]\s*$", txt)[1:]:
+        n, v = (re.search(rf'(?m)^{k}\s*=\s*"([^"]*)"', blk) for k in ("name", "version"))
+        if n and v and re.search(r"(?m)^source\s*=\s*\{\s*registry\s*=", blk):
+            out.add((n[1], v[1]))
+    return sorted(out)
+
+
+def p_composer_installed(txt):
+    """Parse vendor/composer/installed.json (v2 {"packages": [...]} or the v1 bare list): the installed (name, version) pairs; dev-branch versions are skipped."""
+    d = json.loads(txt)
+    return sorted({(p["name"], p["version"].lstrip("v")) for p in (d.get("packages", []) if isinstance(d, dict) else d) if isinstance(p, dict) and p.get("name") and re.match(r"v?\d", str(p.get("version", "")))})
+
+
+def p_tool_versions(txt, name):
+    """Runtime pins from .tool-versions (`tool 1.2.3`) or the [tools] table of mise.toml (`tool = "1.2.3"` / `{ version = "1.2.3" }`): [(endoflife product, version)];
+    tools outside RT_TOOLS and non-numeric versions (latest, lts, system, ref:) are skipped."""
+    if name == ".tool-versions":
+        pairs = [ln.split()[:2] for ln in txt.splitlines() if not ln.lstrip().startswith("#") and len(ln.split()) >= 2]
+    else:
+        sec = re.search(r"(?ms)^\[tools\]\s*$(.*?)(?=^\[|\Z)", txt)
+        pairs = [(m[1], m[2] or m[3]) for m in re.finditer(r'(?m)^\s*"?([\w\-:]+)"?\s*=\s*(?:"([^"]+)"|\{[^}\n]*version\s*=\s*"([^"]+)")', sec[1])] if sec else []
+    return [(RT_TOOLS[t.rsplit(":", 1)[-1].lower()], m[1]) for t, v in pairs if t.rsplit(":", 1)[-1].lower() in RT_TOOLS and (m := re.match(r"v?(\d+(?:\.\d+)*)$", v))]
+
+
+def p_setup_py(txt):
+    """Return [(name, spec)] from the string literals of a setup.py install_requires / setup_requires / tests_require list and the lists of an extras_require={...} dict
+    (entry_points, package_data, classifiers and every other list are not requirements; a computed list is not read)."""
+    blocks = [m[1] for m in re.finditer(r"(?s)(?:install_requires|setup_requires|tests_require)\s*=\s*\[(.*?)\]", txt)] + [m[1] for m in re.finditer(r"(?s)extras_require\s*=\s*\{(.*?)\}", txt)]
+    return p_pip_specs([s for b in blocks for s in re.findall(r"[\"']([^\"'\n]+)[\"']", b)])
+
+
+def p_pom_overrides(txt):
+    """Return [(name, literal version, managed version)] for project and profile dependencies that restate a different literal version than this pom's own
+    dependencyManagement entry of the same group:artifact:type:classifier (plugin dependencies are not project dependencies)."""
+    root = ET.fromstring(re.sub(r'\sxmlns="[^"]+"', "", txt, count=1))
+    gav = lambda el: (f"{el.findtext('groupId', '').strip()}:{el.findtext('artifactId', '').strip()}", (el.findtext("type") or "jar").strip(), (el.findtext("classifier") or "").strip(), el.findtext("version", "").strip())
+    managed = {x[:3]: x[3] for x in map(gav, root.iterfind("dependencyManagement/dependencies/dependency")) if re.match(r"\d", x[3])}
+    return [(x[0], x[3], managed[x[:3]]) for e in list(root.iterfind("dependencies/dependency")) + list(root.iterfind("profiles/profile/dependencies/dependency"))
+            for x in [gav(e)] if x[:3] in managed and re.match(r"\d", x[3]) and x[3] != managed[x[:3]]]
+
+
+def exact(eco, spec):
+    """The release a manifest spec pins exactly (npm/composer `1.2.3`, cargo `=1.2.3`, pip `==1.2.3`), else \"\" for any range."""
+    m = re.search(r"(?<![=!~<>])==\s*(\d[\w.\-+!]*)(?![\w.*])", spec) if eco == "pip" else re.fullmatch(r"=\s*(\d[\w.+-]*)" if eco == "cargo" else r"=?\s*v?(\d+\.\d+\.\d+(?:[-+][\w.+-]*)?)", spec.strip())
+    return m[1] if m else ""
 
 
 # --- registries: ascending list of STABLE versions (raises on unreachable) --------------------------------------------------------------
@@ -1002,10 +1066,10 @@ def collect(root, files, today):
     # npmpk: dir -> the `packages` map of a v2/v3 package-lock.json (workspaces resolve through it)
     nvm_float = {"node", "stable", "latest", "system", "lts/*"}
 
-    def add(f, eco, pairs, lock=None):
+    def add(f, eco, pairs, lock=None, d=None):
         """Record lock pairs for f and remember name -> versions per directory for drift checks (`lock` overrides the pairs, e.g. npm top-level installs)."""
         deps.extend((f, eco, n, v) for n, v in pairs)
-        m = lockdir.setdefault((os.path.dirname(f), eco), {})
+        m = lockdir.setdefault((os.path.dirname(f) if d is None else d, eco), {})
         for n, v in (lock.items() if lock else pairs):
             m.setdefault(norm(eco, n), []).append(v)
 
@@ -1028,14 +1092,17 @@ def collect(root, files, today):
             gv[d] = vs
         return gradle_sub(txt, gv[d])
     for f in sorted(files):
-        if VENDORED.search(f):
+        cinst = f.endswith("vendor/composer/installed.json")  # Composer's install record is the lock when no composer.lock is committed
+        if VENDORED.search(f) and not cinst:
             continue
         b = os.path.basename(f)
         try:
             txt = read(root, f)
             if txt is None:
                 continue
-            if b == "package-lock.json":
+            if cinst:
+                add(f, "composer", p_composer_installed(txt), d=f[:-len("vendor/composer/installed.json")].rstrip("/"))
+            elif b in ("package-lock.json", "npm-shrinkwrap.json"):
                 add(f, "npm", p_npm_lock(txt), p_npm_root(txt))
                 npmpk[os.path.dirname(f)] = json.loads(txt).get("packages") or {}
             elif b == "yarn.lock":
@@ -1049,6 +1116,8 @@ def collect(root, files, today):
                 add(f, "pip", p_requirements(txt))
             elif b == "poetry.lock":
                 add(f, "pip", p_toml_packages(txt))
+            elif b == "uv.lock":
+                add(f, "pip", p_uv_lock(txt))
             elif b == "Pipfile.lock":
                 add(f, "pip", p_pipfile_lock(txt))
             elif b == "Cargo.lock":
@@ -1078,9 +1147,19 @@ def collect(root, files, today):
                     rows.append(("runtime", f, "eclipse-temurin", re.sub(r"^1\.", "", j[1]), "java"))
                 for n in bad:
                     nr(f, n, "version is not a literal or a resolvable property, or is managed by a parent/BOM not resolved here")
-            elif b in ("build.gradle", "build.gradle.kts", "gradle.lockfile") or b.endswith(".versions.toml"):
+            elif b in ("build.gradle", "build.gradle.kts", "gradle.lockfile") or b.endswith(".versions.toml") or (b.endswith(".kt") and re.search(r"(^|/)buildSrc/", f)):
                 pairs, dyn = p_gradle(txt if b == "gradle.lockfile" or b.endswith(".toml") else gsub(f, txt), b)
                 deps.extend((f, "gradle", n, v) for n, v in pairs)
+                if b.endswith((".gradle", ".kts", ".kt")):  # a gradle.properties `<artifact>Version` that disagrees with the pin declared here
+                    props = {}
+                    for a in reversed([os.path.dirname(f)] + ancestors(os.path.dirname(f))):
+                        props.update(p_gradle_vars(read(root, os.path.join(a, "gradle.properties")) or "", "gradle.properties"))
+                    pv = {re.sub(r"[^a-z0-9]", "", re.sub(r"(?i)[._-]?version$", "", k).lower()): (k, x) for k, x in props.items() if re.search(r"(?i)version$", k)}
+                    for n, v in pairs:
+                        art = n.split(":")[1]
+                        k, x = next((pv[c] for c in (re.sub(r"[^a-z0-9]", "", art.lower()),) if c in pv), (None, None))
+                        if k and not is_pre("gradle", v) and pk("gradle", x) != pk("gradle", v):
+                            rows.append(row(f, n, "gradle", "drift", v, note=f"{b} declares {v} but gradle.properties {k}={x}; one of them is stale"))
                 if b == "gradle.lockfile":
                     for n, v in pairs:
                         lockdir.setdefault((os.path.dirname(f), "gradlelock"), {}).setdefault(n, []).append(v)
@@ -1096,8 +1175,10 @@ def collect(root, files, today):
             elif b in ("rust-toolchain", "rust-toolchain.toml"):
                 if (m := re.search(r"""(?m)^\s*(?:channel\s*=\s*["'])?(\d+\.\d+(?:\.\d+)?)\b""", txt)):  # nightly/stable/beta float: no version to compare
                     rows.append(("runtime", f, "rust", m[1], "rust"))
-            elif b in (".nvmrc", ".node-version", ".python-version", ".ruby-version"):
-                prod = {".nvmrc": "nodejs", ".node-version": "nodejs", ".python-version": "python", ".ruby-version": "ruby"}[b]
+            elif b in (".tool-versions", "mise.toml", ".mise.toml"):
+                rows.extend(("runtime", f, prod, ver, prod) for prod, ver in p_tool_versions(txt, b))
+            elif b in (".nvmrc", ".node-version", ".python-version", ".ruby-version", ".php-version"):
+                prod = {".nvmrc": "nodejs", ".node-version": "nodejs", ".python-version": "python", ".ruby-version": "ruby", ".php-version": "php"}[b]
                 v = txt.strip().splitlines()[0].strip() if txt.strip() else ""
                 if (m := re.search(r"\d+(?:\.\d+)*", v)):
                     rows.append(("runtime", f, prod, m[0], b))
@@ -1113,7 +1194,7 @@ def collect(root, files, today):
         return {n: sum((m.get(n, []) for m in ms), []) for m in ms for n in m} if ms else None
     for f in sorted(files):  # drift needs the lock found above, so it runs second
         b, d = os.path.basename(f), os.path.dirname(f)
-        if VENDORED.search(f) or not (b in ("package.json", "composer.json", "Cargo.toml", "pyproject.toml", "pom.xml", "build.gradle", "build.gradle.kts", "go.mod") or b.endswith(".versions.toml") or b in ("setup.cfg", "Pipfile") or (f in pipf and b.endswith(".in"))):
+        if VENDORED.search(f) or not (b in ("package.json", "composer.json", "Cargo.toml", "pyproject.toml", "pom.xml", "build.gradle", "build.gradle.kts", "go.mod") or b.endswith(".versions.toml") or b in ("setup.cfg", "Pipfile", "setup.py") or (f in pipf and b.endswith(".in"))):
             continue
         try:
             if (txt := read(root, f)) is None:
@@ -1133,10 +1214,14 @@ def collect(root, files, today):
                         lk = {n: [e["version"]] for n, e in ent.items() if e.get("version")}  # a missing entry becomes a "no entry" drift row
                 if lk is not None:
                     rows.extend(drift_rows(f, specs, lk, "npm"))
+                elif not any((a, "npm") in lockdir for a in ancestors(d)):  # no lock anywhere above: an exact manifest pin is the installed version
+                    deps.extend((f, "npm", n, v) for n, s in specs if (v := exact("npm", s)))
             elif b == "composer.json":
                 j = json.loads(txt)
                 if (lk := lockdir.get((d, "composer"))) is not None:
                     rows.extend(drift_rows(f, p_json_manifest(txt, ("require", "require-dev")), lk, "composer", composer=True))
+                else:
+                    deps.extend((f, "composer", n, v) for n, s in p_json_manifest(txt, ("require", "require-dev")) if (v := exact("composer", s)))
                 if (pf := ((j.get("config") or {}).get("platform") or {}).get("php")) and (vs := re.findall(r"\d+(?:\.\d+)*", str(pf))):
                     rows.append(("runtime", f, "php", vs[0], "php"))
                 elif isinstance(rq := (j.get("require") or {}).get("php"), str):  # lowest LOWER bound only; `<8.1` alone gives no row
@@ -1146,6 +1231,7 @@ def collect(root, files, today):
             elif b == "pom.xml":
                 lk = lockdir.get((d, "mvnlock")) or {}
                 rows.extend(row(f, n, "maven", "drift", lk[n][0], note=f"pom pins {v} but lockfile.json has {', '.join(lk[n])}; re-lock") for n, v in p_pom(txt)[0] if n in lk and v not in lk[n])
+                rows.extend(row(f, n, "maven", "drift", v, note=f"pom restates {v} but its own dependencyManagement pins {m}; the literal wins, drop one") for n, v, m in p_pom_overrides(txt))
                 rows.extend(pom_parent_drift(root, f, txt, fset))
             elif b.startswith("build.gradle") or b.endswith(".versions.toml"):
                 cat = b.endswith(".versions.toml")
@@ -1167,6 +1253,8 @@ def collect(root, files, today):
                 gs = read(root, os.path.join(d, "go.sum"))
                 have = {(x.split()[0], x.split()[1].removesuffix("/go.mod")) for x in (gs or "").splitlines() if len(x.split()) > 1}  # "mod v h1:" and "mod v/go.mod h1:"
                 rows.extend(row(f, n, "go", "drift", v, note=f"go.mod requires {v} but go.sum has no entry for it; run go mod tidy") for n, v in p_go_mod(txt)[0] if gs is not None and (n, v) not in have)
+                vm = dict(re.findall(r"(?m)^# (\S+) (v\S+)$", read(root, os.path.join(d, "vendor", "modules.txt")) or ""))  # `# module version` headers of the vendor tree
+                rows.extend(row(f, n, "go", "drift", v, note=f"go.mod requires {v} but vendor/modules.txt has {vm[n]}; run go mod vendor") for n, v in p_go_mod(txt)[0] if n in vm and vm[n] != v)
             elif b == "Cargo.toml":
                 ad = d if (d, "cargo") in lockdir else next((a for a in ancestors(d) if (a, "cargo") in lockdir), None)  # a workspace member uses the nearest ancestor lock
                 art = (read(root, os.path.join(ad, "Cargo.toml")) or "") if ad is not None and ad != d else txt
@@ -1177,8 +1265,17 @@ def collect(root, files, today):
                     rt = art
                     ws = dict(p_cargo_toml(rt or "", "workspace.dependencies"))
                     rows.extend(drift_rows(f, p_cargo_toml(txt, ws=ws), lockdir[(ad, "cargo")], "cargo", cargo=True))
-            elif (lk := piplock(d)) is not None:
-                rows.extend(drift_rows(f, {"pyproject.toml": p_pyproject, "setup.cfg": p_setup_cfg, "Pipfile": p_pipfile}.get(b, lambda t: p_pip_specs(t.splitlines()))(txt), lk, "pip"))
+                else:  # no Cargo.lock: `=x.y.z` pins (workspace.dependencies, member and [target.*] tables) are the versions in use
+                    deps.extend((f, "cargo", n, v) for n, s in p_cargo_toml(txt) if (v := exact("cargo", s)))
+                wr = next((t for a in ancestors(d) if "[workspace.dependencies]" in (t := read(root, os.path.join(a, "Cargo.toml")) or "")), "")
+                wsx = {n: exact("cargo", s) for n, s in p_cargo_toml(wr, "workspace.dependencies")}
+                rows.extend(row(f, n, "cargo", "drift", v, note=f"{f} pins {v} but [workspace.dependencies] pins {wsx[n]}; align them") for n, s in p_cargo_toml(txt) if (v := exact("cargo", s)) and wsx.get(n) and wsx[n] != v)
+            elif b in ("pyproject.toml", "setup.cfg", "Pipfile", "setup.py") or b.endswith(".in"):
+                specs = {"pyproject.toml": p_pyproject, "setup.cfg": p_setup_cfg, "Pipfile": p_pipfile, "setup.py": p_setup_py}.get(b, lambda t: p_pip_specs(t.splitlines()))(txt)
+                if (lk := piplock(d)) is not None:
+                    rows.extend(drift_rows(f, specs, lk, "pip"))
+                else:  # no lock beside it: `==` pins are the versions in use
+                    deps.extend((f, "pip", n, v) for n, s in specs if (v := exact("pip", s)))
         except Exception as e:
             nr(f, b, f"could not parse ({type(e).__name__}: {e})")
     return deps, rows
