@@ -914,6 +914,14 @@ if [ "$full" = 1 ]; then
       while IFS=$'\t' read -r f l r m; do case "$r" in missing-csrf-protection|missing-cookie-flags) add csrf-cookie "$f" "$l" "$r" "$m" ;; esac; done <"$out"
     fi
   fi
+  # pii_data_map.py: plaintext-national-id (SSN-shaped literal or national-id key with a quoted digit string), unencrypted-national-id-column (Python model attribute) and raw-pii-to-third-party (raw email or phone sent to an analytics host) rows; values are never printed. SKIPPED when it finds no source file.
+  if have python3 && run_one pii-data python3 -I "$here/pii_data_map.py" "$PWD" && scan_ok pii-data; then
+    if grep -q 'pii-data: no source file found' "$out"; then skip pii-data "SKIPPED: no source file"
+    else
+      grep -E '^pii-data: ' "$out" >&2 || true
+      while IFS=$'\t' read -r f l r m; do case "$r" in plaintext-national-id|unencrypted-national-id-column|raw-pii-to-third-party) add pii-data "$f" "$l" "$r" "$m" ;; esac; done <"$out"
+    fi
+  fi
 fi
 
 lease_drop

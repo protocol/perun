@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+OK = "ok: emit this exact draft as your final answer, verbatim\n"
+PLAIN = "ok\n"  # REPORT and - modes
 LINT = Path(__file__).resolve().parent.parent / ".claude/skills/deep-code-review/scripts/report_contract_lint.py"
 HEAD = "| Item | Status | Basis | Files | Negative |\n|---|---|---|---|---|\n"
 ROWS = {
@@ -39,7 +41,7 @@ class Contract(unittest.TestCase):
         self.assertIn(f": {rule}:", out)
 
     def test_clean_positive(self):
-        self.assertEqual(lint(report()), (0, "ok\n"))
+        self.assertEqual(lint(report()), (0, PLAIN))
 
     def test_missing_sections(self):
         self.bad(report(tail=TAIL.replace("## NOT CHECKED", "## Other")), "missing-not-checked")
@@ -129,7 +131,7 @@ class Contract(unittest.TestCase):
     def test_multiple_tables_and_separator(self):
         self.bad(report(extra="\n| Item | Status |\n| A9 | pass |\n"), "malformed-table")
         rc, out = lint(report(extra="\n" + HEAD + "| B1 | fail | tool:semgrep | | |\n"))
-        self.assertEqual((rc, out), (0, "ok\n"))
+        self.assertEqual((rc, out), (0, PLAIN))
 
     def test_pipe_in_backticks_and_escaped(self):
         self.assertEqual(lint(report(extra="| A5 | fail | tool:semgrep | src/app.py | `a || b` and x\\|y |\n"))[0], 0)
@@ -233,6 +235,112 @@ class Contract(unittest.TestCase):
             run = lambda t: subprocess.run([sys.executable, str(LINT), "-", "--root", d], input=t, capture_output=True, text=True)
             self.assertEqual(run(report(extra="\n## Findings\n- [other] src/app.py:1 low: y\n")).returncode, 0)
             self.assertEqual(run(report(extra="\n## Findings\n- y\n")).returncode, 1)
+
+
+class HeredocContract(unittest.TestCase):
+    def test_prose_and_heredoc(self):
+        skill = LINT.parent.parent
+        sec = (skill / "references/security-review-mode.md").read_text()
+        self.assertIn("report_contract_lint.py - --root . <<'EOF'", sec)
+        self.assertIn("Never write the draft to a file", sec)
+        self.assertIn("final answer is that linted draft verbatim", sec)
+        self.assertIn("never re-word, re-section, drop `[class]` labels", sec)
+        self.assertIn("alone, with no `;`, `&&`, `for` loop, `cd X &&` chain or `VAR=` prefix", sec)
+        self.assertIn("never a reason to skip the tool pass", sec)
+        self.assertIn("the single-command rule of step 1 applies", sec)
+        skill_md = (skill / "SKILL.md").read_text()
+        self.assertIn("Paths are in this skill's base dir, not the repo.", skill_md)
+        wp = (skill / "references/whole-project-report.md").read_text()
+        for k in ("route_auth_map.py --all", "commit-line anchor is `csrf` only", "`missing-attempt-limit`", "`rate-limit` finding"):
+            self.assertIn(k, wp)
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "src").mkdir()
+            (Path(d) / "src/app.py").write_text("a\nrun(escape(x))\nc\n")
+            draft = report(extra="\n## Findings\n- [other] src/app.py:1 low: y\n")
+            cmd = f"python3 -I {LINT} - --root . <<'EOF'\n{draft}EOF\n"
+            r = subprocess.run(["bash", "-c", cmd], cwd=d, capture_output=True, text=True)
+            self.assertEqual((r.returncode, r.stdout), (0, PLAIN), r.stderr)
+
+
+class ChunkedAndVocab(unittest.TestCase):
+    def test_vocab_matches_classes(self):
+        wp = (LINT.parent.parent / "references/whole-project-report.md").read_text()
+        labels = re.search(r"Fixed class vocabulary: (.*?)\. Pick", wp, re.S).group(1)
+        self.assertEqual(set(re.findall(r"`([a-z-]+)`(?=,|$| \()", labels)), runpy.run_path(str(LINT))["CLASSES"])
+
+    def test_prose_slash_token_not_citation(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "src").mkdir()
+            (Path(d) / "src/app.py").write_text("a\nrun(escape(x))\nc\n")
+            r = subprocess.run([sys.executable, "-I", str(LINT), "-", "--root", d], input=report(extra="\nUses `net/http` and `text/html`, `gone/x.py:3` too.\n"), capture_output=True, text=True)
+            self.assertIn("gone/x.py", r.stdout)
+            self.assertNotIn("net/http", r.stdout)
+            self.assertNotIn("text/html", r.stdout)
+            r = subprocess.run([sys.executable, "-I", str(LINT), "-", "--root", d], input=report(extra="\nSee `net/http.Client` and `src/app.py#L3`.\n"), capture_output=True, text=True)
+            self.assertNotIn("net/http", r.stdout)  # prose
+            self.assertIn("src/app.py#L3", r.stdout)  # still parsed as a citation (flagged: #L form is not valid)
+
+    def test_part_done(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "src").mkdir()
+            (Path(d) / "src/app.py").write_text("a\nrun(escape(x))\nc\n")
+            run = lambda *a, i="": subprocess.run([sys.executable, "-I", str(LINT), *a, "--root", d], input=i, capture_output=True, text=True)
+            draft = report(extra="\n## Findings\n- [other] src/app.py:1 low: y\n")
+            cut = draft.index("## NOT CHECKED")
+            a, b = run("--part", "1", i=draft[:cut]), run("--part", "2", i=draft[cut:])
+            self.assertEqual((a.returncode, b.returncode), (0, 0))
+            self.assertEqual(int(b.stdout), draft.count("\n"))
+            r = run("--done")
+            self.assertEqual((r.returncode, r.stdout), (0, OK), r.stderr)
+            self.assertEqual(run("--done").returncode, 2)  # draft deleted
+            run("--part", "1", i="junk stale\n")  # stale draft, then part 1 truncates it
+            self.assertEqual(run("--part", "1", i=draft[:cut]).stdout.strip(), str(draft[:cut].count("\n")))
+            run("--part", "2", i="## Bogus\nsafe to deploy\n")  # failing --done deletes; resend from part 1
+            self.assertEqual(run("--done").returncode, 1)
+            run("--part", "1", i=draft[:cut]), run("--part", "2", i=draft[cut:])
+            self.assertEqual(run("--done").returncode, 0)
+
+    def test_symlink_draft_refused(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as t:
+            import hashlib
+            draft = Path(tempfile.gettempdir()) / ("rcl-" + hashlib.sha256(str(Path(d).resolve()).encode()).hexdigest()[:16] + ".md")
+            victim = Path(t) / "victim"
+            victim.write_text("keep")
+            draft.symlink_to(victim)
+            try:
+                r = subprocess.run([sys.executable, "-I", str(LINT), "--part", "1", "--root", d], input="x\n", capture_output=True, text=True)
+                self.assertEqual((r.returncode, victim.read_text()), (2, "keep"))
+            finally:
+                draft.unlink()
+
+    def test_extensionless_citation_rule(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "src").mkdir()
+            (Path(d) / "src/app.py").write_text("a\n")
+            run = lambda t: subprocess.run([sys.executable, "-I", str(LINT), "-", "--root", d], input=report(extra=f"\nSee {t}.\n"), capture_output=True, text=True).stdout
+            self.assertIn("src/Makefile", run("`src/Makefile`"))  # top dir exists, file missing
+            self.assertNotIn("net/http", run("`net/http`"))
+            self.assertNotIn("passwd", run("`../../etc/passwd`"))
+            self.assertIn("escapes", run("`../x.py:3`"))
+
+    def test_part_order_and_draft_safety(self):
+        with tempfile.TemporaryDirectory() as d:
+            import hashlib
+            draft = Path(tempfile.gettempdir()) / ("rcl-" + hashlib.sha256(str(Path(d).resolve()).encode()).hexdigest()[:16] + ".md")
+            run = lambda *a, i="x\n": subprocess.run([sys.executable, "-I", str(LINT), *a, "--root", d], input=i, capture_output=True, text=True)
+            try:
+                self.assertEqual(run("--part", "2").returncode, 2)  # N>1, no draft
+                self.assertIn("--part 1", run("--part", "2").stderr)
+                self.assertEqual(run("--part", "1").returncode, 0)
+                self.assertEqual(run("--part", "3").returncode, 2)  # skipped
+                self.assertEqual(run("--part", "2").returncode, 0)
+                self.assertEqual(run("--part", "2").returncode, 2)  # duplicate
+                draft.chmod(0o644)
+                self.assertEqual(run("--part", "3").returncode, 2)  # not private
+                self.assertEqual(run("--done").returncode, 2)
+            finally:
+                for f in (draft, Path(str(draft) + ".part")):
+                    f.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
