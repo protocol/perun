@@ -1,0 +1,210 @@
+[
+ {
+  "fixture": "kiosk-fastify",
+  "file": "auth.js",
+  "line": 5,
+  "class": "missing_authn",
+  "verdict": "fp",
+  "reason": "bearerAuth itself rejects missing SESSIONS token with 401; this is the authn control, not a gap."
+ },
+ {
+  "fixture": "kiosk-fastify",
+  "file": "records.js",
+  "line": 15,
+  "class": "missing_authn",
+  "verdict": "fp",
+  "reason": "purge route sits inside the bearerAuth onRequest scope in server.js; authn present, only ownership missing."
+ },
+ {
+  "fixture": "kiosk-fastify",
+  "file": "store.js",
+  "line": 6,
+  "class": "missing_authz",
+  "verdict": "fp",
+  "reason": "Seed SESSIONS entry 'tok-admin' is data, not an access-control decision point; no authz sink here."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "auth.go",
+  "line": 14,
+  "class": "missing_authz",
+  "verdict": "fp",
+  "reason": "token[7:] strips the Bearer prefix; authentication parsing, not an authorization check location."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "auth.go",
+  "line": 16,
+  "class": "missing_authz",
+  "verdict": "fp",
+  "reason": "tokens[token] lookup returns 401 when absent; authentication, role checks live in requireAdmin."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "store.go",
+  "line": 20,
+  "class": "missing_authz",
+  "verdict": "fp",
+  "reason": "Static 'tok-buyer' seed map entry is fixture data, no handler or authorization decision."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "store.go",
+  "line": 21,
+  "class": "missing_authz",
+  "verdict": "fp",
+  "reason": "Static 'tok-admin' seed map entry is fixture data, no handler or authorization decision."
+ },
+ {
+  "fixture": "forum-laravel",
+  "file": "routes/partners.php",
+  "line": 49,
+  "class": "secret_in_log",
+  "verdict": "fp",
+  "reason": "Log::info writes card and holder, personal/payment data not a credential; class should be pii log."
+ },
+ {
+  "fixture": "forum-laravel",
+  "file": "routes/records.php",
+  "line": 11,
+  "class": "rate_limit",
+  "verdict": "fp",
+  "reason": "ridge purge is an authorization/IDOR matter on a deletion, not a brute-force or cost endpoint needing throttle."
+ },
+ {
+  "fixture": "kiosk-fastify",
+  "file": "partners.js",
+  "line": 21,
+  "class": "rate_limit",
+  "verdict": "fp",
+  "reason": "falcon/fetch axios.get(req.query.url) is an SSRF sink; missing throttle is not the issue here."
+ },
+ {
+  "fixture": "kiosk-fastify",
+  "file": "public.js",
+  "line": 19,
+  "class": "rate_limit",
+  "verdict": "tp",
+  "reason": "Unauthenticated POST /auth/canyon-pin compares req.body.pin with no rate-limit config (global:false), allowing PIN brute force."
+ },
+ {
+  "fixture": "kiosk-fastify",
+  "file": "routes/partners.js",
+  "line": 64,
+  "class": "rate_limit",
+  "verdict": "fp",
+  "reason": "arbor/assist is bearer-authenticated; its real flaw is note interpolated into system prompt, not throttling."
+ },
+ {
+  "fixture": "kiosk-fastify",
+  "file": "store.js",
+  "line": 5,
+  "class": "rate_limit",
+  "verdict": "fp",
+  "reason": "SESSIONS seed object literal, no route or handler; rate limiting does not apply."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "integrations.go",
+  "line": 94,
+  "class": "rate_limit",
+  "verdict": "fp",
+  "reason": "quince/assist truncates note to 500 chars, tool-less prompt, authenticated under bearerAuth; no clear throttle need."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "partners.go",
+  "line": 96,
+  "class": "rate_limit",
+  "verdict": "fp",
+  "reason": "olive/assist is authenticated; its issue is prompt injection via c.PostForm(\"note\"), not missing throttling."
+ },
+ {
+  "fixture": "forum-laravel",
+  "file": "routes/account.php",
+  "line": 21,
+  "class": "csrf",
+  "verdict": "fp",
+  "reason": "olive/remember is a GET that sets a cookie; flaw is cookie flags, not a CSRF-protected state change."
+ },
+ {
+  "fixture": "forum-laravel",
+  "file": "routes/web.php",
+  "line": 6,
+  "class": "csrf",
+  "verdict": "tp",
+  "reason": "withoutMiddleware(VerifyCsrfToken::class) on cookie.sid group disables CSRF for POST email/close; sid cookie has no SameSite."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "auth.go",
+  "line": 38,
+  "class": "csrf",
+  "verdict": "fp",
+  "reason": "cookieAuth middleware line reading c.Cookie(\"sid\"); the state-changing route is not here, so location fails."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "main.go",
+  "line": 15,
+  "class": "csrf",
+  "verdict": "fp",
+  "reason": "store.Options sets SameSite Strict, Secure, HttpOnly on session cookie; mitigated and not the sid cookie."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "auth.go",
+  "line": 51,
+  "class": "cookie_flags",
+  "verdict": "fp",
+  "reason": "Line 51 is memberAuth session lookup; no cookie is written here, so no cookie flag sink."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "main.go",
+  "line": 14,
+  "class": "cookie_flags",
+  "verdict": "fp",
+  "reason": "Session cookie options on the next line set Secure, HttpOnly and SameSite Strict; flags are present."
+ },
+ {
+  "fixture": "forum-laravel",
+  "file": "routes/partners.php",
+  "line": 32,
+  "class": "pii_log",
+  "verdict": "fp",
+  "reason": "Log::info('vendor ping key=') logs a vendor API key, a credential, so class is secret log."
+ },
+ {
+  "fixture": "kiosk-fastify",
+  "file": "routes/partners.js",
+  "line": 55,
+  "class": "pii_log",
+  "verdict": "fp",
+  "reason": "SEED_MOOR is a hardcoded fixture array, never logged; no log call at this line."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "partners.go",
+  "line": 81,
+  "class": "pii_log",
+  "verdict": "fp",
+  "reason": "seedfennel is a sample data literal; only len() is returned, nothing is logged."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "partners.go",
+  "line": 87,
+  "class": "pii_log",
+  "verdict": "fp",
+  "reason": "hazel/track postJSON sends email and phone to stats vendor: third-party data sharing, not a log call."
+ },
+ {
+  "fixture": "orders-gin",
+  "file": "partners.go",
+  "line": 91,
+  "class": "pii_log",
+  "verdict": "fp",
+  "reason": "seedlaurel is a sample data literal; only len() is returned, nothing is logged."
+ }
+]
