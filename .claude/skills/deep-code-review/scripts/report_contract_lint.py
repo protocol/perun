@@ -25,6 +25,17 @@ CLASSES = {  # Findings-line vocabulary; defined in references/whole-project-rep
     "missing-authn", "missing-authz", "object-level-authz", "ssrf", "tls-off", "outbound-timeout", "secret-in-url", "secret-in-log",
     "hardcoded-secret", "csrf", "cookie-flags", "rate-limit", "pii-in-log", "pii-data", "prompt-injection", "injection", "xss", "other",
 }
+I = re.I
+OUT = re.compile(r"https?://|fetch\w*\(|\w*request\w*\(|requests\.|axios|curl|urlopen|reqwest|openConnection|openStream|resttemplate|webclient|httpclient|file_get_contents|fopen|got\(|\bopen\(|okhttp|\b(?:client|session|http|agent)\w*\.\w+\(|\bhttp\w*\.", I)  # outbound call or URL
+LOG = re.compile(r"\b(?:log|logger|logging|slog|console)\b|\bprint|puts|fmt\.|\becho\b|var_dump|error_log|\b(?:debug|warn|warning|error|info|trace)\s*\(", I)
+COOKIE = re.compile(r"cookie|httponly|samesite|session", I)
+TLS = r"verify|ssl|tls|timeout|insecure|rejectUnauthorized"
+SINKS = {c: (OUT.pattern + "|" + TLS + x, "outbound HTTP call, URL or TLS option") for c, x in
+         (("ssrf", ""), ("outbound-timeout", ""), ("tls-off", "|trust|verif|cert|hostname"), ("secret-in-url", r"|[?&]\w+="))}
+SINKS.update({c: (LOG.pattern, "log or print call") for c in ("secret-in-log", "pii-in-log")})
+SINKS["cookie-flags"] = (COOKIE.pattern, "cookie set or cookie config")
+CRED = re.compile(r"(?<![a-z])(?:api_?key|access_?key|secret|token|password|passwd|pwd)(?![a-z])", I)
+PII = re.compile(r"(?<![a-z])(?:email|phone|ssn|dob|birth|address|name|user|ip)s?(?![a-z])", I)
 FINDING = re.compile(r"\[([\w-]+)\]\s+(\S+)\s+[\w-]+:\s*\S")
 FILES_SPLIT = r"[;\s]+|,(?![\d-]+(?:[,;\s]|$))"  # a comma before a bare line number continues `path:1,2`
 STATUSES = {"pass", "fail", "not-checked"}
@@ -115,6 +126,22 @@ def resolve(tok, root):
     return full, a, b, None
 
 
+def sink_problem(cls, full, a, b):
+    """Rule text when the cited line (+-2) is off the class's sink, or the class mismatches the line; else None."""
+    lines = open(full, errors="replace").read().splitlines()
+    one = lines[a - 1]
+    win = "\n".join(lines[max(a - 3, 0):(b or a) + 2])
+    if cls == "pii-in-log":
+        if LOG.search(win) and CRED.search(one) and not PII.search(one):
+            return "class-mismatch", "logged value names a credential (key/token/secret/password): use secret-in-log"
+        if OUT.search(one) and not LOG.search(win):
+            return "class-mismatch", "line is an outbound call, not a log call: use pii-data"
+    if cls in SINKS:
+        rx, what = SINKS[cls]
+        if not re.search(rx, win, I):
+            return "finding-not-on-sink", f"[{cls}] cited line +-2 shows no {what}: cite the sink line, not the route/helper"
+
+
 def lint(path, root, text=None):
     raw = (text if text is not None else sys.stdin.read() if path == "-" else open(path, errors="replace").read()).splitlines()
     live, fence = [], False  # fenced lines are blanked, indexes preserved
@@ -167,6 +194,8 @@ def lint(path, root, text=None):
                     add(k, "bad-citation", err)
                 elif "," in m.group(2) or any(not resolve(c, root)[3] for c in re.findall(r"[\w/.-]+\.\w+:\d+", l[m.end() - 1:].split("evidence:")[0])):
                     add(k, "finding-multi-cite", "one primary path:line per finding; put other cites after `evidence:`")
+                elif ":" in m.group(2) and (sp := sink_problem(m.group(1).lower(), *resolve(m.group(2), root)[:3])):
+                    add(k, *sp)
     rows, in_table = [], set()
     for n, (i, _, t) in enumerate(heads):
         if not re.search(SECTIONS["missing-table"], t, re.I):

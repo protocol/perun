@@ -219,7 +219,7 @@ class Contract(unittest.TestCase):
     def test_finding_single_cite(self):
         self.bad(report(extra="\n## Findings\n- [xss] src/app.py:1,2 high: x\n"), "finding-multi-cite")
         self.bad(report(extra="\n## Findings\n- [xss] src/app.py:1 high: x via src/app.py:2\n"), "finding-multi-cite")
-        ok = ("\n## Findings\nTwo findings.\n- [SSRF] src/app.py:1 medium-high: reaches 127.0.0.1:8080 and example.com:443\n"
+        ok = ("\n## Findings\nTwo findings.\n- [XSS] src/app.py:1 medium-high: reaches 127.0.0.1:8080 and example.com:443\n"
               "  evidence: src/app.py:2\n### Attack paths\n- src/app.py:1 -> src/app.py:2\n## Finding 3: notes\n- prose\n")
         self.assertEqual(lint(report(extra=ok))[0], 0)
         split = runpy.run_path(str(LINT))["FILES_SPLIT"]
