@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""route_auth_map.py [--paths] DIR -- heuristic lead-finder for HTTP handlers with no authentication evidence (CWE-306/862). Report-only, stdlib only.
+"""route_auth_map.py [--paths | --all] DIR -- heuristic lead-finder for HTTP handlers with no authentication evidence (CWE-306/862). Report-only, stdlib only.
 
 Read this when you review an API surface for missing authentication or run the anonymous GET sweep in security-appsec.md: a handler that
 mutates state and never touches an identity check is reachable by anyone, and generic linters do not see it. Run
-`python3 -I route_auth_map.py DIR` (add `--paths` to list the GET and ANY routes, one per line). A row is a lead to verify, and SILENCE IS NOT PROOF
+`python3 -I route_auth_map.py DIR` (add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
 OF AUTHENTICATION: the scan only sees the call shapes listed below.
 
 1. Inventory every handler: Next.js app/**/route.(ts|tsx|js|jsx|mjs) exported GET/POST/PUT/PATCH/DELETE (function, const, destructured or re-exported),
    pages/api/** (methods read from `req.method` checks, else ANY), "use server" exported async functions (METHOD ACTION), Express/Router/Hono/
    Fastify `<receiver>.get|post|put|patch|delete|all("/path", ...)` (TS type arguments allowed: `app.post<{ Body: Widget }>("/path", h)`), FastAPI `@x.get(...)` and Flask `@x.route(..., methods=[...])` decorators.
+   `--paths` and `--all` also inventory (no auth evidence is judged for these) Go (`HandleFunc|Handle("[METHOD ]/p")` incl. Go 1.22 patterns, chi/gin/echo `x.Get|GET|Any("/p")`, `x.Handle|Method|Add("GET", "/p")`,
+   gorilla `.Methods(...)`, with `Group`/`PathPrefix` variables and chi `Route("/a", func...)` prefixes), Spring (`@Get|Post|Put|Patch|DeleteMapping`, `@RequestMapping` with `method=`, array paths, the class-level `@RequestMapping` prefix)
+   and Django urlconfs (`path|re_path|url`, method ANY, `include("pkg.urls")` prefixes resolved to a scanned file). Not seen there: DRF routers, `add_url_rule`, `include(module)`, Kotlin DSL, a prefix held in a variable.
 2. One row per handler: `path:line: SEV: METHOD route auth=<evidence>`. Evidence, first hit wins: a call, decorator or `Depends(...)` naming an
    identity check (IDENTITY below: getServerSession, auth(), currentUser, requireAuth*, verify*, login_required...; a Depends/Security argument
    with user, auth, token, current, bearer, jwt, api_key, verify or login in it) or `req.user`/`current_user.`/`g.user` in the handler, in a
@@ -65,7 +68,7 @@ Public-by-design routes (login, webhooks, health, NextAuth `[...nextauth]`) read
 after reviewing one, put a `route-auth-ok` comment on its line or the line above and the row reads `auth=public`. Edit IDENTITY and RECEIVERS for house guards.
 
 Output: one row per handler sorted by path then line, one JSON summary line (handlers, files, high, findings = the HIGH rows) and a stderr line
-`heuristic; scanned N files with M handlers; ...`. `--paths` prints the unique GET and ANY routes (dynamic segments as `:name`) and no JSON.
+`heuristic; scanned N files with M handlers; ...`. `--paths` prints the unique GET and ANY routes (dynamic segments as `:name`) and no JSON; `--all` prints one `METHOD /path file:line` line per route and method and no JSON (the two flags exclude each other).
 Exit 0 always on a readable DIR (report-only: never fails a build on its own), 2 on usage error. Reads files only; writes nothing.
 ponytail: text scan on the tenant_scope_check.py masker, not an AST -- regex literals with quotes can desync it. Upgrade to a parser if
 precision matters more.
@@ -555,15 +558,158 @@ def scan(root):
     return sorted(rows), len(todo)
 
 
+GOCH = r'((?:\.(?:With|Use)\((?:[^()]|\([^()]*\))*\)|\.(?:Group|PathPrefix)\(\s*"[^"]*"\s*\)|\.Subrouter\(\))*)'  # a call chain between receiver and route call: x.With(mw).Group("/a").Get(...)
+GOCALL = re.compile(r'\b([\w$]+)' + GOCH + r'\.(HandleFunc|Handle|Get|Post|Put|Patch|Delete|GET|POST|PUT|PATCH|DELETE|Any|ANY)\(\s*"([^"]*)"\s*,')
+GOMETH = re.compile(r'\b([\w$]+)' + GOCH + r'\.(?:Handle|Method|MethodFunc|Add)\(\s*"(%s)"\s*,\s*"([^"]*)"' % V, re.I)
+GOCLI = re.compile(r"(?:http|resty|req|session|\w*client)$", re.I)  # receivers of outbound calls: client.Post("/x", "application/json", body)
+GOGRP = re.compile(r'\b([\w$]+)\s*:?=\s*([\w$]+)\.(?:Group|PathPrefix)\(\s*"([^"]*)"')
+GORT = re.compile(r'\.(?:Route|Mount)\(\s*"([^"]*)"\s*,\s*func\b[^{]*\{')
+GOMS = re.compile(r'\s*\.Methods\(([^)]*)\)')
+JAVAM = re.compile(r'@(Get|Post|Put|Patch|Delete|Request)Mapping\b(?:\s*\(((?:[^()"]|"[^"]*"|\([^()]*\))*)\))?')
+JAVAX = re.compile(r"\bmethod\s*=[^,)]*|\b(?:consumes|produces|headers|params)\s*=\s*(?:\{[^}]*\}|[^,)]*)")
+DJ = re.compile(r'(?<![\w.])(re_path|path|url)\(\s*r?(["\'])(.*?)\2\s*,\s*(include\(\s*(?:r?["\']([\w.]+)["\'])?)?')
+NOTSRC = re.compile(TEST.pattern + r"|_test\.go$|Tests?\.(?:java|kt)$")
+
+
+def join(*ps):
+    """Path segments joined with single slashes and a leading one: join("/api/", "x") is /api/x."""
+    return "/".join(["", *(x.strip("/") for x in ps if x.strip("/"))]) or "/"
+
+
+def goroute(p):
+    """Go 1.22 / chi / gorilla path to a route: {id} -> :id, {rest...} -> :rest*, {$} dropped."""
+    return pyroute(re.sub(r"\{(\w+)\.\.\.\}", r"{\1}*", p.replace("{$}", "")))
+
+
+def go_routes(raw):
+    """[(pos, METHOD, path)] of a Go file: net/http `HandleFunc|Handle("[METHOD ]/p", h)`, chi/gin/echo `x.Get|GET|Any("/p", h)`, `x.Handle|Method|Add("GET", "/p", h)`, gorilla
+    `HandleFunc("/p", h).Methods("A","B")`, behind a `.With(mw)` / `.Group("/a")` chain, under `x := y.Group|PathPrefix("/a")` prefixes (the latest definition of x in a block that holds the
+    route) and chi `x.Route|Mount("/a", func(...) {` blocks. Outbound calls (a client-like receiver, or no handler argument) are skipped."""
+    mk, bm = mask(raw, True), mask(raw)
+    blocks, st = [], []
+    for i, c in enumerate(bm):
+        if c == "{": st.append(i)
+        elif c == "}" and st: blocks.append((st.pop(), i))
+    defs_ = [(t.start(), t) for t in GOGRP.finditer(mk)]
+    rts = [(t.start(), close_of(mk, t.end() - 1), t[1]) for t in GORT.finditer(mk)]
+    def scope(pos): return min((b - a, a, b) for a, b in blocks if a < pos < b)[1:] if any(a < pos < b for a, b in blocks) else (-1, len(mk))
+    def gp(var, pos):
+        d = [t for q, t in defs_ if t[1] == var and q < pos and scope(q)[0] < pos < scope(q)[1]]
+        return join(gp(d[-1][2], d[-1].start()), d[-1][3]) if d else ""
+    def pf(pos, var, ch): return join(gp(var, pos), *re.findall(r'(?:Group|PathPrefix)\(\s*"([^"]*)"', ch), *(q for a, b, q in rts if a < pos < b))
+    out = [(t.start(), t[3].upper(), join(pf(t.start(), t[1], t[2]), goroute(t[4]))) for t in GOMETH.finditer(mk)]
+    for t in GOCALL.finditer(mk):
+        k, p, q = t[3], t[4], pf(t.start(), t[1], t[2])
+        if GOMETH.match(mk, t.start()): continue
+        m = re.match(r"(%s)\s+(.*)" % V, p)
+        if m: meth, p = m[1], m[2]
+        elif k in ("Handle", "HandleFunc"):
+            cl = close_of(mk, mk.index("(", t.end(3)))
+            ms = GOMS.match(mk, cl + 1) if cl > 0 else None
+            meth = "|".join(v for v in VERBS if re.search(r'"%s"' % v, ms[1], re.I)) if ms else "ANY"
+        elif GOCLI.match(t[1]): continue  # client.Get("/x", ...) is an outbound call
+        else: meth = k.upper()
+        if p.startswith("/") or p == "" and q != "/": out.append((t.start(), meth, join(q, goroute(p))))
+    return out
+
+
+def java_paths(a):
+    """Paths of a mapping annotation's arguments (a): the strings of `value=` / `path=` (else the bare argument, `name=` and the other attributes dropped); a part that is no string
+    literal (a constant, `BASE + "/x"`) reads `{?}`, so the row names an unresolved path, never a wrong one."""
+    S = r'"(?:[^"\\]|\\.)*"'  # a Java string literal
+    x = re.search(r"\b(?:value|path)\s*=\s*(\{(?:%s|[^}\"])*\}|\[(?:%s|[^\]\"])*\]|(?:%s|[^,)\"])*)" % (S, S, S), a)
+    body = x[1] if x else re.sub(r"\b\w+\s*=\s*(?:\{(?:%s|[^}\"])*\}|\[(?:%s|[^\]\"])*\]|(?:%s|[^,)\"])*)" % (S, S, S), "", JAVAX.sub("", a)) if re.search(r"\b\w+\s*=", a) else a
+    out = []
+    for el in re.findall(r'(?:[^,"{}\[\]]|%s)+' % S, body):
+        if el.strip(): out.append("".join(g[0] if g[0] or not g[1] else "{?}" for g in re.findall(r'"((?:[^"\\]|\\.)*)"|([\w.$]+)', el)))
+    return out or [""]
+
+
+def java_routes(raw):
+    """[(pos, METHOD, path)] of a Spring file: `@Get|Post|Put|Patch|DeleteMapping` and `@RequestMapping(value|path = ..., method = RequestMethod.X)` (ANY without a method), every path
+    of an array (java_paths), under the `@RequestMapping` of its own class (a method-less one with no `{` or `;` before the next `class`; each class or interface declaration resets
+    the prefix, a nested class too).
+    ponytail: a controller's nested class ends the outer prefix for the mappings after it."""
+    mk = mask(raw, True)
+    out, pre, pend = [], "", ""
+    cls = [t.start() for t in re.finditer(r"\b(?:class|interface)\s+\w+", mk)]
+    for t in JAVAM.finditer(mk):
+        while cls and cls[0] < t.start(): cls.pop(0); pre, pend = pend, ""
+        a = t[2] or ""
+        ps = java_paths(a)
+        if t[1] == "Request" and "method" not in a:
+            c = re.search(r"\b(?:class|interface)\b", mk[t.end():])
+            if c and not re.search(r"[{;]", mk[t.end():t.end() + c.start()]): pend = ps[0]; continue
+        ms = re.findall(r"\b(%s)\b" % V, "".join(re.findall(r"\bmethod\s*=[^)]*", a))) if t[1] == "Request" else [t[1].upper()]
+        out += [(t.start(), "|".join(ms) or "ANY", join(pre, pyroute(p))) for p in ps]
+    return out
+
+
+def groups(r):
+    """Regex route r with each named group `(?P<id>...)` (nested parentheses balanced) replaced by `<id>`."""
+    while True:
+        x = re.search(r"\(\?P<(\w+)>", r)
+        if not x: return r
+        d, i = 1, x.end()
+        while d and i < len(r):
+            d += (r[i] == "(") - (r[i] == ")") if r[i - 1] != "\\" else 0
+            i += 1
+        r = r[:x.start()] + "<%s>" % x[1] + r[i:]
+
+
+def django_routes(files):
+    """[(rel, line, "ANY", path)] of Django urlconfs (files: {rel: raw}): `path|re_path|url("route", view)` (a view's methods are not read), under the prefixes of
+    `include("pkg.urls")` calls that name a scanned file by its dotted path suffix (`include(module)`, a list and an unresolvable name are skipped). A urlconf some other one includes is read only under that prefix."""
+    mks = {r: pymask(raw, True) for r, raw in files.items() if "urlpatterns" in raw}
+    ents = {r: list(DJ.finditer(mk)) for r, mk in mks.items()}
+    def find(spec): return next((r for r in mks if ("/" + r).endswith("/" + spec.replace(".", "/") + ".py")), None)
+    inc = {find(t[5]) for ts in ents.values() for t in ts if t[5]}
+    out = []
+    def walk(rel, pre, path, seen):
+        for t in ents[rel]:
+            r = t[3]
+            if t[1] != "path": r = groups(r).lstrip("^").rstrip("$")
+            if not t[4]: out.append((rel, lineno(mks[rel], t.start()), "ANY", join(pre, pyroute(r)) if r.strip("/") else join(pre)))
+            elif t[5] and find(t[5]) and find(t[5]) not in path: seen.add(find(t[5])); walk(find(t[5]), join(pre, r), path | {find(t[5])}, seen)
+    seen = set()
+    for r in [r for r in mks if r not in inc] + list(mks):  # then any urlconf an include cycle left unread
+        if r not in seen: seen.add(r); walk(r, "", {r}, seen)
+    return out
+
+
+def inventory(root):
+    """[(METHOD, path, file, line)] of every route under root, sorted, one entry per method: the scan() handlers (JS/TS, Next, Python), Go, Spring and Django urlconfs."""
+    rows = [(m, r[3], r[0], r[1]) for r in scan(root)[0] for m in r[2].split("|")]
+    files, django = {}, {}
+    for dp, dn, fn in os.walk(root):
+        dn[:] = [d for d in sorted(dn) if d not in SKIP_DIR]
+        for f in sorted(fn):
+            rel = os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/")
+            if NOTSRC.search(rel): continue
+            if f.endswith((".go", ".java", ".kt")): files[rel] = f
+            elif f.endswith(".py") and "urlpatterns" in (raw := read(root, rel) or ""): django[rel] = raw
+    for rel in files:
+        raw = read(root, rel) or ""
+        for pos, ms, p in go_routes(raw) if rel.endswith(".go") else java_routes(raw):
+            rows += [(m, p, rel, lineno(raw, pos)) for m in ms.split("|")]
+    rows += [(m, p, rel, ln) for rel, ln, m, p in django_routes(django)]
+    return sorted(set(rows), key=lambda r: (r[1], r[0], r[2], r[3]))
+
+
 def main(argv):
-    a = [x for x in argv[1:] if x != "--paths"]
-    if len(a) != 1 or not os.path.isdir(a[0]):
-        print("usage: route_auth_map.py [--paths] DIR", file=sys.stderr); return 2
+    a = [x for x in argv[1:] if x not in ("--paths", "--all")]
+    if len(a) != 1 or not os.path.isdir(a[0]) or {"--paths", "--all"} <= set(argv[1:]):
+        print("usage: route_auth_map.py [--paths | --all] DIR", file=sys.stderr); return 2
+    if {"--paths", "--all"} & set(argv[1:]):
+        inv = inventory(a[0])
+        print("heuristic; %d routes; silence is not proof of authentication" % len(inv), file=sys.stderr)
+        if "--all" in argv[1:]:
+            for m, p, f, ln in inv: print("%s %s %s:%d" % (m, p, f, ln))
+        else:
+            for p in sorted({p for m, p, f, ln in inv if m in ("GET", "ANY")}): print(p)
+        return 0
     rows, files = scan(a[0])
     print("heuristic; scanned %d files with %d handlers; silence is not proof of authentication" % (files, len(rows)), file=sys.stderr)
-    if "--paths" in argv[1:]:
-        for r in sorted({r[3] for r in rows if {"GET", "ANY"} & set(r[2].split("|"))}): print(r)
-        return 0
     out = [(r, "HIGH" if r[4] == "none" and any(x != "GET" for x in r[2].split("|")) else "INFO") for r in rows]
     for r, s in out: print("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))
     hi = [(r, s) for r, s in out if s == "HIGH"]
