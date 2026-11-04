@@ -1,0 +1,47 @@
+from django.urls import path
+
+from . import forms_extras as fx
+from . import polls_extras as px
+from . import views as v
+
+urlpatterns = [
+    path("healthz", v.health),
+    path("api/public/surveys/<int:sid>", v.public_survey),
+    path("api/exports/responses.csv", v.exports_csv),
+    path("api/surveys/mine", v.my_surveys),
+    path("api/surveys/<int:sid>", v.survey_detail),
+    path("api/surveys/<int:sid>/publish", v.publish_survey),
+    path("api/surveys/<int:sid>/close", v.close_survey),
+    path("api/admin/surveys/<int:sid>/archive", v.archive_survey),
+    path("api/admin/responses/<int:rid>/purge", v.purge_response),
+    path("legacy/results/<int:sid>", v.legacy_results),
+    path("api/users/<int:uid>/surveys", v.user_surveys),
+    path("api/responses/<int:rid>/note", v.annotate_response),
+    path("api/ext/embed", px.embed),
+    path("api/ext/catalog/refresh", px.refresh_catalog),
+    path("api/ext/forecast/<slug:city>", px.forecast),
+    path("api/ext/forecast/<slug:city>/alerts", px.alerts),
+    path("api/ext/radar", px.radar),
+    path("auth/pin", px.pin_login),
+    path("auth/code", px.send_code),
+    path("web/ext/account/email", px.change_email),
+    path("web/ext/account/close", px.close_account),
+    path("web/ext/session/remember", px.remember_device),
+    path("web/ext/session/trust", px.trust_device),
+    path("auth/signup", px.signup),
+    path("api/ext/billing/charge", px.charge),
+    path("api/ext/members/invite", px.invite),
+    path("api/ext/track", px.track),
+    path("api/ext/assist/note", px.assist_note),
+    path("api/ext/assist/lookup", px.assist_lookup),
+    path("auth/login", fx.login),
+    path("api/ext/surveys/share", fx.share),
+    path("api/ext/preview/<int:rid>", fx.preview),
+    path("api/ext/geo/<slug:place>", fx.geo),
+    path("web/ext/profile/phone", fx.change_phone),
+    path("web/ext/prefs/locale", fx.set_locale),
+    path("api/ext/billing/redeem", fx.redeem),
+    path("api/ext/notes/add", fx.add_note),
+    path("api/ext/track/visit", fx.visit),
+    path("api/ext/assist/ask", fx.ask),
+]
