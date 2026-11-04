@@ -68,6 +68,11 @@ class ReviewFixes(unittest.TestCase):
         prop = used.replace("@RequestParam size: Int): String = rows(size)", "@RequestParam size: Int = items().size): String = rows()")
         self.assertEqual(lines({"Rows.kt": prop}, C), set())
 
+    def test_annotation_default_does_not_hide_capped_size(self):
+        src = 'package acme;\n@RestController\nclass Rows {\n    @GetMapping("/v1/rows")\n    String list(@RequestParam(defaultValue = "10") int size) {\n        if (size > 100) throw new IllegalArgumentException();\n        return rows(size);\n    }\n}\n'
+        self.assertEqual(lines({"Rows.java": src}, C), set())
+        self.assertEqual(lines({"Rows.java": src.replace("        if (size > 100) throw new IllegalArgumentException();\n", "")}, C), {("Rows.java", at(src, "/v1/rows"))})
+
 
 if __name__ == "__main__":
     unittest.main()

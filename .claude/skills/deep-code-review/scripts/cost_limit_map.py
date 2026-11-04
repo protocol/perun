@@ -64,6 +64,7 @@ FOUND = "%s endpoint: limit code found (%s at %s:%d); check it covers this route
 def cmp_cap(text, z):
     """True when the variable the page-size line z (a SIZE match in text) assigns, or the size name itself, is compared with a number above 1 in either direction (`n > 100`, `n <= 100`, `100 < n`); a floor against 0 or 1 (`n < 1`, `n > 0`, `n >= 1`) is no cap."""
     line = text[text.rfind("\n", 0, z.start()) + 1:text.find("\n", z.end())]
+    line = re.sub(r"\w+\s*=\s*\"[^\"]*\"", "", line)  # drop annotation args such as `defaultValue = "10"` so the name after them survives the split
     names = "|".join(set(re.findall(r"\w+", line.split("=")[0])) | {"limit", "pageSize", "page_size", "per_page", "perPage"})
     pat = r"\b(?:{0})\b\s*[<>]=?\s*(\d+)|(\d+)\s*[<>]=?\s*\b(?:{0})\b".format(names)
     return any(int(a or b) > 1 for a, b in re.findall(pat, text))
