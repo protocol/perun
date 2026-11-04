@@ -29,6 +29,8 @@ def routes():
         "pypi.org/pypi/fict-pydecoy/json": J({"releases": {"3.1": [{}]}}),
         "proxy.golang.org/example.com/fictmod/v2/@v/list": "v2.0.0\nv2.1.0\nv2.2.0\nv2.3.0-rc1\n",
         "proxy.golang.org/example.com/fictdecoy/@v/list": "v1.5.0\n",
+        "proxy.golang.org/example.com/fictmod/v2/@latest": J({"Version": "v2.2.0"}),
+        "proxy.golang.org/example.com/fictdecoy/@latest": J({"Version": "v1.5.0"}),
         "maven2/org/fict/lib/maven-metadata.xml": "<metadata><versions><version>1.0.0</version><version>1.2.0</version><version>1.3.0-SNAPSHOT</version></versions></metadata>",
         "maven2/org/fict/glib/maven-metadata.xml": "<metadata><versions><version>4.0.0</version><version>4.1.0</version></versions></metadata>",
         "crates.io/api/v1/crates/fict-crate": J({"versions": [{"num": "0.3.0", "yanked": False}, {"num": "0.4.0", "yanked": False}, {"num": "0.5.0", "yanked": True}]}),
