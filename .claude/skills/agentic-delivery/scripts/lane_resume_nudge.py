@@ -10,7 +10,8 @@ sent back to a lane that went idle long ago (default 6; a missing, non-numeric o
 activity is the mtime of `agent-<id>.jsonl` beside the meta file when it exists, else the meta file's own mtime; a
 lane whose mtime cannot be read is skipped. When the keyword overlap (Jaccard over words of 3+ letters/digits minus
 stopwords) with a remaining lane is at least 0.5 and shares 2+ words, it prints a PreToolUse `additionalContext`
-advisory naming the earlier lane to continue with SendMessage. Advisory only: it never denies. A missing field,
+advisory naming the earlier lane to continue with SendMessage. A lane is skipped when both descriptions contain
+3+-digit numbers and the two number sets are disjoint (PR 9900 vs PR 9919 are different tasks). Advisory only: it never denies. A missing field,
 directory or unreadable meta file exits 0 silently.
 
 Run `lane_resume_nudge.py --selftest` to check it.
@@ -58,6 +59,9 @@ def check(payload):
         if active < cutoff:
             continue
         old = words(desc)
+        nn, on = {w for w in new if w.isdigit()}, {w for w in old if w.isdigit()}
+        if nn and on and not nn & on:
+            continue
         shared = len(new & old)
         score = shared / len(new | old) if new | old else 0.0
         if shared >= 2 and score >= 0.5 and score > best[0]:
@@ -113,6 +117,12 @@ def _selftest():
         ctx = json.loads(out)["hookSpecificOutput"]
         res.append(("advisory-json-never-denies", rc == 0 and ctx["hookEventName"] == "PreToolUse"
                     and "permissionDecision" not in ctx))
+        pr = {"transcript_path": tp, "tool_input": {"description": "Lint sweep PR 1234"}}
+        (sub / "agent-pr.meta.json").write_text(json.dumps({"description": "Lint sweep PR 5678"}))
+        res.append(("disjoint-numbers-silent", "agent pr" not in (check(pr) or "")))
+        (sub / "agent-pr.meta.json").write_text(json.dumps({"description": "Lint sweep PR 1234 delta"}))
+        res.append(("shared-number-advises", "agent pr" in (check(pr) or "")))
+        (sub / "agent-pr.meta.json").unlink()
         meta, log = sub / "agent-abc123.meta.json", sub / "agent-abc123.jsonl"
 
         def age(path, hours):
