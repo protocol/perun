@@ -35,6 +35,8 @@ One finding per vulnerable site, never a group or a range: each state-changing c
 
 Fixed class vocabulary: `missing-authn`, `missing-authz`, `object-level-authz`, `ssrf`, `tls-off`, `outbound-timeout`, `secret-in-url`, `secret-in-log`, `hardcoded-secret` (credentials or tokens in source), `csrf`, `cookie-flags`, `rate-limit`, `pii-in-log`, `pii-data` (personal data committed, stored in plaintext or sent to a third party), `prompt-injection` (including tool-call JSON built from input), `injection`, `xss`, `other`. Pick the closest class; use `other` only when none fits.
 
+Cite the sink: for `ssrf`, `tls-off`, `outbound-timeout` and `secret-in-url` the outbound call, URL or TLS option; for `secret-in-log` and `pii-in-log` the log call; for `cookie-flags` the cookie set. The lint fails a cite whose line +-2 shows no sink (`finding-not-on-sink`). One finding per issue: do not re-cite it at the route or a helper. `rate-limit` cites the handler line only, and only for brute-forceable or costly endpoints (login, PIN, OTP, SMS, LLM, bulk export); not when a limiter already wraps the route. `csrf`: SameSite Lax or Strict blocks a cross-site POST but not a state-changing GET. Never cite a token generator or a limiter definition. A `pii-in-log` line that logs a key, token, secret or password is `secret-in-log`; one with an outbound call and no log call is `pii-data` (`class-mismatch`).
+
 Example: `- [pii-data] src/api/users.py:42 high: serves SSNs and dates of birth unmasked. evidence: src/models.py:10`
 
 ## Rules the linter enforces
