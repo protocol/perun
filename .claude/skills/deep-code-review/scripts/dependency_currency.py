@@ -101,7 +101,9 @@ FRAMEWORKS = {("pip", "django"): "django", ("npm", "react"): "react", ("npm", "n
               ("gradle", "org.springframework:spring-webmvc"): "spring-framework", ("gradle", "org.springframework:spring-webflux"): "spring-framework",
               ("gradle", "org.springframework:spring-aop"): "spring-framework", ("gradle", "org.springframework:spring-jdbc"): "spring-framework",
               ("gradle", "org.springframework:spring-tx"): "spring-framework", ("gradle", "org.springframework:spring-orm"): "spring-framework",
-              ("gradle", "org.springframework:spring-expression"): "spring-framework", ("gradle", "org.springframework:spring-test"): "spring-framework"}
+              ("gradle", "org.springframework:spring-expression"): "spring-framework", ("gradle", "org.springframework:spring-test"): "spring-framework",
+              ("maven", "io.dropwizard:dropwizard-core"): "dropwizard", ("gradle", "io.dropwizard:dropwizard-core"): "dropwizard",
+              ("maven", "io.dropwizard:dropwizard-bom"): "dropwizard", ("gradle", "io.dropwizard:dropwizard-bom"): "dropwizard"}
 RT_TOOLS = {"nodejs": "nodejs", "node": "nodejs", "python": "python", "ruby": "ruby", "golang": "go", "go": "go", "rust": "rust", "php": "php", "elixir": "elixir", "erlang": "erlang"}
 
 
@@ -614,7 +616,7 @@ def versions(eco, name, cur=""):
         vs = [v for v, fs in d["releases"].items() if fs and not all(f.get("yanked") for f in fs)]
     elif eco == "go":
         esc = "/".join(q(re.sub(r"[A-Z]", lambda m: "!" + m[0].lower(), x), safe="!") for x in name.split("/"))
-        vs = [v for v in net.get(f"https://proxy.golang.org/{esc}/@v/list").split() if "+incompatible" not in v]
+        vs = [v for v in net.get(f"https://proxy.golang.org/{esc}/@v/list").split() if "+incompatible" not in v]  # the proxy's @latest skips +incompatible tags once a module has a go.mod; ponytail: a pre-modules repo whose only newer major is +incompatible reads as current, query @latest if that matters
     elif eco in ("maven", "gradle"):
         g, a = name.split(":")
         gp = "/".join(qp(x) for x in g.split("."))
@@ -649,12 +651,21 @@ def ls_remote_latest(repo, err):
     return max(tags, key=vkey)
 
 
+FLOAT_TAGS = {}  # repo -> highest tag found behind a floating major release, so many `uses:` lines of one action cost one ls-remote
+
+
 def gh_latest(repo):
     """Return the latest stable release tag of an owner/repo: releases/latest, else the highest stable tag."""
     repo = qp(repo)
     try:
         try:
-            return net.json(f"https://api.github.com/repos/{repo}/releases/latest")["tag_name"]
+            tag = net.json(f"https://api.github.com/repos/{repo}/releases/latest")["tag_name"]
+            if re.fullmatch(r"v?\d+", tag):  # a floating major alias ("v6") lags point releases such as v6.1.2: take the highest tag instead
+                try:
+                    tag = FLOAT_TAGS[repo] if repo in FLOAT_TAGS else FLOAT_TAGS.setdefault(repo, ls_remote_latest(repo, OSError()))
+                except OSError:
+                    pass  # a failed ls-remote is not cached; the alias tag stands
+            return tag
         except NotFound:
             t = [e["name"] for e in net.json(f"https://api.github.com/repos/{repo}/tags?per_page=100") if re.match(r"v?\d+(\.\d+)*$", e["name"])]
             if not t:
@@ -903,7 +914,7 @@ def read(root, rel):
 
 
 VENDOR_CAP = 200  # vendored rows listed before one overflow row
-VMANIFEST = re.compile(r"package\.json|composer\.json|go\.mod|pom\.xml|Cargo\.toml|pyproject\.toml|setup\.py|.*\.gemspec")
+VMANIFEST = re.compile(r"PKG-INFO|package\.json|composer\.json|go\.mod|pom\.xml|Cargo\.toml|pyproject\.toml|setup\.py|.*\.gemspec")
 
 
 def vendored_rows(root, files):
@@ -926,6 +937,8 @@ def vendored_rows(root, files):
             txt = read(root, mf) if mf and not (DEADLINE and time.time() > DEADLINE) else None  # reads count against --budget
             if txt and mf.endswith(("package.json", "composer.json")):
                 name = json.loads(txt).get("name") or name
+            elif txt and mf.endswith("PKG-INFO"):
+                name = re.search(r"(?m)^Name:\s*(\S+)", txt)[1]
             elif txt and mf.endswith("go.mod"):
                 name = re.search(r"(?m)^module\s+(\S+)", txt)[1]
             elif txt and mf.endswith(("Cargo.toml", "pyproject.toml")):
@@ -1175,6 +1188,9 @@ def collect(root, files, today):
             elif b in ("rust-toolchain", "rust-toolchain.toml"):
                 if (m := re.search(r"""(?m)^\s*(?:channel\s*=\s*["'])?(\d+\.\d+(?:\.\d+)?)\b""", txt)):  # nightly/stable/beta float: no version to compare
                     rows.append(("runtime", f, "rust", m[1], "rust"))
+            elif b == "gradle-wrapper.properties":
+                if (m := re.search(r"(?m)^distributionUrl=.*/gradle-(\d+(?:\.\d+)*)-(?:bin|all)\.zip", txt)):
+                    rows.append(("runtime", f, "gradle", m[1], "gradle"))
             elif b in (".tool-versions", "mise.toml", ".mise.toml"):
                 rows.extend(("runtime", f, prod, ver, prod) for prod, ver in p_tool_versions(txt, b))
             elif b in (".nvmrc", ".node-version", ".python-version", ".ruby-version", ".php-version"):
@@ -1278,6 +1294,19 @@ def collect(root, files, today):
                     deps.extend((f, "pip", n, v) for n, s in specs if (v := exact("pip", s)))
         except Exception as e:
             nr(f, b, f"could not parse ({type(e).__name__}: {e})")
+    gd = {}  # one module declared at different versions in two files of the same Gradle project (build file vs version catalog, ...)
+    for f, eco, n, v in deps:
+        b, d = os.path.basename(f), os.path.dirname(f)
+        if eco == "gradle" and b != "gradle.lockfile" and not is_pre("gradle", v):
+            gd.setdefault((os.path.dirname(d) if b.endswith(".versions.toml") and os.path.basename(d) == "gradle" else d, n), set()).add((v, f))
+    for (_, n), m in sorted(gd.items()):
+        per = {}
+        for v, f in m:
+            per.setdefault(f, set()).add(pk("gradle", v))
+        if len(per) > 1 and all(len(s) == 1 for s in per.values()) and len(set().union(*per.values())) > 1:  # a file that itself declares two versions (two catalog aliases) is ambiguous: skip
+            s = sorted(m, key=lambda x: pk("gradle", x[0]))
+            (v, f), (v2, f2) = s[0], s[-1]  # lowest vs highest: different versions, so different files
+            rows.append(row(f, n, "gradle", "drift", v, note=f"{f} declares {v} but {f2} declares {v2}; one of them is stale"))
     return deps, rows
 
 
