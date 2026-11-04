@@ -298,7 +298,9 @@ def run(a, st=None) -> dict:
             if crit and not scores_ok(d.get("scores"), options, crit):
                 raise ValueError("bad scores")
         except (ValueError, KeyError) as e:
-            rec["dropped"].append([lenses[k], f"malformed answer: {e}"])
+            hint = " (claude seat without --setting-sources project: a user Stop hook may rewrite the reply)" \
+                if os.path.basename(shlex.split(cmd)[0]) == "claude" and "--setting-sources" not in cmd else ""
+            rec["dropped"].append([lenses[k], f"malformed answer: {e}{hint}"])
             continue  # dropped seat lowers confidence; <2 parseable fails closed below
         states = [cite_state(c, root) for c in d.get("claims", [])]
         for c, s_ in zip(d.get("claims", []), states):

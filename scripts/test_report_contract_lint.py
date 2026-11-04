@@ -17,7 +17,7 @@ ROWS = {
     "guided": "| A2 | pass | guided:g1-07 | src/app.py | `run(escape(x))` |\n",
     "nc": "| A3 | not-checked | tool:zap | | |\n",
 }
-TAIL = "\n## NOT CHECKED\n- A3: needs runtime\n\n## NOT RUN\n- zap: no running target\n\n## Static vs runtime\nWAF needs a deployed system.\n\n## Dependencies\nLockfile read.\n"
+TAIL = "\n## NOT CHECKED\n- A3: needs runtime\n\n## NOT RUN\n- zap: no running target\n\n## Static vs runtime\nWAF needs a deployed system.\n\n## Dependencies\nLockfile read.\n\n## Route inventory\n- GET /a src/app.py:1 auth=none rate-limit=no\n"
 
 
 def report(rows=ROWS["tool"] + ROWS["guided"] + ROWS["nc"], tail=TAIL, extra=""):
@@ -92,7 +92,7 @@ class Contract(unittest.TestCase):
     def test_scoped_tool_count_not_a_claim(self):
         t = TAIL.replace("Lockfile read.", "osv-scanner: 0 vulnerabilities in package-lock.json.")
         self.assertEqual(lint(report(tail=t))[0], 0)
-        self.assertEqual(lint(report(tail=TAIL + "\nScanned: no vulnerabilities in `src/app.py`.\n"))[0], 0)
+        self.assertEqual(lint(report(tail=TAIL.replace("\n## Route inventory", "\nScanned: no vulnerabilities in `src/app.py`.\n\n## Route inventory")))[0], 0)
 
     def test_not_secure_is_not_a_claim(self):
         self.assertEqual(lint(report(extra="The app is not secure against CSRF.\n"))[0], 0)
@@ -177,7 +177,7 @@ class Contract(unittest.TestCase):
 
     # round 3: held-out probes (normalization, asides, cookie context)
     def test_normalized_and_aside_claims(self):
-        tl = lambda s: report(tail=TAIL + "\n" + s + "\n")
+        tl = lambda s: report(tail=TAIL.replace("\n## Route inventory", "\n" + s + "\n\n## Route inventory"))
         for s in ["The service is **secure**.", "Overall the codebase is\nsecure.", "The app is, in our view, secure.",
                   "The app is really quite secure.", "The app is ~~insecure~~ _safe_.", "The repository is free of vulnerabilities.",
                   "This project is production-ready from a security standpoint.", "No vulnerabilities were found."]:
@@ -185,7 +185,7 @@ class Contract(unittest.TestCase):
                 self.bad(tl(s), "safety-claim")
 
     def test_honest_text_not_flagged(self):
-        tl = lambda s: report(tail=TAIL + "\n" + s + "\n")
+        tl = lambda s: report(tail=TAIL.replace("\n## Route inventory", "\n" + s + "\n\n## Route inventory"))
         for s in ["Session cookies are marked Secure and HttpOnly.", "The cookie has the Secure flag.",
                   "The Dockerfile is not hardened: it runs as root.", "gitleaks (ran): 0 secrets in git history.",
                   "semgrep: no findings in src/."]:
@@ -235,6 +235,33 @@ class Contract(unittest.TestCase):
             run = lambda t: subprocess.run([sys.executable, str(LINT), "-", "--root", d], input=t, capture_output=True, text=True)
             self.assertEqual(run(report(extra="\n## Findings\n- [other] src/app.py:1 low: y\n")).returncode, 0)
             self.assertEqual(run(report(extra="\n## Findings\n- y\n")).returncode, 1)
+
+
+class RouteInventory(unittest.TestCase):
+    def rc(self, tail):
+        return lint(report().replace("\n## Route inventory\n- GET /a src/app.py:1 auth=none rate-limit=no\n", tail))
+
+    def test_inventory_rules(self):
+        self.assertEqual(self.rc("")[1].count("missing-route-inventory"), 1)
+        for line in ("- GET /a auth=none rate-limit=no", "- POST /a, /b src/app.py:1 src/app.py:2", "- GET /a app.py:1 auth=none", "- GET /a src/gone.py:1 auth=none"):
+            with self.subTest(line=line):
+                self.assertIn("inventory-no-cite", self.rc("\n## Route inventory\n" + line + "\n")[1])
+        self.assertEqual(self.rc("\n## Route inventory\n- GET /a `src/app.py:2` auth=none rate-limit=yes\n")[0], 0)
+
+    def test_empty_inventory_needs_none(self):
+        inv = "\n## Route inventory\n"
+        self.assertIn("missing-route-inventory", self.rc(inv + "\n")[1])
+        self.assertEqual(self.rc(inv + "- none\n")[0], 0)
+
+    def test_inventory_prose_line_fails(self):
+        self.assertIn("inventory-not-list", self.rc("\n## Route inventory\n- GET /a src/app.py:1 auth=none\nprose line\n")[1])
+
+    def test_inventory_host_port_is_not_a_cite(self):
+        self.assertEqual(self.rc("\n## Route inventory\n- GET /a src/app.py:1 calls host:8080\n")[0], 0)
+
+    def test_bare_basename_prose_cite(self):
+        self.assertIn("bad-citation", lint(report(extra="Path: a reaches fetch (app.py:2) on.\n"))[1])
+        self.assertEqual(lint(report(extra="It calls example.com:443 only.\n"))[0], 0)
 
 
 class HeredocContract(unittest.TestCase):

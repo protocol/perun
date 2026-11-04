@@ -29,13 +29,14 @@ neither and it convenes (legacy behavior), so declare them.
 ## Run
 
 ```text
-python3 scripts/veche.py --cmd "claude -p --strict-mcp-config" \
+python3 scripts/veche.py --cmd "claude -p --strict-mcp-config --setting-sources project" \
   --claim "<one sentence>" --steelman "<best version>" --packet evidence.txt --root . \
   --lenses cpo,cto,cfo,ciso,user-advocate --option ship --option wait \
   --criteria impact:3,cost:2,risk:3,reversibility:2 --chair cpo --twin \
   --stakes high --reversibility hard
 ```
 
+- A `claude -p` seat loads the user's own settings, and a user Stop hook can rewrite its reply so no JSON verdict survives; `--setting-sources project` (two separate words, never one shell var) keeps that out.
 - `--cmd` reads the prompt on stdin and prints the answer. A custom `--cmd` reply needs a JSON object with a `verdict` (`HOLD|REVISE|PASS_TO_USER`) and string-only `claims` items; prose and stray braces around it are skipped, the first object with a valid `verdict` wins, and with `--option` the `scores` map may sit under `scores` in that object, or in any other object (bare or under `scores`). Without `--lenses` it is solo-3: one cmd, the three hats.
 - `--option` names must be short tokens (letters, digits, `-`, `_`, starting with a letter or digit; at most 32): seats echo them as JSON keys. Others fail before any call.
 - The packet is shown with numbered lines and its path under `--root`, so a model with no file tools

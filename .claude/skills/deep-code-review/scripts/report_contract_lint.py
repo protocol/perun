@@ -44,6 +44,7 @@ SECTIONS = {  # rule name -> heading regex
     "missing-not-checked": r"not checked",
     "missing-static-runtime": r"static\W{0,6}(vs|versus)\W{0,6}runtime",
     "missing-dependencies": r"dependenc",
+    "missing-route-inventory": r"route inventory",
 }
 RISK = r"(vulnerabilit\w*|weakness\w*|flaws?|findings?|issues?|risks?|problems?)"
 # Published safety-claim list (G0); paraphrases matched by pattern.
@@ -163,6 +164,20 @@ def lint(path, root, text=None):
     for rule, rx in SECTIONS.items():
         if not any(re.search(rx, t, re.I) for _, _, t in heads):
             add(0, rule, "required section missing")
+    for n, (i, _, t) in enumerate(heads):
+        if re.search(SECTIONS["missing-route-inventory"], t, re.I):  # one route per line, exactly one resolving repo-relative path:line
+            a, b = body(n)
+            if not any(live[k].strip() for k in range(a, b)):
+                add(a - 1, "missing-route-inventory", "empty inventory: list the routes or write `- none`")
+            for k in range(a, b):
+                if re.match(r"\s*[-*]\s+none\s*$", live[k], re.I):
+                    continue
+                if re.match(r"\s*(?:[-*]|\d+[.)])\s", live[k]):
+                    cites = re.findall(r"[^\s:`]+\.\w+:\d+(?:-\d+)?", live[k])  # an extension keeps `host:8080` from counting
+                    if len(cites) != 1 or resolve(cites[0], root)[3]:
+                        add(k, "inventory-no-cite", f"route line needs exactly one repo-relative path:line that exists under --root: {live[k].strip()[:60]!r}")
+                elif live[k].strip():
+                    add(k, "inventory-not-list", f"inventory line is not a list item: {live[k].strip()[:60]!r}")
     not_run = {}
     for n, (i, _, t) in enumerate(heads):
         if re.search(r"not[ _-]?run", t, re.I):
@@ -279,6 +294,9 @@ def lint(path, root, text=None):
             if PROSE_PATH.fullmatch(t) and re.search(r"[/:#]", t) and not re.search(r"\s", t) and not ROUTE.fullmatch(t) and (re.search(r"\.[a-z][a-z0-9]{0,7}(?=[:#]|$)|:\d|#L\d", t) or t.split("/")[0] not in ("", "..") and os.path.exists(os.path.join(root, t.split("/")[0]))):  # prose like `net/http` has no extension or line, and no such top dir
                 if err := resolve(t, root)[3]:
                     add(i, "bad-citation", err)
+        for t in re.findall(r"(?<![\w/.:-])[\w-]+\.(?!(?:com|net|org|io|dev|local)\b)[a-z]{1,8}:\d+", CODE.sub(" ", txt)):  # unquoted bare basename:line (host:port TLDs excepted)
+            if err := resolve(t, root)[3]:
+                add(i, "bad-citation", err)
         prose = re.sub(r"(?<!\w)[*_~]+|[*_~]+(?!\w)", "", CODE.sub(r"\1", txt))
         for sent in re.split(r"(?<=[.;!?])\s+|\s+\|\s+", " ".join(prose.split())):
             for k, rx in enumerate(CLAIMS):

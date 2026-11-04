@@ -8,7 +8,7 @@ from pathlib import Path
 
 LINT = Path(__file__).resolve().parent.parent / ".claude/skills/deep-code-review/scripts/report_contract_lint.py"
 TAIL = ("| Item | Status | Basis | Files | Negative |\n|---|---|---|---|---|\n| A | pass | tool:semgrep | app.py:1 | |\n"
-        "\n## NOT CHECKED\n- none\n\n## NOT RUN\n- zap: no target\n\n## Static vs runtime\nneeds deploy.\n\n## Dependencies\nread.\n")
+        "\n## NOT CHECKED\n- none\n\n## NOT RUN\n- zap: no target\n\n## Static vs runtime\nneeds deploy.\n\n## Dependencies\nread.\n\n## Route inventory\n- GET /proxy app.py:1 auth=none rate-limit=no\n")
 PAD = "x = 1\n" * 6  # keeps the route line more than 2 lines from the sink
 FILES = {
     "app.py": '@app.get("/proxy")\ndef proxy(u):\n' + PAD + "    return requests.get(u, verify=False)\n",
