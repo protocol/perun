@@ -1,0 +1,51 @@
+Rails.application.routes.draw do
+  get "/healthz", to: "health#show"
+  get "/api/me", to: "records#me"
+  match "/web/ext/shoal/email", to: "account#shoal_email", via: :post
+  match "/web/ext/spire/close", to: "account#spire_close", via: :post
+  match "/web/ext/clover/remember", to: "account#clover_remember", via: :get
+  match "/web/ext/fennel/trust", to: "account#fennel_trust", via: :get
+  match "/api/badger", to: "catalog#badger_index", via: :get
+  match "/api/tundra/:id", to: "catalog#tundra_remove", via: :delete
+  match "/api/valley/:id", to: "catalog#valley_show", via: :get
+  match "/api/marten/recent", to: "gateway#marten_recent", via: :get
+  match "/api/canyon/:id/approve", to: "gateway#canyon_approve", via: :post
+  match "/api/ridge/:id/label", to: "gateway#ridge_relabel", via: :put
+  match "/auth/moor-login", to: "gateway#moor_login", via: :post
+  match "/auth/poppy-join", to: "gateway#poppy_join", via: :post
+  match "/api/ext/atoll/:id/image", to: "integrations#atoll_image", via: :get
+  match "/api/ext/geyser/:code/rates", to: "integrations#geyser_rates", via: :get
+  match "/api/ext/tarn/:code/stock", to: "integrations#tarn_stock", via: :get
+  match "/api/ext/reef/export", to: "integrations#reef_export", via: :get
+  match "/api/ext/quince/rotate-key", to: "integrations#quince_rotate_key", via: :post
+  match "/api/ext/tansy/track", to: "integrations#tansy_track", via: :post
+  match "/api/ext/yarrow/sample", to: "integrations#yarrow_sample", via: :get
+  match "/api/ext/parcel/assist", to: "integrations#parcel_assist", via: :post
+  match "/api/ext/crate/lookup-tool", to: "integrations#crate_lookup_tool", via: :post
+  match "/api/ext/delta/push", to: "partners#delta_push", via: :post
+  match "/api/ext/lagoon/fetch", to: "partners#lagoon_fetch", via: :get
+  match "/api/ext/mesa/status", to: "partners#mesa_status", via: :get
+  match "/api/ext/prairie/lookup", to: "partners#prairie_lookup", via: :get
+  match "/api/ext/savanna/ping", to: "partners#savanna_ping", via: :get
+  match "/api/ext/fjord/lookup", to: "partners#fjord_lookup", via: :get
+  match "/api/ext/cairn/export", to: "partners#cairn_export", via: :get
+  match "/api/ext/nettle/charge", to: "partners#nettle_charge", via: :post
+  match "/api/ext/rowan/sample", to: "partners#rowan_sample", via: :get
+  match "/api/ext/sorrel/track", to: "partners#sorrel_track", via: :post
+  match "/api/ext/orchard/assist", to: "partners#orchard_assist", via: :post
+  match "/api/ext/ledger/lookup-tool", to: "partners#ledger_lookup_tool", via: :post
+  match "/web/ext/arbor/phone", to: "profile#arbor_phone", via: :post
+  match "/web/ext/bramble/nickname", to: "profile#bramble_nickname", via: :post
+  match "/web/ext/hazel/rotate", to: "profile#hazel_rotate", via: :get
+  match "/web/ext/laurel/keep", to: "profile#laurel_keep", via: :get
+  match "/api/heron/summary", to: "public#heron_summary", via: :get
+  match "/api/otter/summary", to: "public#otter_summary", via: :get
+  match "/auth/bluff-pin", to: "public#bluff_pin", via: :post
+  match "/auth/dune-pin", to: "public#dune_pin", via: :post
+  match "/auth/maple-signup", to: "public#maple_signup", via: :post
+  match "/auth/olive-signup", to: "public#olive_signup", via: :post
+  match "/api/plover/:id/purge", to: "records#plover_purge", via: :post
+  match "/api/sparrow/:id/purge", to: "records#sparrow_purge", via: :post
+  match "/api/glacier/:id", to: "records#glacier_show", via: :get
+  match "/api/summit/:id", to: "records#summit_show", via: :get
+end
