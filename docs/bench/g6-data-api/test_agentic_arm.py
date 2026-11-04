@@ -267,6 +267,12 @@ def test_v2_is_arm_b_default_and_v1_stays_callable():
     assert A.run.__defaults__[-1] is A.parse_report_v2
 
 
+def test_v2_numbered_top_level_items():
+    t = "## Findings\n1. [ssrf] a.py:3 high: x\n2) [csrf] b.py:4\n3. no label c.py:5\n   1. [tls-off] d.py:6 nested\n"
+    rows, unm, oov = A.parse_report_v2(t, "fx")
+    assert key(rows) == {("a.py", 3, "ssrf"), ("b.py", 4, "csrf")} and len(unm) == 1 and not oov
+
+
 if __name__ == "__main__":
     n = 0
     for k, f in list(globals().items()):

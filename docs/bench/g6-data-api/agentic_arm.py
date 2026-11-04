@@ -143,7 +143,7 @@ LABEL_CLASS = {"missing-authn": "missing_authn", "missing-authz": "missing_authz
                "ssrf": "ssrf", "tls-off": "tls_off", "outbound-timeout": "no_timeout", "secret-in-url": "secret_in_url",
                "secret-in-log": "secret_in_log", "csrf": "csrf", "cookie-flags": "cookie_flags", "rate-limit": "rate_limit",
                "pii-in-log": "pii_log", "pii-data": "pii_data", "prompt-injection": "prompt_injection"}
-ITEM = re.compile(r"[-*]\s+(?:\[([^\]]*)\])?\s*(.*)")
+ITEM = re.compile(r"(?:[-*]|\d+[.)])\s+(?:\[([^\]]*)\])?\s*(.*)")
 
 
 def parse_report_v2(text, fixture, prefix=""):
