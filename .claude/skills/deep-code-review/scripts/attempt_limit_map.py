@@ -193,10 +193,10 @@ def declend(lines, ln, py):
     return len(lines)
 
 
-def units(root, texts):
+def units(root, texts, innermost=False):
     """{file: [(line, end, methods, route)]} of every handler under root, sorted by line: the route_auth_map inventory (JS/TS, Python, Go, Spring, Django), where a Go registration, a Django
     `path(route, view)` and a Next `export const GET = handler` re-export are followed to the function they name (the unit is that function's first line), and `end` is the last line of
-    the handler. texts is filled with the masked text of every file read (comments blanked, strings kept)."""
+    the handler. texts is filled with the masked text of every file read (comments blanked, strings kept). A Go registration `HandleFunc(p, wrap(h))` follows `wrap`'s definition unless innermost is set, which follows `h`."""
     def T(rel):
         if rel not in texts:
             raw = read(root, rel)
@@ -225,11 +225,12 @@ def units(root, texts):
         tail = re.search(r"""["']\s*,\s*(.*)""", line)
         d = None
         if rel.endswith(".go") and tail:
-            for n in re.findall(r"[\w.]+", tail[1]):
+            for n in (lambda ns: ns[::-1] if innermost else ns)(re.findall(r"[\w.]+", tail[1])):
                 d = find(r"^func\s+(?:\([^)]*\)\s*)?%s\s*\(" % re.escape(n.rpartition(".")[2]), rel)
                 if d: break
-        elif rel.endswith(".py") and re.match(r"\s*(?:re_)?path\(|\s*url\(", line) and tail:
-            v = re.match(r"[\w.]+", tail[1])
+        elif rel.endswith(".py") and re.search(r"(?:^|[\s\[,(])(?:re_)?path\(|(?:^|[\s\[,(])url\(", line) and tail:
+            lit = [x for x in re.finditer(r"""["']([^"']*)["']\s*,\s*""", line) if x[1].strip("/") == (route or "").strip("/")]  # the tail after THIS route's string, not the line's first
+            v = re.match(r"[\w.]+", line[lit[0].end():] if lit else tail[1])
             d = v and find(r"^[ \t]*(?:async\s+)?(?:def|class)\s+%s\b" % re.escape(v[0].replace(".as_view", "").rpartition(".")[2]), rel)
         else:
             im = re.match(r"\s*export\s+const\s+\w+\s*=\s*(\w+)\s*;?\s*$", line)  # `export const POST = handler;`, handler imported by name
@@ -241,7 +242,9 @@ def units(root, texts):
         j = l - 2  # the decorators and annotations above a handler (blank, comment and multi-line argument lines between them too) belong to it, not to the handler before
         while j >= 0:
             s = above[j].strip()
-            if s.startswith("@"): l = j + 1
+            if s.startswith("@"):
+                if s.count("(") == s.count(")") and "{" in re.sub(r"\([^()]*\)", "", re.sub(r"\([^()]*\)", "", s)): break  # a one-line declaration (class, or handler with its body) is not a decorator of the next handler; an unclosed `({` opens a multi-line annotation argument
+                l = j + 1
             elif s and not s.startswith(("#", "//")):
                 k = next((k for k in range(j - 1, max(j - 16, -1), -1) if above[k].lstrip().startswith("@") and "\n".join(above[k:j]).count("(") > "\n".join(above[k:j]).count(")")), None)
                 if k is None: break
