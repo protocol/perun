@@ -152,10 +152,12 @@ def parse_report_v2(text, fixture, prefix=""):
     A label outside LABEL_CLASS goes to out_of_vocab (not scored); a vocab item with no label or no path:line goes to unmapped
     (line 0). Sub-bullets and other sections are ignored. Route-inventory rows come from parse_report unchanged."""
     rows = [r for r in parse_report(text, fixture, prefix)[0] if r["class"] == "route_inventory"]
-    unm, oov, seen, inside = [], [], set(), False
+    unm, oov, seen, inside = [], [], set(), 0  # inside: level of the open Findings heading; ends at a heading of equal/higher level
     for ln in text.splitlines():
-        if re.match(r"#+\s", ln):
-            inside = bool(re.match(r"findings", re.sub(r"^#+\s*", "", ln), re.I))
+        h = re.match(r"(#+)\s+(.*)", ln)
+        if h:
+            if not inside or len(h[1]) <= inside:
+                inside = len(h[1]) if re.match(r"findings", h[2], re.I) else 0
             continue
         m = ITEM.match(ln) if inside else None
         if not m:

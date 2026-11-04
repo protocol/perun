@@ -273,6 +273,11 @@ def test_v2_numbered_top_level_items():
     assert key(rows) == {("a.py", 3, "ssrf"), ("b.py", 4, "csrf")} and len(unm) == 1 and not oov
 
 
+def test_v2_findings_runs_through_subheadings():
+    t = "## Findings\n### Flat list\n- [ssrf] a.py:3 high: x\n## Other\n- [csrf] b.py:4 high: y\n"
+    assert key(A.parse_report_v2(t, "fx")[0]) == {("a.py", 3, "ssrf")}
+
+
 if __name__ == "__main__":
     n = 0
     for k, f in list(globals().items()):
