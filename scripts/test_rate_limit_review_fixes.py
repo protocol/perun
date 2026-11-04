@@ -54,11 +54,19 @@ class ReviewFixes(unittest.TestCase):
         src = 'from flask import request\n@app.route("/v1/rows")\ndef rows():\n    n = int(request.args["limit"])\n    if n < 1:\n        n = 1\n    return rows_all(n)\n'
         self.assertEqual(lines({"app.py": src}, C), {("app.py", at(src, "/v1/rows"))})
         self.assertEqual(lines({"app.py": src.replace("n < 1", "100 < n")}, C), set())
+        for floor in ("n > 0", "n >= 1", "0 < n", "1 <= n"):
+            self.assertEqual(lines({"app.py": src.replace("n < 1", floor)}, C), {("app.py", at(src, "/v1/rows"))}, floor)
+        for cap in ("n <= 100", "n < 100", "100 >= n", "n > 100"):
+            self.assertEqual(lines({"app.py": src.replace("n < 1", cap)}, C), set(), cap)
 
     def test_size_param_used_in_body_is_page_size(self):
         used = 'package acme\n@RestController\nclass Rows {\n    @GetMapping("/v1/rows")\n    fun list(@RequestParam size: Int): String = rows(size)\n}\n'
         self.assertEqual(lines({"Rows.kt": used}, C), {("Rows.kt", at(used, "/v1/rows"))})
         self.assertEqual(lines({"Rows.kt": used.replace("rows(size)", "rows()")}, C), set())
+        named = used.replace("@RequestParam size: Int): String = rows(size)", '@RequestParam(name = "size", defaultValue = "10") size: Int): String = rows()')
+        self.assertEqual(lines({"Rows.kt": named}, C), set())
+        prop = used.replace("@RequestParam size: Int): String = rows(size)", "@RequestParam size: Int = items().size): String = rows()")
+        self.assertEqual(lines({"Rows.kt": prop}, C), set())
 
 
 if __name__ == "__main__":

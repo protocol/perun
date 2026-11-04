@@ -62,10 +62,11 @@ FOUND = "%s endpoint: limit code found (%s at %s:%d); check it covers this route
 
 
 def cmp_cap(text, z):
-    """True when the variable the page-size line z (a SIZE match in text) assigns, or the size name itself, is bounded above by a number (`n > 100`, `100 < n`); a floor such as `n < 1` is no cap."""
+    """True when the variable the page-size line z (a SIZE match in text) assigns, or the size name itself, is compared with a number above 1 in either direction (`n > 100`, `n <= 100`, `100 < n`); a floor against 0 or 1 (`n < 1`, `n > 0`, `n >= 1`) is no cap."""
     line = text[text.rfind("\n", 0, z.start()) + 1:text.find("\n", z.end())]
     names = "|".join(set(re.findall(r"\w+", line.split("=")[0])) | {"limit", "pageSize", "page_size", "per_page", "perPage"})
-    return bool(re.search(r"\b(?:%s)\b\s*>=?\s*\d+|\d+\s*<=?\s*\b(?:%s)\b" % (names, names), text))
+    pat = r"\b(?:{0})\b\s*[<>]=?\s*(\d+)|(\d+)\s*[<>]=?\s*\b(?:{0})\b".format(names)
+    return any(int(a or b) > 1 for a, b in re.findall(pat, text))
 
 
 def kinds(text, route):
@@ -73,7 +74,7 @@ def kinds(text, route):
     k = {SEG[s] for s in re.split(r"[^a-z0-9]+", route.lower()) if s in SEG}
     if LLM.search(text): k.add("llm")
     if UPLOAD.search(text): k.add("upload")
-    z = SIZE.search(text) or (len(re.findall(r"\bsize\b", text)) > 1 and SIZEP.search(text))  # a bare `size` parameter counts only when the body uses it
+    z = SIZE.search(text) or (len(re.findall(r"(?<![\w.\"'])size\b(?![\"'])", text)) > 1 and SIZEP.search(text))  # a bare `size` parameter counts only when the body uses it (not a quoted "size" or a `.size` property)
     if z and not CAP.search(text) and not cmp_cap(text, z): k.add("page-size")  # any cap in the handler (a multi-line `Query(..., le=200)` too) clears it
     return sorted(k)
 
