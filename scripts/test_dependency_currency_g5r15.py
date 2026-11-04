@@ -44,6 +44,11 @@ class G5R15(unittest.TestCase):
         self.assertEqual(self._go(lst, "v2.0.3+incompatible", "v2.0.3+incompatible")[1]["status"], "current")
         self.assertEqual(self._go(lst, "v2.0.3+incompatible", "v2.0.0+incompatible")[1]["status"], "outdated")
 
+    def test_go_untagged_module_pseudo_latest_is_not_a_target(self):
+        """No tags (empty list) and @latest is a pseudo-version: no stable release, so the row is not-checked, never outdated."""
+        vs, r = self._go("", "v0.0.0-20241129210726-2c02b8208cf8", "v0.0.0-20190702054246-869f871628b6")
+        self.assertEqual((vs, r["status"]), ([], "not-checked"))
+
     def test_floating_major_release_tag_does_not_hide_point_releases(self):
         """releases/latest tagged `v6` while v6.1.2 exists: the highest tag wins, so v6.1.0 is behind it."""
         old_net, old_ls = dc.net.json, dc.ls_remote_latest

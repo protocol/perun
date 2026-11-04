@@ -632,7 +632,7 @@ def versions(eco, name, cur=""):
         raise ValueError(eco)
     out = {v for v in vs if re.match(r"v?\d", v) and not is_pre(eco, v)}
     if cap:
-        out = {v for v in out if pk(eco, v) <= pk(eco, cap)} | {cap}
+        out = {v for v in out if pk(eco, v) <= pk(eco, cap)} | ({cap} if not is_pre(eco, cap) else set())  # a pseudo/pre-release @latest caps but is never a target
     return sorted(out, key=lambda v: pk(eco, v))
 
 
