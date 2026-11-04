@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for dependency_currency.py / review_checks.sh root causes found by the set-7 scored run: Go +incompatible tags stay out of latest, a floating
+"""Regression tests for dependency_currency.py / review_checks.sh root causes found by the set-7 scored run: Go latest follows the proxy's @latest, a floating
 major release tag hiding point releases, framework EOL for Dropwizard, the Gradle wrapper as a runtime pin, Gradle build-file vs version-catalog drift, and
 vendored dirs that hold no recognised manifest. Fictional names; every HTTP call mocked."""
 import importlib.util, os, re, tempfile, unittest
@@ -21,14 +21,28 @@ def collect(files):
 
 
 class G5R15(unittest.TestCase):
-    def test_go_incompatible_tag_is_not_latest(self):
-        """A +incompatible tag is not the module's latest: the Go proxy's @latest skips it once the module has a go.mod (go-sqlite3: v1.14.x, not v2.0.3+incompatible)."""
-        old = dc.net.get
-        dc.net.get = lambda url, data=None, headers=None: "v1.0.0\nv1.0.9\nv3.1.0+incompatible\n"
+    def _go(self, lst, latest, cur):
+        old = dc.net.get, dc.net.json
+        dc.net.get = lambda url, data=None, headers=None: lst
+        dc.net.json = lambda url, headers=None: {"Version": latest}
         try:
-            self.assertEqual(dc.versions("go", "example.com/fict/mod")[-1], "v1.0.9")
+            return dc.versions("go", "example.com/fict/mod"), dc.dep_row("go.mod", "go", "example.com/fict/mod", cur, "2026-11-04")
         finally:
-            dc.net.get = old
+            dc.net.get, dc.net.json = old
+
+    def test_go_latest_follows_proxy_latest_over_incompatible_list_entry(self):
+        """The list holds v3.1.0+incompatible but the proxy's @latest is v1.0.9: latest is v1.0.9 (go-sqlite3 shape)."""
+        vs, r = self._go("v1.0.0\nv1.0.9\nv3.1.0+incompatible\n", "v1.0.9", "v1.0.0")
+        self.assertEqual(vs[-1], "v1.0.9")
+        self.assertEqual(r["latest"], "v1.0.9")
+
+    def test_go_incompatible_latest_is_used_and_survives_incompatible_pin(self):
+        """@latest = v2.0.3+incompatible (pre-modules repo): it is latest, outdated vs a v1 pin; an incompatible pin at it reads current."""
+        lst = "v1.0.0\nv2.0.0+incompatible\nv2.0.3+incompatible\n"
+        vs, r = self._go(lst, "v2.0.3+incompatible", "v1.0.0")
+        self.assertEqual((vs[-1], r["status"], r["latest"]), ("v2.0.3+incompatible", "outdated", "v2.0.3+incompatible"))
+        self.assertEqual(self._go(lst, "v2.0.3+incompatible", "v2.0.3+incompatible")[1]["status"], "current")
+        self.assertEqual(self._go(lst, "v2.0.3+incompatible", "v2.0.0+incompatible")[1]["status"], "outdated")
 
     def test_floating_major_release_tag_does_not_hide_point_releases(self):
         """releases/latest tagged `v6` while v6.1.2 exists: the highest tag wins, so v6.1.0 is behind it."""

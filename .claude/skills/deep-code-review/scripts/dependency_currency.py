@@ -616,7 +616,8 @@ def versions(eco, name, cur=""):
         vs = [v for v, fs in d["releases"].items() if fs and not all(f.get("yanked") for f in fs)]
     elif eco == "go":
         esc = "/".join(q(re.sub(r"[A-Z]", lambda m: "!" + m[0].lower(), x), safe="!") for x in name.split("/"))
-        vs = [v for v in net.get(f"https://proxy.golang.org/{esc}/@v/list").split() if "+incompatible" not in v]  # the proxy's @latest skips +incompatible tags once a module has a go.mod; ponytail: a pre-modules repo whose only newer major is +incompatible reads as current, query @latest if that matters
+        vs = net.get(f"https://proxy.golang.org/{esc}/@v/list").split()
+        cap = net.json(f"https://proxy.golang.org/{esc}/@latest")["Version"]  # the proxy's @latest is authoritative (it skips +incompatible tags once a module has a go.mod, else may return one)
     elif eco in ("maven", "gradle"):
         g, a = name.split(":")
         gp = "/".join(qp(x) for x in g.split("."))
