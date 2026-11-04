@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lint a whole-project security audit report against the G0 report contract.
 
-Usage: report_contract_lint.py REPORT.md --root REPO
+Usage: report_contract_lint.py REPORT.md --root REPO   (REPORT `-` reads stdin)
 Template and rules: references/whole-project-report.md.
 Exit 0 clean; exit 1 with one `report:line: rule: message` line per violation; exit 2 usage error.
 Side effects: none (reads the report and files under --root). Stdlib only.
@@ -16,6 +16,12 @@ import os
 import re
 import sys
 
+CLASSES = {  # Findings-line vocabulary; defined in references/whole-project-report.md
+    "missing-authn", "missing-authz", "object-access", "ssrf", "tls-off", "outbound-timeout", "secret-in-url", "secret-in-log",
+    "hardcoded-secret", "csrf", "cookie-flags", "rate-limit", "pii-in-log", "pii-data", "prompt-injection", "injection", "xss", "other",
+}
+FINDING = re.compile(r"\[([\w-]+)\]\s+(\S+)\s+[\w-]+:\s*\S")
+FILES_SPLIT = r"[;\s]+|,(?![\d-]+(?:[,;\s]|$))"  # a comma before a bare line number continues `path:1,2`
 STATUSES = {"pass", "fail", "not-checked"}
 SECTIONS = {  # rule name -> heading regex
     "missing-table": r"per-standard",
@@ -44,7 +50,8 @@ CLAIMS = [
 ]
 SCOPABLE = {0, 1, len(CLAIMS) - 1}  # tool-result counts: a tool prefix or "in <path>" scopes them
 NEGATOR = re.compile(r"(\bnot|\bnever|n't|\bcannot)\s+(claim|say|state|assert|imply|certify|guarantee|mean|show|prove)\w*\b(?:(?!\b(?:but|however|yet)\b)[^.;!?:,])*$")
-CITE = re.compile(r"([^\s:#]+)(?::(\d+)(?:-(\d+))?)?")
+NUM = r"\d+(?:-\d+)?"
+CITE = re.compile(rf"([^\s:#]+)(?::({NUM}(?:,{NUM})*))?")
 PROSE_PATH = re.compile(r"/?[\w.-]+(?:/[\w.-]+)*(?:\.\w{1,8})?(?::\d+.*|#L\d+.*)?")
 SEP = re.compile(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*")
 ROUTE = re.compile(r"/(?:[\w-]+/)*[\w-]+/?")  # HTTP route: leading /, last segment has no extension or :line
@@ -89,17 +96,22 @@ def resolve(tok, root):
         return None, 0, 0, f"citation escapes --root: {p}"
     if not os.path.isfile(full):
         return None, 0, 0, f"cited path does not exist: {p}"
-    a, b = (int(g) if g else 0 for g in (m.group(2), m.group(3)))
-    if a:
+    a = b = 0
+    if m.group(2):
         with open(full, errors="replace") as f:
             n = sum(1 for _ in f)
-        if not 1 <= a <= n or (b and not a <= b <= n):
-            return None, 0, 0, f"cited line {m.group(2)}{'-' + m.group(3) if b else ''} out of range ({p} has {n} lines)"
+        for k, spec in enumerate(m.group(2).split(",")):
+            x, _, y = spec.partition("-")
+            x, y = int(x), int(y or 0)
+            if not 1 <= x <= n or (y and not x <= y <= n):
+                return None, 0, 0, f"cited line {spec} out of range ({p} has {n} lines)"
+            if k == 0:
+                a, b = x, y
     return full, a, b, None
 
 
 def lint(path, root):
-    raw = open(path, errors="replace").read().splitlines()
+    raw = (sys.stdin.read() if path == "-" else open(path, errors="replace").read()).splitlines()
     live, fence = [], False  # fenced lines are blanked, indexes preserved
     for l in raw:
         if l.lstrip().startswith("```"):
@@ -131,6 +143,25 @@ def lint(path, root):
                     add(k, "not-run-no-reason", f"NOT RUN entry needs `tool: reason`: {live[k].strip()!r}")
                 else:
                     not_run[m.group(1).lower()] = m.group(2)
+    for n, (i, _, t) in enumerate(heads):
+        if re.match(r"findings\s*(?:\(|$)", t, re.I):
+            a, b = body(n)
+            skip = False
+            for k in range(a, b):
+                if h := re.match(r"#+\s+(.*)", live[k]):  # attack-path / chain subsections cite every link
+                    skip = bool(re.search(r"attack|chain", h.group(1), re.I))
+                    continue
+                lm = re.match(r"(?:[-*]|\d+[.)])\s+", live[k])  # top-level list items; prose and indented lines pass
+                if skip or not lm:
+                    continue
+                l = live[k][lm.end():].replace("`", "").replace("**", "")
+                m = FINDING.match(l)
+                if not m or m.group(1).lower() not in CLASSES:
+                    add(k, "finding-no-class", f"Findings line needs `[<class>] <path>:<line> <severity>: <text>` with a known class: {l.strip()[:60]!r}")
+                elif err := resolve(m.group(2), root)[3] if re.search(r":\d", m.group(2)) else "finding needs path:line":
+                    add(k, "bad-citation", err)
+                elif "," in m.group(2) or any(not resolve(c, root)[3] for c in re.findall(r"[\w/.-]+\.\w+:\d+", l[m.end() - 1:].split("evidence:")[0])):
+                    add(k, "finding-multi-cite", "one primary path:line per finding; put other cites after `evidence:`")
     rows, in_table = [], set()
     for n, (i, _, t) in enumerate(heads):
         if not re.search(SECTIONS["missing-table"], t, re.I):
@@ -169,7 +200,7 @@ def lint(path, root):
         guided = re.search(r"guided:[\w.-]+", basis)
         has_tool = "tool:" in basis
         files, cited = [], []
-        for tok in re.split(r"[,;\s]+", r.get("files", "").replace("`", "")):
+        for tok in re.split(FILES_SPLIT, r.get("files", "").replace("`", "")):
             if tok.lower() in SKIP_FILES:
                 continue
             full, _, _, err = resolve(tok, root)
@@ -236,7 +267,7 @@ def main():
     ap.add_argument("report")
     ap.add_argument("--root", required=True)
     a = ap.parse_args()
-    if not os.path.isfile(a.report) or not os.path.isdir(a.root):
+    if (a.report != "-" and not os.path.isfile(a.report)) or not os.path.isdir(a.root):
         print("usage: report_contract_lint.py REPORT.md --root REPO", file=sys.stderr)
         sys.exit(2)
     v = lint(a.report, a.root)
