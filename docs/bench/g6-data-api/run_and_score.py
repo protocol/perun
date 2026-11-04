@@ -54,6 +54,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = ".claude/skills/deep-code-review/scripts"
 RC = SCRIPTS + "/review_checks.sh"
 WINDOW = 3
+LEGACY_SETS = ('set1', 'set2', 'set3')  # frozen scoring; later sets use the strict rules (missing path = FP, tp adds no positive)
 OK_EXIT = (0,)
 ROUTE = ("missing_authn", "missing_authz", "missing_object_check")
 OUTBOUND = ("tls_off", "ssrf", "no_timeout", "secret_in_url", "secret_in_log")
@@ -198,9 +199,11 @@ def adjudged(adjudicated, fx, f, ln, part):
                  and (fx is None or a["fixture"] in (fx, None))), None)
 
 
-def score(truth, rows, adjudicated=()):
+def score(truth, rows, adjudicated=(), exists=None):
     """truth: set1 rows (all fixtures); rows: [(file, line, tool, class[, fixture])] already minus NOT RUN tools;
-    adjudicated: load_adjudicated output. -> (parts {part: verdict dict}, warnings [str]). 'route_inventory' rows are dropped."""
+    adjudicated: load_adjudicated output; exists: optional fn(fixture, normalized path) -> bool. With exists (sets beyond
+    set1-3): an unmatched row on a missing path is an FP with no adjudication, and an adjudicated tp counts for precision only
+    (no positive, no recall hit). -> (parts {part: verdict dict}, warnings [str]). 'route_inventory' rows are dropped."""
     truth = [dict(t, file=norm(t["file"], t["fixture"])) for t in truth]
     rows = [(norm(r[0], r[4] if len(r) > 4 else None),) + tuple(r[1:]) for r in rows if r[3] != "route_inventory"]
     tfiles = {t["file"] for t in truth}
@@ -222,17 +225,18 @@ def score(truth, rows, adjudicated=()):
         tp = fp = 0
         pending = []
         for fx, f, ln in unmatched:
-            v = adjudged(adjudicated, fx, f, ln, part)
+            v = "fp" if exists and not exists(fx, f) else adjudged(adjudicated, fx, f, ln, part)
             if v == "tp":
                 tp += 1
             elif v == "fp":
                 fp += 1
             else:
                 pending.append([fx, f, ln])
-        rec = verdict(len(got) + tp, len(pos) + tp, rthr)
+        add = 0 if exists else tp  # strict mode: an adjudicated tp is a correct claim, not a new positive or recall hit
+        rec = verdict(len(got) + add, len(pos) + add, rthr)
         prec = verdict(len(got) + tp, len(got) + tp + len(fps) + fp, pthr)
-        size_ok = len(pos) + tp >= npos and len(dec) >= ndec
-        res[part] = {"positives": len(pos) + tp, "decoys": len(dec), "size_ok": size_ok, "recall": rec, "precision": prec,
+        size_ok = len(pos) + add >= npos and len(dec) >= ndec
+        res[part] = {"positives": len(pos) + add, "decoys": len(dec), "size_ok": size_ok, "recall": rec, "precision": prec,
                      "fp_decoy": [[t["fixture"], t["file"], t["line"]] for t in fps], "adjudicated_tp": tp, "adjudicated_fp": fp,
                      "unmatched": [list(u) for u in unmatched], "pending_adjudication": bool(pending),
                      "missed": [[t["fixture"], t["file"], t["line"]] for i, t in enumerate(pos) if i not in got],
@@ -292,7 +296,8 @@ def run(out, detector, sset="set1", rows_file=None, adj_file=None):
                     handlers[fx] = int(json.loads(ho[ho.index("{"):]).get("handlers", 0))
                 except ValueError:  # no JSON line: count unknown, treated as 0
                     handlers[fx] = 0
-    parts, warns = score(truth, rows, adj)
+        ex = None if sset in LEGACY_SETS else lambda fx, f: any(os.path.exists(os.path.join(target, d, f)) for d in ([fx] if fx else os.listdir(target)))
+        parts, warns = score(truth, rows, adj, ex)
     inv = inventory_rows(routes, rows) if claims is not None else inventory_counts(routes, handlers)
     res = {"arm": "rows" if claims is not None else "deterministic",
            "pass": not errors and all(p["pass"] for p in parts.values()),

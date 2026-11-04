@@ -45,9 +45,9 @@ def env(events, n=3, sleep=0):
     return tmp
 
 
-def go(events, cap=15.0, per_call=3.0, n=3):
+def go(events, cap=15.0, per_call=3.0, n=3, parser=A.parse_report):
     tmp = env(events, n)
-    rows, unm, errs = A.run(tmp, tmp / "out", tmp / "fx", cap, per_call)
+    rows, unm, errs = A.run(tmp, tmp / "out", tmp / "fx", cap, per_call, parser)
     return tmp, rows, unm, errs
 
 
@@ -228,6 +228,43 @@ def test_subbullet_multi_cite_parent_goes_unmapped():
     t = "## Findings\n1. **Medium: weak storage** (`db.js:1`, `server.js:16`).\n   - There is no rate limiting on /login.\n"
     rows, unm = A.parse_report(t, "fx")
     assert not any(r["class"] == "rate_limit" for r in rows) and unm[-1]["file"] == "" and "rate limiting" in unm[-1]["text"]
+
+
+V2 = """# Audit
+## Routes
+- GET /x a.py:3
+## Findings
+- [missing-authn] a.py:10 admin export open; evidence: b.py:20
+- [object-level-authz] c.py:5 other users' notes
+- [pii-in-log] d.py:7
+- [hardcoded-secret] e.py:1 key in source
+- [xss] f.py:2
+- [ssrf] no line given here
+- no label but g.py:9
+  - [csrf] h.py:4 sub-bullet, not scored
+## Attack chains
+- [ssrf] i.py:1
+"""
+
+
+def test_v2_scores_only_labelled_primary_cites():
+    rows, unm, oov = A.parse_report_v2(V2, "fx")
+    assert key(rows) == {("a.py", 3, "route_inventory"), ("a.py", 10, "missing_authn"), ("c.py", 5, "missing_object_check"),
+                         ("d.py", 7, "pii_log")}  # b.py evidence cite, sub-bullet, attack chain, out-of-vocab: none scored
+    assert [o["label"] for o in oov] == ["hardcoded-secret", "xss"]
+    assert [u["text"][:8] for u in unm] == ["no line ", "no label"] and all(u["line"] == 0 for u in unm)
+
+
+def test_v2_label_map_covers_every_class():
+    assert set(A.LABEL_CLASS.values()) == set(A.R.CLASSES)
+
+
+def test_v2_is_arm_b_default_and_v1_stays_callable():
+    rep = "## Findings\n- [other] a.js:1 odd\n- [rate-limit] a.js:2\n"
+    assert len(A.parse_report(rep, "fx")) == 2 and A.parse_report_v2(rep, "fx")[0][0]["class"] == "rate_limit"
+    tmp, rows, unm, errs = go([INIT, USE, RL, result(rep)], n=1, parser=A.parse_report_v2)
+    assert key(rows) == {("a.js", 2, "rate_limit")} and json.load(open(tmp / "out" / "out_of_vocab.json"))[0]["label"] == "other"
+    assert A.run.__defaults__[-1] is A.parse_report_v2
 
 
 if __name__ == "__main__":

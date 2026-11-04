@@ -186,6 +186,26 @@ def test_nits():
         assert r.returncode != 0 and ("unknown argument" in r.stderr or "no arguments" in r.stderr), (argv, r.stderr)
 
 
+def test_strict_missing_path_is_fp_and_tp_adds_no_positive():
+    have = lambda fx, f: f != "ghost.x"
+    ghost = [("ghost.x", 5, "agent", "csrf", "f")]
+    adj = [{"fixture": "f", "file": "ghost.x", "line": 5, "class": "csrf", "verdict": "tp"}]
+    assert S(T, ghost, adj)["csrf"]["adjudicated_tp"] == 1  # legacy: adjudicated tp joins positives
+    s = R.score(T, ghost, adj, have)[0]["csrf"]  # strict: missing path = FP before adjudication
+    assert s["adjudicated_fp"] == 1 and s["adjudicated_tp"] == 0 and not s["pending_adjudication"]
+    real = [("elsewhere.x", 5, "agent", "csrf", "f")]
+    adj2 = [{"fixture": "f", "file": "elsewhere.x", "line": 5, "class": "csrf", "verdict": "tp"}]
+    hits = rows_for(T, "positive", "csrf", 6)
+    legacy, strict = S(T, hits + real, adj2)["csrf"], R.score(T, hits + real, adj2, have)[0]["csrf"]
+    assert legacy["positives"] == 13 and legacy["recall"]["n"] == 13
+    assert strict["positives"] == 12 and strict["recall"]["k"] == 6 and strict["recall"]["n"] == 12
+    assert strict["adjudicated_tp"] == 1 and strict["precision"]["k"] == 7 and strict["precision"]["n"] == 7  # tp is a correct claim
+
+
+def test_legacy_sets_keep_old_scoring():
+    assert R.LEGACY_SETS == ("set1", "set2", "set3")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -139,6 +139,42 @@ def parse_report(text, fixture, prefix=""):
     return rows, unm
 
 
+LABEL_CLASS = {"missing-authn": "missing_authn", "missing-authz": "missing_authz", "object-level-authz": "missing_object_check",
+               "ssrf": "ssrf", "tls-off": "tls_off", "outbound-timeout": "no_timeout", "secret-in-url": "secret_in_url",
+               "secret-in-log": "secret_in_log", "csrf": "csrf", "cookie-flags": "cookie_flags", "rate-limit": "rate_limit",
+               "pii-in-log": "pii_log", "pii-data": "pii_data", "prompt-injection": "prompt_injection"}
+ITEM = re.compile(r"[-*]\s+(?:\[([^\]]*)\])?\s*(.*)")
+
+
+def parse_report_v2(text, fixture, prefix=""):
+    """Report markdown -> (rows, unmapped, out_of_vocab). Scores only what the report claims: top-level `- [label] path:line ...`
+    items under a heading starting "Findings", primary cite only (first path:line, before `evidence:`), class from LABEL_CLASS.
+    A label outside LABEL_CLASS goes to out_of_vocab (not scored); a vocab item with no label or no path:line goes to unmapped
+    (line 0). Sub-bullets and other sections are ignored. Route-inventory rows come from parse_report unchanged."""
+    rows = [r for r in parse_report(text, fixture, prefix)[0] if r["class"] == "route_inventory"]
+    unm, oov, seen, inside = [], [], set(), False
+    for ln in text.splitlines():
+        if re.match(r"#+\s", ln):
+            inside = bool(re.match(r"findings", re.sub(r"^#+\s*", "", ln), re.I))
+            continue
+        m = ITEM.match(ln) if inside else None
+        if not m:
+            continue
+        label, body = (m[1] or "").strip().lower(), re.sub(r"\s+", " ", m[2]).strip()
+        if label and label not in LABEL_CLASS:
+            oov.append(dict(fixture=fixture, label=label, text=body[:300]))
+            continue
+        found = cites(re.split(r"evidence:", body, 1, flags=re.I)[0], prefix)[0] if label else []
+        if not found:
+            unm.append(dict(fixture=fixture, file="", line=0, **{"class": "unmapped"}, text=body[:300]))
+            continue
+        f, n = found[0]
+        if (f, n, label) not in seen:
+            seen.add((f, n, label))
+            rows.append({"fixture": fixture, "file": f, "line": n, "class": LABEL_CLASS[label]})
+    return rows, unm, oov
+
+
 def init_ok(skills):
     """system/init skills list -> True only if a plugin-namespaced deep-code-review skill exists and no user-level skill does.
     Entries are names or dicts {name, path/source}. Shape unverified against a real capture: unknown/empty list fails closed."""
@@ -202,12 +238,13 @@ def sh_claude(prompt, cwd, detector, cap, timeout=1500):
     return r
 
 
-def run(detector, out, fixtures, cap=15.0, per_call=3.0):
+def run(detector, out, fixtures, cap=15.0, per_call=3.0, parser=parse_report_v2):
+    """parser: parse_report_v2 (default; 3-tuple, extra list -> out_of_vocab.json) or v1 parse_report (2-tuple)."""
     out = Path(out)
     out.mkdir(parents=True)
     (out / "reports").mkdir()
     (out / "raw").mkdir()
-    ledger, rows, unm, errors, spent, util = out / "ledger.jsonl", [], [], [], 0.0, 0.0
+    ledger, rows, unm, oov, errors, spent, util = out / "ledger.jsonl", [], [], [], [], 0.0, 0.0
     json.dump(dict(model=MODEL, prompt=PROMPT, detector=str(detector), cap=cap, per_call=per_call, allowed=ALLOWED,
                    disallowed=DENIED, quota_stop=QUOTA_STOP), open(out / "meta.json", "w"), indent=1)
     try:
@@ -235,15 +272,17 @@ def run(detector, out, fixtures, cap=15.0, per_call=3.0):
             if not r["skill_loaded"]:  # evidence: a Skill tool_use, or a tool_use touching <detector>/.claude/skills/deep-code-review/
                 errors.append(dict(fixture=fx, error="skill not loaded"))
             elif not r["err"]:
-                a, x = parse_report(r["text"], fx, str(fdir))
+                a, x, *o = parser(r["text"], fx, str(fdir))
                 rows += a
                 unm += x
+                oov += o[0] if o else []
     except Stop as e:
         errors.append(dict(stop=str(e)))
     except Exception as e:  # crash: record, never silent
         errors.append(dict(crash=repr(e)))
     json.dump(rows, open(out / "rows.json", "w"), indent=1)
     json.dump(unm, open(out / "unmapped.json", "w"), indent=1)
+    json.dump(oov, open(out / "out_of_vocab.json", "w"), indent=1)
     json.dump(dict(complete=not errors, errors=errors, spent=round(spent, 4)), open(out / "errors.json", "w"), indent=1)
     return rows, unm, errors
 
