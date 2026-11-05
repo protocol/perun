@@ -8441,6 +8441,17 @@
         "Aims the fix at the gate that does run (the pre-commit hook) or flags re-enabling Actions as an owner decision",
         "Does not present the ci.yml step as a running gate; at most as one that runs once Actions is enabled"
       ]
+    },
+    {
+      "id": "audit-ownership-sibling-idor",
+      "prompt": "A Flask app has `get_note(note_id)` doing `Note.query.get(note_id)` and returning it, and, in the same file, `delete_note(note_id)` doing `Note.query.filter_by(id=note_id, user_id=current_user.id).first_or_404()`. Both sit behind @login_required and the repo's scanners printed nothing. Is `get_note` a finding, and how do you find more like it?",
+      "expected_output": "Yes, High: broken object-level authorization (IDOR / API1). Any signed-in user can read another user's note by id, because the lookup is not scoped by the current user while its sibling for the same model is. Fix: scope the lookup (`filter_by(id=note_id, user_id=current_user.id)`) or compare the owner and return 404. Find siblings with scripts/ownership_sibling_check.py PATH, which prints `FILE:LINE: OWNERSHIP: <handler> loads <model> by client id; sibling <handler2> checks ownership` for Express, Flask, FastAPI and Django handlers. It is a heuristic: it only sees a lookup written inside the handler, only fires when a sibling for the same model checks ownership, and does not see helper-layer lookups, so silence is not proof; confirm each hit by reading the handler and replaying another user's id.",
+      "expectations": [
+        "Reports the unscoped lookup as a High object-level authorization (IDOR) finding, not a style issue",
+        "Cites the checking sibling as the evidence the check was forgotten and names the scoped fix",
+        "Uses scripts/ownership_sibling_check.py to find similar handlers",
+        "Treats the tool output as leads to verify and says silence is not proof"
+      ]
     }
   ]
 }

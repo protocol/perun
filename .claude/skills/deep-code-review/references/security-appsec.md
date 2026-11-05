@@ -79,6 +79,9 @@ Depth: `appsec-edge.md` (gate proposals, proxy chains, caches), `appsec-scan-tes
 multi-tenant). For every object-bearing route: replay A's request with B's id / B's token / B's tenant. Expected:
 `own → 200`, `other → 403/404`, `none → 401`. Missing a second account → `Decisions needed`, not a skip. Most
 production authz bugs are authenticated-but-unauthorized; reading code for IDOR isn't enough.
+Static lead for the same bug: `python3 -I .claude/skills/deep-code-review/scripts/ownership_sibling_check.py PATH...` reports a handler
+that loads a record by a client id when a sibling in the same file loads the same model with an ownership check (Express, Flask, FastAPI,
+Django); a file with no checking sibling is out of scope, so silence is not proof.
 
 **🚩 grep**: `req.params`/`req.body` id → query; ungated routes; `fetch(userUrl)`; `role === 'admin'` in UI only;
 shared loaders across API + page with asymmetric redaction; `Cache-Control: public` on auth'd handlers; a reflected
