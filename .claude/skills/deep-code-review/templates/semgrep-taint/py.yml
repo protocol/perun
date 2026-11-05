@@ -526,7 +526,7 @@ rules:
           regex: ^(?:.*\.)?(?:ModelSerializer|HyperlinkedModelSerializer|ModelForm)$
   paths:
     exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
-# OWASP API10:2023 unsafe consumption of APIs: a field of a requests/httpx response body (.json(), .text, .content, also from a response variable or a client/session named like *client or *session) reaches a SQL string passed to execute/executemany/executescript/raw/text/read_sql, a file path (open, Path, send_file), an outbound request URL (requests/httpx or a client verb), or a shell command (subprocess, os.system, os.popen) with no validation on the way. A same-file helper function or method that returns such a body is followed at its call sites, and a same-file wrapper whose parameter goes straight to a shell, SQL or file call is a sink at its call sites. int/float/bool, basename, secure_filename, shlex.quote, quote, UUID, hashlib, an as_/validate_/sanitize_/ensure_/assert_/coerce_/clean_/escape_ prefixed function, a lookup in an ALL_CAPS constant map, an in/not-in allowlist test, a regex match or isdigit/isalnum test, and a urlparse/urlsplit of the value (parsing is read as validating) clear the value. A request URL that starts with a literal scheme and host is skipped, a SQL string built with % from a parameter of the enclosing def is left to perun.py.sqli (no duplicate report), a subprocess list is a sink only as `sh -c <value>`. os.path.join is not a sink on its own: the open/Path call that uses its result is. A same-file def with an `if <path, prefix or type check>: raise` guard clears its result, but a def that only raises on a status check does not. ponytail: OSS semgrep taint is single-file, so a helper defined in another file is not followed, a helper must be defined before its caller in the same block (or class), and the response must come from requests/httpx or a client/session-named object.
+# OWASP API10:2023 unsafe consumption of APIs: a field of a requests/httpx response body (.json(), .text, .content, also from a response variable or a client/session named like *client or *session) reaches a SQL string passed to execute/executemany/executescript/raw/text/read_sql, a file path (open, Path, send_file), an outbound request URL (requests/httpx or a client verb), or a shell command (subprocess, os.system, os.popen) with no validation on the way. A same-file helper function or method that returns such a body is followed at its call sites, and a same-file wrapper whose parameter goes straight to a shell, SQL or file call is a sink at its call sites. int/float/bool, basename, secure_filename, shlex.quote, quote, UUID, hashlib, an as_/validate_/sanitize_/ensure_/assert_/coerce_/clean_/escape_ prefixed function, a lookup in an ALL_CAPS constant map, an in/not-in allowlist test, a regex match or isdigit/isalnum test, and a urlparse/urlsplit of the value (parsing is read as validating) clear the value. A request URL that starts with a literal scheme and host is skipped, a SQL string built with % from a parameter of the enclosing def is left to perun.py.sqli (no duplicate report), a subprocess list is a sink only as `sh -c <value>`. os.path.join is not a sink on its own: the open/Path call that uses its result is. A same-file def whose raising `if` tests its parameter, or a local derived from it, with commonpath, is_relative_to, fullmatch, match, isalnum, isdigit or isalpha clears its result; a type-only, startswith, status-code or unrelated guard does not. ponytail: OSS semgrep taint is single-file, so a helper defined in another file is not followed, a helper must be defined before its caller in the same block (or class), and the response must come from requests/httpx or a client/session-named object.
 - id: perun.py.unsafe-api-consumption
   mode: taint
   languages: [python]
@@ -814,17 +814,33 @@ rules:
           regex: ^(?:as|validate|validated|sanitize|ensure|assert|coerce|clean|escape)_\w+$
     - patterns:
       - pattern: $F(...)
-      - pattern-inside: |
-          def $F($P, ...):
-            ...
-            if $COND:
+      - pattern-either:
+        - pattern-inside: |
+            def $F($P, ...):
               ...
-              raise ...
+              if $COND:
+                ...
+                raise ...
+              ...
             ...
-          ...
+        - pattern-inside: |
+            def $F($P, ...):
+              ...
+              $L = <... $P ...>
+              ...
+              if $COND:
+                ...
+                raise ...
+              ...
+            ...
       - metavariable-regex:
           metavariable: $COND
-          regex: (?s).*(?:commonpath|startswith|endswith|is_relative_to|fullmatch|match\(|isinstance|isalnum|isdigit|isalpha)
+          regex: (?s).*(?:commonpath|is_relative_to|fullmatch|match\(|isalnum|isdigit|isalpha)
+      - metavariable-pattern:
+          metavariable: $COND
+          pattern-either:
+          - pattern: <... $P ...>
+          - pattern: <... $L ...>
     - patterns:
       - pattern: $D[...]
       - metavariable-regex:
