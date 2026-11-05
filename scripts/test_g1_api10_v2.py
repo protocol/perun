@@ -6,7 +6,7 @@ method, arrow, promise-then), a same-file wrapper around a shell/SQL/file sink, 
 Path/send_file/popen sinks, and near-miss negatives (coercion helper, hash, constant-map lookup, URL host check,
 helper that does not call an API, literal wrapper argument). A line ending in the HIT marker must be flagged by the
 named rule; every other line must stay silent. Fictional names only. A missing semgrep skips, never passes.
-A SQL string built with the % operator is left to perun.py.sqli (h_plain.py), so no line gets two reports.
+A SQL string built with % from a parameter of the enclosing def is left to perun.py.sqli (n_pct_param.py), so no line gets two reports.
 Known uncovered: a helper defined in another file of the same case (OSS semgrep taint is single-file), a helper
 defined after its caller in the same block, a response that arrives through an unnamed client.
 """
@@ -20,7 +20,9 @@ from test_g1_api_pilot_a import semgrep_hits, tree  # noqa: E402
 UAC, TLS = "unsafe-api-consumption", "tls-verify-off"
 
 PY_POS = {
-    "h_plain.py": 'def load(n):\n    r = requests.get(f"https://api.acme.example/p/{n}")\n    r.raise_for_status()\n    return r.json()\n\ndef go(cur, n):\n    p = load(n)\n    cur.execute("DELETE FROM t WHERE k = \'%s\'" % p["key"])\n',
+    "h_plain.py": 'def load(n):\n    r = requests.get(f"https://api.acme.example/p/{n}")\n    r.raise_for_status()\n    return r.json()\n\ndef go(cur):\n    p = load(3)\n    cur.execute("DELETE FROM t WHERE k = \'%s\'" % p["key"])  # HIT\n',
+    "h_pct_local.py": 'def go(cur):\n    d = requests.get("https://api.acme.example/p").json()\n    k = d["key"]\n    cur.execute("DELETE FROM t WHERE k = \'%s\'" % k)  # HIT\n',
+    "n_pct_param.py": 'def go(cur, n):\n    d = requests.get("https://api.acme.example/p").json()\n    cur.execute("DELETE FROM t WHERE k = \'%s\'" % n)\n',
     "h_text.py": 'import os\ndef body():\n    r = httpx.get("https://api.acme.example/script")\n    return r.text\n\ndef go():\n    os.system("sh -c " + body())  # HIT\n',
     "h_async.py": 'import httpx\nasync def cfg():\n    async with httpx.AsyncClient() as c:\n        r = await c.get("https://api.acme.example/cfg")\n        return r.json()\n\nasync def go():\n    d = await cfg()\n    return open(d["path"])  # HIT\n',
     "h_method.py": 'import requests\nclass Feed:\n    def __init__(self):\n        self.session = requests.Session()\n    def items(self):\n        r = self.session.get("https://api.acme.example/items")\n        return r.json()["items"]\n    def save(self, cur):\n        for it in self.items():\n            cur.execute("INSERT INTO t VALUES (\'" + it["name"] + "\')")  # HIT\n',
