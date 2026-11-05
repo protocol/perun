@@ -8,10 +8,13 @@ OF AUTHENTICATION: the scan only sees the call shapes listed below.
 
 1. Inventory every handler: Next.js app/**/route.(ts|tsx|js|jsx|mjs) exported GET/POST/PUT/PATCH/DELETE (function, const, destructured or re-exported),
    pages/api/** (methods read from `req.method` checks, else ANY), "use server" exported async functions (METHOD ACTION), Express/Router/Hono/
-   Fastify `<receiver>.get|post|put|patch|delete|all("/path", ...)` (TS type arguments allowed: `app.post<{ Body: Widget }>("/path", h)`), FastAPI `@x.get(...)` and Flask `@x.route(..., methods=[...])` decorators.
+   Fastify `<receiver>.get|post|put|patch|delete|all("/path", ...)` (TS type arguments allowed: `app.post<{ Body: Widget }>("/path", h)`), raw node:http / fetch-handler dispatch (a file that calls `createServer(`,
+   `Deno.serve(`, `Bun.serve(` or defines `fetch(request) {`: one handler per `if (pathname === "/x" && req.method === "POST")` branch or `switch (pathname) { case "/x": ... }` case, either operand order,
+   `url.pathname`, a `pathname` variable or `req.url`, a path literal or a same-file `const X = "/x"`; the method comes from the condition, the block or an enclosing `if`, and a branch with no method test, a branch in a class that is not `export default class` (a Durable Object), a `startsWith` or regex dispatch and an imported path constant are not seen; identity evidence before the dispatch in the enclosing function counts, an earlier branch's block does not), FastAPI `@x.get(...)` and Flask `@x.route(..., methods=[...])` decorators.
    `--paths` and `--all` also inventory (no auth evidence is judged for these) Go (`HandleFunc|Handle("[METHOD ]/p")` incl. Go 1.22 patterns, chi/gin/echo `x.Get|GET|Any("/p")`, `x.Handle|Method|Add("GET", "/p")`,
    gorilla `.Methods(...)`, with `Group`/`PathPrefix` variables and chi `Route("/a", func...)` prefixes), Spring (`@Get|Post|Put|Patch|DeleteMapping`, `@RequestMapping` with `method=`, array paths, the class-level `@RequestMapping` prefix)
-   and Django urlconfs (`path|re_path|url`, method ANY, `include("pkg.urls")` prefixes resolved to a scanned file). Not seen there: DRF routers, `add_url_rule`, `include(module)`, Kotlin DSL, a prefix held in a variable.
+   Django urlconfs (`path|re_path|url`, method ANY, `include("pkg.urls")` prefixes resolved to a scanned file) and PHP (Symfony `#[Route(path, methods: [...])]` attributes and `@Route` annotations, with the class-level
+   `#[Route]` prefix; Laravel `Route::get|post|put|patch|delete|any('/p', ...)`, no `prefix()`/`group()` nesting). Not seen there: DRF routers, `add_url_rule`, `include(module)`, Kotlin DSL, a prefix held in a variable.
 2. One row per handler: `path:line: SEV: METHOD route auth=<evidence>`. Evidence, first hit wins: a call, decorator or `Depends(...)` naming an
    identity check (IDENTITY below: getServerSession, auth(), currentUser, requireAuth*, verify*, login_required...; a Depends/Security argument
    with user, auth, token, current, bearer, jwt, api_key, verify or login in it) or `req.user`/`current_user.`/`g.user` in the handler, in a
@@ -125,6 +128,12 @@ DECL = re.compile(r"^([ \t]*)(?:export\s+)?(?:async\s+)?(?:function|const|let|va
 IMP = (re.compile(r"""\bimport\s+([^"']*?)\s*from\s*(["'])(\.[^"'\n]*)\2"""),  # import a, { b as c } from "./x"
        re.compile(r"""\b(?:const|let|var)\s+([^=]*?)=\s*(?:await\s+)?(?:require|import)\(\s*(["'])(\.[^"'\n]*)\2"""))  # const { a } = require("./x")
 INL = re.compile(r"""\b(?:require|import)\(\s*["'](\.[^"'\n]*)["']""")  # register(require("./x"))
+PNAME = r"(?<![\w$])(?:[\w$]+\.)*(?:pathname|path|url)\b"  # `pathname`, `path` or `url`, bare or as the last segment (`url.pathname`, `req.url`), as written in raw dispatch
+PCMP = re.compile(PNAME + r"""\s*={2,3}\s*(?:(["'`])(?P<a>/[^\s"'`$]*)\1|(?P<b>[\w$]+)(?![\w$.(\[]))|(?:(["'`])(?P<c>/[^\s"'`$]*)\4|(?<![\w$.])(?P<d>[\w$]+))\s*={2,3}\s*""" + PNAME)  # `pathname === "/x"` in either order, or against a same-file `const X = "/x"`
+PCONST = re.compile(r"""\bconst[ \t]+([\w$]+)\s*(?::[^=\n]+)?=\s*(["'`])(?P<p>/[^\s"'`$]*)\2""")
+PCASE = re.compile(r"""\bcase\s+(["'`])(?P<p>/[^\s"'`$]*)\1\s*:""")
+FETCH = r"\bfetch\s*\([^)]*\)\s*(?::[^{;=]*)?\{"  # a `fetch(request, env) {` method or function definition, return type allowed
+SRV = re.compile(r"\bcreateServer\s*\(|\bDeno\.serve\(|\bBun\.serve\(|addEventListener\(\s*[\"']fetch|export\s+(?:async\s+)?function\s+fetch\b|^[ \t]+(?:async[ \t]+)?" + FETCH, re.M)  # a file that creates an http server or defines a fetch handler
 ARG1 = re.compile(r"\s*([\w$]+)\s*[,)]")  # the first argument of a call, when it is a bare name
 
 
@@ -369,6 +378,42 @@ def py_hs(m, mk, hs, gone):
         hs.append((t.start(), "|".join(meths), pyroute(pm.group(2)), [(t.start(), dm.start()), (dm.end() - 1, end)], None, None, None))
 
 
+def raw_hs(m, mk, hs, gone):
+    """Raw node:http / fetch-handler dispatch in a file that creates an http server or exports a fetch handler (SRV): one handler per `if (pathname === "/x" && req.method === "POST")` branch
+    (either order, `==` or `===`, `url.pathname`, a `pathname` variable or `req.url`) and per `case "/x":` of a `switch (pathname)`. The method is the one the condition, the block or an enclosing
+    `if` tests; a branch with no method test is skipped (skip rather than guess), and so is a branch inside a class that is not `export default class` (a Durable Object `fetch` is internal; a default-exported WorkerEntrypoint class and an `export default { fetch }` object stay public). The span is the block. Evidence before the dispatch in the enclosing function counts; an earlier branch's block does not.
+    ponytail: fall-through `case "/a": case "/b":`, a `switch (req.method)` nested in a case and `fetch(`/`createServer(` inside a string literal are not read; any non-default class is read as internal (a named-export WorkerEntrypoint is missed); a block testing two methods is one `GET|POST` handler; `startsWith` dispatch, a router table and a method-first `switch` are not read."""
+    if not SRV.search(m): return
+    L, br, cs = list(ifs(m)), [], {t[1]: t["p"] for t in PCONST.finditer(mk)}  # br: (position, route, block span, condition span)
+    for a, b, s, e in L:
+        for t in PCMP.finditer(mk, a + 1, b):
+            r = t["a"] or t["c"] or cs.get(t["b"] or t["d"])
+            if r: br.append((a, r, (s, e + 1), (a, b)))
+    for t in re.finditer(r"\bswitch\s*\(\s*" + PNAME + r"\s*\)\s*\{", mk):
+        sc = close_of(mk, t.end() - 1)
+        se = sc if sc > 0 else len(mk)  # an unclosed switch runs to the end of the file
+        for c in PCASE.finditer(mk, t.end(), se):
+            n = re.compile(r"\bcase\s|\bdefault\s*:").search(mk, c.end(), se)
+            br.append((c.start(), c["p"], (c.end(), n.start() if n else se), (0, 0)))
+    if not br: return
+    fns = [(t.end(), close_of(m, t.end() - 1)) for t in re.finditer(r"\bcreateServer\s*\(|" + FETCH, m)] + list(decls(m).values())
+    cls = [(t.end(), close_of(m, t.end() - 1)) for t in re.finditer(r"^(?!export\s+default\s+class\b)(?:export\s+)?(?:abstract\s+)?class\b[^{;]*\{", m, re.M)]  # classes that are not `export default class`
+    br = [x for x in br if not any(a < x[0] < b for a, b in cls)]  # a Durable Object class fetch() is reachable only through a Worker stub
+    hot = [f for f in fns if any(f[0] < x[0] < f[1] for x in br)]
+    gone.extend((s, e + 1) for a, b, s, e in L if any(f[0] < s < f[1] for f in hot))  # an `if` body in a dispatching function is evidence only for its own branches, not module-level for all
+    for pos, route, sp, cd in br:
+        ms = methods(mk[cd[0]:cd[1]]) or methods(mk[sp[0]:sp[1]])
+        up = [(s, a, b) for a, b, s, e in L if s < pos and sp[1] <= e + 1 and methods(mk[a:b])]  # enclosing ifs that test a method
+        if not ms and up:
+            a, b = max(up)[1:]  # the innermost: a `!==` test there gives no method
+            ms = methods(mk[a:b].replace("!=", "#"))
+        if not ms: continue
+        st = max((a for a, b in fns if a < pos < b), default=0)
+        gone.append(sp)
+        hid = blank(m, [(s, e + 1) for a, b, s, e in L if not s <= pos < e] + [x[2] for x in br])  # only the function's top level and enclosing ifs are evidence
+        hs.append((pos, "|".join(ms), route, [sp], ident(hid[st:max(pos, cd[1])]), None, None))
+
+
 def mount(ps):
     """Path prefix a `x.register(plugin, opts)` call (ps: its parts) mounts the plugin under: the literal `prefix` of an inline options object, "" when there is none to read
     (no options, or an object with neither `prefix` nor a spread), None when it is unknown (an options variable, a spread, a prefix that is not a string literal)."""
@@ -562,6 +607,7 @@ def analyze(rel, raw, mws, sites=None, hooks=None):
                 gone.append((t.end(), nextdecl(m, t.start())))
                 hs.append((t.start(), "ACTION", t.group(1) or t.group(2), [gone[-1]], None, None, None))
         call_hs(m, mk, hs, uses, gone)
+        raw_hs(m, mk, hs, gone)
     ctx = pyctx(m, mk) if py else jsctx(m, mk, fn)  # for --privileged only
     hide = gone + list(fn.values())
     mod = ident(blank(m, hide))  # module level: what is outside every handler, function definition and `.use` call; scanned once, per handler it would make a file with many routes quadratic
@@ -608,7 +654,7 @@ def scan(root):
         if ".register" in raw or "addHook" in raw:
             own[rel], sites = wiring(rel, raw, known)
             for f, site in sites: cov.setdefault(f, []).append(site)
-        if NAPP.match(rel) or NAPI.match(rel) or (PYDEC if rel.endswith(".py") else JSPRE).search(raw): todo.append((rel, raw))
+        if NAPP.match(rel) or NAPI.match(rel) or (PYDEC if rel.endswith(".py") else JSPRE).search(raw) or not rel.endswith(".py") and SRV.search(raw): todo.append((rel, raw))
     for rel, raw in todo: rows += analyze(rel, raw, mws, cov.get(rel), own.get(rel))
     return sorted(rows), len(todo)
 
@@ -623,7 +669,7 @@ GOMS = re.compile(r'\s*\.Methods\(([^)]*)\)')
 JAVAM = re.compile(r'@(Get|Post|Put|Patch|Delete|Request)Mapping\b(?:\s*\(((?:[^()"]|"[^"]*"|\([^()]*\))*)\))?')
 JAVAX = re.compile(r"\bmethod\s*=[^,)]*|\b(?:consumes|produces|headers|params)\s*=\s*(?:\{[^}]*\}|[^,)]*)")
 DJ = re.compile(r'(?<![\w.])(re_path|path|url)\(\s*r?(["\'])(.*?)\2\s*,\s*(include\(\s*(?:r?["\']([\w.]+)["\'])?)?')
-NOTSRC = re.compile(TEST.pattern + r"|_test\.go$|Tests?\.(?:java|kt)$")
+NOTSRC = re.compile(TEST.pattern + r"|_test\.go$|Tests?\.(?:java|kt|php)$")
 
 
 def join(*ps):
@@ -700,6 +746,31 @@ def java_routes(raw):
     return out
 
 
+PHPN = re.compile(r"(?:\s+|\]|\*/|\*[^\n]*|@\w+[^\n]*|#\[[^\n]*|//[^\n]*|/\*.*?\*/|\b(?:final|abstract|readonly|public|protected|private|static)\b)*?\b(class|function)\b", re.S)  # tokens skipped between a Route and its declaration
+PHPR = re.compile(r"(?:#\[\s*|@)Route\s*\(((?:[^()\"']|\"[^\"]*\"|'[^']*'|\([^()]*\))*)\)")  # a Symfony attribute or annotation
+PHPL = re.compile(r"""\bRoute::(get|post|put|patch|delete|any)\(\s*['"]([^'"]*)['"]""", re.I)
+
+
+def php_routes(raw):
+    """[(pos, METHOD, path)] of a PHP file: Symfony `#[Route('/p', methods: ['POST'])]` and `@Route("/p", methods={"POST"})` (no methods: ANY), under the Route of its own class (one before a
+    `class`), at the position of the Route; Laravel `Route::get|post|put|patch|delete|any('/p', ...)`.
+    ponytail: Laravel `Route::prefix()` / `group()` nesting is not resolved; a Laravel controller array is not followed to its method. Upgrade when a repo needs it."""
+    out, pre, cend, bm = [], "", 0, re.sub(r"#(?!\[)[^\n]*", lambda x: " " * len(x[0]), mask(raw))  # bm: comments (`#` too) and strings blanked, same length
+    for t in PHPR.finditer(raw):
+        a = t[1]
+        m = re.search(r"""\bpath\s*[:=]\s*['"]([^'"]*)['"]""", a) or re.match(r"""\s*['"]([^'"]*)['"]""", a)
+        ms = re.search(r"\bmethods\s*[:=]\s*[\[{]([^\]}]*)", a)
+        nx = PHPN.match(raw, t.end(), t.end() + 400)  # the declaration right after the Route, in a bounded window
+        if nx and nx[1] == "class":  # a Route right before a `class` is that class's prefix
+            pre, cend = (m[1] if m else ""), nx.end(); continue
+        if pre and re.search(r"(?<![:\w$>])class\s+\w", bm[cend:t.start()]): pre = ""  # a later class ends the prefix
+        verbs = [v for v in VERBS if ms and re.search(r"['\"]%s['\"]" % v, ms[1], re.I)]
+        out.append((t.start(), "|".join(verbs) or "ANY", join(pre, pyroute(m[1] if m else ""))))
+    for t in PHPL.finditer(raw):
+        out.append((t.start(), t[1].upper(), join(pyroute(t[2]))))
+    return out
+
+
 def groups(r):
     """Regex route r with each named group `(?P<id>...)` (nested parentheses balanced) replaced by `<id>`."""
     while True:
@@ -733,7 +804,7 @@ def django_routes(files):
 
 
 def inventory(root):
-    """[(METHOD, path, file, line)] of every route under root, sorted, one entry per method: the scan() handlers (JS/TS, Next, Python), Go, Spring and Django urlconfs."""
+    """[(METHOD, path, file, line)] of every route under root, sorted, one entry per method: the scan() handlers (JS/TS, Next, Python), Go, Spring, Django urlconfs and PHP."""
     rows = [(m, r[3], r[0], r[1]) for r in scan(root)[0] for m in r[2].split("|")]
     files, django = {}, {}
     for dp, dn, fn in os.walk(root):
@@ -741,11 +812,11 @@ def inventory(root):
         for f in sorted(fn):
             rel = os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/")
             if NOTSRC.search(rel): continue
-            if f.endswith((".go", ".java", ".kt")): files[rel] = f
+            if f.endswith((".go", ".java", ".kt", ".php")): files[rel] = f
             elif f.endswith(".py") and "urlpatterns" in (raw := read(root, rel) or ""): django[rel] = raw
     for rel in files:
         raw = read(root, rel) or ""
-        for pos, ms, p in go_routes(raw) if rel.endswith(".go") else java_routes(raw):
+        for pos, ms, p in (go_routes if rel.endswith(".go") else php_routes if rel.endswith(".php") else java_routes)(raw):
             rows += [(m, p, rel, lineno(raw, pos)) for m in ms.split("|")]
     rows += [(m, p, rel, ln) for rel, ln, m, p in django_routes(django)]
     return sorted(set(rows), key=lambda r: (r[1], r[0], r[2], r[3]))

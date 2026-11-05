@@ -194,7 +194,7 @@ def declend(lines, ln, py):
 
 
 def units(root, texts, innermost=False):
-    """{file: [(line, end, methods, route)]} of every handler under root, sorted by line: the route_auth_map inventory (JS/TS, Python, Go, Spring, Django), where a Go registration, a Django
+    """{file: [(line, end, methods, route)]} of every handler under root, sorted by line: the route_auth_map inventory (JS/TS, Python, Go, Spring, Django, PHP), where a Go registration, a Django
     `path(route, view)` and a Next `export const GET = handler` re-export are followed to the function they name (the unit is that function's first line), and `end` is the last line of
     the handler. texts is filled with the masked text of every file read (comments blanked, strings kept). A Go registration `HandleFunc(p, wrap(h))` follows `wrap`'s definition unless innermost is set, which follows `h`."""
     def T(rel):
@@ -205,7 +205,7 @@ def units(root, texts, innermost=False):
     files = walk(root)[0]
     for dp, dn, fn in os.walk(root):
         dn[:] = [d for d in dn if d not in PRUNE]
-        files += [os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/") for f in fn if f.endswith((".go", ".java", ".kt")) and not NOTSRC.search(f)]
+        files += [os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/") for f in fn if f.endswith((".go", ".java", ".kt", ".php")) and not NOTSRC.search(f)]
     def find(rx, near):
         """(file, 1-based line) of the first line matching rx in a file of the same kind, files beside `near` first."""
         for f in sorted((f for f in files if f.endswith(".go" if near.endswith(".go") else ".py")), key=lambda f: f.rpartition("/")[0] != near.rpartition("/")[0]):
@@ -216,7 +216,7 @@ def units(root, texts, innermost=False):
                 while ln > 1 and lines[ln - 2].startswith("@"): ln -= 1  # the decorators belong to the view
                 return f, ln
     for f in files:
-        if f.endswith((".go", ".java", ".kt")): T(f)  # the limiter search below reads every native file
+        if f.endswith((".go", ".java", ".kt", ".php")): T(f)  # the limiter search below reads every native file
     got = {}
     for m, route, rel, ln in inventory(root):
         t = T(rel)

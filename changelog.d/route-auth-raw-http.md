@@ -1,0 +1,2 @@
+### Added
+- `route_auth_map.py` finds raw-dispatch HTTP handlers (node:http `createServer`, `Deno.serve`, `Bun.serve`, a `fetch(request)` handler): one handler per `pathname === "/x"` plus method branch or `switch (pathname)` case, so route-auth, cost-limit, csrf-cookie, attempt-limit and pii-data no longer skip such repos as "no HTTP handlers". Identity evidence before the dispatch counts; a branch with no method test is skipped.

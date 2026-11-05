@@ -369,6 +369,30 @@ class ChunkedAndVocab(unittest.TestCase):
                 for f in (draft, Path(str(draft) + ".part")):
                     f.unlink(missing_ok=True)
 
+    def test_fail_line_on_stderr_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            import hashlib
+            bad = report(extra="| A4 | pass | tool:semgrep | nope.py:1 | |\n")
+            run = lambda *a, i="": subprocess.run([sys.executable, "-I", str(LINT), *a, "--root", d], input=i, capture_output=True, text=True)
+            draft = Path(tempfile.gettempdir()) / ("rcl-" + hashlib.sha256(str(Path(d).resolve()).encode()).hexdigest()[:16] + ".md")
+            try:
+                for text, want in ((bad, True), (report(), False)):
+                    (Path(d) / "src").mkdir(exist_ok=True)
+                    (Path(d) / "src/app.py").write_text("a\nrun(escape(x))\nc\n")
+                    f = Path(d) / "r.md"
+                    f.write_text(text)
+                    p = run(str(f))  # file mode
+                    self.assertEqual("not deliverable" in p.stderr, want, p.stderr)
+                    self.assertNotIn("FAIL:", p.stdout)
+                    run("--part", "1", i=text)
+                    p = run("--done")  # draft mode
+                    self.assertEqual("not deliverable" in p.stderr and "--part 1" in p.stderr, want, p.stderr)
+                    self.assertEqual("FAIL:" in p.stderr, want)
+                    self.assertNotIn("FAIL:", p.stdout)
+            finally:
+                for g in (draft, Path(str(draft) + ".part")):
+                    g.unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     unittest.main()
