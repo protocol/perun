@@ -18,7 +18,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 R = ROOT / ".claude/skills/deep-code-review/references"
 PARENT = "security-appsec.md"
 SPLITS = ("appsec-egress.md", "appsec-flows.md", "appsec-corroboration.md")
-PARENT_CAP = 28300  # old file 32790 B (-13.7% at the cap)
+PARENT_CAP = 28700  # old file 32790 B (-12.5% at the cap); raised from 28300 for the 3-line ownership_sibling_check.py pointer in ADDED
 TRIGGERS = {  # index row -> phrase its trigger must carry
     "appsec-egress.md": "SSRF guard",
     "appsec-flows.md": "check-then-act",
@@ -30,6 +30,9 @@ EDITED = (  # old lines reworded on purpose ("above" -> "in security-appsec.md";
     '    is not "clean" (the `Secrets` rule above still holds: a committed secret is compromised).',
 )
 ADDED = (  # prefix of every line in the new files that the old file did not have; each must match exactly once
+    "Static lead for the same bug: `python3 -I .claude/skills/deep-code-review/scripts/ownership_sibling_check.py PATH...`",
+    "that loads a record by a client id when a sibling in the same file loads the same model with an ownership check",
+    "Django); a file with no checking sibling is out of scope, so silence is not proof.",
     "| `appsec-egress.md` | builds or changes an SSRF guard",
     "| `appsec-flows.md` | has a flow that moves value or advances state (checkout, refund, balance, coupon, invite, quota, wizard, approval, tier change)",
     "| `appsec-corroboration.md` | rests a finding on taint",

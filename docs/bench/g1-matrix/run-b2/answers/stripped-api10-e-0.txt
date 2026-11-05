@@ -1,0 +1,13 @@
+## Review
+
+The upstream-consumption path is well hardened. The base URL is fixed, the handle is validated and URL-encoded, redirects are refused, there is a 4 s timeout, the content type is checked, the body is capped at 32 KB while streaming, and the response is re-sanitized. The sanitizer enforces an avatar host allow-list and requires the returned handle to match the requested one. The cache is bounded and concurrent fetches for the same handle are coalesced. I found no API7 or API10 issues.
+
+**One finding, API4, `server.js:17`.** The per-IP rate limiter is the only throttle on an unauthenticated endpoint that makes an outbound call on every cache miss. Its counter store is flushed completely whenever `counts.size > 10000`. A client that rotates source addresses (for example a v6 prefix, or spoofed `X-Forwarded-For` values if `trust proxy` is later enabled) can push the map past 10,000 keys, which resets every client's counter, including its own. The effective limit then stops holding.
+
+Failing input: a burst of requests from more than 10,000 distinct source IPs, then repeated requests for random, non-existent valid handles. These are never cached, because failures return 502 without caching, so each one triggers a fresh directory fetch. There is also no global cap on outbound concurrency or request rate, so nothing else bounds the fan-out to the directory provider. A fix would be a bounded LRU or a real rate-limit store that evicts old entries rather than clearing all of them, a global limit on outbound concurrency, and a short negative cache.
+
+```json
+[
+  {"file": "server.js", "line": 17, "owasp_api_2023": "API4"}
+]
+```

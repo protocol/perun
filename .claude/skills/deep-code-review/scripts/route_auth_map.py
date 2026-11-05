@@ -3,7 +3,7 @@
 
 Read this when you review an API surface for missing authentication or run the anonymous GET sweep in security-appsec.md: a handler that
 mutates state and never touches an identity check is reachable by anyone, and generic linters do not see it. Run
-`python3 -I route_auth_map.py DIR` (add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
+`python3 -I route_auth_map.py DIR` (add `--privileged` to list privileged routes guarded by authentication alone, with no role, permission or admin check in the handler: admin path segments, role or permission changes, PUT/PATCH/DELETE on `/users/:id` and kin; add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
 OF AUTHENTICATION: the scan only sees the call shapes listed below.
 
 1. Inventory every handler: Next.js app/**/route.(ts|tsx|js|jsx|mjs) exported GET/POST/PUT/PATCH/DELETE (function, const, destructured or re-exported),
@@ -489,6 +489,56 @@ def gated(sites, route):
     return bool(sites) and all(any(ok(pre, *h) for h in hs) for pre, hs in sites)
 
 
+EXTRA = {}  # (file, line) -> (router path prefix, router-level guard text, router-level identity gate), filled by analyze() for --privileged
+
+
+def jsctx(m, mk, fn):
+    """[(receiver, pos, path, text)] per `<receiver>.use(...)` call: its arguments and the bodies of the functions they name."""
+    out = []
+    for t, op, cl, ps in callargs(m, mk, "use", RECEIVERS | set(RCV.findall(m))):
+        lit = LIT.fullmatch(ps[0][1].strip())
+        txt = mk[op:cl + 1]
+        out.append((t.group(1), t.start(), lit and lit.group(2).rstrip("*/") or "", "\n".join([txt] + [mk[a:b] for w in set(re.findall(r"[\w$]+", txt)) if w in fn for a, b in [fn[w]]])))
+    return out
+
+
+def pyctx(m, mk):
+    """{receiver: [prefix, guard text, gated]} for the routers, blueprints and apps built in one Python file: `prefix=` / `url_prefix=`, the constructor, `include_router` and
+    `register_blueprint` arguments (dependencies=[...] is guard text), and `@x.before_request` bodies (gated when one aborts or raises)."""
+    c = {}
+    for t in re.finditer(r"\b(\w+)\s*=\s*(?:\w+\.)?(?:APIRouter|Blueprint|FastAPI|Flask)\(", m):
+        op = t.end() - 1; cl = close_of(m, op)
+        a = mk[op:cl + 1] if cl > 0 else ""
+        c[t.group(1)] = ["", a, bool(re.search(r"Depends|Security", a))]
+        x = re.search(r"\b(?:url_)?prefix\s*=\s*([\"'])([^\"']*)\1", a)
+        if x: c[t.group(1)][0] = x.group(2)
+    for t in re.finditer(r"\.(?:include_router|register_blueprint)\(\s*(\w+)", m):
+        op = m.rfind("(", 0, t.end()); cl = close_of(m, op)
+        a = mk[op:cl + 1] if cl > 0 else ""
+        e = c.setdefault(t.group(1), ["", "", False])
+        x = re.search(r"\b(?:url_)?prefix\s*=\s*([\"'])([^\"']*)\1", a)
+        if x: e[0] = x.group(2) + e[0]
+        e[1] += a; e[2] = e[2] or bool(re.search(r"Depends|Security", a))
+    for t in re.finditer(r"^( *)@(\w+)\.before_(?:app_)?request\s*\n", m, re.M):
+        d = PYDEF.search(m, t.end()); sc = close_of(m, d.end() - 1) if d else -1
+        b = mk[d.start():outdent(m, sc, t.end(1) - t.start(1))] if sc > 0 else ""
+        e = c.setdefault(t.group(2), ["", "", False])
+        e[1] += b; e[2] = e[2] or bool(re.search(r"\babort\(|\braise\b|\b40[13]\b|redirect|Unauthorized|Forbidden", b))
+    return c
+
+
+def priv_ctx(ctx, rcv, route, pos, fn, mk):
+    """(prefix, guard text, identity gate) the receiver's router-level setup adds to one handler: Python from pyctx, JS from the `.use(...)` calls declared before the route."""
+    if isinstance(ctx, dict):
+        e = ctx.get(rcv)
+        return tuple(e) if e else ("", "", False)
+    gt = "\n".join(t for r, p, u, t in ctx if r == rcv and p < pos and (route == u or route.startswith(u + "/")))
+    return "", gt, False
+
+
+BODY = {}  # (file, line) -> the handler's own and helper text with strings kept, filled by analyze() for --privileged
+
+
 def analyze(rel, raw, mws, sites=None, hooks=None):
     """[(path, line, METHOD, route, auth)] for one file; sites: the wiring() sites that wire the file, for the root-hook evidence; hooks: the wiring() hooks of the file itself.
     A non-GET route is also covered by the hook of its own receiver declared before it in a block that holds the route (a route above the hook keeps its own evidence, and a GET reads INFO either way).
@@ -512,12 +562,17 @@ def analyze(rel, raw, mws, sites=None, hooks=None):
                 gone.append((t.end(), nextdecl(m, t.start())))
                 hs.append((t.start(), "ACTION", t.group(1) or t.group(2), [gone[-1]], None, None, None))
         call_hs(m, mk, hs, uses, gone)
+    ctx = pyctx(m, mk) if py else jsctx(m, mk, fn)  # for --privileged only
     hide = gone + list(fn.values())
     mod = ident(blank(m, hide))  # module level: what is outside every handler, function definition and `.use` call; scanned once, per handler it would make a file with many routes quadratic
     out = []
     for pos, meth, route, spans, pre, rcv, mwb in hs:
         ln = lineno(m, pos)
         own = "\n".join(m[a:b] for a, b in spans)
+        BODY[(rel, ln)] = "\n".join(mk[a:b] for a, b in spans + [fn[w] for w in set(re.findall(r"[\w$]+", own)) if w in fn])  # for --privileged only
+        r_ = rcv or (re.compile(r"\s*@(\w+)\.").match(m, pos) or [0, None])[1]
+        pfx, gt, gate = priv_ctx(ctx, r_, route, pos, fn, mk)
+        EXTRA[(rel, ln)] = (pfx, gt, gate)
         got = [(ident(m[a:b]), tok(mk[a:b])) for a, b in spans + [fn[w] for w in sorted(set(re.findall(r"[\w$]+", own))) if w in fn]] + [(mod, False)]
         use = next((u[3] for u in uses if u[0] == rcv and u[1] < pos and (route == u[2] or route.startswith(u[2] + "/"))), None)
         pats = mws.get(mwb) if mwb is not None else None
@@ -696,10 +751,54 @@ def inventory(root):
     return sorted(set(rows), key=lambda r: (r[1], r[0], r[2], r[3]))
 
 
+PRIVSEG = re.compile(r"admin|administrator|superuser|backoffice", re.I)
+PRIVROLE = re.compile(r"role|permission|privilege|grant|promote|demote", re.I)
+PRIVREC = re.compile(r"(?:^|/)(?:users?|accounts?|members?|profiles?|customers?)/:\w+")  # another user's record: a collection then an id param
+CALLER = r"(?:\breq(?:uest)?\.user|current_user|\bg\.user|\buser)"  # the signed-in user object
+ROLEWORD = r"(?:roles?|permissions?|scopes?|perms|groups|authorities)"
+ROLECHK = re.compile(  # check shapes, not words: `{role: req.body.role}` is the write being guarded, not a guard
+    r"\b" + ROLEWORD + r"\b\s*(?:[!=]==?|\.(?:includes|has|some|indexOf)\(|\bin\b)|['\"`][^'\"`\n]+['\"`]\s+(?:not\s+)?in\s+[^\n]*?\b" + ROLEWORD + r"\b|\.admin\b"
+    r"|is_?(?:admin|staff|superuser)|has_?(?:role|perm\w*)|require_?(?:role|admin|perm\w*)|permission_required|authori[sz](?:e\w*|er)\b|\bcans?\(|\bcan_|rbac|polic(?:y|ies)|abilit"
+    # named guards: a call (checkRole('x'), ensure_staff(u), restrictTo('admin')), a middleware or dependency argument (adminOnly, Depends(get_admin)), a Security(scopes=[...]) dependency,
+    # a permission object's .require(), and a comparison on a user attribute that is not an identifier (req.user.tier === 'staff')
+    r"|\b(?:check|has|ensure|verify|assert|need|must|enforce|guard|allow|only|restrict)_?(?:to|roles?|perm\w*|scopes?|privileg\w*|access|admin|staff|owner)\w*\s*\("
+    r"|(?:admin|staff|superuser|moderator)_?only|(?<=[(,])\s*[\w$.]*(?:admin|staff|superuser|moderator)[\w$]*\s*(?=[,)])"
+    r"|Depends\(\s*\w*(?:admin|staff|superuser|moderator|role|perm|scope|privileg)|Security\([^)]*scopes\s*=|\w*(?:permission|role|admin|scope|staff|need)\w*\.(?:require|check|allow|enforce)\w*\("
+    r"|" + CALLER + r"\.(?!\w*Id\b|\w*_id\b|id\b|pk\b|sub\b)\w+\s*(?:[!=]==?|\b(?:not\s+)?in\b)"
+    r"|['\"`]\s*[!=]==?\s*" + CALLER + r"\.", re.I)
+OWNER = re.compile(  # the record written is the caller's own: an identifier comparison or a scoped lookup on the caller's id
+    r"" + CALLER + r"\.(?:\w*Id|\w*_id|id|pk|sub)\b\s*[!=]==?|[!=]==?\s*(?:" + CALLER + r"\.(?:\w*Id|\w*_id|id|pk|sub)\b)"
+    r"|\b(?:id|_id|pk|user_?id|owner\w*|\w*profile\w*|account_?id)\s*[:=]\s*" + CALLER + r"\.(?:\w*Id|\w*_id|id|pk|sub)\b", re.I)
+PRIVVERB = re.compile(r"/:\w+/(?:suspend|ban|unban|disable|enable|activate|deactivate|approve|reject|impersonate|refund|lock|unlock|status)(?:/|$)")
+PATHLIT = re.compile(r"""(['"`])/[^'"`]*\1""")
+
+
+def privileged(rows):
+    """[(row, why)] for routes with identity evidence (auth is neither none nor public, or a router-level gate) that are privileged and whose handler, router-level guards and helper text hold no role, permission or admin check.
+    Privileged: an admin path segment (non-GET: a read-only admin page is not listed), a role or permission path segment (non-GET), a state verb under a record (non-GET: /x/:id/suspend, /status) or PUT/PATCH/DELETE on `/users/:id` and kin
+    unless the handler scopes the write to the caller's own id. Router-level evidence: JS `.use(...)` before the route, Python `prefix=` / `url_prefix=`, `dependencies=[...]`, `include_router`,
+    `register_blueprint` and `before_request` in the same file. Heuristic: a quoted /path literal is dropped before the check search so the route itself does not count; a check done in a function
+    the scan does not follow, a guard mounted from another file, or an imported router prefix is missed (lead, not proof)."""
+    out = []
+    for r in rows:
+        rel, ln, meth, route, lab = r
+        pfx, gt, gated = EXTRA.get((rel, ln), ("", "", False))
+        if lab == "public" or lab == "none" and not gated: continue
+        route = (pfx.rstrip("/") + route).rstrip("/") or "/"
+        ms, parts = meth.split("|"), route.lower().split("/")
+        why = ("admin path" if any(PRIVSEG.search(p) for p in parts) and ms != ["GET"] else
+               "role or permission change" if any(PRIVROLE.search(p) for p in parts) and ms != ["GET"] else
+               "state change on another user's record" if PRIVVERB.search(route) and ms != ["GET"] else
+               "write on another user's record" if PRIVREC.search(route) and {"PUT", "PATCH", "DELETE", "ANY"} & set(ms) else None)
+        body = PATHLIT.sub("", BODY.get((rel, ln), "") + "\n" + gt)
+        if why and not ROLECHK.search(body) and not (why.endswith("record") and OWNER.search(body)): out.append(((rel, ln, meth, route, lab), why))
+    return out
+
+
 def main(argv):
-    a = [x for x in argv[1:] if x not in ("--paths", "--all")]
-    if len(a) != 1 or not os.path.isdir(a[0]) or {"--paths", "--all"} <= set(argv[1:]):
-        print("usage: route_auth_map.py [--paths | --all] DIR", file=sys.stderr); return 2
+    a = [x for x in argv[1:] if x not in ("--paths", "--all", "--privileged")]
+    if len(a) != 1 or not os.path.isdir(a[0]) or len({"--paths", "--all", "--privileged"} & set(argv[1:])) > 1:
+        print("usage: route_auth_map.py [--paths | --all | --privileged] DIR", file=sys.stderr); return 2
     if {"--paths", "--all"} & set(argv[1:]):
         inv = inventory(a[0])
         print("heuristic; %d routes; silence is not proof of authentication" % len(inv), file=sys.stderr)
@@ -715,6 +814,11 @@ def main(argv):
             for p in sorted({p for m, p, f, ln in inv if m in ("GET", "ANY")}): print(p)
         return 0
     rows, files = scan(a[0])
+    if "--privileged" in argv[1:]:
+        pv = privileged(rows)
+        print("heuristic; %d privileged routes with authentication but no role check; silence is not proof" % len(pv), file=sys.stderr)
+        for r, why in pv: print("%s:%d: PRIV: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why))
+        return 0
     print("heuristic; scanned %d files with %d handlers; silence is not proof of authentication" % (files, len(rows)), file=sys.stderr)
     out = [(r, "HIGH" if r[4] == "none" and any(x != "GET" for x in r[2].split("|")) else "INFO") for r in rows]
     for r, s in out: print("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))

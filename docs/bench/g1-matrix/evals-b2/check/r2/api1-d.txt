@@ -1,0 +1,14 @@
+I found no issues that fall under an OWASP API Security Top 10:2023 class.
+
+- **Object-level authorization (API1):** `one`, `comment`, `notes` and `close` all go through `load_visible`. It returns 404 for both missing and unauthorized tickets, so ticket IDs can't be enumerated. `mine` filters by `g.user`.
+- **Authentication (API2):** `authenticated` rejects unknown or missing tokens with 401 on every route. The short tokens like `c-1` are fixture data in `store.py`, not a flaw in the code's logic.
+- **Property-level authorization (API3):** responses are built from the `VIEW` allowlist (`id`, `subject`, `state`), so `reporter` and `staff_note` are not leaked. The `comment` endpoint only reads `text` and never mass-assigns client fields.
+- **Function-level authorization (API5):** `notes` calls `require_agent()` before loading the ticket, so members get 403. `close` is open to the ticket's reporter or an agent, which is a reasonable rule for closing your own ticket.
+- **Resource consumption (API4):** `MAX_CONTENT_LENGTH` is 8 KB, comment text is truncated to 500 characters, and the `mine` listing is capped at 50 items.
+- **Misconfiguration, SSRF and inventory (API7, API8, API9):** there is no debug flag, no outbound requests, and no extra or legacy routes.
+
+Non-security note: `request.get_json(force=True).get(...)` would raise a 500 if the body is a JSON list rather than an object. That is a robustness bug, not an OWASP API class.
+
+```json
+[]
+```

@@ -465,3 +465,438 @@ rules:
       regex: ^(?:(?:.*(?:[._]|[a-z0-9](?=[A-Z])))?(?i:pass|passwd|password|passcode|passphrase|secret|token|credentials?|api_?key|(?:secret|private|signing|encryption|session|jwt|hmac|master|access|auth|client|app|service|service_role|webhook)_?key)|.*(?:_|[a-z0-9](?=[A-Z]))(?i:pwd))$
   paths:
     exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+# OWASP API3:2023 inbound mass assignment: a whole request body (or a variable assigned from it) unpacked or passed into a model constructor, create or update; a setattr loop over request keys; DRF ModelSerializer/ModelForm with fields = "__all__". ponytail: search-mode, one block hop (`d = request.get_json(); ... User(**d)`); no cross-function flow. A schema or pydantic parse first (the argument is then a call or a new name) never matches.
+- id: perun.py.mass-assignment
+  languages: [python]
+  severity: WARNING
+  message: Whole request body written to a model (mass assignment). Pick named fields or validate against a schema with fixed fields.
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either: &mass_sinks
+        - patterns:
+          - pattern: $M(**$B)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(?:.*\.)?[A-Z]\w*$
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(?!.*(?:In|Input|Schema|Payload|Request|Body|DTO|Params|Args|Form|Create|Update)$)
+        - pattern: $M.objects.create(**$B)
+        - pattern: $M.objects.update_or_create(**$B)
+        - pattern: $M.objects.get_or_create(defaults=$B, ...)
+        - pattern: $M.create(**$B)
+        - pattern: $Q.update(**$B)
+        - pattern: $Q.filter_by(...).update($B)
+        - pattern: $Q.filter(...).update($B)
+        - pattern: $O.__dict__.update($B)
+      - metavariable-regex:
+          metavariable: $B
+          regex: &mass_re '^(?:request\.(?:json|data|POST|form)|(?:await\s+)?request\.json\(\)|request\.get_json\([^()]*\)|request\.POST\.dict\(\)|request\.form\.to_dict\(\))$'
+    - patterns:
+      - pattern-either: *mass_sinks
+      - pattern-inside: |
+          $B = $SRC
+          ...
+      - metavariable-regex:
+          metavariable: $SRC
+          regex: *mass_re
+    - patterns:
+      - pattern: |
+          for $K, $V in $SRC.items():
+            ...
+            setattr($O, $K, $V)
+      - pattern-not: |
+          for $K, $V in $SRC.items():
+            ...
+            if $K in $A:
+              ...
+      - metavariable-regex:
+          metavariable: $SRC
+          regex: *mass_re
+    - patterns:
+      - pattern: fields = "__all__"
+      - pattern-inside: |
+          class $C($BASE):
+            ...
+            class Meta:
+              ...
+      - metavariable-regex:
+          metavariable: $BASE
+          regex: ^(?:.*\.)?(?:ModelSerializer|HyperlinkedModelSerializer|ModelForm)$
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+# OWASP API10:2023 unsafe consumption of APIs: a field of a requests/httpx response body (.json(), .text, .content, also from a response variable or a client/session named like *client or *session) reaches a SQL string passed to execute/executemany/executescript/raw/text/read_sql, a file path (open, Path, send_file), an outbound request URL (requests/httpx or a client verb), or a shell command (subprocess, os.system, os.popen) with no validation on the way. A same-file helper function or method that returns such a body is followed at its call sites, and a same-file wrapper whose parameter goes straight to a shell, SQL or file call is a sink at its call sites. int/float/bool, basename, secure_filename, shlex.quote, quote, UUID, hashlib, an as_/validate_/sanitize_/ensure_/assert_/coerce_/clean_/escape_ prefixed function, a lookup in an ALL_CAPS constant map, an in/not-in allowlist test, a regex match or isdigit/isalnum test, and a urlparse/urlsplit of the value (parsing is read as validating) clear the value. A request URL that starts with a literal scheme and host is skipped, a SQL string built with % from a parameter of the enclosing def is left to perun.py.sqli (no duplicate report), a subprocess list is a sink only as `sh -c <value>`. os.path.join is not a sink on its own: the open/Path call that uses its result is. A same-file def whose raising `if` tests its parameter, or a local derived from it, with commonpath, is_relative_to, fullmatch, match, isalnum, isdigit or isalpha clears its result; a type-only, startswith, status-code or unrelated guard does not. ponytail: OSS semgrep taint is single-file, so a helper defined in another file is not followed, a helper must be defined before its caller in the same block (or class), and the response must come from requests/httpx or a client/session-named object.
+- id: perun.py.unsafe-api-consumption
+  mode: taint
+  languages: [python]
+  severity: WARNING
+  message: A field of a third-party or internal API response reaches a SQL string, file path, outbound URL or shell command unvalidated. Validate the type, shape and allowed values of response data first, and bind SQL parameters. Known limit, only flows inside one file are followed, so a response read in one file and used in another is not reported.
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern: $MOD.$M(...).json()
+      - pattern: $MOD.$M(...).text
+      - pattern: $MOD.$M(...).content
+    - metavariable-regex:
+        metavariable: $MOD
+        regex: ^(?:requests|httpx)$
+  - patterns:
+    - pattern-either:
+      - pattern: $C.$M(...).json()
+      - pattern: $C.$M(...).text
+      - pattern: $C.$M(...).content
+    - metavariable-regex:
+        metavariable: $C
+        regex: ^(?:.*\.)?\w*(?i:client|session|sess|http)\w*$
+    - metavariable-regex:
+        metavariable: $M
+        regex: ^(?:get|post|put|patch|delete|head|request)$
+  - patterns:
+    - pattern-either:
+      - pattern: $R.json()
+      - pattern: $R.text
+      - pattern: $R.content
+    - pattern-inside: |
+        $R = $MOD.$M(...)
+        ...
+    - metavariable-regex:
+        metavariable: $MOD
+        regex: ^(?:requests|httpx)$
+  - patterns:
+    - pattern-either:
+      - pattern: $R.json()
+      - pattern: $R.text
+      - pattern: $R.content
+    - pattern-either:
+      - pattern-inside: |
+          $R = await $C.$M(...)
+          ...
+      - pattern-inside: |
+          $R = $C.$M(...)
+          ...
+    - metavariable-regex:
+        metavariable: $C
+        regex: ^(?:.*\.)?\w*(?i:client|session|sess|http)\w*$
+    - metavariable-regex:
+        metavariable: $M
+        regex: ^(?:get|post|put|patch|delete|head|request)$
+  - patterns:
+    - pattern: $F(...)
+    - pattern-either:
+      - pattern-inside: |
+          def $F(...):
+            <... $X.$M(...) ...>
+            ...
+            return <... $R.$P ...>
+          ...
+      - pattern-inside: |
+          def $F(...):
+            <... $X.$M(...) ...>
+            ...
+            return <... $X.$M(...).$P ...>
+          ...
+      - pattern-inside: |
+          async def $F(...):
+            <... $X.$M(...) ...>
+            ...
+            return <... $R.$P ...>
+          ...
+      - pattern-inside: |
+          async def $F(...):
+            <... $X.$M(...) ...>
+            ...
+            return <... $X.$M(...).$P ...>
+          ...
+    - metavariable-regex:
+        metavariable: $X
+        regex: '^(?:requests|httpx|(?:.*\.)?\w*(?i:client|session|sess|http)\w*)$'
+    - metavariable-regex:
+        metavariable: $P
+        regex: '^(?:json|text|content)$'
+  - patterns:
+    - pattern: $F(...)
+    - pattern-either:
+      - pattern-inside: |
+          def $F(...):
+            ...
+            with $A as $X:
+              <... $X.$M(...) ...>
+              ...
+              return <... $R.$P ...>
+          ...
+      - pattern-inside: |
+          async def $F(...):
+            ...
+            with $A as $X:
+              <... $X.$M(...) ...>
+              ...
+              return <... $R.$P ...>
+          ...
+      - pattern-inside: |
+          async def $F(...):
+            ...
+            async with $A as $X:
+              <... $X.$M(...) ...>
+              ...
+              return <... $R.$P ...>
+          ...
+    - metavariable-regex:
+        metavariable: $A
+        regex: '(?s).*(?i:client|session)'
+    - metavariable-regex:
+        metavariable: $P
+        regex: '^(?:json|text|content)$'
+  - patterns:
+    - pattern: self.$F(...)
+    - pattern-either:
+      - pattern-inside: |
+          class $C(...):
+            ...
+            def $F(...):
+              <... $X.$M(...) ...>
+              ...
+              return <... $R.$P ...>
+            ...
+      - pattern-inside: |
+          class $C(...):
+            ...
+            def $F(...):
+              <... $X.$M(...) ...>
+              ...
+              return <... $X.$M(...).$P ...>
+            ...
+      - pattern-inside: |
+          class $C(...):
+            ...
+            async def $F(...):
+              <... $X.$M(...) ...>
+              ...
+              return <... $R.$P ...>
+            ...
+      - pattern-inside: |
+          class $C(...):
+            ...
+            async def $F(...):
+              <... $X.$M(...) ...>
+              ...
+              return <... $X.$M(...).$P ...>
+            ...
+    - metavariable-regex:
+        metavariable: $X
+        regex: '^(?:requests|httpx|(?:.*\.)?\w*(?i:client|session|sess|http)\w*)$'
+    - metavariable-regex:
+        metavariable: $P
+        regex: '^(?:json|text|content)$'
+  - patterns:
+    - pattern: self.$F(...)
+    - pattern-either:
+      - pattern-inside: |
+          class $C(...):
+            ...
+            def $F(...):
+              ...
+              with $A as $X:
+                <... $X.$M(...) ...>
+                ...
+                return <... $R.$P ...>
+            ...
+      - pattern-inside: |
+          class $C(...):
+            ...
+            async def $F(...):
+              ...
+              with $A as $X:
+                <... $X.$M(...) ...>
+                ...
+                return <... $R.$P ...>
+            ...
+      - pattern-inside: |
+          class $C(...):
+            ...
+            async def $F(...):
+              ...
+              async with $A as $X:
+                <... $X.$M(...) ...>
+                ...
+                return <... $R.$P ...>
+            ...
+    - metavariable-regex:
+        metavariable: $A
+        regex: '(?s).*(?i:client|session)'
+    - metavariable-regex:
+        metavariable: $P
+        regex: '^(?:json|text|content)$'
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $C.execute($S, ...)
+      - pattern: $C.executemany($S, ...)
+      - pattern: $C.executescript($S)
+      - pattern: $C.raw($S, ...)
+      - pattern: text($S)
+      - pattern: pd.read_sql($S, ...)
+      - pattern: open($S, ...)
+      - pattern: Path($S, ...)
+      - pattern: pathlib.Path($S, ...)
+      - pattern: send_file($S, ...)
+      - pattern: os.system($S)
+      - pattern: os.popen($S, ...)
+      - pattern: subprocess.$F($S, ...)
+      - pattern: subprocess.$F([$SH, "-c", $S], ...)
+      - pattern: requests.$M($S, ...)
+      - pattern: httpx.$M($S, ...)
+      - pattern: urlopen($S, ...)
+    - pattern-not:
+        patterns:
+        - pattern-inside: |
+            def $F(..., $P, ...):
+              ...
+        - pattern-either:
+          - pattern: $C.$M($X % $P, ...)
+          - pattern: $C.$M($X % (..., $P, ...), ...)
+        - metavariable-regex:
+            metavariable: $M
+            regex: ^(?:execute|executemany|raw)$
+    - metavariable-regex:
+        metavariable: $S
+        regex: ^(?!\[|f?["']https?://[^/{"']+[/"'])
+    - focus-metavariable: $S
+  - patterns:
+    - pattern: $C.$M($S, ...)
+    - metavariable-regex:
+        metavariable: $C
+        regex: ^(?:.*\.)?\w*(?i:client|session|sess|http)\w*$
+    - metavariable-regex:
+        metavariable: $M
+        regex: ^(?:get|post|put|patch|delete|head|request)$
+    - metavariable-regex:
+        metavariable: $S
+        regex: ^(?!f?["']https?://[^/{"']+[/"'])
+    - focus-metavariable: $S
+  - patterns:
+    - pattern: $W(..., $S, ...)
+    - pattern-either:
+      - pattern-inside: |
+          def $W(..., $P, ...):
+            ...
+            $K($P, ...)
+            ...
+          ...
+      - pattern-inside: |
+          def $W(..., $P, ...):
+            ...
+            $K.$G($P, ...)
+            ...
+          ...
+    - metavariable-regex:
+        metavariable: $K
+        regex: ^(?:os\.system|os\.popen|open|subprocess|\w*cur\w*|\w*conn\w*|\w*db\w*|\w*cursor\w*)$
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern-either:
+    - pattern: int(...)
+    - pattern: float(...)
+    - pattern: bool(...)
+    - pattern: uuid.UUID(...)
+    - pattern: UUID(...)
+    - pattern: os.path.basename(...)
+    - pattern: secure_filename(...)
+    - pattern: shlex.quote(...)
+    - pattern: urllib.parse.quote(...)
+    - pattern: quote(...)
+    - pattern: quote_plus(...)
+    - pattern: hashlib.$H(...)
+    - patterns:
+      - pattern: $F(...)
+      - metavariable-regex:
+          metavariable: $F
+          regex: ^(?:as|validate|validated|sanitize|ensure|assert|coerce|clean|escape)_\w+$
+    - patterns:
+      - pattern: $F(...)
+      - pattern-either:
+        - pattern-inside: |
+            def $F($P, ...):
+              ...
+              if $COND:
+                ...
+                raise ...
+              ...
+            ...
+        - pattern-inside: |
+            def $F($P, ...):
+              ...
+              $L = <... $P ...>
+              ...
+              if $COND:
+                ...
+                raise ...
+              ...
+            ...
+      - metavariable-regex:
+          metavariable: $COND
+          regex: (?s).*(?:commonpath|is_relative_to|fullmatch|match\(|isalnum|isdigit|isalpha)
+      - metavariable-pattern:
+          metavariable: $COND
+          pattern-either:
+          - pattern: <... $P ...>
+          - pattern: <... $L ...>
+    - patterns:
+      - pattern: $D[...]
+      - metavariable-regex:
+          metavariable: $D
+          regex: ^[A-Z][A-Z0-9_]+$
+    - patterns:
+      - pattern: $D.get(...)
+      - metavariable-regex:
+          metavariable: $D
+          regex: ^[A-Z][A-Z0-9_]+$
+  - by-side-effect: true
+    patterns:
+    - pattern-either:
+      - pattern: $X in $A
+      - pattern: $X not in $A
+      - pattern: re.fullmatch($P, $X)
+      - pattern: re.match($P, $X)
+      - pattern: $X.isdigit()
+      - pattern: $X.isalnum()
+      - pattern: $X.isnumeric()
+      - pattern: urlparse($X)
+      - pattern: urlsplit($X)
+      - pattern: urllib.parse.urlparse($X)
+    - focus-metavariable: $X
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+# OWASP API10:2023 TLS verification turned off on an outbound HTTP client: verify=False on a requests/httpx call or a call on an object named like *client, *session or *pool, cert_reqs set to CERT_NONE, session.verify = False, ssl._create_unverified_context, check_hostname = False, verify_mode = ssl.CERT_NONE. A multi-line call is reported at the line of the unsafe argument. ponytail: search-mode, so a False held in a variable (verify=flag) is not matched.
+- id: perun.py.tls-verify-off
+  languages: [python]
+  severity: WARNING
+  message: TLS certificate verification is turned off, so any on-path attacker can impersonate the API. Trust a CA bundle (verify="/path/ca.pem") instead.
+  pattern-either:
+  - patterns:
+    - pattern-either:
+      - pattern: $F(..., verify=$V, ...)
+      - pattern: $F(..., cert_reqs=$V, ...)
+    - metavariable-regex:
+        metavariable: $V
+        regex: ^(?:False|["']CERT_NONE["']|ssl\.CERT_NONE)$
+    - metavariable-regex:
+        metavariable: $F
+        regex: ^(?:.*\.)?(?:requests|httpx|urllib3|\w*(?i:client|session|sess|http|pool)\w*)(?:\.\w+)?$
+    - focus-metavariable: $V
+  - pattern: requests.Session().verify = False
+  - pattern: $S.verify = False
+  - pattern: ssl._create_unverified_context(...)
+  - pattern: ssl._create_default_https_context = ssl._create_unverified_context
+  - pattern: $C.check_hostname = False
+  - pattern: $C.verify_mode = ssl.CERT_NONE
+  - patterns:
+    - pattern-either:
+      - pattern: aiohttp.TCPConnector(..., ssl=$V, ...)
+      - pattern: $S.$M(..., ssl=$V, ...)
+    - metavariable-regex:
+        metavariable: $V
+        regex: ^False$
+    - focus-metavariable: $V
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]

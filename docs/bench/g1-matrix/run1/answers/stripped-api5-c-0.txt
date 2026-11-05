@@ -1,0 +1,20 @@
+## Review of users.py
+
+**Scope:** two routes, `GET /users/me` and `POST /users/{user_id}/suspend`.
+
+**Checked and found sound:**
+- **Function-level authorization (API5):** `suspend` depends on `require_admin`, which chains onto `current_user` and returns 403 for any non-admin. The privileged route is gated, and a missing or invalid credential fails inside `current_user` before the role check.
+- **Object-level authorization (API1):** `/users/me` takes no client-supplied ID and uses the authenticated user's own record. The suspend target ID is an admin-only action, so acting on arbitrary users is intended.
+- **Property exposure (API3):** `me` returns an explicit allow-list (`id`, `email`). It does not serialize the whole user object, so `role`, `suspended` and password hashes are not leaked.
+- **Injection:** the `UPDATE` uses a parameterized query, and `user_id` is typed as `int`.
+
+**Minor, non-OWASP observations (not reported as findings):**
+- `suspend` returns 204 even if `user_id` doesn't exist, and doesn't stop an admin suspending themselves. These are robustness or operational issues, not security flaws.
+- Whether suspension actually blocks already-issued sessions or tokens depends on `current_user` in `auth.py`, which isn't in the files provided. Verify there that `current_user` rejects `suspended` users. Otherwise suspension would have no effect on existing sessions (API2).
+- No rate limiting is visible, but that is likely handled at the gateway or middleware level, and the routes are cheap and authenticated.
+
+No findings in this file.
+
+```json
+[]
+```

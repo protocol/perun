@@ -1,0 +1,40 @@
+I found four issues, one of them minor.
+
+1. **Unbounded upstream body (API10 and API4).** `directory.js` line 10 only limits size by checking the `Content-Length` header. A chunked or header-less response bypasses that check. `res.json()` on line 13 then buffers the whole body in memory, so a compromised or misbehaving directory can exhaust memory. The 4-second timeout bounds the time but not the size. I filed this under API10, since the root cause is trusting the upstream API's headers. It is also an API4 resource-consumption risk.
+
+2. **Upstream profile not bound to the requested handle (API10).** `server.js` line 13 never checks that the returned `handle` equals the requested `req.params.handle`. `sanitize.js` validates the handle's format but not its identity. `cache.put` (`cache.js` line 7) keys the entry by the upstream-supplied `profile.handle`. A request for `/members/alice` can therefore return bob's profile and cache it under `bob`. A buggy or compromised directory can poison other users' cache entries for 5 minutes. The cache entry for `alice` is also never created, so every request for `alice` goes upstream again.
+
+3. **No rate limiting and no negative caching (API4).** `server.js` lines 8-20 expose an unauthenticated endpoint. Each uncached valid handle triggers an outbound request. Failures and invalid directory responses are never cached. An attacker can cycle through handles to generate unlimited upstream traffic and to enumerate members. They can also flood the 1000-entry cache and evict legitimate entries.
+
+4. **Minor hardening gaps (API8).** The Express app on `server.js` line 6 leaves the `X-Powered-By` header enabled and sets no security headers (for example via `helmet`). Nothing in the app enforces TLS or limits request size, so those protections would have to come from elsewhere.
+
+I found no SSRF. The base URL is fixed, the handle is validated and URL-encoded, and redirects are disabled. The avatar URL is restricted to an HTTPS host allowlist.
+
+```json
+[
+  {
+    "file": "directory.js",
+    "line": 10,
+    "owasp_api_2023": "API10",
+    "why": "Response size is limited only via the Content-Length header; chunked or header-less responses bypass it and res.json() buffers an unbounded upstream body, risking memory exhaustion."
+  },
+  {
+    "file": "server.js",
+    "line": 13,
+    "owasp_api_2023": "API10",
+    "why": "The profile returned by the directory is not checked against the requested handle. Mismatched upstream data is returned for the wrong handle and cached under the upstream-supplied handle (cache.js line 7), enabling cache poisoning of other members' entries."
+  },
+  {
+    "file": "server.js",
+    "line": 8,
+    "owasp_api_2023": "API4",
+    "why": "The unauthenticated endpoint has no rate limiting and failures are not cached. Each uncached handle triggers an outbound directory request, so an attacker can drive unlimited upstream traffic, enumerate members and churn the 1000-entry cache."
+  },
+  {
+    "file": "server.js",
+    "line": 6,
+    "owasp_api_2023": "API8",
+    "why": "Express is used with defaults: X-Powered-By is enabled and no security headers (such as helmet) are set, so the app does not harden its own responses."
+  }
+]
+```

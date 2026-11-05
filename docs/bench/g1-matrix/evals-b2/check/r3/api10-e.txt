@@ -1,0 +1,15 @@
+I found four minor issues and nothing critical. There is no SSRF, because the handle is validated and URL-encoded, the base host is fixed, redirects are rejected, and the avatar host is allow-listed. The upstream response is also capped in size and time, and only whitelisted fields are returned.
+
+1. **Rate limiter reset (`server.js`, line 17, API4).** The limiter wipes all counters whenever `counts.size > 10000`. An attacker with many source addresses, such as an IPv6 range, can push the map past that size and reset their own counter, bypassing the 60 requests per minute limit.
+2. **Rate limiting keyed on `req.ip` (`server.js`, line 21, API8/API4).** `trust proxy` is not configured. Behind a reverse proxy or load balancer, every client shares the proxy's IP, so one client can trigger 429s for everyone. If `trust proxy` is later set too permissively, `X-Forwarded-For` can be spoofed to evade the limit.
+3. **Upstream fetch amplification (`server.js`, line 33, API4).** Only successful lookups are cached, so unknown or failing handles trigger an upstream request every time. There is also no global cap on concurrent upstream fetches. The `inflight` map only coalesces requests for the same handle. Rotating through many distinct handles (and IPs) can exhaust outbound capacity or the directory's quota.
+4. **Incomplete `displayName` sanitization (`sanitize.js`, line 16, API10).** The directory response is trusted too much. Only ASCII control characters and `<>` are stripped. Unicode bidi overrides, zero-width characters, and other format characters pass through, which allows spoofed or confusing names. Quotes and `&` also pass through, which matters if a consumer renders the value into HTML attributes or other contexts.
+
+```json
+[
+  {"file": "server.js", "line": 17, "owasp_api_2023": "API4", "why": "Rate-limit state is cleared whenever the counts map exceeds 10000 keys, so an attacker using many source IPs can force a global reset and bypass the per-IP limit."},
+  {"file": "server.js", "line": 21, "owasp_api_2023": "API8", "why": "Rate limiting keys on req.ip with no trust proxy configuration; behind a proxy all clients share one bucket (self-DoS), and a later permissive trust setting would allow X-Forwarded-For spoofing to evade limits."},
+  {"file": "server.js", "line": 33, "owasp_api_2023": "API4", "why": "Failed or unknown handles are never cached and there is no global limit on concurrent upstream fetches; requests for many distinct handles each trigger an outbound directory call, enabling resource and quota exhaustion."},
+  {"file": "sanitize.js", "line": 16, "owasp_api_2023": "API10", "why": "displayName from the third-party directory is only stripped of ASCII control characters and angle brackets; Unicode bidi/format characters and quotes/ampersands pass through, allowing spoofed names or injection in downstream rendering contexts."}
+]
+```

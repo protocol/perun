@@ -1,0 +1,13 @@
+**Review of views.py**
+
+I found no OWASP API Security Top 10 issues in this file.
+
+- **`ticket_detail` (API1):** The lookup uses `Ticket.objects.get(pk=ticket_id, owner=request.user)`, so the ownership check is part of the query. Passing another user's ticket ID raises `DoesNotExist` and returns 404, so there is no object-level authorization bypass. Returning 404 rather than 403 also avoids revealing whether the ticket exists.
+- **API2 and API5:** Both views are behind `@login_required`, so there is no unauthenticated access. Neither view modifies data, so there is no function-level privilege issue.
+- **API3:** The responses are built from explicit field allowlists (`id`, `subject`, `status` for detail; `id`, `subject` for the list), not a whole-model serialization. Internal fields can't leak by accident.
+- **API4 (not reported):** `ticket_list` has no pagination and returns every ticket the caller owns. The caller can't set the size through a parameter, and the data is their own, so the only impact is on themselves. Adding a server-side page cap would still be good hygiene if users can accumulate many tickets.
+- **Outbound calls and secrets:** There are no outbound requests, so no API7 or API10 concerns. Nothing here is a misconfiguration (API8) or an inventory problem (API9).
+
+```json
+[]
+```

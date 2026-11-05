@@ -1,0 +1,24 @@
+I found one minor issue, in the rate limiter in `app.py`. I found nothing else that falls under the listed classes.
+
+**Rate limiter reset (API4, minor).** The `limit()` hook clears the whole `hits` table whenever it holds more than 10,000 distinct addresses. An attacker who can send requests from many source addresses, such as a large IPv6 range or spoofed or rotating proxies, can fill the table and wipe every client's counter, including their own. This lets them keep sending requests above the 60-per-minute limit. The counter updates also aren't thread-safe, so concurrent requests can undercount. The effect is limited because `/sync` needs the admin key and `/price` is a cheap query.
+
+**Checked and found fine:**
+- **Admin key check:** `/sync` compares the key with `hmac.compare_digest` and fails closed when `ADMIN_KEY` is unset.
+- **Sync concurrency:** a non-blocking lock caps concurrent syncs.
+- **Category input:** the category is validated and URL-encoded as a query parameter.
+- **SQL:** all queries are parameterized.
+- **Vendor URL and redirects:** the vendor URL is fixed and redirects are disabled, so there is no SSRF.
+- **Vendor response limits:** the response has size, time and item-count caps.
+- **Vendor data validation:** vendor data is validated by type, SKU pattern and price range, and NaN and inf prices are rejected.
+- **`/price` access:** `/price/<sku>` is public and returns only price data, so there is no object-level or property-level exposure.
+
+```json
+[
+  {
+    "file": "app.py",
+    "line": 17,
+    "owasp_api_2023": "API4",
+    "why": "The in-memory rate limiter wipes all counters when more than 10,000 distinct addresses are tracked. An attacker using many source addresses can reset it and exceed the 60/min limit. The counter updates are also not thread-safe."
+  }
+]
+```

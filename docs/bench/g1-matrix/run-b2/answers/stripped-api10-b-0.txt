@@ -1,0 +1,17 @@
+**Review summary**
+
+- **Path traversal on write (labels.js:10).** `shipment.labelName` comes straight from the carrier's JSON response and is joined onto `LABEL_DIR` with no sanitization. A value like `../../app/server.js` or an absolute-looking path escapes the labels directory, so the service writes attacker-influenced bytes to an arbitrary file. The carrier response is trusted blindly, which makes this unsafe consumption of a third-party API (API10). `readLabel` applies `path.basename`, but `saveLabel` does not.
+- **Bypassable response size cap (carrier.js:11-12).** The 64 KB limit relies on the `Content-Length` header. A missing header (chunked encoding) becomes 0 and passes the check. `res.json()` then buffers the entire body with no ceiling, and the 512 KB label cap runs only after the base64 string is already in memory. A hostile or compromised upstream can exhaust memory (API4).
+- **No authentication or object-level authorization (routes.js:20).** `GET /labels/:name` has no auth and no ownership check. Anyone who can guess or enumerate a label filename can download any customer's shipping label (API1).
+- **Unauthenticated sync endpoint (routes.js:7).** `POST /shipments/:ref/sync` has no authentication and no rate limit. Any caller can trigger outbound carrier calls and disk writes for any ref (API2). The `ref` regex only limits format.
+
+The `redirect: 'error'` setting and the timeout on the carrier fetch are good. The base URL is fixed and `ref` is URL-encoded, so there is no SSRF.
+
+```json
+[
+  {"file": "labels.js", "line": 10, "owasp_api_2023": "API10"},
+  {"file": "carrier.js", "line": 11, "owasp_api_2023": "API4"},
+  {"file": "routes.js", "line": 20, "owasp_api_2023": "API1"},
+  {"file": "routes.js", "line": 7, "owasp_api_2023": "API2"}
+]
+```

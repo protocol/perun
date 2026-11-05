@@ -1,0 +1,15 @@
+**Review of users.js**
+
+**`POST /users/:id/suspend` (line 11):** The route only uses `requireLogin`. Any authenticated user can suspend any other account, or their own, by supplying an arbitrary `:id`. Suspending a user is an administrative action, so the handler needs a role or permission check (admin only) before it runs. This is a function-level authorization failure (API5). There is also an object-level angle, because the target ID is taken from the URL without checking the caller's rights over that object, but the main root cause is the missing privilege check on an admin function, so I classify it as API5.
+
+Secondary observations, not separate findings:
+- `req.params.id` is passed straight into the query. If the ID is an object or malformed value, Mongoose may throw a cast error. The handler is async with no error handling, so in Express 4 a rejected promise becomes an unhandled rejection and the request can hang.
+- The handler does not check whether the user exists and returns 204 either way.
+
+**`GET /users/me` (line 7):** Returns only `id` and `email` of the authenticated user, with an explicit allowlist of fields. No issue.
+
+```json
+[
+  {"file": "users.js", "line": 11, "owasp_api_2023": "API5"}
+]
+```
