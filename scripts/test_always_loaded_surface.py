@@ -69,11 +69,11 @@ def read_script(name):
 
 
 class AlwaysLoadedSurface(unittest.TestCase):
-    def test_plugin_install_adds_only_skills_and_commands(self):
+    def test_plugin_install_adds_only_skills_commands_and_audit_gate(self):
         with open(os.path.join(ROOT, ".claude-plugin/plugin.json"), encoding="utf-8") as f:
             manifest = json.load(f)
         self.assertEqual({"agents", "hooks", "commands", "mcpServers"} & set(manifest), set())
-        self.assertEqual(default_path_sources(ROOT), [])
+        self.assertEqual(default_path_sources(ROOT), ["hooks/hooks.json"])  # only the audit report Stop gate; its script prints only on a violation
 
     def test_default_path_sources_detects_auto_loaded_files(self):
         with tempfile.TemporaryDirectory(prefix="always-loaded-root-") as tmp:
