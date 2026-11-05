@@ -6,6 +6,8 @@ BLUF: API3's detector passes the precision bar narrowly: precision 0.727 (8 of 1
 
 Run 2: API1's detector passes with precision 1.0 (7 of 7 reports) and recall 0.467 (7 of 15). It keeps (a), pending the audit. API10's first detector fails, with precision 0.667 (2 of 3 reports) and recall 0.133, so it is dropped.
 
+Run 3: API5's second detector passes on a fresh set, `h5b`, with precision 0.857 (12 of 14 reports) and recall 0.8 (12 of 15). It keeps (a), pending the audit.
+
 ## Run
 - The scorer is `score.py`, sha256 `1224864eaf779a677e267a2ab107f27cad3302cf31471fee15f2604dd6e64d42`. It was written after both sets existed, but before the coordinator read any case and before the first run, and it was not changed after scoring. It takes the detector from git at the frozen commit with `git archive` and scans each case directory once. It makes no model calls.
 - API3: semgrep 1.183.0, rules `perun.js.mass-assignment` and `perun.py.mass-assignment` at `02f5d8406`. API5: `route_auth_map.py --privileged` at `00550ed93`.
@@ -59,6 +61,22 @@ Precision 0.667 (2 of 3 reports), recall 0.133 (2 of 15).
 | False positives | 1 | n05 (`fetch_assets.py` line 20) |
 
 Nine of the 13 misses are single-file cases, so the cross-file limit explains only 4 of them. A second API10 detector needs the same amendment route as API5, committed before a new set is written. `h10` would become its development set.
+
+## Run 3 (API5 second detector)
+- This run follows `RULES-amend1.md`. The detector is `route_auth_map.py --privileged` at `2895635f9`. It was frozen and pushed before `h5b` was first read, and `h5` was its development set.
+- `h5b` was written by a fresh agent from `RULES.md`, `RULES-amend1.md`, the OWASP API5 page and the API5 scope line. It never saw `h5`, the results or any detector.
+- The scorer is unchanged (`score.py`, sha256 `bb55c8d1…`). The set ran once, and no case was re-labelled after scoring.
+
+## API5b (second detector kept, pending audit)
+Precision 0.857 (12 of 14 reports), recall 0.8 (12 of 15).
+
+| | Count | Cases |
+|---|---|---|
+| True positives | 12 | h5b-05, h5b-06, h5b-11, h5b-13, h5b-15, h5b-17, h5b-18, h5b-20, h5b-21, h5b-22, h5b-26, h5b-29 |
+| Missed positives | 3 | h5b-03 (an invite created with a role taken from the request body, on a path with no admin word), h5b-23 (a FastAPI `APIRouter(prefix="/admin")` whose only router dependency is authentication), h5b-27 (an Express `router.route(...).put(...)` chain) |
+| False positives | 2 | h5b-10 (an inline `me.role not in MODERATORS` check), h5b-25 (a Flask `@roles_required("admin", "ops")` under `@token_required`) |
+
+Uncovered shapes stated beside the label: role assignment through a create on a path with no admin word, an admin prefix set on a router object, and chained `route(...).put(...)` handlers. These are in addition to the limits stated when the detector was frozen: guards mounted or defined in another file, imported router prefixes, read-only admin GETs, a fixed list of state-changing verbs, and custom guards without an admin, role, permission or staff-style name.
 
 ## Audit plan (declared before the first audit call)
 - Runner: `audit.py`, committed with this section. It builds the prompt only from committed files and records the prompt's sha256.
