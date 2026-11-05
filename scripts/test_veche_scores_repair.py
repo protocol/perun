@@ -37,12 +37,16 @@ class T(unittest.TestCase):
         log = (d / "log").read_text().split() if (d / "log").exists() else []
         return r, log
 
+    def kept(self, r):
+        return sum(json.loads(r.stdout)["tally"].values())
+
     def dropped(self, r):
         return [x for x in json.loads(r.stdout).get("dropped", []) if "scores" in x[1]]
 
     def assert_normalized(self, scores):
         r, log = self.run_veche(ans(scores))
         self.assertEqual(self.dropped(r), [], r.stdout + r.stderr)
+        self.assertEqual(self.kept(r), 3, r.stdout)  # the seat was kept, not dropped for another reason
         self.assertNotIn('"REPAIR"', log)
 
     def test_case_and_punctuation_keys(self):
@@ -62,10 +66,33 @@ class T(unittest.TestCase):
         r, _ = self.run_veche(ans({o: {"impact": 3} for o in GOOD}))
         self.assertEqual(len(self.dropped(r)), 1)
 
+    def test_duplicate_normalized_keys_not_guessed(self):
+        sc = dict(GOOD, SHIP={"impact": 0, "cost": 0})  # "ship" and "SHIP": which one is meant is unknown
+        r, log = self.run_veche(ans(sc))
+        self.assertEqual(len(self.dropped(r)), 1)
+        self.assertEqual(log.count('"REPAIR"'), 1)
+
+    def test_colliding_declared_names_exact_only(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("veche", VECHE)
+        v = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(v)
+        opts, crit = ["do-nothing", "a b", "ab"], {"x": 1}
+        exact = {o: {"x": 1} for o in opts}
+        self.assertEqual(v.norm_scores(exact, opts, crit), exact)
+        self.assertIsNone(v.norm_scores({"DO-NOTHING": {"x": 1}, "a b": {"x": 1}, "ab": {"x": 1}}, opts, crit))
+
+    def test_valid_second_object_used_before_repair(self):
+        raw = ans({"ship": "bad"}) + "\n" + json.dumps({"scores": GOOD})
+        r, log = self.run_veche(raw)
+        self.assertEqual(self.dropped(r), [], r.stdout + r.stderr)
+        self.assertNotIn('"REPAIR"', log)
+
     def test_repair_success(self):
         r, log = self.run_veche(ans("garbage"), repair=json.dumps({"scores": GOOD}))
         self.assertEqual(self.dropped(r), [], r.stdout + r.stderr)
         self.assertEqual(log.count('"REPAIR"'), 1)
+        self.assertEqual(self.kept(r), 3, r.stdout)
         self.assertIn('"CTX"', log)  # the repair call sees the question and its own earlier answer
 
     def test_repair_failure_keeps_excerpt(self):

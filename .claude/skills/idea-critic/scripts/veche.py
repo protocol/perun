@@ -172,6 +172,8 @@ def norm_scores(sc, options, crit):
     """Canonical {option: {criterion: number}} from a seat's scores, or None. Names match case- and punctuation-insensitively,
     numeric strings count, a transposed {criterion: {option: n}} matrix is accepted. Missing or out-of-range cells -> None."""
     key = lambda s: re.sub(r"[^a-z0-9]", "", str(s).lower())
+    if any(len({key(x) for x in names} - {""}) < len(names) for names in (options, list(crit))):
+        return sc if scores_ok(sc, options, crit) else None  # names that collide or vanish once normalized: exact match only
 
     def num(v):
         try:
@@ -183,12 +185,16 @@ def norm_scores(sc, options, crit):
         if not isinstance(rows, dict):
             return None
         rk = {key(k): v for k, v in rows.items()}
+        if len(rk) < len(rows):  # two keys of the seat normalize alike ("ship" and "Ship"): ambiguous
+            return None
         out = {}
         for r in rn:
             cells = rk.get(key(r))
             if not isinstance(cells, dict):
                 return None
             ck = {key(k): v for k, v in cells.items()}
+            if len(ck) < len(cells):
+                return None
             out[r] = {c: num(ck.get(key(c))) for c in cn}
         return out
 
@@ -326,10 +332,9 @@ def run(a, st=None) -> dict:
             continue
         try:
             d = parse(raw, "claims")
-            if crit and d.get("scores") is None:  # scores may arrive as a second JSON object, under "scores" or bare
-                d["scores"] = next((n for o in objs(raw) for c in (o.get("scores"), o) if (n := norm_scores(c, options, crit))), None)
-            elif crit:
-                d["scores"] = norm_scores(d["scores"], options, crit)
+            if crit:  # scores may also arrive as a second JSON object, under "scores" or bare
+                d["scores"] = (d.get("scores") is not None and norm_scores(d["scores"], options, crit)) or next(
+                    (n for o in objs(raw) for c in (o.get("scores"), o) if (n := norm_scores(c, options, crit))), None)
             if crit and d.get("scores") is None:  # one repair re-ask of this seat, through call() so caps apply
                 fix = (f"{lenses[k]}\n\n{body}{fence('SELF', raw, secrets.token_hex(8))}\n\n"  # a fresh call has no memory: give it the question and its own answer
                        f"STAGE: SCORES REPAIR\nThe scores in your answer above were unusable. Reply with ONLY one JSON object "
