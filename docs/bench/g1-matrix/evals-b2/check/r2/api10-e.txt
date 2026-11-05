@@ -1,0 +1,21 @@
+I found five minor issues, mostly resource consumption and hardening gaps. There are no high-severity problems. The SSRF surface is well controlled: the handle is validated and URL-encoded, the base host is fixed, redirects are blocked, and avatar URLs are limited to an allowlist.
+
+1. **Upstream calls on every cache miss (API4, `server.js` line 27).** Each miss triggers an outbound directory request. Failed lookups and 502s are never cached, and concurrent requests for the same handle are not coalesced. A client can cycle through many valid handles, or spread requests across many IPs, to push load onto the directory and tie up sockets for up to 4 seconds each. The 1000-entry cache and 5-minute TTL only help for repeat handles.
+2. **Weak rate limiter (API4, `server.js` lines 9-18).**
+   - The counters live in process memory and are keyed by `req.ip`.
+   - The `counts` map can grow large within a window, for example with IPv6 address rotation.
+   - Without `trust proxy`, every client behind a reverse proxy shares one IP, so one abuser can lock out everyone, or the limit stops being per-client.
+   - The limiter is not shared across instances.
+3. **Missing hardening (API8, `server.js` lines 7 and 36).** The app sets no security headers such as `X-Content-Type-Options` or a `Cache-Control` policy, and has no `trust proxy` setting. It also has no explicit TLS or deployment configuration, and nothing limits concurrent connections.
+4. **Unfiltered upstream `displayName` (API10, `sanitize.js` line 19).** Only the length is truncated. HTML, markup and control characters from the directory pass through and are cached and served. A compromised or malicious directory could inject content that causes XSS in any client that renders the field unsafely.
+5. **No response validation on the directory call (API10, `directory.js` line 17).** The code does not check `Content-Type` before parsing. A `JSON.parse` failure just becomes a generic 502, which is safe but unvalidated. The profile shape is checked only by the sanitizer.
+
+```json
+[
+  {"file": "server.js", "line": 27, "owasp_api_2023": "API4", "why": "Each cache miss triggers an outbound directory fetch. Failures are not cached and concurrent requests are not coalesced, so cycling through handles or using many IPs amplifies load on the upstream directory and ties up server sockets."},
+  {"file": "server.js", "line": 11, "owasp_api_2023": "API4", "why": "The in-memory per-IP rate limiter is keyed on req.ip with no trust proxy handling. Behind a proxy all clients share one counter, or the limit is bypassable. The counts map can grow with many source IPs, such as IPv6 rotation, and the limiter is not shared across instances."},
+  {"file": "server.js", "line": 7, "owasp_api_2023": "API8", "why": "Only x-powered-by is disabled. There are no security headers, no trust proxy configuration and no explicit TLS or connection limits."},
+  {"file": "sanitize.js", "line": 19, "owasp_api_2023": "API10", "why": "The upstream displayName is only length-truncated. HTML or control characters from the directory are cached and served unchanged, which could lead to XSS in clients that render it unsafely."},
+  {"file": "directory.js", "line": 17, "owasp_api_2023": "API10", "why": "The upstream response is parsed as JSON without checking Content-Type, and its structure is validated only later by the sanitizer."}
+]
+```

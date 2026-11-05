@@ -1,0 +1,30 @@
+## Findings
+
+1. **Path traversal and arbitrary file write from the carrier's response (labels.js:10, API10).** `shipment.labelName` comes straight from the carrier's JSON and is passed to `path.join(LABEL_DIR, ...)` with no sanitisation. A filename like `../../app/server.js` or an absolute-style segment escapes `LABEL_DIR`, and `writeFile` then writes attacker-chosen bytes there. The carrier, or anyone who can tamper with or spoof its responses, gets arbitrary file overwrite. `readLabel` uses `path.basename`, but `saveLabel` does not. Because only the carrier's filename is used, two shipments with the same name also silently overwrite each other's labels.
+
+2. **Carrier response fields are trusted without validation (carrier.js:14-17, API10).** The returned `ref` is never checked against the requested ref. `labelName` and `labelBase64` are not checked for type, format or character set, and the label is not verified as a PDF. Third-party data is consumed as if it were trusted.
+
+3. **Response size limit is bypassable (carrier.js:10-12, API4/API10).** The 64 KB cap relies only on the `Content-Length` header. A chunked or missing header gives `len = 0`, and `res.json()` then buffers an unbounded body into memory. The 5 s timeout only partly limits this.
+
+4. **No rate limiting or storage quota on sync and file writes (routes.js:7, labels.js:12, API4).** Each unauthenticated POST triggers an outbound request and can write up to 512 KB to disk. Repeated calls with different refs or filenames can exhaust disk and carrier quota. The size check on line 9 happens only after the whole base64 string is decoded into memory.
+
+5. **No authentication on any endpoint (routes.js:7 and 20, API2).** Both the sync trigger and label download are open to any caller.
+
+6. **Labels readable without an ownership check (routes.js:22, API1).** Any caller can fetch any label by filename. Labels contain shipping and personal data, and carrier-supplied names may be guessable. There is no tie between the requester and the shipment.
+
+7. **Unvalidated bytes served as `application/pdf` without hardening headers (routes.js:22, API8, minor).** Stored content is never verified to be a PDF, and no `X-Content-Type-Options: nosniff`, `Content-Disposition` or similar headers are set. Combined with finding 2, attacker-supplied content such as HTML could be sniffed and rendered by a browser. There is also no general security middleware such as helmet (server.js:5-7).
+
+SSRF is not an issue here. The base URL is fixed, `ref` is validated by regex and URL-encoded, and redirects are disabled.
+
+```json
+[
+  {"file": "labels.js", "line": 10, "owasp_api_2023": "API10", "why": "Carrier-supplied labelName is joined to LABEL_DIR without sanitisation, allowing path traversal and arbitrary file overwrite (and filename collisions overwriting other labels)."},
+  {"file": "carrier.js", "line": 14, "owasp_api_2023": "API10", "why": "Carrier response fields (ref, label filename, label data) are used without validation; returned ref is not checked against the requested ref and label type/format is not verified."},
+  {"file": "carrier.js", "line": 12, "owasp_api_2023": "API4", "why": "Size limit relies only on the Content-Length header; chunked or header-less responses let res.json() buffer an unbounded body."},
+  {"file": "labels.js", "line": 12, "owasp_api_2023": "API4", "why": "No rate limiting, quota or cleanup on label writes; repeated sync calls can fill disk, and the base64 string is fully decoded before the size check."},
+  {"file": "routes.js", "line": 7, "owasp_api_2023": "API2", "why": "The sync endpoint, which triggers outbound requests and disk writes, has no authentication."},
+  {"file": "routes.js", "line": 20, "owasp_api_2023": "API2", "why": "The label download endpoint has no authentication."},
+  {"file": "routes.js", "line": 22, "owasp_api_2023": "API1", "why": "Labels are returned by name with no ownership or authorization check, exposing any shipment label to any caller."},
+  {"file": "routes.js", "line": 22, "owasp_api_2023": "API8", "why": "Stored, unvalidated bytes are served as application/pdf without nosniff or Content-Disposition headers; no hardening middleware is configured."}
+]
+```

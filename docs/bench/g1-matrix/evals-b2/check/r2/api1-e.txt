@@ -1,0 +1,14 @@
+I found no issues in these files that fall under the OWASP API Security Top 10:2023.
+
+- **Authentication (API2):** `authenticate` is mounted on the whole `/projects` router and looks up `x-key` in a `Map` built from the environment. A missing or unknown key gets a 401, and there are no prototype-lookup or default-credential problems.
+- **Object-level authorization (API1):** Every `/:id` route runs `loadProject`. It validates the id format and checks team membership, and it returns the same 404 whether the project is missing or forbidden, so it doesn't reveal which projects exist. The list endpoint filters with `forUser`.
+- **Property-level authorization (API3):** `PATCH` copies only a string `name`, truncated to 80 characters, so there is no mass assignment. The budget is shown only to team members, and the code doesn't suggest otherwise.
+- **Function-level authorization (API5):** There are no roles or admin endpoints, and all routes sit behind the same authentication and team check.
+- **Resource consumption (API4):** There is a global rate limit, the JSON body is capped at 2 KB, the list is capped at 50 items, and ids are limited to a short pattern.
+- **Other classes (API6–API10):** There are no outbound requests, no third-party API consumption, and no stray or versioned endpoints. `x-powered-by` is disabled.
+
+Two things I considered and left out. The `memberships[user]` lookup in `repo.js` could misbehave for special names like `constructor`, but those names come from the `API_KEYS` environment variable, not from a request. Rate limiting without `trust proxy` could misattribute client IPs behind a reverse proxy, but that depends on a deployment I can't see here.
+
+```json
+[]
+```

@@ -1,0 +1,26 @@
+I found six issues in total.
+
+**API10, Unsafe Consumption of APIs**
+- **parse.go:17:** `io.ReadAll(body)` reads the upstream feed with no size cap. The 6s client timeout is the only limit, and a compromised or misbehaving provider can still send a very large body within that window and exhaust memory. Wrapping the body in `io.LimitReader` or `http.MaxBytesReader` fixes this.
+- **parse.go:25:** The validation checks ranges and that `Station` is non-empty. It never checks that `r.Station` equals the requested `id`. The server therefore relays whatever the third party returns, including data for another station or an arbitrary string, to its own clients.
+- **client.go:25:** Only the status code is checked. The `Content-Type` is not checked, and the response is trusted structurally, with no strict decoding such as `DisallowUnknownFields`. This is minor.
+
+**API4, Unrestricted Resource Consumption**
+- **main.go:32:** The endpoint has no rate limiting, caching, or concurrency limit. Every request makes an outbound call to the provider, and there are only 26⁴×100 valid IDs. A client can amplify load onto the upstream, exhaust the provider's quota, and tie up goroutines and connections for up to 6s each.
+
+**API8, Security Misconfiguration**
+- **main.go:33:** `http.ListenAndServe` uses a default `http.Server` with no `ReadHeaderTimeout`, `ReadTimeout`, `WriteTimeout`, `IdleTimeout`, or `MaxHeaderBytes`, so it is open to slowloris-style attacks. It serves plain HTTP with no TLS, and the returned error is ignored.
+- **main.go:27:** The handler never sets `Content-Type: application/json` or `X-Content-Type-Options: nosniff`. Go sniffs the type, so the response is served as `text/plain`, and the `json.Encoder` error is ignored. This is minor, but the response carries a feed-controlled `station` string.
+
+I did not flag SSRF. The station ID is restricted by the regex `^[A-Z]{4}[0-9]{2}$`, then passed through `url.PathEscape` and appended to a fixed HTTPS base. Redirects are disabled. I also did not flag the lack of authentication, because the endpoint serves public weather readings and may be intentionally open.
+
+```json
+[
+  {"file": "parse.go", "line": 17, "owasp_api_2023": "API10", "why": "io.ReadAll on the third-party feed body has no size limit, so an oversized upstream response can exhaust memory within the 6s timeout."},
+  {"file": "parse.go", "line": 25, "owasp_api_2023": "API10", "why": "The upstream Station value is only checked for non-empty and never compared with the requested ID, so mismatched or arbitrary upstream data is passed on to clients."},
+  {"file": "client.go", "line": 25, "owasp_api_2023": "API10", "why": "Only the status code of the third-party response is checked. Content-Type and strict schema are not validated, so the response is trusted too much (minor)."},
+  {"file": "main.go", "line": 32, "owasp_api_2023": "API4", "why": "There is no rate limiting, caching, or concurrency limit, so each client request triggers an outbound provider call and can be used to amplify load and exhaust upstream quota or server resources."},
+  {"file": "main.go", "line": 33, "owasp_api_2023": "API8", "why": "The default http.Server has no read, write, idle, or header timeouts and no TLS, so it is exposed to slowloris-style attacks and cleartext transport. The returned error is ignored."},
+  {"file": "main.go", "line": 27, "owasp_api_2023": "API8", "why": "No Content-Type or nosniff header is set on the JSON response, so the type is sniffed as text/plain, and the encode error is ignored (minor)."}
+]
+```

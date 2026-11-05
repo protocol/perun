@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for docs/bench/g1-matrix/ablate.py: stripped text, scorer, run order/stop rule/confirmation (fake `claude` on PATH), fail-closed cap and quota."""
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -178,6 +179,34 @@ class SetAndFreeze(unittest.TestCase):
         self.assertNotIn("old", out)
         out = self.freeze("# T\n\n## Result\nr\n", "evals-b2")
         self.assertTrue(out.startswith("# T\n\n## Result\nr\n\n## Frozen inputs (b2)\n| Input"))
+
+
+class FrozenB2(unittest.TestCase):
+    """The committed evals-b2 set matches the hashes frozen in ABLATION.md and is shaped 3 pos + 2 neg per item."""
+
+    B2 = ROOT / "docs/bench/g1-matrix/evals-b2"
+
+    def test_frozen_hashes_match_disk(self):
+        doc = (ROOT / "docs/bench/g1-matrix/ABLATION.md").read_text()
+        sec = doc.split("## Frozen inputs (b2)\n", 1)[1].split("\n## ", 1)[0]
+        want = dict(re.findall(r"^\| (?:fixture )?`([^`]+)` sha256 \| ([0-9a-f]{64}) \|$", sec, re.M))
+        want.pop("ablate.py")  # the harness itself, not a b2 input
+        got = {"evals.json": hashlib.sha256((self.B2 / "evals.json").read_bytes()).hexdigest()}
+        for f in (self.B2 / "fixtures").rglob("*"):
+            if f.is_file():
+                got[f.relative_to(self.B2).as_posix()] = hashlib.sha256(f.read_bytes()).hexdigest()
+        self.assertEqual(want, got)
+
+    def test_three_pos_two_neg_per_item_and_truth_exists(self):
+        kinds = {}
+        for e in json.loads((self.B2 / "evals.json").read_text()):
+            kinds.setdefault(e["item"], []).append(e["kind"])
+            for t in e.get("truth", []):
+                lines = (self.B2 / e["dir"] / t["file"]).read_text().splitlines()
+                self.assertTrue(1 <= t["line"] <= len(lines), (e["id"], t))
+        self.assertTrue(kinds)
+        for item, ks in kinds.items():
+            self.assertEqual((ks.count("pos"), ks.count("neg")), (3, 2), item)
 
 
 if __name__ == "__main__":
