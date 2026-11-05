@@ -1631,18 +1631,20 @@ rules:
   - pattern-not: Object.assign([], ...)
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
-# OWASP API10:2023 unsafe consumption of APIs: a field of a fetch or axios response body (await res.json()/.text(), axios .data, a then-callback parameter, a destructured { data }, also from an instance named like *client, *session, *api or *instance) reaches a SQL string passed to query/execute/raw, a file path (fs read/write calls), an outbound fetch/axios/got URL, or a child_process command with no validation on the way. A same-file helper (function, async arrow or class method, called plain or through this) that returns such a body is followed at its call sites, and a same-file wrapper whose first parameter goes straight to exec, a query or an fs call is a sink at its call sites. parseInt/parseFloat/Number, path.basename, encodeURIComponent, crypto.createHash(...).update, an as/validate/sanitize/ensure/assert/coerce/clean/escape prefixed function, a lookup in an ALL_CAPS constant map, Number.isInteger, an allowlist .has/.includes guard, a regex .test guard and new URL(value) clear the value. A URL that starts with a literal scheme and host is skipped. path.join is not a sink on its own: the fs call that uses its result is. ponytail: OSS semgrep taint is single-file, so a helper defined in another file is not followed, a helper must be defined before its caller, spawn/execFile argument lists are not sinks, and an instance named like http is not a source (the node http module shares the name).
+# OWASP API10:2023 unsafe consumption of APIs: a field of a fetch or axios response body (await res.json()/.text(), axios .data, a then-callback parameter, a destructured { data }, also from an instance named like *client, *session, *api or *instance) reaches a SQL string passed to query/execute/raw, a file path (fs read/write calls), an outbound fetch/axios/got URL, or a child_process command with no validation on the way. A same-file helper (function, async arrow or class method, called plain or through this) that returns such a body is followed at its call sites, and a same-file wrapper whose first parameter goes straight to exec, a query or an fs call is a sink at its call sites, and so is a function made by promisify(exec) or util.promisify(exec). A destructured { data } source covers the binding, not the request URL inside the call. parseInt/parseFloat/Number, path.basename, encodeURIComponent, crypto.createHash(...).update, an as/validate/sanitize/ensure/assert/coerce/clean/escape prefixed function, a lookup in an ALL_CAPS constant map, Number.isInteger, an allowlist .has/.includes guard, a regex .test guard and new URL(value) clear the value. A URL that starts with a literal scheme and host is skipped. path.join is not a sink on its own: the fs call that uses its result is. ponytail: OSS semgrep taint is single-file, so a helper defined in another file is not followed, a helper must be defined before its caller, spawn/execFile argument lists are not sinks, and an instance named like http is not a source (the node http module shares the name).
 - id: perun.js.unsafe-api-consumption
   mode: taint
   languages: [javascript, typescript]
   severity: WARNING
-  message: A field of a third-party or internal API response reaches a SQL string, file path, outbound URL or shell command unvalidated. Validate the type, shape and allowed values of response data first, and bind SQL parameters.
+  message: A field of a third-party or internal API response reaches a SQL string, file path, outbound URL or shell command unvalidated. Validate the type, shape and allowed values of response data first, and bind SQL parameters. Known limit, only flows inside one file are followed, so a response read in one file and used in another is not reported.
   pattern-sources:
   - pattern-either:
     - pattern: (await fetch(...)).json()
     - pattern: (await fetch(...)).text()
     - pattern: (await axios(...)).data
-    - pattern: '{ ..., data: $D, ... } = await axios(...)'
+    - patterns:
+      - pattern: '{ ..., data: $D, ... } = await axios(...)'
+      - focus-metavariable: $D
     - patterns:
       - pattern-either:
         - pattern: $R.json()
@@ -1668,6 +1670,7 @@ rules:
     - metavariable-regex:
         metavariable: $C
         regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+    - focus-metavariable: $D
   - patterns:
     - pattern: $R.data
     - pattern-inside: |
@@ -2037,6 +2040,19 @@ rules:
     - metavariable-regex:
         metavariable: $F
         regex: ^(?:readFile|readFileSync|writeFile|writeFileSync|appendFile|appendFileSync|createReadStream|createWriteStream|unlink|unlinkSync|rm|rmSync|rename|renameSync|readdir|readdirSync|open|openSync|copyFile|copyFileSync|mkdir|mkdirSync)$
+    - focus-metavariable: $S
+  - patterns:
+    - pattern: $W($S, ...)
+    - pattern-either:
+      - pattern-inside: |
+          const $W = promisify($K);
+          ...
+      - pattern-inside: |
+          const $W = util.promisify($K);
+          ...
+    - metavariable-regex:
+        metavariable: $K
+        regex: ^(?:exec|(?:child_process|cp)\.exec)$
     - focus-metavariable: $S
   - patterns:
     - pattern: $W($S, ...)
