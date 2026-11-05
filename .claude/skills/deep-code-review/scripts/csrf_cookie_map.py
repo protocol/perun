@@ -156,7 +156,7 @@ def analyze(root):
     for dp, dn, fn in os.walk(root):
         dn[:] = [d for d in dn if d not in PRUNE]
         for f in fn:
-            if f.endswith((".py", ".js", ".ts", ".mjs", ".java", ".kt", ".go", ".xml", ".gradle", ".kts", ".json", ".cfg", ".toml", ".txt")):
+            if f.endswith((".py", ".js", ".ts", ".mjs", ".java", ".kt", ".go", ".php", ".xml", ".gradle", ".kts", ".json", ".cfg", ".toml", ".txt")):
                 p = os.path.join(dp, f)
                 if os.path.getsize(p) <= 1 << 20 and "node_modules" not in p:
                     raw = read(root, os.path.relpath(p, root).replace(os.sep, "/")) or ""

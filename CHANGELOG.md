@@ -3,6 +3,30 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.649.0] — 2026-11-05
+
+### Fixed
+- Currency detector, three set-8 misses: Heroku `runtime.txt` (`python-3.10.12`) is a Python runtime pin; a Gradle Kotlin plugin pin (`kotlin("jvm") version "1.9.22"`, `id("org.jetbrains.kotlin.jvm") version "..."`, Groovy `id '...' version '...'`) is a `kotlin` runtime row checked against endoflife.date; a Maven property named `<artifactId>.version` or `version.<artifactId>` that differs from that artifact's literal `<version>` is a drift row (versions compare as equal when they differ only by trailing zeros, such as `1.0` and `1.0.0`; skipped when the dependency uses `${...}`, when any `${...}` in the pom references that property, because it is then a shared family property, and for plugin dependencies). An npm pre-release `dist-tags.latest` is no longer a target either.
+
+### Added
+- G1 API Top 10 pilot: `ownership_sibling_check.py` (API1) and `route_auth_map.py --privileged` (API5) now run in `review_checks.sh --full` as tools `ownership` (rule `ownership-sibling`) and `privileged-route` (rule `privileged-route`); API3 mass-assignment Semgrep rules; held-out records and the API status table under `docs/bench/g1-matrix/`. The third API10 detector (Semgrep `unsafe-api-consumption` and `tls-verify-off` rules) passed its held-out set, so API10 is labelled (a) pending audit. Tests in `scripts/test_g1_review_checks_rows.py` and `scripts/test_g1_api5_v2.py` and `scripts/test_g1_api10_{a,v2,v3}.py`.
+
+size-budget-raise: .claude/skills/deep-code-review/references/security-appsec.md 28245→28602 API3 mass-assignment guidance
+
+### Added
+- `report_contract_lint.py` rules `missing-route-inventory` (no `## Route inventory` section) and `inventory-no-cite` (an inventory list line without exactly one repo-relative `path:line` that resolves under `--root`). `whole-project-report.md` template gains the section: one line per route, never grouped. An empty inventory fails unless it holds `- none`; a non-list inventory line fails `inventory-not-list`; only a token with a file extension counts as a cite (`host:8080` does not); the rate-limit anchor is reviewer guidance, not a lint rule.
+- G6 data/API bench blind set3 record (final FAIL 4/8, burned) and scorer amendments v2.2 (attack/chain subsections are not claims, as in the report lint) and v2.3 (fenced code skipped; only a `Findings` or `Findings (...)` heading opens the section), both logged in the bench ledger before set4. The v2.3 scorer and its tests live in `docs/bench/g6-data-api/scorer-v2/` (the set1-frozen top-level scorers stay at their landed bytes); a `relocated` ledger event records the move, offline set2/set3 parity and recovered scorer snapshots.
+
+### Fixed
+- `bad-citation` now also checks unquoted bare `basename.ext:line` cites in prose, which previously passed unchecked when the file lives in a subdirectory.
+
+size-budget-raise: .claude/skills/deep-code-review/references/whole-project-report.md 5593→6651 route inventory template section, its lint rules and reviewer-guidance wording
+
+### Changed
+- `veche.py` hints at `--setting-sources project` when a `claude` seat returns a malformed reply without that flag (a user Stop hook can rewrite the reply); `council.md` shows the flag in its `claude -p` example. Tests in `scripts/test_veche_claude_hint.py`.
+
+size-budget-raise: .claude/skills/idea-critic/references/council.md 9516→9752 one sentence and one flag on the claude -p seat example
+
 ## [1.648.0] — 2026-11-04
 
 ### Added

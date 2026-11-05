@@ -7,16 +7,17 @@ Read this when you review an API for denial-of-wallet or resource exhaustion: an
 client pick the page size costs the owner money or CPU on every call, and an attacker can repeat it without limit. dynamic_probe.py --rate-endpoint sees a missing limit only on a
 running app; this is the static side. A row is a lead, never a finding, and SILENCE IS NOT PROOF OF A LIMIT: a gateway, WAF or host may limit where this scan cannot see.
 
-Handlers come from route_auth_map.py (Express/Router/Hono/Fastify, Next route handlers and pages/api, FastAPI, Flask, and its `--all` inventory: Go, Spring, Django). A Go registration, a Django
+Handlers come from route_auth_map.py (Express/Router/Hono/Fastify, Next route handlers and pages/api, FastAPI, Flask, and its `--all` inventory: Go, Spring, Django, PHP: Symfony `#[Route]`/`@Route`, Laravel `Route::post(...)`). A Go registration, a Django
 `path(route, view)` and a Next `export const GET = handler` re-export are followed to the function they name (attempt_limit_map.units). A handler's text runs from its line to the next
 handler of the same file. It is costly when, comments ignored, that text (or its route path) shows one of:
 - llm: an OpenAI/Anthropic/Gemini/Mistral/Groq/Cohere/Replicate/ElevenLabs/Vercel-AI-SDK call (`chat.completions`, `messages.create`, `generateText`, `streamText`, `api.openai.com`...);
-- llm: also a caller-supplied `prompt` field read from the request;
+- llm: also a caller-supplied `prompt` field read from the request, an `llm|ai|gpt|claude|model...->chat|complete|generate|ask(` call, or a call to a same-repo function (one hop, by name) whose own text shows an llm call;
+- send: email or SMS (a `/send` endpoint on a mail/sms host, sendgrid, mailgun, postmark, twilio, nodemailer, smtplib, SES, `Mail::send`, `mailer->send`, `send_mail(`);
 - upload: multer/busboy/formidable, `formData()`, `req.file(s)`, `request.files`, `UploadFile`, `get_data()`, `MultipartFile`, `FormFile`, or a Go `io.ReadAll|Copy(.., r.Body)`, or an `upload` route token;
 - search: a `search` route token; export: an `export` or `report` route token;
 - page-size: `limit`, `pageSize`, `page_size`, `per_page` or `perPage` read from the query string in a handler with no `min`/`max`/`clamp`/`le=`/`MAX_` cap anywhere in it.
 Evidence is read per handler (attempt_limit_map.scoped): limit code inside the handler, or at module level, covers it; code inside another handler, or in a helper function only
-another handler calls, does not. Evidence, first hit wins: rate-limit code in the handler's file (rate-limit, ratelimit, limiter, express-rate-limit, @upstash/ratelimit, slowapi, flask-limiter, throttler,
+another handler calls, does not. A limiter that handlers only attach through a Go `.With(limiter)` chain on their own registration line covers just those routes: its declaration (`limiter := ...`, `func limiter(`) is not module-level cover for the rest, while a `Use(limiter)` or any other use still is. Evidence in a file of another language family (go, php, java/kt, py, js/ts) never covers. Evidence, first hit wins: rate-limit code in the handler's file (rate-limit, ratelimit, limiter, express-rate-limit, @upstash/ratelimit, slowapi, flask-limiter, throttler,
 express-slow-down, quota, `429`, too many requests; a bare `throttle` is not evidence), then the same in any scanned file below the package root (nearest ancestor holding
 package.json, pyproject.toml, requirements.txt, setup.py, setup.cfg or Pipfile, else DIR).
 
@@ -33,19 +34,22 @@ import os, re, sys
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from attempt_limit_map import covered, declend, pkgroot, regskips, shown, spans, units, walk  # noqa: E402
+from attempt_limit_map import covered, declend, defs, pkgroot, regskips, shown, spans, units, walk  # noqa: E402
 from route_auth_map import pymask, read  # noqa: E402
 from tenant_scope_check import lineno, mask  # noqa: E402
 
 LLM = re.compile(r"chat\.completions|\.messages\.(?:create|stream)|\.responses\.create|\bgenerate(?:Text|Object)\s*\(|\bstream(?:Text|Object)\s*\(|api\.(?:openai|anthropic|groq|mistral|cohere|elevenlabs)\.|"
                  r"generativelanguage\.googleapis|api\.replicate\.com|"
-                 r"(?:\b(?:req|request|body|json|data|payload|form|POST|args|params|query|input|FormValue|getParameter)\b[^\n]*?[.\"'\[(]\s*|@Request\w+[^\n]*\b)prompt\b|\b(?:OpenAI|Anthropic|AsyncOpenAI|AsyncAnthropic|Groq|Cohere|Replicate)\s*\(|ChatCompletion|\bgenerate_content\s*\(|\.invoke\(\s*\{?\s*(?:messages|prompt)", re.I)
+                 r"(?:\b(?:req|request|body|json|data|payload|form|POST|args|params|query|input|FormValue|getParameter)\b[^\n]*?[.\"'\[(]\s*|@Request\w+[^\n]*\b)prompt\b|\b(?:OpenAI|Anthropic|AsyncOpenAI|AsyncAnthropic|Groq|Cohere|Replicate)\s*\(|ChatCompletion|\bgenerate_content\s*\(|\b(?:llm|ai|gpt|claude|gemini|openai|anthropic|model)\w*\s*(?:->|\.)\s*(?:chat|complete|completion|generate|ask|invoke)\s*\(|\.invoke\(\s*\{?\s*(?:messages|prompt)", re.I)
+SEND = re.compile(r"https?://[^\s\"'`]*(?:mail|sms|email)[^\s\"'`/]*/[^\s\"'`]*send|\b(?:sendgrid|mailgun|postmark|twilio|nodemailer)\b|\bapi\.resend\.com|\bsmtplib\b|\bsmtp\.SendMail\s*\(|\b(?:SESClient|SendEmailCommand|SendRawEmail)\b|"
+                  r"\b(?:Mail|Mailer)::(?:to|send|raw)\b|\bmailer\s*(?:->|\.)\s*send\s*\(|\bSmtpClient\b|\bsend_mail\s*\(|\bsendMail\s*\(|\b\w*[mM]ail\w*\.send\s*\(|\.createTransport\s*\(", re.I)
 UPLOAD = re.compile(r"\b(?:multer|busboy|formidable|multiparty)\b|\.formData\s*\(|\breq\.files?\b|\brequest\.files\b|\bUploadFile\b|\bupload\.(?:single|array|any|fields)\b|\brequest\.get_data\s*\(|\bMultipartFile\b|\brequest\.FILES\b|\.FormFile\(|\bParseMultipartForm\b|\b(?:io|ioutil)\.(?:ReadAll|Copy)\([^)\n]*\b(?:r|req|request)\.Body\b")
 SIZE = re.compile(r"(?:query|searchParams|args|params|Query|(?-i:GET|POST)|FormValue|getParameter)[^\n]*\b(?:limit|pageSize|page_size|per_page|perPage)\b|\b(?:limit|pageSize|page_size|per_page|perPage)\b[^\n]*(?:req\.query|searchParams|request\.args|Query\()|@RequestParam[^\n]*\b(?:(?:int|long|Integer|Long)\s+(?:limit|pageSize|page_size|per_page|perPage)\b|(?:limit|pageSize|page_size|per_page|perPage)\s*:\s*(?:Int|Long)\b)", re.I)
 SIZEP = re.compile(r"@RequestParam[^\n]*\b(?:(?:int|long|Integer|Long)\s+size|size\s*:\s*(?:Int|Long))\b")
 CAP = re.compile(r"\bmin(?:Of)?\(|coerce(?:In|AtMost)|Math\.min|\bmax\(|Math\.max|clamp|\ble\s*=|\bMAX_|\bmax[A-Z_]\w*", re.I)
 SEG = {"search": "search", "export": "export", "exports": "export", "report": "export", "reports": "export", "upload": "upload", "uploads": "upload"}
 EVID = re.compile(r"(?i:rate[-_]?limit|(?<!de)limiter|slowapi|throttler|slow[-_]?down|\bquota|\b429\b|too[-_ ]?many[-_ ]?requests)")
+WITH = re.compile(r"\.With\(((?:[^()]|\([^()]*\))*)\)")
 UB = "unbounded-body"
 MISSING = "%s endpoint with no rate-limit or quota code found in this file or its package (a gateway or host may still limit; confirm with dynamic_probe.py --rate-endpoint)"
 WHOLE = re.compile(r"\b(?:req|request|c\.req|ctx\.req)\.(?:formData|text|arrayBuffer|blob)\s*\(\s*\)|\brequest\.(?:body|get_data)\s*\(|\brequest\.files\b")
@@ -70,10 +74,33 @@ def cmp_cap(text, z):
     return any(int(a or b) > 1 for a, b in re.findall(pat, text))
 
 
+def lang(f):
+    """Language family of file f (go, php, java, py, else js): evidence in another family is no cover."""
+    return {"go": "go", "php": "php", "java": "java", "kt": "java", "py": "py"}.get(f.rpartition(".")[2], "js")
+
+
+def detach(texts, sks):
+    """Blank, in texts (same length), the declarations of every limiter name that handlers only attach through a Go `.With(name)` chain on their registration line: such a name is
+    cover for the routes that attach it, not for the rest of the package (the registration line itself is kept, and so is a `Use(name)` or any other use)."""
+    use = {}  # name -> {(file, offset)} of its occurrences inside a registration line's `.With(...)`
+    for f, t in texts.items():
+        for a, b in sks[f]:
+            for w in WITH.finditer(t, a, b):
+                for n in re.finditer(r"[A-Za-z_]\w*", w[1]):
+                    if EVID.search(n[0]): use.setdefault(n[0], set()).add((f, w.start(1) + n.start()))
+    for n, at in use.items():
+        occ = [(f, m.start()) for f, t in texts.items() for m in re.finditer(r"\b%s\b" % re.escape(n), t)]
+        decl = re.compile(r"^\s*(?:func|def|function|const|let|var|type|public|private|protected)\b|\b%s\s*:?=(?!=)" % re.escape(n))
+        rest = [o for o in occ if o not in at]
+        if rest and all(decl.search(texts[f].split("\n")[texts[f].count("\n", 0, i)]) for f, i in rest):
+            for f, i in rest: texts[f] = texts[f][:i] + " " * len(n) + texts[f][i + len(n):]
+
+
 def kinds(text, route):
-    """Sorted cost kinds (llm, upload, search, export, page-size) shown by a handler's masked text and route path."""
+    """Sorted cost kinds (llm, send, upload, search, export, page-size) shown by a handler's masked text and route path."""
     k = {SEG[s] for s in re.split(r"[^a-z0-9]+", route.lower()) if s in SEG}
     if LLM.search(text): k.add("llm")
+    if SEND.search(text): k.add("send")
     if UPLOAD.search(text): k.add("upload")
     z = SIZE.search(text) or (len(re.findall(r"(?<![\w.\"'])size\b(?![\"'])", text)) > 1 and SIZEP.search(text))  # a bare `size` parameter counts only when the body uses it (not a quoted "size" or a `.size` property)
     if z and not CAP.search(text) and not cmp_cap(text, z): k.add("page-size")  # any cap in the handler (a multi-line `Query(..., le=200)` too) clears it
@@ -102,7 +129,7 @@ def analyze(root):
     files, pkgs = walk(root)
     rows, texts = [], {}
     us = units(root, texts)
-    us = {f: v for f, v in us.items() if f in files or f.endswith((".go", ".java", ".kt"))}
+    us = {f: v for f, v in us.items() if f in files or f.endswith((".go", ".java", ".kt", ".php"))}
     for rel in files:
         raw = read(root, rel) if rel not in texts else None
         if raw is not None: texts[rel] = (pymask if rel.endswith(".py") else mask)(raw, True)
@@ -110,12 +137,14 @@ def analyze(root):
     sps = {f: spans(t, us.get(f, [])) for f, t in texts.items()}
     evp = {}  # package root -> first (file, token, line) of limit code that can cover any handler of it
     sks = regskips(texts, us)
+    detach(texts, sks)
     def evid(rel, u, own, pk):
         """(file, token, line) of limit code for handler u of rel with span own: its own span, module level or registration line, else any file below package root pk."""
         k = (pk, rel, u[0])
         if k not in evp:
-            evp[k] = covered(EVID, rel, u, None, texts, sps, sks, [f for f in sorted(texts) if not pk or f.startswith(pk + "/")])
+            evp[k] = covered(EVID, rel, u, None, texts, sps, sks, [f for f in sorted(texts) if (not pk or f.startswith(pk + "/")) and lang(f) == lang(rel)])
         return covered(EVID, rel, u, own, texts, sps, sks) or evp[k]
+    llmfn = {n for t in texts.values() for (a, n), (b, _) in zip(defs(t), [*defs(t)[1:], (len(t), "")]) if LLM.search(t[a:b])}  # names of same-repo functions whose own text calls an LLM
     costly = 0
     lim = {}  # package root -> True when a framework body limit is named in a scanned file of it
     for rel in texts:
@@ -135,6 +164,7 @@ def analyze(root):
             if whole and not STREAM.search(body) and not any(v for k, v in lim.items() if not pk or k == pk or k.startswith(pk + "/")):  # own package and below; a root or sibling limit does not cover it
                 rows.append((shown(root, rel), ln, UB, "only cap is Content-Length: a chunked body skips the header check (CWE-770)" if CLEN.search(body) else "whole request body read: no streamed byte count or framework body limit found (CWE-770)"))
             ks = kinds(body, route)
+            if "llm" not in ks and any(re.search(r"(?<![\w$])(?:(?:->|\.|::)\s*)?%s\s*\(" % re.escape(n), body) for n in llmfn): ks = sorted(ks + ["llm"])  # one hop: a same-repo helper that calls an LLM
             if not ks: continue
             costly += 1
             what = "/".join(ks)
