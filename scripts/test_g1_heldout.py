@@ -9,6 +9,7 @@ Edge cases: a missing set file or a hash drift fails the test (fail closed).
 """
 
 import hashlib
+import importlib.util
 import json
 import unittest
 from pathlib import Path
@@ -71,6 +72,49 @@ class ScoreConsistencyTest(unittest.TestCase):
                 self.assertEqual(r["reports"], reports)
                 self.assertEqual(r["precision"], round(tp / reports, 3))
                 self.assertEqual(r["recall"], round(tp / len(positives), 3))
+
+
+def _load_audit():
+    """Import audit.py by path. Offline: importing it only defines functions and constants."""
+    spec = importlib.util.spec_from_file_location("g1_audit", HELDOUT / "audit.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+AUDIT = _load_audit()
+
+SYNTHETIC_YML = """rules:
+- id: perun.js.mass-assignment
+  message: js mass assignment
+  languages: [js]
+- id: perun.js.sql-injection
+  message: js sql injection
+  languages: [js]
+- id: perun.py.mass-assignment
+  message: py mass assignment
+  languages: [python]
+- id: perun.py.path-traversal
+  message: py path traversal
+  languages: [python]
+"""
+
+
+class AuditHelpersTest(unittest.TestCase):
+    def test_only_rules_keeps_exactly_the_matching_blocks_verbatim(self):
+        expected = (
+            "- id: perun.js.mass-assignment\n  message: js mass assignment\n  languages: [js]\n"
+            "- id: perun.py.mass-assignment\n  message: py mass assignment\n  languages: [python]\n"
+        )
+        self.assertEqual(AUDIT.only_rules(SYNTHETIC_YML, "mass-assignment"), expected)
+
+    def test_section_returns_item_up_to_next_heading(self):
+        md = "# Title\n\n## API1 Other\nalpha\n\n## API3 Object Property\nbeta\ngamma\n\n## API5 Last\ndelta\n"
+        self.assertEqual(AUDIT.section(md, "api3"), "## API3 Object Property\nbeta\ngamma\n\n")
+
+    def test_section_empty_when_absent(self):
+        md = "# Title\n\n## API1 Other\nalpha\n\n## API5 Last\ndelta\n"
+        self.assertEqual(AUDIT.section(md, "api3"), "")
 
 
 if __name__ == "__main__":

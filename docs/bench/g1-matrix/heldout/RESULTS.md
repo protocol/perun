@@ -29,3 +29,10 @@ Uncovered shapes stated beside the label: Prisma `data:` objects, Mongo update o
 | False positives | 9 | h5-04 (a second admin route in the same file), h5-07, h5-10 (two routes behind a router-level custom guard that compares `req.user.tier`), h5-11 (FastAPI `Security(..., scopes=["admin"])`), h5-15, h5-23, h5-24, h5-30 |
 
 Most false positives come from guard shapes the detector does not read: router-level guards, scope-based dependencies and custom predicates. A second API5 detector needs an amendment to `RULES.md`, committed before a new set is written. `h5` becomes its development set.
+
+## Audit plan (declared before the first audit call)
+- Runner: `audit.py`, committed with this section. It builds the prompt only from committed files and records the prompt's sha256.
+- Model: `Qwen3.5-397B-A17B` on the PCSS endpoint, a different vendor from every author and from the coordinator. Temperature 0, one call per item.
+- A transport error or an answer with no parseable verdict may be retried once with the same prompt, and both responses are kept. Neither of those is counted as an ACCEPT.
+- Order: API3 first. A REJECT on any item stops the plan for a re-plan, as `RULES.md` says. API5 is audited only after a detector for it passes its own held-out set.
+- The raw prompt, response and verdict go to `api3/audit/` and are committed whatever the outcome.
