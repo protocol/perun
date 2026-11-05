@@ -35,7 +35,7 @@ BLUF: an item gets status (b) only if its blind eval passes with the guided step
 - Every raw answer is saved under the run's output directory, together with spend and utilization.
 
 ## One attempt
-These fixtures are used once. If a fixture or step is edited, or the run is repeated after the first scored call, the result is a new eval. An infrastructure fault (no output at all, an API error, or a harness crash before any answer is saved) voids the attempt. It may be re-run once from scratch.
+These fixtures are used once. If a fixture or step is edited, or the run is repeated after the first scored call, the result is a new eval. An infrastructure fault (no output at all, an API error, or a harness crash before any answer is saved) voids the attempt. It may be re-run once from scratch. A fault after the first answer is saved (an API error, a timeout, a missing quota reading or a harness crash) stops the run instead: items already decided keep their verdict, the rest stay unstatused, and there is no re-run. `ablate.py` exits 2 in both cases; this rule decides which one applies.
 
 ## If an item is not (b)
 The item stays unstatused. There are two remaining paths: an (a) deterministic detector with seeded tests, or a new blind eval set authored under rules written down and committed before authoring. The steps are never edited to fit these fixtures.
