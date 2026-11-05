@@ -1,0 +1,97 @@
+[
+ {
+  "fixture": "harrow-actix",
+  "label": "hardcoded-secret",
+  "text": "src/store.rs:32 critical: static admin bearer token `tok-admin` seeded in source, never expires, grants admin role (purge routes). evidence: src/auth.rs:15"
+ },
+ {
+  "fixture": "harrow-actix",
+  "label": "hardcoded-secret",
+  "text": "src/store.rs:31 high: static clerk bearer token `tok-clerk` seeded in source, valid for any caller."
+ },
+ {
+  "fixture": "harrow-actix",
+  "label": "other",
+  "text": "src/routes/roster.rs:37 high: SSRF. The `url` query parameter goes straight to the outbound GET and the body is returned, so any authenticated caller can reach internal hosts or metadata endpoints; no scheme or host allowlist. Filed as other because the linter does not recognise the vclient() call a"
+ },
+ {
+  "fixture": "harrow-actix",
+  "label": "other",
+  "text": "src/store.rs:48 low: sessions have no expiry and the cookie-minting GET routes add a new session without revoking the old one, so tokens pile up and stay valid until restart. evidence: src/routes/outbox.rs:53"
+ },
+ {
+  "fixture": "mantle-symfony",
+  "label": "hardcoded-secret",
+  "text": "src/Service/Store.php:9 high: hardcoded admin session token `tok-admin` is accepted as a bearer token for uid 41 / role admin by any caller who reads the source. evidence: src/EventSubscriber/RouteGuard.php:36"
+ },
+ {
+  "fixture": "mantle-symfony",
+  "label": "hardcoded-secret",
+  "text": "src/Service/Store.php:8 high: hardcoded clerk session token `tok-clerk` with csrf value `c-40` is a valid credential for uid 40."
+ },
+ {
+  "fixture": "mantle-symfony",
+  "label": "other",
+  "text": "src/EventSubscriber/RouteGuard.php:34 low: str_replace('Bearer ', '') removes the substring anywhere in the header, so `Authorization: xBearer tok` or a doubled prefix authenticates; strip only a leading prefix."
+ },
+ {
+  "fixture": "mantle-symfony",
+  "label": "other",
+  "text": "src/Controller/ParcelController.php:80 low: the PIN is compared with `!==` rather than hash_equals, and the PIN always maps to the fixed uid 40 clerk session, so every PIN holder shares one identity."
+ },
+ {
+  "fixture": "pylon-koa",
+  "label": "hardcoded-secret",
+  "text": "src/store.js:4 high: the static bearer tokens `tok-clerk` and `tok-admin` are in source, and `tok-admin` gives the admin role. They stay valid for any deployment of this code."
+ },
+ {
+  "fixture": "pylon-koa",
+  "label": "other",
+  "text": "src/util.js:17 medium: the throttle keys on `remoteAddress`. The server binds to 127.0.0.1 (src/app.js:27), so behind a proxy every client shares one bucket (a lockout, so a DoS risk). The hit map is never evicted."
+ },
+ {
+  "fixture": "pylon-koa",
+  "label": "other",
+  "text": "src/exports.js:43 medium: `/auth/beryl-pin` and `/auth/gravel-login` (src/inbox.js:55) hard-wire the session to uid 40 with role `clerk`, and sessions from `openSession` never expire server-side (src/store.js:13)."
+ },
+ {
+  "fixture": "quarry-nest",
+  "label": "hardcoded-secret",
+  "text": "src/store.ts:10 high: static `tok-admin` and `tok-clerk` bearer sessions (line 9) are committed; either token authenticates as admin or clerk."
+ },
+ {
+  "fixture": "quarry-nest",
+  "label": "other",
+  "text": "src/store.ts:18 medium: sessions never expire server-side. `maxAge` only limits the cookie, `SESSIONS` grows without bound, and `rotate` (`notes.controller.ts:23`) and `trust` do not revoke the old token."
+ },
+ {
+  "fixture": "quarry-nest",
+  "label": "other",
+  "text": "src/util.ts:21 low: the throttle key is `remoteAddress`. Behind a proxy on 127.0.0.1 every client shares one bucket, and the map is never pruned."
+ },
+ {
+  "fixture": "quarry-nest",
+  "label": "other",
+  "text": "src/main.ts:8 low: no helmet or security headers. The tool also reported CSP, Referrer-Policy, X-Content-Type-Options and X-Frame-Options as absent from repo config."
+ },
+ {
+  "fixture": "sluice-chi",
+  "label": "hardcoded-secret",
+  "text": "store.go:24 high: static bearer tokens `tok-clerk` and `tok-admin` (uid 41, role admin) are committed in source and accepted by every bearer route. evidence: auth.go:37"
+ },
+ {
+  "fixture": "sluice-chi",
+  "label": "injection",
+  "text": "mailbox.go:31 high: tool-call JSON is built with Sprintf from the `arg` body field; arg `x\", \"tool\": \"admin` injects extra keys sent to the tool endpoint."
+ },
+ {
+  "fixture": "sluice-chi",
+  "label": "other",
+  "text": "reports.go:71 medium: the keyId from rotate-key comes from math/rand, which is predictable and not a secret source. evidence: util.go:74"
+ },
+ {
+  "fixture": "sluice-chi",
+  "label": "other",
+  "text": "sessions.go:33 low: dusk/rotate issues a new session but never drops the old token, so rotation does not revoke a stolen sid, and sessions have no server-side expiry."
+ }
+]
