@@ -25,6 +25,9 @@ Needs a running system: deployed config, WAF, runtime authz, vault, infra outsid
 
 ## Dependencies
 <lockfile and advisory results, or what could not be read>
+
+## Route inventory
+- <METHOD> <path> <repo-relative file>:<line> auth=<none|...> rate-limit=<yes|no>
 ```
 
 ## Findings format
@@ -35,7 +38,7 @@ One finding per vulnerable site, never a group or a range: each state-changing c
 
 Fixed class vocabulary: `missing-authn`, `missing-authz`, `object-level-authz`, `ssrf`, `tls-off`, `outbound-timeout`, `secret-in-url`, `secret-in-log`, `hardcoded-secret` (credentials or tokens in source), `csrf`, `cookie-flags`, `rate-limit`, `pii-in-log`, `pii-data` (personal data committed, stored in plaintext or sent to a third party), `prompt-injection` (including tool-call JSON built from input), `injection`, `xss`, `other`. Pick the closest class; use `other` only when none fits.
 
-Cite the sink: for `ssrf`, `tls-off`, `outbound-timeout` and `secret-in-url` the outbound call, URL or TLS option; for `secret-in-log` and `pii-in-log` the log call; for `cookie-flags` the cookie set. The lint fails a cite whose line +-2 shows no sink (`finding-not-on-sink`). One finding per issue: do not re-cite it at the route or a helper. `rate-limit` cites the handler line only, and only for brute-forceable or costly endpoints (login, PIN, OTP, SMS, LLM, bulk export); not when a limiter already wraps the route. `csrf`: SameSite Lax or Strict blocks a cross-site POST but not a state-changing GET. Never cite a token generator or a limiter definition. A `pii-in-log` line that logs a key, token, secret or password is `secret-in-log`; one with an outbound call and no log call is `pii-data` (`class-mismatch`).
+Cite the sink: for `ssrf`, `tls-off`, `outbound-timeout` and `secret-in-url` the outbound call, URL or TLS option; for `secret-in-log` and `pii-in-log` the log call; for `cookie-flags` the cookie set. The lint fails a cite whose line +-2 shows no sink (`finding-not-on-sink`). One finding per issue: do not re-cite it at the route or a helper. `rate-limit` cites the line doing the brute-forceable check or costly work (credential, PIN or OTP compare; SMS or LLM call; export build), not the route declaration or signature, and only for brute-forceable or costly endpoints (login, PIN, OTP, SMS, LLM, bulk export); not when a limiter already wraps the route (reviewer guidance: the lint does not check this anchor). `csrf`: SameSite Lax or Strict blocks a cross-site POST but not a state-changing GET. Never cite a token generator or a limiter definition. A `pii-in-log` line that logs a key, token, secret or password is `secret-in-log`; one with an outbound call and no log call is `pii-data` (`class-mismatch`).
 
 Example: `- [pii-data] src/api/users.py:42 high: serves SSNs and dates of birth unmasked. evidence: src/models.py:10`
 
@@ -44,7 +47,8 @@ Example: `- [pii-data] src/api/users.py:42 high: serves SSNs and dates of birth 
 - `finding-no-class`: a Findings line lacks a vocabulary label or the `[class] path:line severity: text` shape. `finding-multi-cite`: a second cite before `evidence:`, or a `path:12,15` list, on one finding. Elsewhere `path:12,15,20` is accepted as lines of one path.
 - All four sections above exist; every item has a status of `pass`, `fail` or `not-checked`.
 - `pass` needs a check that ran: `tool:<name>` whose tool is not under NOT RUN, or `guided:<id>`. A guided pass also lists the files it examined and a backtick-quoted negative that appears in a cited file. Cited paths resolve inside `--root`, as `path` or `path:line[-line]` only.
-- Every cited `path` or `path:line` exists under `--root`.
+- Every cited `path` or `path:line` exists under `--root`; cite the repo-relative path; a bare file name such as `app.py:9` resolves only for a file at the repo root, in prose or backticks (`bad-citation`).
+- `missing-route-inventory`: no `## Route inventory` section. List one route or handler per line, never grouped (not "POST /a, /b"), each at its own declaration `file:line`; fill it from `route_auth_map.py --all` where it supports the stack, else grep. `inventory-no-cite`: a list line there without exactly one repo-relative `path:line` that exists under `--root` (only tokens with a file extension count as cites, so `host:8080` does not). An empty section fails `missing-route-inventory` unless it holds an explicit `- none` line. `inventory-not-list`: a non-blank line in the section that is not a list item.
 - More than 40% of items `not-checked` without a NOT RUN reason (a `tool:` basis whose tool has a reason under NOT RUN) fails.
 - No safety claim ("no vulnerabilities", "is secure", "safe to deploy" and paraphrases; list in the script's `CLAIMS`). State what was checked, never that the project is safe. A zero count starts with its tool (`trivy: 0 findings in package-lock.json`).
 - NOT RUN holds one `- <tool>: <reason>` line per tool that did not run, and nothing else; tools that ran go in the Basis column.
