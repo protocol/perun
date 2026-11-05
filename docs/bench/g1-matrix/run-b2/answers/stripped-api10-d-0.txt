@@ -1,0 +1,22 @@
+**Review summary**
+
+I found no API Top 10 issues I would report at high confidence. The code looks deliberately hardened.
+
+- **Function-level authorization (API5):** `POST /sync/<category>` requires `X-Admin-Key`. The key is compared with `hmac.compare_digest`, and the endpoint fails closed with 403 if `ADMIN_KEY` is unset.
+- **Object-level authorization (API1):** `GET /price/<sku>` is public. It returns only product price data, so this looks intentional rather than a missing check.
+- **Injection:** Both SQL statements are parameterized. `category` is restricted to alphanumerics and 20 characters, and `requests` URL-encodes it as a query parameter, so it cannot alter the vendor URL host or path.
+- **Resource consumption (API4):** The following limits are in place:
+  - a per-IP rate limit;
+  - a non-blocking lock so only one sync runs at a time;
+  - connect and read timeouts, plus a 15-second wall-clock deadline and a 256 KiB streamed size cap on the vendor response;
+  - a cap of 500 items per sync.
+- **Unsafe consumption of APIs (API10):** The vendor call uses HTTPS and does not follow redirects. The response shape is validated. Each item passes through `clean_product`, which checks the SKU regex, name length, and price type and range, and rejects booleans. Rows are also filtered to the requested category.
+- **SSRF (API7):** The vendor base URL is a constant, so there is no user-controlled destination.
+
+**Minor observations (below the reporting bar):**
+- The rate limiter in `app.py` clears all counters once more than 10,000 distinct addresses have been seen. An attacker with many source addresses (for example, an IPv6 range) could reset everyone's counters. It is also not thread-safe, and behind a reverse proxy `remote_addr` would be the proxy's address.
+- `str.isalnum()` accepts non-ASCII letters and digits. This is harmless here because the value is URL-encoded, but `isascii()` would be stricter.
+
+```json
+[]
+```

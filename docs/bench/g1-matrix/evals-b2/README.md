@@ -18,7 +18,7 @@ The check prompt, the same for every round: system "You are a careful applicatio
 | 2 | 4 negatives | $0.117 | 0.48 | `api1-d` and `api1-e` clean; minor API10 and cross-class findings in `api10-d` and `api10-e` |
 | 3 | `api10-d`, `api10-e` | $0.061 | 0.48 | no API1 or API10 finding in `api10-d`; one minor API10 finding in `api10-e` (see below) |
 
-Round 3 was fixed in advance as the last: whatever it finds is listed under "Residual findings" and not fixed. Every edit below is in a negative. No positive and no truth line changed.
+Round 3 was decided as the last before it ran: whatever it finds is listed under "Residual findings" and not fixed. Every edit below is in a negative. No positive and no truth line changed.
 
 ### Edits after round 1
 - `api1-d/routes.py`: the list endpoint returns the same field allow-list as the detail endpoint (the check found `staff_note` exposed in the list).

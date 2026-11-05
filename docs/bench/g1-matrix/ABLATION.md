@@ -135,3 +135,18 @@ A decision council scored the options mixed 3.55, detect 2.95 and harder 2.50. O
 | fixture `fixtures/api10-e/directory.js` sha256 | 21e6452b6bc0de31cbbb2278b1693972a722ef7f7963015efc541d92529a159d |
 | fixture `fixtures/api10-e/sanitize.js` sha256 | 29e6ebf0c40f60c5169ce0203ff6f9090c546f9d77e778d05f1bd4da85ff071e |
 | fixture `fixtures/api10-e/server.js` sha256 | e85d7e3adf54a87de5538f8cc1581692c456d261f465bcc1d7ef5b6740486ee4 |
+
+## Result (b2 run, 2026-11-05)
+
+BLUF: neither API1 nor API10 reached status (b). The stripped arm passed all 10 b2 fixtures, so under the stop rule the step arm was never run. The run finished with exit 0 and cost $0.23 on `sonnet` (10 calls plus the quota preflight), at plan-quota utilization 0.49. The inputs matched "Frozen inputs (b2)". Raw answers and `result.json` are in `run-b2/`.
+
+| Item | Stripped arm (pass per fixture) | Step arm | Verdict |
+|---|---|---|---|
+| API1 | 5/5 | not run (stop rule) | not (b): stripped arm passes every fixture |
+| API10 | 5/5 | not run (stop rule) | not (b): stripped arm passes every fixture |
+
+A forecast was logged before the run. It scored the round 1 check answers, from a generic reviewer, against the positives: all 6 passed with the right label, so a stripped-arm pass was expected. The run matched the forecast.
+
+What this shows: on multi-file cases with authorization split across helpers and upstream data crossing a file boundary, a model without these steps already finds the flaw. The steps are still not shown to matter for these shapes. This is the one b2 attempt, and there is no re-run.
+
+Next, per "Next path": API1 and API10 take the fallback, a narrow-scope (a) detector each, with the same held-out audit and kill criteria as API3 and API5. They do not take (c).
