@@ -526,3 +526,117 @@ rules:
           regex: ^(?:.*\.)?(?:ModelSerializer|HyperlinkedModelSerializer|ModelForm)$
   paths:
     exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+# OWASP API10:2023 unsafe consumption of APIs: a field of a requests/httpx response body (.json(), .text, .content, also from a response variable or a client/session named like *client or *session) reaches a SQL string passed to execute/executemany/executescript/raw/text/read_sql, a file path (open, Path, os.path.join, send_file), an outbound request URL, or a shell command (subprocess, os.system, os.popen) with no validation on the way. int/float/bool, basename, secure_filename, shlex.quote, quote, UUID, an in/not-in allowlist test, a regex fullmatch or isdigit/isalnum test clear the value. A request URL that starts with a literal scheme and host is skipped, a subprocess list is a sink only as `sh -c <value>`. ponytail: taint stays inside one file (no cross-file helper), one function level and no sinks on a response that arrives through an unnamed client.
+- id: perun.py.unsafe-api-consumption
+  mode: taint
+  languages: [python]
+  severity: WARNING
+  message: A field of a third-party or internal API response reaches a SQL string, file path, outbound URL or shell command unvalidated. Validate the type, shape and allowed values of response data first, and bind SQL parameters.
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern: $MOD.$M(...).json()
+      - pattern: $MOD.$M(...).text
+      - pattern: $MOD.$M(...).content
+    - metavariable-regex:
+        metavariable: $MOD
+        regex: ^(?:requests|httpx)$
+  - patterns:
+    - pattern-either:
+      - pattern: $R.json()
+      - pattern: $R.text
+      - pattern: $R.content
+    - pattern-inside: |
+        $R = $MOD.$M(...)
+        ...
+    - metavariable-regex:
+        metavariable: $MOD
+        regex: ^(?:requests|httpx)$
+  - patterns:
+    - pattern-either:
+      - pattern: $R.json()
+      - pattern: $R.text
+      - pattern: $R.content
+    - pattern-either:
+      - pattern-inside: |
+          $R = await $C.$M(...)
+          ...
+      - pattern-inside: |
+          $R = $C.$M(...)
+          ...
+    - metavariable-regex:
+        metavariable: $C
+        regex: ^(?:.*\.)?\w*(?i:client|session|sess|http)\w*$
+    - metavariable-regex:
+        metavariable: $M
+        regex: ^(?:get|post|put|patch|delete|head|request)$
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $C.execute($S, ...)
+      - pattern: $C.executemany($S, ...)
+      - pattern: $C.executescript($S)
+      - pattern: $C.raw($S, ...)
+      - pattern: text($S)
+      - pattern: pd.read_sql($S, ...)
+      - pattern: open($S, ...)
+      - pattern: Path($S, ...)
+      - pattern: pathlib.Path($S, ...)
+      - pattern: os.path.join(..., $S, ...)
+      - pattern: send_file($S, ...)
+      - pattern: os.system($S)
+      - pattern: os.popen($S, ...)
+      - pattern: subprocess.$F($S, ...)
+      - pattern: subprocess.$F([$SH, "-c", $S], ...)
+      - pattern: requests.$M($S, ...)
+      - pattern: httpx.$M($S, ...)
+      - pattern: urlopen($S, ...)
+    - pattern-not: subprocess.$F([...], ...)
+    - metavariable-regex:
+        metavariable: $S
+        regex: ^(?!f?["']https?://[^/{"']+[/"'])
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern-either:
+    - pattern: int(...)
+    - pattern: float(...)
+    - pattern: bool(...)
+    - pattern: uuid.UUID(...)
+    - pattern: UUID(...)
+    - pattern: os.path.basename(...)
+    - pattern: secure_filename(...)
+    - pattern: shlex.quote(...)
+    - pattern: urllib.parse.quote(...)
+    - pattern: quote(...)
+    - pattern: quote_plus(...)
+  - by-side-effect: true
+    patterns:
+    - pattern-either:
+      - pattern: $X in $A
+      - pattern: $X not in $A
+      - pattern: re.fullmatch($P, $X)
+      - pattern: re.match($P, $X)
+      - pattern: $X.isdigit()
+      - pattern: $X.isalnum()
+      - pattern: $X.isnumeric()
+    - focus-metavariable: $X
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+# OWASP API10:2023 TLS verification turned off on an outbound HTTP client: verify=False on a requests/httpx call, client or session, session.verify = False, ssl._create_unverified_context, check_hostname = False, verify_mode = ssl.CERT_NONE. ponytail: search-mode, so a False held in a variable (verify=flag) is not matched.
+- id: perun.py.tls-verify-off
+  languages: [python]
+  severity: WARNING
+  message: TLS certificate verification is turned off, so any on-path attacker can impersonate the API. Trust a CA bundle (verify="/path/ca.pem") instead.
+  pattern-either:
+  - pattern: requests.$M(..., verify=False, ...)
+  - pattern: httpx.$M(..., verify=False, ...)
+  - pattern: requests.Session().verify = False
+  - pattern: $S.verify = False
+  - pattern: ssl._create_unverified_context(...)
+  - pattern: ssl._create_default_https_context = ssl._create_unverified_context
+  - pattern: $C.check_hostname = False
+  - pattern: $C.verify_mode = ssl.CERT_NONE
+  - pattern: aiohttp.TCPConnector(..., ssl=False, ...)
+  - pattern: $S.$M(..., ssl=False, ...)
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]

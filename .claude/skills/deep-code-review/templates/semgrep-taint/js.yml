@@ -1631,3 +1631,109 @@ rules:
   - pattern-not: Object.assign([], ...)
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+# OWASP API10:2023 unsafe consumption of APIs: a field of a fetch or axios response body (await res.json()/.text(), axios .data, a then-callback parameter, or a destructured { data }) reaches a SQL string passed to query/execute/raw, a file path (fs read/write calls, path.join/resolve), an outbound fetch/axios/got URL, or a child_process command with no validation on the way. parseInt/parseFloat/Number, path.basename, encodeURIComponent, Number.isInteger, an allowlist .has/.includes guard and a regex .test guard clear the value. A URL that starts with a literal scheme and host is skipped. ponytail: taint stays inside one file (no cross-file helper), a response bound to a variable is followed only when it is assigned from fetch/axios in the same function, and spawn/execFile argument lists are not sinks.
+- id: perun.js.unsafe-api-consumption
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A field of a third-party or internal API response reaches a SQL string, file path, outbound URL or shell command unvalidated. Validate the type, shape and allowed values of response data first, and bind SQL parameters.
+  pattern-sources:
+  - pattern-either:
+    - pattern: (await fetch(...)).json()
+    - pattern: (await fetch(...)).text()
+    - pattern: (await axios.$M(...)).data
+    - pattern: (await axios(...)).data
+    - pattern: '{ ..., data: $D, ... } = await axios.$M(...)'
+    - pattern: '{ ..., data: $D, ... } = await axios(...)'
+    - patterns:
+      - pattern-either:
+        - pattern: $R.json()
+        - pattern: $R.text()
+      - pattern-inside: |
+          $R = await fetch(...);
+          ...
+    - patterns:
+      - pattern: $R.data
+      - pattern-inside: |
+          $R = await axios.$M(...);
+          ...
+    - patterns:
+      - pattern: $R.data
+      - pattern-inside: |
+          axios.$M(...).then(($R) => { ... })
+    - patterns:
+      - pattern: $D
+      - pattern-inside: |
+          fetch(...).then(($R) => $R.json()).then(($D) => { ... })
+    - patterns:
+      - pattern: $D
+      - pattern-inside: |
+          fetch(...).then(($R) => { return $R.json(); }).then(($D) => { ... })
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $C.query($S, ...)
+      - pattern: $C.execute($S, ...)
+      - pattern: $C.raw($S, ...)
+      - pattern: $C.$queryRawUnsafe($S, ...)
+      - pattern: $C.$executeRawUnsafe($S, ...)
+      - pattern: path.join(..., $S, ...)
+      - pattern: path.resolve(..., $S, ...)
+      - pattern: fetch($S, ...)
+      - pattern: axios($S, ...)
+      - pattern: axios.$M($S, ...)
+      - pattern: got($S, ...)
+      - pattern: got.$M($S, ...)
+      - pattern: http.get($S, ...)
+      - pattern: https.get($S, ...)
+      - pattern: exec($S, ...)
+      - pattern: execSync($S, ...)
+      - pattern: child_process.exec($S, ...)
+      - pattern: child_process.execSync($S, ...)
+      - pattern: cp.exec($S, ...)
+      - pattern: cp.execSync($S, ...)
+    - metavariable-regex:
+        metavariable: $S
+        regex: ^(?!\s*[`'"]https?://[^/`'"$]+[/`'"])
+    - focus-metavariable: $S
+  - patterns:
+    - pattern-either:
+      - pattern: fs.$F($S, ...)
+      - pattern: fs.promises.$F($S, ...)
+    - metavariable-regex:
+        metavariable: $F
+        regex: ^(?:readFile|readFileSync|writeFile|writeFileSync|appendFile|appendFileSync|createReadStream|createWriteStream|unlink|unlinkSync|rm|rmSync|rename|renameSync|readdir|readdirSync|open|openSync|copyFile|copyFileSync|mkdir|mkdirSync)$
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - pattern-either:
+    - pattern: parseInt(...)
+    - pattern: parseFloat(...)
+    - pattern: Number(...)
+    - pattern: path.basename(...)
+    - pattern: encodeURIComponent(...)
+    - pattern: encodeURI(...)
+    - pattern: String(Number(...))
+  - by-side-effect: true
+    patterns:
+    - pattern-either:
+      - pattern: $A.has($X)
+      - pattern: $A.includes($X)
+      - pattern: $RE.test($X)
+      - pattern: Number.isInteger($X)
+      - pattern: $X in $A
+    - focus-metavariable: $X
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+# OWASP API10:2023 TLS verification turned off on an outbound HTTP client: rejectUnauthorized: false in an options object (https.Agent, tls.connect, https.request, axios httpsAgent, node-fetch agent), strictSSL: false, process.env.NODE_TLS_REJECT_UNAUTHORIZED set to "0" or 0. ponytail: search-mode, so false held in a variable is not matched.
+- id: perun.js.tls-verify-off
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: TLS certificate verification is turned off, so any on-path attacker can impersonate the API. Trust a CA bundle (the ca option) instead.
+  pattern-either:
+  - pattern: '{ ..., rejectUnauthorized: false, ... }'
+  - pattern: '{ ..., strictSSL: false, ... }'
+  - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
+  - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
+  - pattern: process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
