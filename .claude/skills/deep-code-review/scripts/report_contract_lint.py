@@ -5,7 +5,7 @@ Usage: report_contract_lint.py REPORT.md --root REPO   (REPORT `-` reads stdin)
        report_contract_lint.py --part N --root REPO <chunk   (chunk N=1 starts a fresh temp draft, others append; print its line count)
        report_contract_lint.py --done --root REPO          (lint that draft, then delete it)
 Template and rules: references/whole-project-report.md.
-Exit 0 clean; exit 1 with one `report:line: rule: message` line per violation; exit 2 usage error.
+Exit 0 clean; exit 1 with one `report:line: rule: message` line per violation on stdout and a final `FAIL: this report is not deliverable...` line on stderr; exit 2 usage error.
 Side effects: none (reads the report and files under --root). Stdlib only.
 Edge cases: fenced code blocks are ignored; backtick spans are unwrapped and scanned as prose; the Item column is exempt from the claim scan; a sentence
 that negates the claim ("does not say the app is secure") is skipped; a "no vulnerabilities" count
@@ -379,6 +379,8 @@ def main():
                 if os.path.lexists(f):
                     os.remove(f)
     print("\n".join(v) if v else "ok: emit this exact draft as your final answer, verbatim" if a.done else "ok")
+    if v:  # stderr keeps the stdout contract (one violation per line); this is the stop sign at the decision point
+        print("FAIL: this report is not deliverable. " + ("The draft is deleted: fix only the flagged lines, change nothing else, resend the whole corrected report from --part 1, then run --done again. Deliver only a draft that printed ok." if a.done else "Fix only the flagged lines, change nothing else, and re-run the lint until it prints ok. Deliver only the text that passed."), file=sys.stderr)
     sys.exit(1 if v else 0)
 
 
