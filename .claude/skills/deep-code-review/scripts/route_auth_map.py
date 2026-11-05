@@ -3,7 +3,7 @@
 
 Read this when you review an API surface for missing authentication or run the anonymous GET sweep in security-appsec.md: a handler that
 mutates state and never touches an identity check is reachable by anyone, and generic linters do not see it. Run
-`python3 -I route_auth_map.py DIR` (add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
+`python3 -I route_auth_map.py DIR` (add `--privileged` to list privileged routes guarded by authentication alone, with no role, permission or admin check in the handler: admin path segments, role or permission changes, PUT/PATCH/DELETE on `/users/:id` and kin; add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
 OF AUTHENTICATION: the scan only sees the call shapes listed below.
 
 1. Inventory every handler: Next.js app/**/route.(ts|tsx|js|jsx|mjs) exported GET/POST/PUT/PATCH/DELETE (function, const, destructured or re-exported),
@@ -489,6 +489,9 @@ def gated(sites, route):
     return bool(sites) and all(any(ok(pre, *h) for h in hs) for pre, hs in sites)
 
 
+BODY = {}  # (file, line) -> the handler's own and helper text with strings kept, filled by analyze() for --privileged
+
+
 def analyze(rel, raw, mws, sites=None, hooks=None):
     """[(path, line, METHOD, route, auth)] for one file; sites: the wiring() sites that wire the file, for the root-hook evidence; hooks: the wiring() hooks of the file itself.
     A non-GET route is also covered by the hook of its own receiver declared before it in a block that holds the route (a route above the hook keeps its own evidence, and a GET reads INFO either way).
@@ -518,6 +521,7 @@ def analyze(rel, raw, mws, sites=None, hooks=None):
     for pos, meth, route, spans, pre, rcv, mwb in hs:
         ln = lineno(m, pos)
         own = "\n".join(m[a:b] for a, b in spans)
+        BODY[(rel, ln)] = "\n".join(mk[a:b] for a, b in spans + [fn[w] for w in set(re.findall(r"[\w$]+", own)) if w in fn])  # for --privileged only
         got = [(ident(m[a:b]), tok(mk[a:b])) for a, b in spans + [fn[w] for w in sorted(set(re.findall(r"[\w$]+", own))) if w in fn]] + [(mod, False)]
         use = next((u[3] for u in uses if u[0] == rcv and u[1] < pos and (route == u[2] or route.startswith(u[2] + "/"))), None)
         pats = mws.get(mwb) if mwb is not None else None
@@ -696,9 +700,32 @@ def inventory(root):
     return sorted(set(rows), key=lambda r: (r[1], r[0], r[2], r[3]))
 
 
+PRIVSEG = re.compile(r"admin|administrator|superuser|backoffice", re.I)
+PRIVROLE = re.compile(r"role|permission|privilege|grant|promote|demote", re.I)
+PRIVREC = re.compile(r"(?:^|/)(?:users?|accounts?|members?|profiles?|customers?)/:\w+")  # another user's record: a collection then an id param
+ROLECHK = re.compile(r"role|permission|admin|rbac|authoriz|ability|policy|staff|superuser|scope|\bcans?\b|\bcan_|has_perm", re.I)
+PATHLIT = re.compile(r"""(['"`])/[^'"`]*\1""")
+
+
+def privileged(rows):
+    """[(row, why)] for routes with identity evidence (auth is neither none nor public) that are privileged and whose handler text holds no role, permission or admin check.
+    Privileged: an admin path segment (any method), a role or permission path segment (non-GET), or PUT/PATCH/DELETE on `/users/:id` and kin. Heuristic: a quoted /path literal is
+    dropped before the check search so the route itself does not count; a check done in a function the scan does not follow, or in another file, is missed (lead, not proof)."""
+    out = []
+    for r in rows:
+        rel, ln, meth, route, lab = r
+        if lab in ("none", "public"): continue
+        ms, parts = meth.split("|"), route.lower().split("/")
+        why = ("admin path" if any(PRIVSEG.search(p) for p in parts) else
+               "role or permission change" if any(PRIVROLE.search(p) for p in parts) and ms != ["GET"] else
+               "write on another user's record" if PRIVREC.search(route) and {"PUT", "PATCH", "DELETE", "ANY"} & set(ms) else None)
+        if why and not ROLECHK.search(PATHLIT.sub("", BODY.get((rel, ln), ""))): out.append((r, why))
+    return out
+
+
 def main(argv):
-    a = [x for x in argv[1:] if x not in ("--paths", "--all")]
-    if len(a) != 1 or not os.path.isdir(a[0]) or {"--paths", "--all"} <= set(argv[1:]):
+    a = [x for x in argv[1:] if x not in ("--paths", "--all", "--privileged")]
+    if len(a) != 1 or not os.path.isdir(a[0]) or len({"--paths", "--all", "--privileged"} & set(argv[1:])) > 1:
         print("usage: route_auth_map.py [--paths | --all] DIR", file=sys.stderr); return 2
     if {"--paths", "--all"} & set(argv[1:]):
         inv = inventory(a[0])
@@ -715,6 +742,11 @@ def main(argv):
             for p in sorted({p for m, p, f, ln in inv if m in ("GET", "ANY")}): print(p)
         return 0
     rows, files = scan(a[0])
+    if "--privileged" in argv[1:]:
+        pv = privileged(rows)
+        print("heuristic; %d privileged routes with authentication but no role check; silence is not proof" % len(pv), file=sys.stderr)
+        for r, why in pv: print("%s:%d: PRIV: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why))
+        return 0
     print("heuristic; scanned %d files with %d handlers; silence is not proof of authentication" % (files, len(rows)), file=sys.stderr)
     out = [(r, "HIGH" if r[4] == "none" and any(x != "GET" for x in r[2].split("|")) else "INFO") for r in rows]
     for r, s in out: print("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))
