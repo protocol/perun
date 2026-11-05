@@ -16,7 +16,7 @@ handler of the same file. It is costly when, comments ignored, that text (or its
 - upload: multer/busboy/formidable, `formData()`, `req.file(s)`, `request.files`, `UploadFile`, `get_data()`, `MultipartFile`, `FormFile`, or a Go `io.ReadAll|Copy(.., r.Body)`, or an `upload` route token;
 - search: a `search` route token; export: an `export` or `report` route token;
 - page-size: `limit`, `pageSize`, `page_size`, `per_page` or `perPage` read from the query string in a handler with no `min`/`max`/`clamp`/`le=`/`MAX_` cap anywhere in it.
-Evidence is read per handler (attempt_limit_map.scoped): limit code inside the handler, or at module level, covers it; code inside another handler, or in a helper function only
+Evidence is read per handler (attempt_limit_map.scoped): limit code inside the handler, or at module level, covers it (an import, require, `use` line or PHP property or constructor-parameter declaration that only names a limiter library is not evidence; a Go `.Use(limiter)` inside a `Route(`/`Group(` closure covers only the routes registered in that closure, a root-level Use covers the package); code inside another handler, or in a helper function only
 another handler calls, does not. A limiter that handlers only attach through a Go `.With(limiter)` chain on their own registration line covers just those routes: its declaration (`limiter := ...`, `func limiter(`) is not module-level cover for the rest, while a `Use(limiter)` or any other use still is. Evidence in a file of another language family (go, php, java/kt, py, js/ts) never covers. Evidence, first hit wins: rate-limit code in the handler's file (rate-limit, ratelimit, limiter, express-rate-limit, @upstash/ratelimit, slowapi, flask-limiter, throttler,
 express-slow-down, quota, `429`, too many requests; a bare `throttle` is not evidence), then the same in any scanned file below the package root (nearest ancestor holding
 package.json, pyproject.toml, requirements.txt, setup.py, setup.cfg or Pipfile, else DIR).
@@ -27,7 +27,7 @@ streamed byte count and no framework limit (bodySizeLimit, bodyLimit, MAX_CONTEN
 (a chunked body skips it). Also an express/bodyParser json/urlencoded/raw/text call whose `limit` is infinite or at least 10 MB; a call without `limit` (default 100kb) is not flagged.
 stderr: one summary line, or "cost-limit: no HTTP handler found" when route_auth_map finds none. Exit 0; 2 with usage on a bad argument. Reads files only.
 
-ponytail: evidence is package-scoped (a limiter anywhere in the package, outside other handlers, counts); a handler delegated to another file (`app.post("/x", ctrl.run)`) is judged on its own lines only; gateway
+ponytail: evidence is package-scoped (a limiter anywhere in the package, outside other handlers, counts, bar import lines and closure-group Use calls; closure braces are counted naively); a handler delegated to another file (`app.post("/x", ctrl.run)`) is judged on its own lines only; gateway
 limits are not seen; keyword lists are fixed. Upgrade to per-framework parsing if precision matters more.
 """
 import os, re, sys
@@ -49,6 +49,10 @@ SIZEP = re.compile(r"@RequestParam[^\n]*\b(?:(?:int|long|Integer|Long)\s+size|si
 CAP = re.compile(r"\bmin(?:Of)?\(|coerce(?:In|AtMost)|Math\.min|\bmax\(|Math\.max|clamp|\ble\s*=|\bMAX_|\bmax[A-Z_]\w*", re.I)
 SEG = {"search": "search", "export": "export", "exports": "export", "report": "export", "reports": "export", "upload": "upload", "uploads": "upload"}
 EVID = re.compile(r"(?i:rate[-_]?limit|(?<!de)limiter|slowapi|throttler|slow[-_]?down|\bquota|\b429\b|too[-_ ]?many[-_ ]?requests)")
+GROUP = re.compile(r"\.(?:Route|Group)\s*\([^{}\n]*?func\s*\([^)]*\)\s*\{")  # a Go closure group (chi Route/Group, gin or echo Group): the match ends at the closure's `{`
+USE = re.compile(r"\.Use\(((?:[^()]|\([^()]*\))*)\)")
+IMPORT = re.compile(r"^[ \t]*import\b[^;'\"`()]*?\bfrom\s*['\"][^'\"\n]*['\"]|^[ \t]*import\s*['\"][^'\"\n]*['\"]|^[ \t]*(?:const|let|var)\s+[\w${}, \t]+=\s*require\(\s*['\"][^'\"\n]*['\"]\s*\)[ \t]*;?[ \t]*$"
+                    r"|^[ \t]*import\s+[\w., \t]+$|^[ \t]*from\s+[\w.]+\s+import\b(?:[^\n(]*\([^)]*\)|[^\n]*)|\b(?:private|protected|public)\s+(?:(?:readonly|static)\s+)*(?:[\w\\?|]+\s+)?\$\w+|^use\s+(?:function\s+|const\s+)?[\w\\]+[^;\n]*;", re.M)  # JS/TS, Python and PHP import lines
 WITH = re.compile(r"\.With\(((?:[^()]|\([^()]*\))*)\)")
 UB = "unbounded-body"
 MISSING = "%s endpoint with no rate-limit or quota code found in this file or its package (a gateway or host may still limit; confirm with dynamic_probe.py --rate-endpoint)"
@@ -96,6 +100,72 @@ def detach(texts, sks):
             for f, i in rest: texts[f] = texts[f][:i] + " " * len(n) + texts[f][i + len(n):]
 
 
+def noimp(t):
+    """Blank, in masked text t (same length), every import, require or `use` line that names a limiter: it names the library, it does not apply it."""
+    return IMPORT.sub(lambda m: re.sub(r"[^\n]", " ", m[0]) if EVID.search(m[0]) else m[0], t)
+
+
+def block(t, i):
+    """End offset of the brace block whose `{` is t[i] (braces inside strings are counted: a ponytail shortcut)."""
+    d = 0
+    for j in range(i, len(t)):
+        d += (t[j] == "{") - (t[j] == "}")
+        if d == 0: return j + 1
+    return len(t)
+
+
+def groups(texts, us, sks):
+    """Bind a Go `.Use(limiter)` made inside a `Route(`/`Group(` closure to the routes registered inside that closure's braces (innermost closure wins), or `X.Use(...)` on a `X := r.Group(...)` variable to the routes registered on X or its sub-groups. The Use call, and the limiter's
+    `func name(` body (or `name := fn(...)` alias target) when the group is its only user, become skip spans (no cover for the rest of the package); the evidence lines join the registration lines of the closure's handlers.
+    A root-level Use is in no group and stays package cover."""
+    go = {f: t for f, t in texts.items() if f.endswith(".go")}
+    ln = lambda t, i: t.count("\n", 0, i) + 1
+    cs = {f: [(g.end() - 1, block(t, g.end() - 1)) for g in GROUP.finditer(t)] for f, t in go.items()}
+    def grp(f, m):
+        """Handlers of file f registered on the router variable `X` of `X.Use(...)` (match m) when X := <router>.Group(...), or on a sub-group of X; else None."""
+        x = re.search(r"(\w+)\s*$", go[f][:m.start()])
+        fam = {x[1]} if x and re.search(r"\b%s\s*:?=\s*\w+\s*\.\s*Group\s*\(" % re.escape(x[1]), go[f]) else set()
+        while fam and (more := {y[1] for y in re.finditer(r"\b(\w+)\s*:?=\s*(\w+)\s*\.\s*Group\s*\(", go[f]) if y[2] in fam} - fam): fam |= more
+        recv = lambda n: (re.match(r"\s*(\w+)\s*\.", go[f].split("\n")[n - 1]) or [0, None])[1]  # the router variable a registration line starts with
+        if fam: return [u for u in us.get(f, []) if any(r == f and recv(n) in fam for r, n in u[4])]
+    ids = lambda m, g: [(m.start(g) + n.start(), n[0]) for n in re.finditer(r"[A-Za-z_]\w*", m[g])]
+    close = lambda f, a, b: [u for u in us.get(f, []) if any(r == f and ln(go[f], a) <= x <= ln(go[f], b) for r, x in u[4])]  # handlers registered inside a closure
+    calls = []  # (file, Use match, handlers it covers): inside a closure group, or on a Group variable
+    for f, t in go.items():
+        for m in USE.finditer(t):
+            c = [x for x in cs[f] if x[0] < m.start() < x[1]]
+            hs = close(f, *min(c, key=lambda x: x[1] - x[0])) if c else grp(f, m)
+            if hs is not None: calls.append((f, m, hs))
+    scope = {}  # (file, offset) of a scoped use of a name -> (handlers it covers, span to hide from package cover or None)
+    for f, m, hs in calls:
+        for o, _ in ids(m, 1): scope[(f, o)] = (hs, (f, m.start(), m.end()))
+    for f, t in go.items():  # a `.With(...)` chain on a registration line covers just the handlers of that line
+        for a, b in sks[f]:
+            for w in WITH.finditer(t, a, b):
+                for o, _ in ids(w, 1): scope[(f, o)] = ([u for u in us.get(f, []) if (f, ln(t, w.start())) in u[4]], None)
+    for f, m, hs in calls:  # limit code written in the Use call itself
+        if EVID.search(m[1]):
+            for u in hs: u[4].add((f, ln(go[f], m.start())))
+            sks[f].append((m.start(), m.end()))
+    for g, t in go.items():
+        for d in re.finditer(r"^func\s+(\w+)\s*\(", t, re.M):  # a limiter func: its body shows limit code
+            o = t.find("{", d.end())
+            e = block(t, o) if o >= 0 else 0
+            h = EVID.search(t, d.start(), e)
+            if not h: continue
+            own = {d[1]: {(g, d.start(1))}}  # name -> offsets that declare it, not use it: the func, and each alias `n := fn(...)`, `var n = fn(...)`
+            for f, ft in go.items():
+                for x in re.finditer(r"^[ \t]*(?:var\s+)?(\w+)\s*:?=\s*(%s)\s*\(" % re.escape(d[1]), ft, re.M): own[x[1]] = {(f, x.start(1))}; own[d[1]].add((f, x.start(2)))
+            occ = [(f, i.start(), n) for n in own for f, ft in go.items() for i in re.finditer(r"\b%s\b" % re.escape(n), ft) if (f, i.start()) not in own[n]]
+            if not any((f, i) in scope for f, i, _ in occ) or any((f, i) not in scope for f, i, _ in occ): continue  # an unscoped use keeps it package cover
+            cov = (g, ln(t, h.start()))
+            for f, i, _ in occ:
+                hs, sp = scope[(f, i)]
+                for u in hs: u[4].add(cov)
+                if sp: sks[f].append(sp[1:])
+            sks[g].append((d.start(), e))  # every use is scoped: the body is no cover for the rest of the package
+
+
 def kinds(text, route):
     """Sorted cost kinds (llm, send, upload, search, export, page-size) shown by a handler's masked text and route path."""
     k = {SEG[s] for s in re.split(r"[^a-z0-9]+", route.lower()) if s in SEG}
@@ -136,7 +206,9 @@ def analyze(root):
     texts = {f: t for f, t in texts.items() if t is not None}
     sps = {f: spans(t, us.get(f, [])) for f, t in texts.items()}
     evp = {}  # package root -> first (file, token, line) of limit code that can cover any handler of it
+    texts = {f: noimp(t) for f, t in texts.items()}
     sks = regskips(texts, us)
+    groups(texts, us, sks)
     detach(texts, sks)
     def evid(rel, u, own, pk):
         """(file, token, line) of limit code for handler u of rel with span own: its own span, module level or registration line, else any file below package root pk."""

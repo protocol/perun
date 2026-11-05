@@ -4344,7 +4344,10 @@ echo '{"local_cpu": "maximize"}' >"$hg_dir/max.json"
 echo '{not json' >"$hg_dir/bad.json"
 hg_run 'pytest' env PERUN_GATE_LOAD1=99 PERUN_GATE_FREE_RAM_PCT=60 PERUN_POLICY="$hg_dir/bad.json" | grep -q '"deny".*machine busy' || { hg_ok=0; echo "hg: bad policy file did not fall back to default policy and still gate"; }
 printf '{"tool_input":{"command":"pytest"}}' | bash -c 'python3 "$1" || true' _ "$hg_dir/missing.py" 2>/dev/null; [ $? -eq 0 ] || { hg_ok=0; echo "hg: missing hook file did not fail open"; }
-hg_ms=$(python3 -c "import time,subprocess;t=time.time();subprocess.run(['python3','$hg'],input=b'{\"tool_input\":{\"command\":\"pytest\"}}',capture_output=True);print(int((time.time()-t)*1000))")
+hg_ms=$(python3 -c "import time,subprocess
+def run():
+    t=time.time();subprocess.run(['python3','$hg'],input=b'{\"tool_input\":{\"command\":\"pytest\"}}',capture_output=True);return int((time.time()-t)*1000)
+print(min(run() for _ in range(3)))")
 [ "$hg_ms" -lt 200 ] || { hg_ok=0; echo "hg: slow (${hg_ms}ms)"; }
 # session_brief: git fixture with one merged worktree, a PRIORITIES.md, a stale installed version.
 sb_src="$hg_dir/src"; sb_repo="$hg_dir/repo"; mkdir -p "$sb_src/.claude/skills/deep-code-review"

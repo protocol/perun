@@ -71,13 +71,13 @@ class CostLimit(unittest.TestCase):
         self.assertEqual(rows({"a.py": py}), [])
 
     def test_negatives_limiter(self):
-        for name, ev in (("express-rate-limit", 'const rateLimit = require("express-rate-limit");'), ("middleware", "app.use(limiter);"),
-                         ("upstash", 'import { Ratelimit } from "@upstash/ratelimit";'), ("429", "const c = 429;")):
+        for name, ev in (("express-rate-limit", 'app.use(require("express-rate-limit")());'), ("middleware", "app.use(limiter);"),
+                         ("upstash", 'const rl = new Ratelimit({});'), ("429", "const c = 429;")):
             got = rows({"server.js": ev + "\n" + EXPRESS_LLM})
             self.assertEqual([r[2] for r in got], [EVID], name)
         py = rows({"main.py": "from slowapi import Limiter\n@limiter.limit('5/minute')\n" + FAST_LLM})
         self.assertEqual([r[2] for r in py], [EVID])
-        self.assertEqual([r[2] for r in rows({"app.py": "from flask_limiter import Limiter\n" + FLASK_UP})], [EVID])
+        self.assertEqual([r[2] for r in rows({"app.py": "limiter = Limiter(app)\n" + FLASK_UP})], [EVID])
 
     def test_comment_and_bare_throttle_are_not_evidence(self):
         self.assertEqual([r[2] for r in rows({"server.js": "// rateLimit later\n" + EXPRESS_LLM})], [MISS])
