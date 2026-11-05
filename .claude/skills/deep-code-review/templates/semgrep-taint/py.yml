@@ -526,7 +526,7 @@ rules:
           regex: ^(?:.*\.)?(?:ModelSerializer|HyperlinkedModelSerializer|ModelForm)$
   paths:
     exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
-# OWASP API10:2023 unsafe consumption of APIs: a field of a requests/httpx response body (.json(), .text, .content, also from a response variable or a client/session named like *client or *session) reaches a SQL string passed to execute/executemany/executescript/raw/text/read_sql, a file path (open, Path, send_file), an outbound request URL (requests/httpx or a client verb), or a shell command (subprocess, os.system, os.popen) with no validation on the way. A same-file helper function or method that returns such a body is followed at its call sites, and a same-file wrapper whose parameter goes straight to a shell, SQL or file call is a sink at its call sites. int/float/bool, basename, secure_filename, shlex.quote, quote, UUID, hashlib, an as_/validate_/sanitize_/ensure_/assert_/coerce_/clean_/escape_ prefixed function, a lookup in an ALL_CAPS constant map, an in/not-in allowlist test, a regex match or isdigit/isalnum test, and a urlparse/urlsplit of the value (parsing is read as validating) clear the value. A request URL that starts with a literal scheme and host is skipped, a subprocess list is a sink only as `sh -c <value>`. os.path.join is not a sink on its own: the open/Path call that uses its result is. ponytail: OSS semgrep taint is single-file, so a helper defined in another file is not followed, a helper must be defined before its caller in the same block (or class), and the response must come from requests/httpx or a client/session-named object.
+# OWASP API10:2023 unsafe consumption of APIs: a field of a requests/httpx response body (.json(), .text, .content, also from a response variable or a client/session named like *client or *session) reaches a SQL string passed to execute/executemany/executescript/raw/text/read_sql, a file path (open, Path, send_file), an outbound request URL (requests/httpx or a client verb), or a shell command (subprocess, os.system, os.popen) with no validation on the way. A same-file helper function or method that returns such a body is followed at its call sites, and a same-file wrapper whose parameter goes straight to a shell, SQL or file call is a sink at its call sites. int/float/bool, basename, secure_filename, shlex.quote, quote, UUID, hashlib, an as_/validate_/sanitize_/ensure_/assert_/coerce_/clean_/escape_ prefixed function, a lookup in an ALL_CAPS constant map, an in/not-in allowlist test, a regex match or isdigit/isalnum test, and a urlparse/urlsplit of the value (parsing is read as validating) clear the value. A request URL that starts with a literal scheme and host is skipped, a SQL string built with the % operator is left to perun.py.sqli (no duplicate report), a subprocess list is a sink only as `sh -c <value>`. os.path.join is not a sink on its own: the open/Path call that uses its result is. ponytail: OSS semgrep taint is single-file, so a helper defined in another file is not followed, a helper must be defined before its caller in the same block (or class), and the response must come from requests/httpx or a client/session-named object.
 - id: perun.py.unsafe-api-consumption
   mode: taint
   languages: [python]
@@ -747,6 +747,12 @@ rules:
       - pattern: requests.$M($S, ...)
       - pattern: httpx.$M($S, ...)
       - pattern: urlopen($S, ...)
+    - pattern-not:
+        patterns:
+        - pattern: $C.$M($X % $Y, ...)
+        - metavariable-regex:
+            metavariable: $M
+            regex: ^(?:execute|executemany|raw)$
     - metavariable-regex:
         metavariable: $S
         regex: ^(?!\[|f?["']https?://[^/{"']+[/"'])
