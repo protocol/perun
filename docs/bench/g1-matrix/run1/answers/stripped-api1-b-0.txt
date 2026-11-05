@@ -1,0 +1,15 @@
+## Review
+
+**notes.py:12 – API1 Broken Object Level Authorization (High).** `read_note` authenticates the caller via `current_user` but never uses `user`. The query `SELECT ... FROM notes WHERE id = ?` filters only by `note_id`, not by `owner_id`. Any logged-in user can request `/notes/1`, `/notes/2`, and so on, and read other users' notes, including the body. The sibling `list_notes` correctly scopes by `owner_id = user.id`, which shows the intended ownership model and that it was missed here. Integer sequential IDs make enumeration trivial.
+
+Fix: add `AND owner_id = ?` with `user.id`. Keep returning 404 for both missing and foreign notes, so existence isn't leaked.
+
+**notes.py:20 – API4 Unrestricted Resource Consumption (Low).** `list_notes` returns every note for the user with no pagination or maximum page size, so a user with many large notes gets an unbounded result set. The response only includes `id` and `title`, so the impact is limited. This is a hardening point rather than a clear defect, and I'm not reporting it as a finding at the confidence threshold.
+
+Nothing else in this diff stands out: queries are parameterized (no injection), and both routes require authentication.
+
+```json
+[
+  {"file": "notes.py", "line": 12, "owasp_api_2023": "API1"}
+]
+```

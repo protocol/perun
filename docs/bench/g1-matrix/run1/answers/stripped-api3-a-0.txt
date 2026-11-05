@@ -1,0 +1,14 @@
+**Review of `update_profile` (views.py)**
+
+**Main issue: mass assignment (API3, Broken Object Property Level Authorization).** Line 13 passes the entire client-supplied JSON body into `.update(**data)`. The response itself exposes `is_staff` and `credit_balance` as fields on `Profile`, so a user can send `{"is_staff": true}` for privilege escalation or `{"credit_balance": 999999}` to grant themselves money. Any other model field (e.g. `user`, to reassign the profile) is also writable. Fix by using an explicit allow-list (`display_name`, `bio`) or a serializer/form with only those fields.
+
+Secondary points:
+- Unknown keys in the body raise `FieldDoesNotExist`/`FieldError`, and malformed JSON or a non-object body raises an unhandled exception (500). That is a robustness issue rather than a distinct API Top 10 finding, and I did not count it separately.
+- The query is scoped to `request.user`, so there is no object-level authorization (API1) problem. `login_required` is present, so authentication is covered.
+- The response also returns `is_staff` and `credit_balance` to the owner, which is acceptable for their own profile.
+
+```json
+[
+  {"file": "views.py", "line": 13, "owasp_api_2023": "API3"}
+]
+```

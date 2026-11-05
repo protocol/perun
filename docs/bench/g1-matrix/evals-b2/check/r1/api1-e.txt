@@ -1,0 +1,44 @@
+## Findings
+
+**1. Authentication bypass via prototype lookup (API2)**, `policy.js` line 6. `keys` is a plain object literal, so `keys[req.get('x-key')]` resolves inherited properties. Sending `x-key: __proto__` (or `constructor`, `toString`, and so on) returns a truthy value, so `authenticate` passes with no valid key. `req.user` then becomes `Object.prototype` or a function. The membership lookups in `repo.js` coerce that to a string such as `"[object Object]"`, which matches no team. So there is no data leak today, but unauthenticated callers get past the authentication layer. Any future code that trusts `req.user` would inherit the flaw. The fix is to use `Object.hasOwn`, a `Map`, or `Object.create(null)`.
+
+**2. Hardcoded, weak static API keys (API2)**, `policy.js` line 3. Credentials are committed in source as guessable values (`key-alice`, `key-bob`). They have no entropy, rotation, expiry, or hashing. The only brute-force protection is a global per-IP rate limit of 100 requests a minute, and a distributed attacker can get around that.
+
+**3. Unhandled error on non-JSON PATCH body leaks details (API8)**, `projects.js` line 16. `express.json` skips requests that lack a JSON content type, which leaves `req.body` undefined. `req.body.name` then throws a `TypeError`. Malformed JSON also raises a parser error. The app has no error handler, so Express's default handler returns stack traces unless `NODE_ENV=production`. The fix is to add a JSON error handler and guard with `req.body?.name`.
+
+**4. No TLS and no hardening headers (API8)**, `index.js` line 9. The server listens on plain HTTP and sends the `X-Powered-By: Express` header. Nothing like `helmet` is applied, and there is no HTTPS enforcement. The API key is sent in a header on every request, so it can be sniffed in transit.
+
+**Checked and not flagged**
+- BOLA: `loadProject` checks team membership on every `:id` route. Unauthorized and missing projects both return 404, so existence isn't revealed.
+- Mass assignment: PATCH writes only a length-limited `name`.
+- Resource consumption: the body limit is 2kb, the list is capped at 50 items, and a rate limit is in place.
+- Roles: no role model exists, so any team member can edit and see the budget. That is a design choice rather than a defect in the code shown.
+
+```json
+[
+  {
+    "file": "policy.js",
+    "line": 6,
+    "owasp_api_2023": "API2",
+    "why": "keys is a plain object, so x-key values like __proto__ or constructor resolve to inherited, truthy values and pass authentication without a valid key."
+  },
+  {
+    "file": "policy.js",
+    "line": 3,
+    "owasp_api_2023": "API2",
+    "why": "API keys are hardcoded, low-entropy static strings in source, with no rotation, expiry, or hashing, and only a global per-IP rate limit against guessing."
+  },
+  {
+    "file": "projects.js",
+    "line": 16,
+    "owasp_api_2023": "API8",
+    "why": "If the PATCH body is not JSON, req.body is undefined and req.body.name throws. There is no error handler, so the default one can return stack traces, and malformed JSON behaves the same way."
+  },
+  {
+    "file": "index.js",
+    "line": 9,
+    "owasp_api_2023": "API8",
+    "why": "The server listens on plain HTTP with no TLS enforcement, and it sends X-Powered-By and has no security headers such as helmet, so the API key travels in the clear and the stack is disclosed."
+  }
+]
+```

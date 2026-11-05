@@ -1,0 +1,14 @@
+**Review:** I found no OWASP API Top 10 flaws in these files that I'd report with confidence.
+
+- **API1 (object-level authorization):** Every ticket route goes through `load_visible`, which uses `may_view`. That check allows only an agent or the ticket's reporter. Other users get a 404, so ticket existence isn't revealed. The list route filters by `g.user`.
+- **API2 (authentication):** All routes use `@authenticated`. A missing or unknown token returns 401, and `ROLES[name]` is always defined for the tokens in the store. The tokens are static, but that looks like fixture data rather than a code flaw.
+- **API3 (property-level authorization):** List and detail responses are limited to the `VIEW` fields (`id`, `subject`, `state`), so `staff_note` is never exposed there. The comment and close responses return only whitelisted fields.
+- **API4 (resource consumption):** The list is capped at 50 rows, request bodies are capped at 8 KB (`MAX_CONTENT_LENGTH`), and comment text is truncated to 500 characters. There is no rate limit, but nothing here calls a metered downstream service, so I don't count that as a finding.
+- **API5 (function-level authorization):** `/notes` calls `require_agent()` before loading the ticket. `close` is open to the reporter or an agent. Letting a reporter close their own ticket looks like intended behavior, not a privilege gap.
+- **API6 to API10:** There is no sensitive business flow, outbound request, versioned or legacy route, or third-party API consumption in these files. Nothing in the config is misconfigured in a way that matters here.
+
+One robustness issue, not a security one: `request.get_json(force=True).get(...)` raises an error and returns a 500 if the body is a JSON list instead of an object.
+
+```json
+[]
+```

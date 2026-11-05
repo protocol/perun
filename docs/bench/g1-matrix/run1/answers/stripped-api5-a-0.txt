@@ -1,0 +1,21 @@
+**Review of main.go**
+
+The service exposes `/api/users/remove`, which runs `DELETE FROM users WHERE id = ?` with an id taken from the query string. The SQL is parameterized, so there is no injection. The problems are authorization and request handling:
+
+1. **Broken Function Level Authorization (API5), line 25 (`removeUser`) and line 31 (route registration).** `requireSession` only checks that the caller holds *some* valid session. It never checks the caller's role or privileges. Any logged-in low-privilege user can call an administrative, destructive function (deleting users) by supplying an arbitrary id.
+
+2. **Broken Object Level Authorization (API1), line 27.** The handler never checks that the caller owns or may manage the object named by `id`. Any authenticated user can delete any other user's account, including admins, or their own, by changing the `id` parameter. This is a second, distinct mechanism: the missing check is per-object rather than per-function.
+
+3. **Security misconfiguration (API8), lines 25 and 31.** A state-changing delete is reachable through any HTTP method (GET included) because the method is never checked. The session token is also sent via a custom header and the server listens on plain HTTP (`ListenAndServe`, no TLS), so the session identifier can be sniffed. Because GET is accepted, links or prefetchers can trigger deletions. Header-based auth limits CSRF, but the missing method restriction is still a hardening gap. I report the method and cleartext issue at line 32.
+
+Not flagged: the handler does not limit how many deletes a caller can do, but that falls under the authorization problems above rather than a separate resource-consumption flaw I could substantiate. `lookupSession` isn't shown, so I can't assess session validation itself.
+
+**Fixes:** require an admin role (or owner match) in the middleware or handler, restrict to `DELETE`/`POST`, compare the session's user id to `id` for self-service deletion, and serve over TLS.
+
+```json
+[
+  {"file": "main.go", "line": 31, "owasp_api_2023": "API5"},
+  {"file": "main.go", "line": 27, "owasp_api_2023": "API1"},
+  {"file": "main.go", "line": 32, "owasp_api_2023": "API8"}
+]
+```

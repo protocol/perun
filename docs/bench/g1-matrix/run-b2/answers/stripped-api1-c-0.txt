@@ -1,0 +1,20 @@
+## Review
+
+**Main issue: the tracking endpoint skips the ownership check (API1, High).**
+`get` and `setAddress` both call `owns(r, o)` before touching an order. `tracking` in `handlers.go` does not. It only checks that the order exists (`h.store.Get(id)`, line 55) and then returns the order ID, item and `ship_to` address (line 60).
+
+Any valid API key can read another customer's data. For example, `X-Api-Key: k-1` with `GET /orders/2/tracking` returns cust-2's item and home address. IDs are small sequential integers, so enumeration is trivial. The endpoint also returns 404 for missing orders and 200 for others' orders, so it works as an existence oracle too.
+
+**Fix:** use the same `owns` guard and `NotFound` response as the other handlers.
+
+**Lower-confidence observations (not reported as findings):**
+- `authz.go:9` hardcodes API keys in a source-level map. This is a credential-management weakness, but with only two demo keys in this sample I did not count it as a distinct API2 flaw.
+- The `list` endpoint has no pagination and there is no rate limiting. `ReadTimeout`, `WriteTimeout` and the `MaxBytesReader` on the PUT body are present, so resource consumption is reasonably bounded for this size.
+- `setAddress` binds only `Address`, so there is no mass-assignment of `Customer` or `ID`. `get` returns the full order, but only to its owner.
+- `SetAddress` mutates the shared `*Order` while other handlers encode it without the lock. This is a data race, not an API Top 10 issue.
+
+```json
+[
+  {"file": "handlers.go", "line": 55, "owasp_api_2023": "API1"}
+]
+```

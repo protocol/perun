@@ -1,0 +1,13 @@
+**Review: no OWASP API Top 10 findings.**
+
+- **API1 (object-level authorization):** Every `/:id` route runs `loadProject`. It validates the id format (`^p[0-9]{1,6}$`), loads the project, and checks the caller's team membership. Non-members and missing projects get the same 404, so the response doesn't reveal which projects exist. The list route is filtered by `forUser`.
+- **API2 (authentication):** `authenticate` is mounted on the whole `/projects` router and rejects unknown keys with 401. Keys come from the environment. A global rate limit sits in front of it, which slows key guessing.
+- **API3 (property-level authorization):** `PATCH` copies only `name`, as a string truncated to 80 characters. There is no mass assignment, so `team` and `budget` can't be overwritten. `budget` is readable by any team member, which looks intentional.
+- **API4 (resource consumption):** Requests are rate limited, the JSON body is capped at 2kb, and the list is capped at 50 items. Body parsing runs only after authorization.
+- **API5 (function-level authorization):** All team members can rename a project. No roles are defined, so there is no privilege boundary to break.
+- **API6, API7, API9, API10:** There are no sensitive business flows, outbound calls, extra or legacy routes, or third-party API consumption.
+- **API8 (misconfiguration):** `x-powered-by` is disabled. There is no `helmet` and no custom error handler, so malformed JSON on `PATCH` hits Express's default error handler. That leaks stack traces only if `NODE_ENV` isn't `production`, which is a hardening note rather than a finding.
+
+```json
+[]
+```

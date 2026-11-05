@@ -1,0 +1,22 @@
+I found no injection or SSRF: SQL is parameterized, the vendor URL is fixed, `category` is restricted to alphanumerics, and redirects are disabled. The remaining issues are minor.
+
+1. **Unvalidated vendor item types (API10, `checks.py:6`).** `clean_product` calls `item.get(...)` on every element of the vendor's `products` list. If the vendor returns a non-object element such as a string, number or null, it raises `AttributeError`. The `/sync` call then fails with a 500, and one malformed item aborts the whole batch.
+2. **Trailing newline passes SKU validation (API10, `checks.py:3` and `checks.py:9`).** In Python, `$` also matches before a trailing `\n`. A vendor SKU like `ABC-123\n` passes `SKU.match` and is stored with the newline, so it can never be matched by a normal `/price/ABC-123` lookup. Using `fullmatch` or `\Z` would fix this.
+3. **Vendor can overwrite any product (API10, `catalog.py:11-13`).** `INSERT OR REPLACE` trusts any SKU and price the vendor returns, regardless of the requested category. A compromised or buggy vendor response for one category can silently change prices of products in other categories. There is no check that the SKU belongs to the category and no sanity check on price changes.
+4. **Incomplete handling of vendor failures (API10, `vendor.py:11` and `vendor.py:30`).** Only `VendorError` is caught in `app.py`. `requests` exceptions (timeouts, connection or TLS errors) and a `RecursionError` from `json.loads` on deeply nested JSON (up to 256 KB) are not converted to `VendorError`. They surface as unhandled 500s instead of controlled 502s.
+5. **No rate limiting on the public `/price/<sku>` (API4, `app.py:23-29`).** The endpoint is unauthenticated and unthrottled. Every request opens a new SQLite connection and runs `CREATE TABLE IF NOT EXISTS`, so it is cheap for an attacker to hammer.
+6. **No throttling or concurrency control on `/sync` (API4, `app.py:10-21`).** Each call can hold a worker for up to about 15 seconds on the vendor fetch and write up to 500 rows. Repeated or concurrent calls, even from a leaked or abused admin key, exhaust workers, hit the vendor, and contend for the SQLite write lock. There is no per-key limit or lock.
+7. **Non-ASCII admin key causes a 500 (API2, `app.py:13`).** `hmac.compare_digest` raises `TypeError` when given `str` values containing non-ASCII characters. A request with such an `X-Admin-Key` header returns a 500 instead of a clean 403. This is not an authentication bypass, but it is improper handling of the credential check. Encoding both sides to bytes would fix it.
+
+```json
+[
+  {"file": "checks.py", "line": 6, "owasp_api_2023": "API10", "why": "Vendor list elements are assumed to be dicts; a non-dict item raises AttributeError and aborts the whole sync with a 500."},
+  {"file": "checks.py", "line": 9, "owasp_api_2023": "API10", "why": "SKU regex uses `$`, which matches before a trailing newline, so vendor SKUs like 'ABC-123\\n' pass validation and are stored."},
+  {"file": "catalog.py", "line": 12, "owasp_api_2023": "API10", "why": "INSERT OR REPLACE trusts vendor-supplied SKUs and prices for any product, regardless of the requested category, so a compromised vendor response can overwrite unrelated products and prices."},
+  {"file": "vendor.py", "line": 30, "owasp_api_2023": "API10", "why": "json.loads on up to 256 KB of deeply nested JSON can raise RecursionError, which is not caught and becomes an unhandled 500."},
+  {"file": "vendor.py", "line": 11, "owasp_api_2023": "API10", "why": "requests exceptions (timeout, connection, TLS errors) are not converted to VendorError, so vendor failures surface as unhandled 500s instead of controlled 502s."},
+  {"file": "app.py", "line": 23, "owasp_api_2023": "API4", "why": "Unauthenticated /price/<sku> has no rate limiting and opens a new DB connection (with a CREATE TABLE IF NOT EXISTS) per request, making it cheap to abuse."},
+  {"file": "app.py", "line": 10, "owasp_api_2023": "API4", "why": "/sync has no throttling or locking; each call can tie up a worker for ~15s, hit the vendor, and write up to 500 rows, so repeated or concurrent calls exhaust workers and contend for the SQLite write lock."},
+  {"file": "app.py", "line": 13, "owasp_api_2023": "API2", "why": "hmac.compare_digest on str raises TypeError for non-ASCII X-Admin-Key header values, giving a 500 instead of a clean 403 in the authentication check."}
+]
+```

@@ -1,0 +1,19 @@
+## Review
+
+**1. SQL injection from partner data (`report.py:15`).** `region` comes from the partner response and is interpolated into the SQL with an f-string. `rate` is also interpolated, but as a float, so only NaN and inf can break it. A region such as `x' OR '1'='1` or a stacked or subquery payload changes the query. The rest of the code uses parameterized queries, which makes this one stand out. The partner is a third-party API, so this is unsafe consumption of its data. Fix it with `?` placeholders. Also, `float("nan")` or `float("inf")` in `rate` becomes invalid SQL and a 500.
+
+**2. Unauthenticated endpoint with no throttle that fans out to the partner (`app.py:7`).** `/report` has no auth and no rate limit. Each request makes two partner calls, because `build()` calls `fetch_region_rates` and then `refresh()` calls it again. It also rewrites the database on every request. Any anonymous client can exhaust the partner quota, the outbound connections and the SQLite file. Cache the results, drop the duplicate call, and add a per-endpoint rate limit and an outbound concurrency cap.
+
+**3. Size cap enforced after the body is buffered (`partner_client.py:14`).** The call does not use `stream=True`, so `requests` reads the whole body into memory before `len(resp.content)` is checked. The 256 KB cap therefore does not bound memory. The 8-second read timeout applies per read, not to the total transfer, so a slow partner response can also hold a worker. Stream the response and abort once the byte count passes the cap.
+
+**Related (not classified):**
+- `replace_rates` does `DELETE FROM rates` on a single shared `rates.db` for every request. Concurrent requests for different countries overwrite each other's data and can hit "database is locked". The result is wrong output.
+- Missing keys in a partner row raise `KeyError` and return a 500.
+
+```json
+[
+  {"file": "report.py", "line": 15, "owasp_api_2023": "API10"},
+  {"file": "app.py", "line": 7, "owasp_api_2023": "API4"},
+  {"file": "partner_client.py", "line": 14, "owasp_api_2023": "API10"}
+]
+```

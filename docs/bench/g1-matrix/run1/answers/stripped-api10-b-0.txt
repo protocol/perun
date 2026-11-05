@@ -1,0 +1,19 @@
+## Review of fetch.go
+
+**1. Path traversal via upstream-controlled filename (API10, line 31).** `rep.Filename` comes from a partner API's JSON response and is passed straight into `filepath.Join("/var/data/reports", rep.Filename)`. `Join` cleans the path, so a value like `../../etc/cron.d/x` or an absolute-looking name escapes `/var/data/reports`. If the partner is compromised or its response is tampered with, this is an arbitrary file write on the server. This is unsafe consumption of a third-party API: its data is trusted without validation. The decode error is also ignored, so a malformed response yields an empty filename, and `Join` then resolves to the directory itself.
+
+**2. Unbounded upstream body and no timeouts (API4, lines 31-33 and 15/24).** `io.Copy(out, file.Body)` writes whatever the upstream sends with no size cap, so a huge or endless stream can fill the disk. `http.Get` uses the default client with no timeout, so a slow upstream can hold the handler indefinitely. The endpoint has no auth or rate limit visible here, so each inbound request triggers two outbound calls and a disk write. The JSON decode is also unbounded in size.
+
+**3. Missing error and status checks (API10, lines 23-33).** Upstream status codes are never checked, so a 404 or 500 error page is saved as a report. `os.Create` and `io.Copy` errors are discarded, and the handler returns 202 Accepted even when the write failed or was truncated. This lets partially written or bogus data pass as a valid report.
+
+**4. No authentication on the handler (API2/API5).** Nothing in this file shows an auth check. Whether one exists depends on the router, which I haven't seen, so I'm not reporting it as a finding.
+
+The upstream URLs are hardcoded, so there is no SSRF.
+
+```json
+[
+  {"file": "fetch.go", "line": 31, "owasp_api_2023": "API10"},
+  {"file": "fetch.go", "line": 33, "owasp_api_2023": "API4"},
+  {"file": "fetch.go", "line": 24, "owasp_api_2023": "API10"}
+]
+```
