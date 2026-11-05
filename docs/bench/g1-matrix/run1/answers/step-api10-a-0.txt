@@ -1,0 +1,14 @@
+## Review of `sync.py`
+
+**1. SQL injection from partner data (High, `sync.py:16`).** The handler builds the `INSERT` with an f-string from `item['sku']` and `item['name']`, which come straight from the partner's response. A name like `x'); DROP TABLE products;--` or `O'Brien` breaks the statement. Anyone who controls or compromises the partner feed, or sits in the path of a poisoned response, can run SQL against `shop.db`. `require_admin` limits who can trigger the sync, but not what the data does once fetched. Use a parameterized query: `conn.execute("INSERT INTO products (sku, name) VALUES (?, ?)", (item['sku'], item['name']))`. The upstream response is untrusted input, which makes this API10 (unsafe consumption of APIs).
+
+**2. Upstream response used without validation (Medium, `sync.py:12`).** The code calls `.json()` with no `raise_for_status()`, no schema check and no bound on size or item count. Take a failing input: the partner returns an error object such as `{"error": "rate limited"}`. The loop then iterates over its keys and fails with a `TypeError` on `item['sku']`, or a missing `sku` raises `KeyError`. Either failure happens mid-loop and leaves the connection open. A very large payload is fully buffered in memory. Check the status code, validate each item against a schema (types, length limits), cap the response size and item count, and wrap the work in a transaction with try/finally so a failure rolls back and closes the connection.
+
+The partner URL is a hard-coded constant, so there is no SSRF. The route is guarded by `require_admin`, so I found no function-level authorization gap in this diff.
+
+```json
+[
+  {"file": "sync.py", "line": 16, "owasp_api_2023": "API10"},
+  {"file": "sync.py", "line": 12, "owasp_api_2023": "API10"}
+]
+```

@@ -1,0 +1,17 @@
+**Review of profile.js**
+
+This handler looks sound against the API Top 10 classes.
+
+- **API1 (BOLA):** The target record comes from `req.user.id`, which is set by the session. The client supplies no object ID, so one user cannot edit another's profile.
+- **API3 (property-level authorization):** The `EDITABLE` allowlist copies only `displayName`, `bio` and `timezone` from the body. This blocks mass assignment of fields like `role`, `isAdmin`, `email` or `password`. The response also returns only those three fields, so there is no excessive data exposure.
+- **API2 / API5:** `requireLogin` guards the route, and it's a plain self-service function with no privilege tier to bypass.
+- **API4:** There is no per-route cost amplification or external call. Body size limits depend on the app-level `express.json()` configuration, which isn't in this file.
+
+**Robustness notes (not mapped to a class at high confidence):**
+- There is no type validation. If a client sends an object for `displayName`, Mongoose will likely throw a `CastError`. The handler has no `try/catch`, so on Express 4 this becomes an unhandled rejection and the request hangs. Depending on Node settings, it could also crash the process. Validate that the values are strings and bounded in length, and wrap the handler or use an async wrapper.
+- `runValidators` is not set, so any schema length or enum constraints are not enforced on update.
+- If `findByIdAndUpdate` returns `null` (user deleted mid-session), `user.displayName` throws.
+
+```json
+[]
+```

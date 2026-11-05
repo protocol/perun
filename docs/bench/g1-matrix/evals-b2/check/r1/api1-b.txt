@@ -1,0 +1,25 @@
+## Findings
+
+1. **`share` has no ownership check (API1, views.py:37).** Any authenticated user can share any existing document. `can_write` is never called. Ben can call `POST /docs/1/share` with `{"user":"ben"}` and then read Ana's private "Q3 plan". The response also confirms whether the document ID exists, because a missing document returns 404 and an existing one returns 200.
+2. **`share` leaks the sharing list (API3, views.py:41).** The response returns the full `shared_with` list to any caller, including users with no access to the document. The list is an object property that only the owner should see.
+3. **`share` accepts arbitrary targets and the list is unbounded (API4, views.py:36-40).** The target is not checked against known users, and there is no cap on `shared_with` size. Each request can append a new 40-character string, so memory grows without limit. Combined with finding 1, anyone can do this to any document.
+4. **Hardcoded static tokens with no expiry (API2, authz.py:4).** The tokens are fixed strings in source (`t-ana`, `t-ben`). They are guessable, never expire, can't be revoked or rotated, and aren't tied to any real credential.
+5. **No brute-force protection on authentication (API2, authz.py:9-11).** Failed token attempts return 401 with no rate limiting or lockout. Combined with the weak, predictable tokens in finding 4, this makes guessing practical.
+6. **No rate limiting or pagination (API4, views.py:10).** The list endpoint silently truncates to 50 items with no pagination, and no endpoint is rate limited. This is minor, since the in-memory dataset is small.
+7. **`get_json(force=True)` ignores the content type (API8, views.py:26 and 36).** This skips content-type enforcement. A non-object JSON body (such as a list) makes `.get` raise, which produces an unhandled 500 instead of a clean 400. This is minor.
+8. **Plain HTTP with no hardening (API8, app.py:9).** The app serves over HTTP, so `X-Token` is sent in cleartext. There is no TLS, no security headers and no CORS policy. This is minor, since the Flask dev server is likely not the production setup.
+
+`remove` (views.py:43-49) returns 204 without deleting anything. That is a functional bug rather than a security issue, though its authorization check is correct. `show` and `update` enforce object-level checks correctly.
+
+```json
+[
+  {"file": "views.py", "line": 37, "owasp_api_2023": "API1", "why": "share() never checks that the caller owns the document (can_write is not used), so any authenticated user can grant themselves or others read access to any document, and 404 vs 200 reveals which IDs exist."},
+  {"file": "views.py", "line": 41, "owasp_api_2023": "API3", "why": "The share response exposes the full shared_with list to any caller, including users with no access to the document."},
+  {"file": "views.py", "line": 40, "owasp_api_2023": "API4", "why": "Arbitrary unvalidated target strings are appended to shared_with with no cap or rate limit, so the list and memory can grow without bound."},
+  {"file": "authz.py", "line": 4, "owasp_api_2023": "API2", "why": "Hardcoded, static, guessable bearer tokens with no expiry, rotation or revocation."},
+  {"file": "authz.py", "line": 10, "owasp_api_2023": "API2", "why": "No rate limiting or lockout on failed token attempts, so guessing the weak tokens is practical."},
+  {"file": "views.py", "line": 10, "owasp_api_2023": "API4", "why": "The list endpoint has no pagination (it silently truncates to 50) and no endpoint has rate limiting."},
+  {"file": "views.py", "line": 26, "owasp_api_2023": "API8", "why": "get_json(force=True) bypasses content-type checks, and a non-object JSON body causes an unhandled 500. The same pattern appears at line 36."},
+  {"file": "app.py", "line": 9, "owasp_api_2023": "API8", "why": "The app serves plain HTTP with no TLS and no security headers, so the X-Token header is exposed in transit. Minor, since this is likely a dev setup."}
+]
+```

@@ -1,0 +1,25 @@
+## Review of fetch.go
+
+**1. Path traversal from an upstream-supplied filename (High, line 31).**
+`rep.Filename` comes from the partner's JSON response and goes straight into `filepath.Join("/var/data/reports", rep.Filename)`. `Join` cleans the path but does not confine it. A response of `{"filename":"../../etc/cron.d/x"}` or an absolute-looking name with `..` segments makes `os.Create` write outside the reports directory. The file body is also attacker-controlled, so this is an arbitrary file overwrite or creation primitive if the partner is compromised, or if the response is tampered with or redirected. Fix: take `filepath.Base`, reject names containing separators or `..`, and use `os.Root` or verify the resolved path keeps the prefix.
+
+**2. Unbounded upstream body written to disk (Medium, line 33).**
+`io.Copy(out, file.Body)` has no size cap. A large or endless upstream response fills the disk under `/var/data`. Use `io.LimitReader` or `http.MaxBytesReader` with a defined maximum.
+
+**3. No timeout on the outbound calls (Medium, line 16, same pattern at line 25).**
+`http.Get` uses the default client, which has no timeout. A slow or hanging upstream pins the handler goroutine and connection indefinitely. Each inbound request spawns its own outbound calls, so concurrent requests can exhaust the server's resources. Use a client with a timeout or a context deadline.
+
+**Related correctness issues (not separate findings):**
+- The JSON decode error is ignored (line 23).
+- The upstream HTTP status is never checked (lines 16 and 25).
+- The `os.Create` error is ignored (line 31).
+- The handler returns 202 even when the write failed.
+- A missing or empty filename makes `Join` return the directory itself, so the create fails silently.
+
+```json
+[
+  {"file": "fetch.go", "line": 31, "owasp_api_2023": "API10"},
+  {"file": "fetch.go", "line": 33, "owasp_api_2023": "API4"},
+  {"file": "fetch.go", "line": 16, "owasp_api_2023": "API4"}
+]
+```

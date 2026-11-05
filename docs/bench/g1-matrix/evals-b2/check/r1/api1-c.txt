@@ -1,0 +1,24 @@
+I found one clear authorization flaw and four smaller issues.
+
+**Main finding: broken object-level authorization on tracking (API1)**
+- `tracking` in `handlers.go` (lines 55-60) looks up the order by ID and returns it without calling `owns()`. The `get` and `setAddress` handlers both make that check.
+- Any valid API key can read any customer's item and shipping address by walking sequential integer IDs. For example, `k-1` can request `/orders/2/tracking` and get cust-2's address.
+- It also reveals which order IDs exist: a missing ID returns 404, while an existing one returns 200 with data.
+
+**Smaller issues**
+- **Hardcoded API keys (API2):** `authz.go` line 10 defines `tokens` as a static map with trivially guessable keys (`k-1`, `k-2`) in source. There is no rotation, expiry, or hashing. Lookups are plain map comparisons, which are not constant-time. Authentication also has no throttling or lockout.
+- **No rate limiting or pagination (API4):**
+  - `main.go` has no limit on request rate or concurrency, and no `MaxHeaderBytes` or `IdleTimeout`.
+  - `list` (`handlers.go` line 12) returns every matching order with no pagination or cap, so response size is unbounded as data grows.
+  - The unthrottled ID lookups also make the `tracking` enumeration cheap.
+- **Plaintext HTTP (API8):** `main.go` line 21 uses `ListenAndServe` with no TLS, so `X-Api-Key` and customer addresses travel in cleartext unless something in front of the service terminates TLS. The handlers also set no `Content-Type` or security headers on their JSON responses.
+
+```json
+[
+  {"file": "handlers.go", "line": 55, "owasp_api_2023": "API1", "why": "tracking handler fetches the order by ID and returns item and ship_to address without calling owns(); any authenticated customer can read any other customer's order data by enumerating IDs (and 404 vs 200 reveals which IDs exist)."},
+  {"file": "authz.go", "line": 10, "owasp_api_2023": "API2", "why": "API keys are hardcoded, static, and trivially guessable (k-1, k-2), with no rotation, expiry, hashing, or constant-time comparison, and no brute-force protection on authentication."},
+  {"file": "handlers.go", "line": 12, "owasp_api_2023": "API4", "why": "list returns all of a customer's orders with no pagination or limit, so response size is unbounded."},
+  {"file": "main.go", "line": 15, "owasp_api_2023": "API4", "why": "Server has no rate limiting or concurrency limits and sets no MaxHeaderBytes or IdleTimeout, so clients can send unlimited requests (including cheap ID enumeration and key guessing)."},
+  {"file": "main.go", "line": 21, "owasp_api_2023": "API8", "why": "Server listens with plain HTTP (ListenAndServe, no TLS), exposing API keys and addresses in transit; no security headers or content-type are set on responses."}
+]
+```

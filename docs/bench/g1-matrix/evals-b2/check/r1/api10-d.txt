@@ -1,0 +1,23 @@
+I found six issues across the files, one of them in two classes. The first two are the most serious.
+
+1. **Unauthenticated sync (`app.py` 6-10).** `POST /sync/<category>` has no authentication or authorization. Anyone can trigger vendor calls and overwrite database rows. This is both missing authentication (API2) and an exposed privileged function (API5), so I listed it under both.
+2. **No rate limiting on sync (`app.py` 6-10).** Each call makes an outbound vendor request of up to 256 KB and writes up to 500 rows, with no throttling or concurrency control. `GET /price` is also unthrottled, but that is minor.
+3. **Connections never closed (`app.py` 10, 14).** `connect()` opens a new SQLite connection per request, and nothing closes it. Under load this leaks file handles.
+4. **Slow vendor response can tie up workers (`vendor.py` 12, 18).** The `(3, 8)` timeout applies to each socket operation, not to the whole download. A slow-drip vendor response can hold a worker for a long time.
+5. **Vendor response trusted too much (`vendor.py` 22, `checks.py` 6-8).**
+   - The code assumes the JSON is a dict with a list of dicts. A list at the top level, a non-dict `products` value, or non-dict items raise `AttributeError`.
+   - Invalid JSON also raises an uncaught exception.
+   - `VendorError` is not handled in `app.py`, so vendor failures return a 500 and may leak error details if debug mode is on.
+6. **Booleans accepted as prices (`checks.py` 11).** `isinstance(True, int)` is true, so `True` and `False` pass as prices of 1 and 0. This is a minor validation gap on vendor data.
+
+```json
+[
+  {"file": "app.py", "line": 6, "owasp_api_2023": "API2", "why": "POST /sync/<category> has no authentication, so anyone can trigger vendor fetches and overwrite catalog data."},
+  {"file": "app.py", "line": 6, "owasp_api_2023": "API5", "why": "A privileged data-modifying function is exposed to all callers with no role or function-level authorization check."},
+  {"file": "app.py", "line": 10, "owasp_api_2023": "API4", "why": "The sync endpoint triggers an outbound vendor request (up to 256KB) and up to 500 DB writes per call with no rate limiting or concurrency control."},
+  {"file": "app.py", "line": 14, "owasp_api_2023": "API4", "why": "A new SQLite connection is opened per request and never closed (also at line 10), leaking handles and exhausting resources under load. /price is also unthrottled."},
+  {"file": "vendor.py", "line": 12, "owasp_api_2023": "API4", "why": "The (3, 8) timeout applies per socket operation, not to the total download, so a slow-drip vendor response can hold a worker for a long time."},
+  {"file": "vendor.py", "line": 22, "owasp_api_2023": "API10", "why": "The vendor JSON is parsed without handling malformed or unexpected structure (non-dict top level or items), causing unhandled exceptions; VendorError is also not handled by the caller, producing 500s."},
+  {"file": "checks.py", "line": 11, "owasp_api_2023": "API10", "why": "Vendor price validation uses isinstance(price, (int, float)), which accepts booleans, so True/False are stored as prices of 1/0."}
+]
+```

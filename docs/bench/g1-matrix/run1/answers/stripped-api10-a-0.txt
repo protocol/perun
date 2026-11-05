@@ -1,0 +1,19 @@
+**Review of sync.py**
+
+This is a small single-file endpoint, so I reviewed it directly.
+
+1. **Unsafe consumption of a third-party API with SQL injection (API10, line 15-17).** The partner response is parsed and its `sku` and `name` values are interpolated straight into an SQL string via an f-string. A compromised or malicious partner feed (or a MITM, though TLS mitigates it) can send `name = "x'); DROP TABLE products;--"` or similar. sqlite3's `execute` only runs one statement, so stacked queries fail, but injection can still alter the inserted data, and a value such as `x' || (SELECT ...) || '` can pull other data into the product rows. Even a legitimate name like `O'Brien` breaks the insert. Fix with parameterized queries (`VALUES (?, ?)`) and schema validation of the partner payload (for example pydantic models).
+
+2. **No validation of the upstream response (API10, line 13).** `.json()` is called with no status check (`raise_for_status`), no schema check, and no cap on response size or item count. A non-list or malformed payload causes a 500 or a `KeyError`, partway through the loop. An oversized response is loaded fully into memory. Because the inserts are not wrapped in a transaction rollback, a failure mid-loop can leave partial state, since the connection is also never closed on error.
+
+3. **Unbounded resource consumption (API4, line 12-13).** The sync endpoint is admin-only, which limits exposure, but there is no rate limit or concurrency guard, and each call triggers an outbound request and a large synchronous DB write. Repeated or concurrent calls tie up worker threads, and the partner response size is not bounded. This is lower severity given the admin gate.
+
+The auth dependency `require_admin` is applied correctly, and the partner URL is a fixed constant, so there is no SSRF.
+
+```json
+[
+  {"file": "sync.py", "line": 17, "owasp_api_2023": "API10"},
+  {"file": "sync.py", "line": 13, "owasp_api_2023": "API10"},
+  {"file": "sync.py", "line": 12, "owasp_api_2023": "API4"}
+]
+```

@@ -1,0 +1,17 @@
+**Review summary**
+
+1. **Receipt route has no ownership check (API1, High).** `GET /invoices/:id/receipt` in `invoices.js:37` only checks that the invoice exists. It never calls `canAccess`, unlike the `GET /:id` and `PUT /:id` handlers. Any authenticated user can read another user's invoice total, note and status. For example, `tok-a` (u1) requesting `/invoices/2/receipt` gets u2's Globex invoice. The sequential integer IDs make this easy to enumerate.
+
+2. **Session lookup accepts prototype keys (API2, Medium).** In `auth.js:5`, `sessions` is a plain object literal, so `sessions[token]` also resolves inherited properties. With `Authorization: Bearer constructor` (or `__proto__`, `toString`), `uid` is a truthy function or object and `requireUser` passes. The caller is treated as authenticated without a valid token, with `req.user.id` set to a non-string. The ownership checks still fail for that fake user, but the receipt route in finding 1 needs no ownership match. The result is a full authentication bypass for any endpoint that only checks `requireUser`. The fix is to use a `Map` or `Object.create(null)`, or to check `Object.hasOwn`.
+
+**Checked, no finding**
+- `PUT` copies only `note`, trims it to 200 characters and caps the body at 4kb, so there is no mass assignment and the body size is bounded.
+- The list endpoint is scoped to the owner and capped at 50 rows.
+- A global rate limit is in place.
+
+```json
+[
+  {"file": "invoices.js", "line": 37, "owasp_api_2023": "API1"},
+  {"file": "auth.js", "line": 5, "owasp_api_2023": "API2"}
+]
+```

@@ -1,0 +1,15 @@
+**Review of sync.js**
+
+The route is admin-gated and fetches a hardcoded partner URL, so there is no SSRF and no function-level authorization gap. Each item's `sku` and `name` are validated before they reach a parameterized query, so there is no injection.
+
+**Findings**
+
+1. **API10, unsafe consumption of a third-party API (line 11).** The partner response is trusted for size and volume. `resp.json()` buffers the entire body with no byte cap, and the loop on line 14 runs one sequential `INSERT` per element with no limit on the array length. A compromised or misbehaving partner can return a huge payload and exhaust memory, or force millions of DB writes inside one request. The 5s `AbortSignal.timeout` bounds time but not size. Fix this by checking `Content-Length`, reading the body as a stream with a hard byte cap, and clamping `items.length` to a maximum. `fetch` also follows redirects by default; set `redirect: 'error'` or `'manual'` so the partner cannot bounce the server to another host.
+
+2. **Reliability, not a separate OWASP class.** The handler has no `try/catch`. A fetch timeout, a malformed JSON body, or a duplicate-SKU constraint error on the plain `INSERT` becomes an unhandled rejection. In Express 4 that leaves the request hanging or can crash the process. Add error handling, and use an upsert (`ON CONFLICT`) so a re-sync does not fail partway through.
+
+```json
+[
+  {"file": "sync.js", "line": 11, "owasp_api_2023": "API10"}
+]
+```

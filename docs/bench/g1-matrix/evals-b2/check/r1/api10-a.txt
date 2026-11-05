@@ -1,0 +1,34 @@
+## Findings
+
+**1. SQL injection through partner-supplied data (report.py:15), API10**
+`region` comes from the partner response and is interpolated straight into the SQL string with an f-string. The app trusts the third-party API as if it were safe input. A malicious or compromised partner (or anything tampering with its data) could return a region like `x' OR 1=1 --` or a stacked or subquery payload. That would let it alter the query and read or corrupt data in `rates.db`. The fix is a parameterized query: `WHERE region = ? AND rate <= ?`.
+
+**2. Partner response fields are not validated (partner_client.py:21), API10**
+`row["region"]`, `row["rate"]` and `row["currency"]` are used with no type, length or format checks.
+- A missing key raises `KeyError`, which becomes a 500 error.
+- `float()` accepts `nan` and `inf`, which breaks sorting and ranking.
+- Region and currency strings can be arbitrarily long or contain any characters, which feeds finding 1.
+
+**3. Response size limit is enforced after the download (partner_client.py:14), API10 / API4**
+The request is made without `stream=True`, so `resp.content` has already loaded the whole body into memory before the 256 KB check runs. The `(3, 8)` timeout is also per-read rather than a total deadline, so a slow-drip response can hold a worker for a long time.
+
+**4. No rate limiting, and each request fans out to the partner twice (app.py:6, report.py:20-21), API4**
+Each `/report` call runs `fetch_region_rates` twice: once in `build` and once more in `refresh`. Each call is an outbound partner request, so one client request costs two partner calls, a full table delete and rewrite, and a commit. There are only 26² = 676 valid country values, but nothing limits request rate or caches results. Callers can exhaust the partner quota, worker threads and DB write capacity. The rewritten table is also shared by all requests, so concurrent requests overwrite each other's data.
+
+**5. SQLite connection is never closed (report.py:5), API4**
+`refresh` opens a new connection per request and returns it, and `build` never closes it. File descriptors and connections accumulate until garbage collection, which is a resource leak under load.
+
+**6. Endpoint has no authentication (app.py:6), API2**
+`/report` has no authentication or authorization. If it is not meant to be public, anyone can call it, and each call consumes partner quota and writes to the database (see finding 4). I'm flagging this as minor because the endpoint may be intentionally public.
+
+```json
+[
+  {"file": "report.py", "line": 15, "owasp_api_2023": "API10", "why": "Region value from the partner API is interpolated into SQL via an f-string, giving SQL injection from untrusted third-party data; use parameterized queries."},
+  {"file": "partner_client.py", "line": 21, "owasp_api_2023": "API10", "why": "Partner response fields are used without validation (missing keys, NaN/inf rates, unbounded strings), so malformed or malicious upstream data flows into sorting, storage and SQL."},
+  {"file": "partner_client.py", "line": 14, "owasp_api_2023": "API10", "why": "Size limit is checked after resp.content has already buffered the whole body (no stream=True), and the timeout is per-read, so oversized or slow partner responses are still consumed."},
+  {"file": "report.py", "line": 21, "owasp_api_2023": "API4", "why": "build fetches from the partner and then refresh fetches again, doubling outbound calls per request; combined with a full table rewrite and no rate limiting or caching, clients can exhaust partner quota and server resources."},
+  {"file": "app.py", "line": 6, "owasp_api_2023": "API4", "why": "No rate limiting or throttling on /report, whose every call triggers outbound partner requests and database writes."},
+  {"file": "report.py", "line": 5, "owasp_api_2023": "API4", "why": "A new SQLite connection is opened on every request and never closed, leaking connections and file descriptors under load."},
+  {"file": "app.py", "line": 6, "owasp_api_2023": "API2", "why": "The /report endpoint has no authentication, so any caller can trigger partner lookups and database rewrites."}
+]
+```

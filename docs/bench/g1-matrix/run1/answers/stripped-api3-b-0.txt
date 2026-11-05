@@ -1,0 +1,17 @@
+**Review of AccountController.java**
+
+**`PUT /accounts/me` has a mass-assignment flaw (API3, Broken Object Property Level Authorization).** The handler binds the request body straight onto the persistent `Account` entity. It then overwrites only `id` and `email` before calling `repo.save(incoming)`. Every other property the client sends is persisted as supplied. If `Account` has fields such as `role`, `admin`, `enabled`, `balance`, `passwordHash`, `emailVerified` or `tenantId`, any authenticated user can set them on their own record. For example, `PUT /accounts/me {"role":"ADMIN","balance":100000}` escalates privileges.
+
+Because `incoming` replaces the whole row, fields the client omits are saved as null or default values. This can wipe server-managed data such as the password hash, MFA settings or creation timestamps.
+
+The fix is to bind to a DTO that allows only user-editable fields, such as display name and phone. Load `current`, copy those fields onto it and save `current`.
+
+**Object-level authorization (API1) is fine.** The target record comes from `principal.getName()`, not from a client-supplied ID, so there is no BOLA.
+
+**`GET /accounts/me` and the `PUT` response return the raw entity.** If `Account` holds internal or sensitive fields, they are exposed to the caller. I can't confirm that without seeing the entity, so I haven't reported it as a finding. Return a response DTO either way.
+
+```json
+[
+  {"file": "AccountController.java", "line": 21, "owasp_api_2023": "API3"}
+]
+```

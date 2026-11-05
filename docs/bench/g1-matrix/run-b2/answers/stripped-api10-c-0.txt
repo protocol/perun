@@ -1,0 +1,19 @@
+**Review**
+
+The SSRF surface is well handled. `stationID` restricts the path value to `^[A-Z]{4}[0-9]{2}$` before use. The host is a constant, the ID goes through `url.PathEscape`, redirects are disabled and the client has a 6s timeout. I found no API1/2/3/5/7 problems. This is a public read-only feed proxy, so the missing auth is not a flaw here.
+
+Findings:
+
+1. **parse.go:17 (API10, unsafe consumption of APIs).** `io.ReadAll(body)` reads the upstream response with no size cap. The 6s client timeout bounds time, not bytes. A compromised, misbehaving or MITM'd provider can stream a very large body and exhaust memory. This happens before the range checks run. Wrap the body in `io.LimitReader` or `http.MaxBytesReader`, or decode with a size-bounded `json.Decoder`.
+
+2. **main.go:17 (API4, unrestricted resource consumption).** The endpoint is unauthenticated and makes one outbound provider call per request. It has no per-IP or global rate limit, no outbound concurrency cap and no cache. A burst of requests, even across the roughly 67M valid IDs, ties up goroutines and connections. It can also exhaust the provider's per-tenant quota, which would break the service for everyone. Add a rate limit, a bounded semaphore on the outbound leg and a short-TTL cache.
+
+3. **main.go:33 (API8, security misconfiguration).** `http.ListenAndServe` uses the default server, which has no `ReadHeaderTimeout`, `ReadTimeout`, `WriteTimeout`, `IdleTimeout` or `MaxHeaderBytes`. Slow-header (slowloris) clients can hold connections open indefinitely. Use an explicit `http.Server` with those timeouts set.
+
+```json
+[
+  {"file": "parse.go", "line": 17, "owasp_api_2023": "API10"},
+  {"file": "main.go", "line": 17, "owasp_api_2023": "API4"},
+  {"file": "main.go", "line": 33, "owasp_api_2023": "API8"}
+]
+```

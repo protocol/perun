@@ -1,0 +1,22 @@
+## Review
+
+This is a small codebase, so I reviewed it directly without loading the reference files.
+
+**views.py `share` (line ~34):** The endpoint only checks that the doc exists. It never calls `can_write`, so any authenticated user (e.g. ben) can share any document (e.g. ana's doc 1) with any user, including themselves, and then read it. This is a broken object-level authorization (BOLA) flaw. The response also returns the full `shared_with` list to a non-owner.
+
+**views.py `remove` (line ~45):** The handler checks authorization but never deletes the document. This is a functional bug, not a security one (the authorization check is correct), so I'm not reporting it as a finding.
+
+**views.py `update` / `share` (`force=True`):** `request.get_json(force=True)` ignores the Content-Type. If the body is not a JSON object (e.g. a list or `null`), `.get` raises an AttributeError, which results in a 500. This is a low-severity robustness problem, not a clean OWASP match, so I'm leaving it out.
+
+**authz.py (line 4):** Tokens are hardcoded static strings (`t-ana`, `t-ben`) with no expiry or rotation, and they are committed in source. This is weak authentication (API2).
+
+**app.py:** `MAX_CONTENT_LENGTH` is set, so request bodies are bounded. `index` caps results at 50. There is no rate limiting, but nothing here is a sensitive business flow or a metered call, so I'm not flagging it.
+
+**Other notes:** Using 404 for denied access avoids revealing whether a document exists, which is fine. `share` returns 404 for a missing doc, but it doesn't differentiate it from the permission case because there is no permission check at all.
+
+```json
+[
+  {"file": "views.py", "line": 34, "owasp_api_2023": "API1"},
+  {"file": "authz.py", "line": 4, "owasp_api_2023": "API2"}
+]
+```

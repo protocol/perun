@@ -2043,7 +2043,7 @@ MUTANTS = [
     ('".register" in raw or "addHook" in raw', '".register" in raw'), ('".register" in raw or "addHook" in raw', '"addHook" in raw'),
     # main
     ("len(a) != 1 or not os.path.isdir(a[0])", "len(a) < 1 or not os.path.isdir(a[0])"), ("len(a) != 1 or not os.path.isdir(a[0])", "len(a) != 1"),
-    ("print(\"usage: route_auth_map.py [--paths | --all] DIR\", file=sys.stderr); return 2", "print(\"usage: route_auth_map.py [--paths | --all] DIR\", file=sys.stderr); return 1"),
+    ("print(\"usage: route_auth_map.py [--paths | --all | --privileged] DIR\", file=sys.stderr); return 2", "print(\"usage: route_auth_map.py [--paths | --all] DIR\", file=sys.stderr); return 1"),
     ('if "--all" in argv[1:]:', 'if "--all" in argv[2:]:'),
     ('m in ("GET", "ANY")', 'm in ("GET",)'), ('m in ("GET", "ANY")', 'm in ("ANY",)'), ('m in ("GET", "ANY")', 'm in ("GET", "ANY", "POST")'),
     ("        return 0\n    rows, files =", "        return 1\n    rows, files ="),
@@ -2150,7 +2150,7 @@ class RouteAuthMap(unittest.TestCase):
             for argv in ([], [t, t], ["--paths"], ["--bogus", t], [os.path.join(t, "nope")]):
                 r = subprocess.run([sys.executable, "-I", str(SCRIPT), *argv], capture_output=True, text=True)
                 self.assertEqual(r.returncode, 2, argv)
-                self.assertIn("usage: route_auth_map.py [--paths | --all] DIR", r.stderr)
+                self.assertIn("usage: route_auth_map.py [--paths | --all | --privileged] DIR", r.stderr)
 
     def test_writes_nothing_beside_the_script(self):
         with tempfile.TemporaryDirectory() as t:

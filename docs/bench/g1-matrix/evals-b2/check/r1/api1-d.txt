@@ -1,0 +1,28 @@
+## Findings
+
+**1. `GET /tickets/` returns the `staff_note` field to non-agents (API3, Broken Object Property Level Authorization)**
+
+- `routes.py` line 16 returns `by_reporter(g.user)[:50]` straight to `jsonify`. This serializes the full ticket dict, including `staff_note`.
+- The single-ticket endpoint (`one`, lines 22-23) allowlists `id`, `subject` and `state`. The `/notes` endpoint is agent-only (`require_agent()`).
+- Any member listing their own tickets therefore reads internal staff notes. For example, carla sees "check tray" and "done". This bypasses the property-level restriction enforced elsewhere.
+- The fix is to apply the same field allowlist in the list endpoint.
+
+## Reviewed, not flagged
+
+- **Object-level access:** `load_visible` checks `may_view` (agent or reporter) and returns 404 for both missing and unauthorized tickets, so there is no BOLA and no existence oracle. It is applied to the `one`, `comment`, `notes` and `close` endpoints.
+- **Function-level access:** `/notes` calls `require_agent()`. `close` is limited to the ticket's reporter or an agent, which looks like intended behavior.
+- **Resource consumption:** the list is capped at 50, comment text at 500 characters and the request body at 8 KB.
+- **Tokens:** the static tokens in `store.py` look like demo seed data. In production they would need to be random, expiring and stored hashed.
+- **Rate limiting:** none exists, but I did not find a concrete exploitable path beyond that general gap, so I did not list it.
+- **Malformed JSON bodies:** a non-object JSON body in `comment` would raise a 500 (`.get` on a non-dict). That is a robustness problem, not an OWASP API class issue.
+
+```json
+[
+  {
+    "file": "routes.py",
+    "line": 16,
+    "owasp_api_2023": "API3",
+    "why": "The list endpoint returns full ticket dicts, including the internal staff_note field, to members. The detail endpoint allowlists fields and /notes is agent-only, so this exposes a property that should be restricted to agents."
+  }
+]
+```
