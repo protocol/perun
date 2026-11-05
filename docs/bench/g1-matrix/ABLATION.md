@@ -60,3 +60,30 @@ The item stays unstatused. There are two remaining paths: an (a) deterministic d
 | fixture `fixtures/api5-a/main.go` sha256 | c2c5293b48613ce63804bff6d0b6a97b7fe2ddedc39cd1ae2ea2768fb4ca5abe |
 | fixture `fixtures/api5-b/users.js` sha256 | b0a67bdf8980f4f851f5812148ad11fb6dee06918e7b21a9d579e98e3677052b |
 | fixture `fixtures/api5-c/users.py` sha256 | 359841f14d23052ba4bdab403dfefdc1cb4d6508d570a07f12c8023d0503f02a |
+
+## Result (run 1, 2026-11-05)
+
+BLUF: no item reached status (b). The run finished with exit 0, cost $0.23 on `sonnet` (15 calls), at plan-quota utilization 0.43. Raw answers and `result.json` are in `run1/`.
+
+| Item | Stripped arm (pass per fixture) | Step arm | Verdict |
+|---|---|---|---|
+| API1 | 3/3 | not run (stop rule) | not (b): stripped arm passes every fixture |
+| API3 | 3/3 | not run (stop rule) | not (b): stripped arm passes every fixture |
+| API5 | 3/3 | not run (stop rule) | not (b): stripped arm passes every fixture |
+| API10 | 2/3 (negative `api10-c` flagged) | 2/3 (negative `api10-c` flagged) | not (b): step arm fails a fixture |
+
+On `api10-c`, both arms flagged the upstream JSON body and item array, which have no size bound. That is a plausible real weakness, so this negative was not clean on API10. The result stands as scored, and the fixtures are burned.
+
+What this shows: on small single-file textbook cases, a model without these steps already finds the flaw, so the steps were not shown to matter. It says nothing about larger or multi-file code.
+
+## Next path (decided 2026-11-05)
+
+A decision council scored the options mixed 3.55, detect 2.95 and harder 2.50. Only two of five seats returned a valid answer, and both voted REVISE. Three adversarial checks (failure, irreversibility, hidden cost) each returned OK-WITH-MITIGATION.
+
+- API3: an (a) detector for inbound mass assignment, where a request body is spread or bound straight into a model create or update. It starts with JavaScript and Python. Other languages and the over-exposure direction are listed as not covered.
+- API5: an (a) status, extending `route_auth_map.py` to flag privileged routes (admin paths, role or permission changes, destructive actions on other users' records) that are guarded only by authentication.
+- API1 and API10: a new blind eval set, then one preregistered ablation with no re-run. A fresh agent writes the set under rules committed before authoring: multi-file cases, authorization split across middleware, and negatives that are clean on every API class. If either item still fails, the fallback is a narrow-scope (a) detector, not (c). API6 and API9 already take (c) to 20% of the list, and moving API1 and API10 to (c) as well would leave no slack under the 40% cap.
+- Before any label counts, an independent model audits each new detector on at least 30 held-out cases, written blind from a published seed.
+- Kill criteria, by 2026-11-19:
+  - Drop a detector whose precision is below 0.7 on its held-out cases.
+  - Stop and re-plan on any audit rejection among these four labels. One rejection is already 25% of the four, over the gate's 10% line.

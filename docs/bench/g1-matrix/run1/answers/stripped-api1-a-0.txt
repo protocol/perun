@@ -1,0 +1,17 @@
+## Review
+
+**API1 – Broken Object Level Authorization (High)** – `orders.js:7-9`: `GET /invoices/:id` is gated only by `requireLogin`, then loads the invoice by the client-supplied id with `Invoice.findById` and returns it without checking `invoice.ownerId === req.user.id`. Any logged-in user can read any other customer's invoice (name, total, items) by supplying or enumerating ids. Failing input: user A requests `/invoices/<id of user B's invoice>` and gets a 200 with B's data. The sibling list route (line 20) does scope by `ownerId`, which shows the intended ownership model was skipped on the single-object route. Fix: query with `{ _id: req.params.id, ownerId: req.user.id }` and return 404 on miss.
+
+**API4 – Unrestricted Resource Consumption (Medium)** – `orders.js:20`: `GET /invoices` returns every invoice for the owner with no pagination or server-side maximum. A user with a large invoice set (or an automation that creates many) forces the server to materialize and serialize the whole set per request. Fix: clamp `limit` to a hard max and paginate.
+
+**API3 – Broken Object Property Level Authorization (Medium)** – `orders.js:21`: the list route serializes the raw model documents (`res.json(list)`), unlike the detail route which uses an explicit field allow-list. Any internal fields on the Invoice model (e.g. `ownerId`, internal notes, cost/margin, payment references) are exposed to the caller. Fix: map to the same explicit projection as the detail route.
+
+Also noted, not reported as separate findings: async handlers have no error handling, so on Express 4 a rejected `findById` (e.g. malformed id cast error) leaves the request unhandled rather than returning a clean error.
+
+```json
+[
+  {"file": "orders.js", "line": 8, "owasp_api_2023": "API1"},
+  {"file": "orders.js", "line": 21, "owasp_api_2023": "API3"},
+  {"file": "orders.js", "line": 20, "owasp_api_2023": "API4"}
+]
+```

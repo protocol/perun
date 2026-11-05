@@ -1,0 +1,17 @@
+## Review of sync.js
+
+The route is admin-gated and calls a fixed, hardcoded partner URL, so there is no SSRF (API7) and no obvious BFLA (API5). The upstream call has a 5s timeout, and each item's `sku` and `name` are validated before use, with parameterized SQL. The remaining problems are in how the upstream response is consumed.
+
+**1. Unsafe consumption of upstream API (API10), line 15.** The code trusts the partner response structurally. `items` is checked as an array, but each element is not checked. If an element is `null`, `item.sku` throws a TypeError. The handler is async, and Express 4 does not catch rejected promises. That leaves the request hanging and can produce an unhandled rejection, which on modern Node can crash the process. Likewise, `fetch` and `resp.json()` have no try/catch. A network error or invalid JSON from the partner has the same effect.
+
+**2. Unsafe consumption, line 16 (API10).** The `INSERT` has no upsert or `ON CONFLICT` handling. A duplicate SKU, either in the feed or already in the table, throws mid-loop. That leaves a partial import with no transaction and an unhandled rejection. The upstream data therefore controls whether the sync succeeds.
+
+**3. Unrestricted resource consumption (API4), lines 10-13.** Only the timeout is bounded. The response body size and the item count are not capped. `resp.json()` buffers the whole body (the 5s signal does cover body reading, but a fast partner can still send a very large payload). The loop then does one sequential DB insert per item with no limit, so a compromised or misbehaving upstream can exhaust memory or tie up the DB. There is also no rate limit or concurrency guard on the endpoint, so repeated admin calls (or a leaked admin session) can run overlapping long syncs.
+
+```json
+[
+  {"file": "sync.js", "line": 15, "owasp_api_2023": "API10"},
+  {"file": "sync.js", "line": 16, "owasp_api_2023": "API10"},
+  {"file": "sync.js", "line": 12, "owasp_api_2023": "API4"}
+]
+```

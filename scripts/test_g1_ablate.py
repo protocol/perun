@@ -82,7 +82,9 @@ class Score(unittest.TestCase):
 
 class Run(unittest.TestCase):
     def go(self, mode, cap="15", noquota=False):
-        d = tempfile.mkdtemp(prefix="g1ab-")
+        td = tempfile.TemporaryDirectory(prefix="g1ab-")
+        self.addCleanup(td.cleanup)
+        d = td.name
         fake = Path(d) / "bin/claude"
         fake.parent.mkdir()
         fake.write_text(FAKE)
