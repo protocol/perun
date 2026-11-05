@@ -1594,3 +1594,40 @@ rules:
             regex: ^(?:has|includes|test)$
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+# OWASP API3:2023 inbound mass assignment: a whole request body (or a spread of it, or a variable assigned from it) handed to a model create/update/assign. ponytail: search-mode, one block hop (`const d = req.body; ... M.create(d)`); no cross-function flow, and an allow-list applied to the body first (pick, destructure, schema parse) never matches because the argument is then a call or a new name.
+- id: perun.js.mass-assignment
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: Whole request body written to a model (mass assignment). Pick named fields or validate against a schema before create or update.
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either: &mass_sinks
+        - pattern: $M.create($B, ...)
+        - pattern: $M.build($B, ...)
+        - pattern: $M.update($B, ...)
+        - pattern: $M.updateOne($F, $B, ...)
+        - pattern: $M.findByIdAndUpdate($I, $B, ...)
+        - pattern: $M.findOneAndUpdate($F, $B, ...)
+        - pattern: $D.set($B)
+        - patterns:
+          - pattern: new $M($B)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(?!Map$|Set$|WeakMap$|WeakSet$|URLSearchParams$|FormData$|Headers$|Date$|Error$|Promise$|Response$|Request$|Object$|Array$|Buffer$)
+        - pattern: Object.assign($D, $B)
+      - metavariable-regex:
+          metavariable: $B
+          regex: &mass_re '^(?:(?:req|request|ctx\.request)\.body|\{\s*\.\.\.(?:req|request|ctx\.request)\.body\s*(?:,[^{}]*)?\}|\{\s*\$set:\s*(?:req|request|ctx\.request)\.body\s*\})$'
+    - patterns:
+      - pattern-either: *mass_sinks
+      - pattern-inside: |
+          $B = $SRC;
+          ...
+      - metavariable-regex:
+          metavariable: $SRC
+          regex: *mass_re
+  - pattern-not: Object.assign({}, ...)
+  - pattern-not: Object.assign([], ...)
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]

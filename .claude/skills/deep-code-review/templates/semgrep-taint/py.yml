@@ -465,3 +465,64 @@ rules:
       regex: ^(?:(?:.*(?:[._]|[a-z0-9](?=[A-Z])))?(?i:pass|passwd|password|passcode|passphrase|secret|token|credentials?|api_?key|(?:secret|private|signing|encryption|session|jwt|hmac|master|access|auth|client|app|service|service_role|webhook)_?key)|.*(?:_|[a-z0-9](?=[A-Z]))(?i:pwd))$
   paths:
     exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+# OWASP API3:2023 inbound mass assignment: a whole request body (or a variable assigned from it) unpacked or passed into a model constructor, create or update; a setattr loop over request keys; DRF ModelSerializer/ModelForm with fields = "__all__". ponytail: search-mode, one block hop (`d = request.get_json(); ... User(**d)`); no cross-function flow. A schema or pydantic parse first (the argument is then a call or a new name) never matches.
+- id: perun.py.mass-assignment
+  languages: [python]
+  severity: WARNING
+  message: Whole request body written to a model (mass assignment). Pick named fields or validate against a schema with fixed fields.
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either: &mass_sinks
+        - patterns:
+          - pattern: $M(**$B)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(?:.*\.)?[A-Z]\w*$
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(?!.*(?:In|Input|Schema|Payload|Request|Body|DTO|Params|Args|Form|Create|Update)$)
+        - pattern: $M.objects.create(**$B)
+        - pattern: $M.objects.update_or_create(**$B)
+        - pattern: $M.objects.get_or_create(defaults=$B, ...)
+        - pattern: $M.create(**$B)
+        - pattern: $Q.update(**$B)
+        - pattern: $Q.filter_by(...).update($B)
+        - pattern: $Q.filter(...).update($B)
+        - pattern: $O.__dict__.update($B)
+      - metavariable-regex:
+          metavariable: $B
+          regex: &mass_re '^(?:request\.(?:json|data|POST|form)|(?:await\s+)?request\.json\(\)|request\.get_json\([^()]*\)|request\.POST\.dict\(\)|request\.form\.to_dict\(\))$'
+    - patterns:
+      - pattern-either: *mass_sinks
+      - pattern-inside: |
+          $B = $SRC
+          ...
+      - metavariable-regex:
+          metavariable: $SRC
+          regex: *mass_re
+    - patterns:
+      - pattern: |
+          for $K, $V in $SRC.items():
+            ...
+            setattr($O, $K, $V)
+      - pattern-not: |
+          for $K, $V in $SRC.items():
+            ...
+            if $K in $A:
+              ...
+      - metavariable-regex:
+          metavariable: $SRC
+          regex: *mass_re
+    - patterns:
+      - pattern: fields = "__all__"
+      - pattern-inside: |
+          class $C($BASE):
+            ...
+            class Meta:
+              ...
+      - metavariable-regex:
+          metavariable: $BASE
+          regex: ^(?:.*\.)?(?:ModelSerializer|HyperlinkedModelSerializer|ModelForm)$
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
