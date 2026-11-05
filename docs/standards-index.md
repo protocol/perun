@@ -1925,3 +1925,16 @@ Not fetched, no URL: a community report that a token without admin can get a 404
 |---|---|---|
 | sveltejs/kit — @sveltejs/kit reference, Cookies | https://svelte.dev/docs/kit/@sveltejs-kit | Fetched 2026-10-31: the `Cookies` reference says "The `httpOnly` is `true` by default, as is `secure`, except during development, when it defaults to `false`." Basis for `event.cookies.set` being a receiver of `perun.js.auth-cookie-flags` that is reported only for a literal `httpOnly: false` or `secure: false`: a missing flag is the documented default there, not a defect. |
 | pillarjs/cookies — README | https://github.com/pillarjs/cookies | Fetched 2026-10-31: `httpOnly` is "true by default"; `secure` is "false by default for HTTP, true by default for HTTPS". This is the cookies object behind Koa's `ctx.cookies`. Basis for `ctx.cookies.set`, `context.cookies.set`, `this.cookies.set` and a bare `cookies.set` being receivers of `perun.js.auth-cookie-flags` that are reported only for a literal `httpOnly: false` or `secure: false`. The defaults of other frameworks that expose a bare `cookies.set` were not checked, so their missing flags are not reported. |
+
+## Verified by direct fetch (2026-11-05) — G1 standards matrix denominators
+
+Verification date: **2026-11-05**. Raw-byte sha256 of each fetch and the item ids and titles are in `docs/bench/g1-matrix/`.
+
+| Standard / source | URL | What was confirmed |
+|---|---|---|
+| OWASP ASVS 5.0.0 flat CSV | https://raw.githubusercontent.com/OWASP/ASVS/v5.0.0/5.0/docs_en/OWASP_Application_Security_Verification_Standard_5.0.0_en.csv | 345 requirements; 253 with `L` <= 2 (70 L1, 183 L2). |
+| OWASP Top 10:2025 | https://top10.owasp.org/2025/ | A01:2025–A10:2025, 10 items. |
+| OWASP API Security Top 10 (2023) | https://api-security.owasp.org/editions/2023/en/0x11-t10/ | API1:2023–API10:2023, 10 items. |
+| CWE Top 25 (2025) | https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html | 25 ranked CWEs. |
+| OWASP Top 10 for LLM Applications 2025 | https://genai.owasp.org/llm-top-10/ | LLM01:2025–LLM10:2025, 10 items. |
+| OWASP Top 10 for Agentic Applications 2026 (announcement, 2025-12-09) | https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/ | ASI01–ASI10, 10 items. The resource landing page (https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) was also fetched but does not list titles; the PDF was not fetched. |
