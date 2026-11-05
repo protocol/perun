@@ -8,6 +8,8 @@ Run 2: API1's detector passes with precision 1.0 (7 of 7 reports) and recall 0.4
 
 Run 3: API5's second detector passes on a fresh set, `h5b`, with precision 0.857 (12 of 14 reports) and recall 0.8 (12 of 15). It keeps (a), pending the audit.
 
+Run 4: API10's second detector fails on a fresh set, `h10b`, with precision 0.625 (10 of 16 reports) and recall 0.667 (10 of 15). Under `RULES-amend1.md` it goes to the owner. It is not labelled (c), and no third detector is built without an owner decision.
+
 ## Run
 - The scorer is `score.py`, sha256 `1224864eaf779a677e267a2ab107f27cad3302cf31471fee15f2604dd6e64d42`. It was written after both sets existed, but before the coordinator read any case and before the first run, and it was not changed after scoring. It takes the detector from git at the frozen commit with `git archive` and scans each case directory once. It makes no model calls.
 - API3: semgrep 1.183.0, rules `perun.js.mass-assignment` and `perun.py.mass-assignment` at `02f5d8406`. API5: `route_auth_map.py --privileged` at `00550ed93`.
@@ -77,6 +79,24 @@ Precision 0.857 (12 of 14 reports), recall 0.8 (12 of 15).
 | False positives | 2 | h5b-10 (an inline `me.role not in MODERATORS` check), h5b-25 (a Flask `@roles_required("admin", "ops")` under `@token_required`) |
 
 Uncovered shapes stated beside the label: role assignment through a create on a path with no admin word, an admin prefix set on a router object, and chained `route(...).put(...)` handlers. These are in addition to the limits stated when the detector was frozen: guards mounted or defined in another file, imported router prefixes, read-only admin GETs, a fixed list of state-changing verbs, and custom guards without an admin, role, permission or staff-style name.
+
+## Run 4 (API10 second detector)
+- This run follows `RULES-amend1.md`. The detector is semgrep 1.183.0 with the rules `perun.py.unsafe-api-consumption`, `perun.js.unsafe-api-consumption`, `perun.py.tls-verify-off` and `perun.js.tls-verify-off` at `93de177bb`. It was frozen and pushed before `h10b` was first read, and `h10` was its development set.
+- `h10b` was written by a fresh agent from `RULES.md`, `RULES-amend1.md`, the OWASP API10 page and the API10 scope line. It never saw `h10`, the results or any detector.
+- The scorer is unchanged (`score.py`, sha256 `bb55c8d1…`). The set ran once, and no case was re-labelled after scoring.
+
+## API10b (second detector fails, to the owner)
+Precision 0.625 (10 of 16 reports), recall 0.667 (10 of 15).
+
+| | Count | Cases |
+|---|---|---|
+| True positives | 10 | h10b-01, h10b-02, h10b-03, h10b-04, h10b-05, h10b-09, h10b-10, h10b-11, h10b-13, h10b-15 |
+| Missed positives | 5 | h10b-06 (`verify=False` inside a multi-line `httpx.Client(...)`, reported on the call's first line, 4 lines from the truth line), h10b-07, h10b-08 and h10b-14 (a response field reaching SQL or a shell command through a helper in another file), h10b-12 (a response field reaching a `promisify(exec)` wrapper; the only report is on the outbound request line) |
+| False positives | 6 | h10b-02 line 16 (a second report in a positive), h10b-06 line 7 and h10b-12 line 9 (the misplaced reports above), h10b-17 line 23, h10b-17 line 24 (a path checked by a `realpath` and `commonpath` helper whose name the rule does not read as a validator), h10b-28 line 10 (an outbound request whose URL holds a function parameter, not a response field) |
+
+Notes, none of which change the score:
+- Three of the five misses are helpers in another file, a limit stated when the detector was frozen.
+- h10b-02 line 16 and h10b-17 line 23 both fetch a URL taken from a response body, the shape that h10b-03 labels positive. Under `RULES.md` they still count as false positives.
 
 ## Audit plan (declared before the first audit call)
 - Runner: `audit.py`, committed with this section. It builds the prompt only from committed files and records the prompt's sha256.

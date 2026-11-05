@@ -57,3 +57,14 @@ Twins on A:
 - Irreversibility: none. It is local commits and subagent tokens.
 - Hidden cost: if API3 is later rejected, the re-plan may make `h5b` and `h10b` moot, at a cost of about two author lanes. Accepted.
 - Verdict: no unmitigable BLOCK and nothing irreversible. Only the auditor gap goes to the owner.
+
+# Run 4 outcome: API10 goes to the owner (11-05 06:03)
+
+The second API10 detector (`93de177bb`) scored precision 0.625 on `h10b`, below the 0.7 kill line. `RULES-amend1.md` fixes the route in advance: a fail goes to the owner, not to (c) and not to a third attempt. No council was run, because the amendment already decides the route.
+
+
+# Revision: API10 duplicate reports (11-05 05:56)
+
+The hidden-cost mitigation above asked for a seeded test showing that no line gets both an API10 report and a report from an older rule. The second detector has that test, and it passes on the seeded cases. Two things limit what it shows:
+- A first fix skipped every `%`-formatted SQL string. That was dropped, because `perun.py.sqli` takes its taint only from function parameters, `request` fields and `input()`, so a response field that reached `%`-formatted SQL through a local would have been missed by both rules. The frozen detector (`93de177bb`) skips only a `%` operand that is a parameter of the enclosing function.
+- The overlap is not gone in general. When a function fetches a response with a URL built from one of its parameters, `perun.py.sqli` follows that parameter through the call into the response, so both rules report the same SQL line. The seeded cases avoid that shape. Removing it would mean dropping real API10 reports or changing the older rule, so it stays: one line can show two findings, and both are correct. Merging rows that share a line is a reporting change for later.
