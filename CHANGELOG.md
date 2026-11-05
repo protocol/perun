@@ -3,6 +3,23 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.650.0] — 2026-11-05
+
+### Fixed
+- `cost_limit_map.py` no longer reports limit evidence for routes the limiter does not cover. Import, require and PHP `use` lines, and PHP DI declarations, are not evidence. A Go limiter used only inside a chi `Route`/`Group` closure, a gin/echo `v := r.Group(...)` group, or a registration-line `.With(...)` covers only those routes, including through a factory's aliases. Root `Use` middleware still covers the package. Tests in `scripts/test_cost_limit_binding.py`.
+
+### Added
+- `cost_limit_map.py` and every consumer of the `route_auth_map.py` inventory (`--all`, attempt-limit, csrf-cookie) now see PHP handlers: Symfony `#[Route]` attributes and `@Route` annotations (with the class-level prefix) and Laravel `Route::get|post|put|patch|delete|any`. New cost kind `send` (email or SMS through a vendor API or library), a one-hop LLM-through-a-repo-helper rule, and `->chat(` style model-receiver calls. Tests in `scripts/test_cost_limit_recall.py`.
+
+### Fixed
+- `cost_limit_map.py`: a Go limiter that handlers attach only through `.With(limiter)` on another route's registration no longer counts as cover for unrelated routes (a `Use(limiter)` or module-level limiter still does), and limit evidence is no longer taken from a file of a different language family.
+
+### Changed
+- `report_contract_lint.py` prints a final `FAIL: this report is not deliverable ...` line to stderr when it finds violations (stdout stays one violation per line). In `--done` mode it says the draft is deleted and to resend from `--part 1`, so a failed lint no longer reads as permission to deliver the draft anyway. Tests in `scripts/test_report_contract_lint.py`.
+
+### Added
+- `route_auth_map.py` finds raw-dispatch HTTP handlers (node:http `createServer`, `Deno.serve`, `Bun.serve`, a `fetch(request)` handler): one handler per `pathname === "/x"` plus method branch or `switch (pathname)` case, so route-auth, cost-limit, csrf-cookie, attempt-limit and pii-data no longer skip such repos as "no HTTP handlers". Identity evidence before the dispatch counts; a branch with no method test is skipped.
+
 ## [1.649.0] — 2026-11-05
 
 ### Fixed
