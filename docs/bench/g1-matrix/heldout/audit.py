@@ -12,9 +12,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 URL = "https://llm.hpc.psnc.pl/v1/chat/completions"
 SK = ".claude/skills/deep-code-review"
-DETECTOR = {"api3": [f"{SK}/templates/semgrep-taint/js.yml", f"{SK}/templates/semgrep-taint/py.yml"],
+DETECTOR = {"api1": [f"{SK}/scripts/ownership_sibling_check.py"],
+            "api3": [f"{SK}/templates/semgrep-taint/js.yml", f"{SK}/templates/semgrep-taint/py.yml"],
             "api5": [f"{SK}/scripts/route_auth_map.py", f"{SK}/scripts/tenant_scope_check.py"]}
-RULE_IDS = {"api3": "the semgrep rules perun.js.mass-assignment and perun.py.mass-assignment (only these rules are shown from their files)",
+RULE_IDS = {"api1": "ownership_sibling_check.py",
+            "api3": "the semgrep rules perun.js.mass-assignment and perun.py.mass-assignment (only these rules are shown from their files)",
             "api5": "route_auth_map.py --privileged"}
 SYSTEM = "You are an independent application security auditor. You decide whether a static detector earns a status label. You are strict, and you give reasons."
 ASK = """Item: OWASP API Security Top 10:2023 {label}, narrowed to the scope line in RULES.md.
@@ -22,7 +24,8 @@ Status (a) means a deterministic detector, with seeded positive and negative tes
 The detector is {rule_ids}.
 Question: does this detector detect the item's class within its stated scope well enough to earn status (a)? Answer ACCEPT or REJECT, with reasons. If you think a case is mislabelled, say so, but do not re-score.
 End with exactly one fenced json block: {{"verdict": "ACCEPT" or "REJECT", "reasons": [...], "mislabelled_cases": [...]}}."""
-LABEL = {"api3": "API3 Broken Object Property Level Authorization (inbound mass assignment)",
+LABEL = {"api1": "API1 Broken Object Level Authorization (a handler that skips an ownership check its sibling makes)",
+         "api3": "API3 Broken Object Property Level Authorization (inbound mass assignment)",
          "api5": "API5 Broken Function Level Authorization"}
 
 

@@ -16,8 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HELDOUT = ROOT / "docs" / "bench" / "g1-matrix" / "heldout"
-SCORER_SHA256 = "1224864eaf779a677e267a2ab107f27cad3302cf31471fee15f2604dd6e64d42"
-SETS = ("api3", "api5")
+SCORER_SHA256 = "bb55c8d12338a2b2b7809026ca07aec6ab8a6f4f96b3cdc2babf217b58eacc96"
+SETS = ("api1", "api3", "api5", "api10")
 
 
 def _sha256(path: Path) -> str:
