@@ -168,6 +168,39 @@ def scores_ok(sc, options, crit) -> bool:
     return isinstance(sc, dict) and all(isinstance(sc.get(o), dict) and all(num(sc[o].get(c)) for c in crit) for o in options)
 
 
+def norm_scores(sc, options, crit):
+    """Canonical {option: {criterion: number}} from a seat's scores, or None. Names match case- and punctuation-insensitively,
+    numeric strings count, a transposed {criterion: {option: n}} matrix is accepted. Missing or out-of-range cells -> None."""
+    key = lambda s: re.sub(r"[^a-z0-9]", "", str(s).lower())
+
+    def num(v):
+        try:
+            return float(v) if isinstance(v, str) else v
+        except ValueError:
+            return None
+
+    def grid(rows, rn, cn):  # rows keyed by rn, cells by cn
+        if not isinstance(rows, dict):
+            return None
+        rk = {key(k): v for k, v in rows.items()}
+        out = {}
+        for r in rn:
+            cells = rk.get(key(r))
+            if not isinstance(cells, dict):
+                return None
+            ck = {key(k): v for k, v in cells.items()}
+            out[r] = {c: num(ck.get(key(c))) for c in cn}
+        return out
+
+    for rn, cn, flip in ((options, crit, False), (list(crit), options, True)):
+        g = grid(sc, rn, cn)
+        if g is not None:
+            m = {o: {c: (g[c][o] if flip else g[o][c]) for c in crit} for o in options}
+            if scores_ok(m, options, crit):
+                return m
+    return None
+
+
 def aggregate(answers: list, options: list, crit: dict, chair) -> tuple:
     """Deterministic decision: weighted mean over seats and criteria; ties go to the chair's own top
     option among the tied, then to option order (do-nothing first, the cautious choice). -> (decision, totals)"""
@@ -294,9 +327,23 @@ def run(a, st=None) -> dict:
         try:
             d = parse(raw, "claims")
             if crit and d.get("scores") is None:  # scores may arrive as a second JSON object, under "scores" or bare
-                d["scores"] = next((c for o in objs(raw) for c in (o.get("scores"), o) if scores_ok(c, options, crit)), None)
-            if crit and not scores_ok(d.get("scores"), options, crit):
-                raise ValueError("bad scores")
+                d["scores"] = next((n for o in objs(raw) for c in (o.get("scores"), o) if (n := norm_scores(c, options, crit))), None)
+            elif crit:
+                d["scores"] = norm_scores(d["scores"], options, crit)
+            if crit and d.get("scores") is None:  # one repair re-ask of this seat, through call() so caps apply
+                fix = (f"{lenses[k]}\n\n{body}{fence('SELF', raw, secrets.token_hex(8))}\n\n"  # a fresh call has no memory: give it the question and its own answer
+                       f"STAGE: SCORES REPAIR\nThe scores in your answer above were unusable. Reply with ONLY one JSON object "
+                       f'{{"scores": {{option: {{criterion: number 0..5}}}}}} covering exactly these OPTIONS: {"; ".join(options)} '
+                       f"and these CRITERIA: {', '.join(crit)}. Use those names verbatim; every cell a number from 0 to 5.\n")
+                note = ""
+                try:
+                    fixed = call(cmd, fix)
+                    d["scores"] = next((n for o in objs(fixed) for c in (o.get("scores"), o) if (n := norm_scores(c, options, crit))), None)
+                except Stop as e:
+                    why.append(str(e))
+                    note = f" (repair failed: {e})"
+                if d["scores"] is None:
+                    raise ValueError(f"bad scores{note}; raw: " + " ".join(raw.split())[:300])
         except (ValueError, KeyError) as e:
             rec["dropped"].append([lenses[k], f"malformed answer: {e}"])
             continue  # dropped seat lowers confidence; <2 parseable fails closed below
