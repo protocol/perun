@@ -9,6 +9,7 @@ BLUF: an item gets status (b) only if its blind eval passes with the guided step
 - Evals: `docs/bench/g1-matrix/evals-b/` (12 fixtures, hashes below). See its README for how they were made. The coordinator read the fixtures before this protocol was written.
 
 ## Arms
+- Model: `sonnet` in both arms, chosen before any call because it is the project's default model for lanes. The rival_eval default (`haiku`) was not used: a weaker model fails more often without the step, which would favor (b).
 - Both arms make one no-tools model call per fixture. The system prompt is `SKILL.md` followed by `references/security-api.md`. The user prompt is the fixture files, each under its path, then the API1 to API10 labels with titles only, then the output instruction. The labels and the instruction are identical in both arms.
 - Step arm: the reference as committed.
 - Stripped arm: the same text with the three item paragraphs removed. No other byte differs. A test asserts that the stripped text has no match for IDOR, BOLA, BFLA, mass assignment, over-posting, allow-list of bindable fields, privileged verb, or upstream response.
@@ -42,11 +43,11 @@ The item stays unstatused. There are two remaining paths: an (a) deterministic d
 ## Frozen inputs
 | Input | Value |
 |---|---|
-| model | `haiku` |
+| model | `sonnet` |
 | `SKILL.md` git blob | 05da29c4e0811866bb9361f8b0680e59e0aea20b |
 | `security-api.md` git blob | 39bce3f1ba1a8aef53dfbb4b439679efdbe34029 |
 | `evals.json` sha256 | 0522f25cb86a8ebe1110720c66ffc3df5da29a795bec90901187aaf8cbd7657f |
-| `ablate.py` sha256 | 7319c42976845e04a82fe367df0bc23d7b20a88abe0add8213a0bed62975d996 |
+| `ablate.py` sha256 | 042a77a9ccf468add46b2a3b9aee33638ccfe87b8acc5761a28b959dc02a2c65 |
 | fixture `fixtures/api1-a/orders.js` sha256 | 57c9e32790de78eba9e581f83b06defe1d62a64ba9a7b1951962217d88e016c7 |
 | fixture `fixtures/api1-b/notes.py` sha256 | 9f8402cbfd31252fd03d587ad642e132606c9ee94fb94b74c109e3a1de8b2d5e |
 | fixture `fixtures/api1-c/views.py` sha256 | 6de79ded9b6d97f5f0f7e3afc2eaa7bc4d5da7941ecd882e6140195b2d20de48 |

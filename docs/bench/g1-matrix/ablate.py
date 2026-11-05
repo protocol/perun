@@ -20,6 +20,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 import rival_eval as R  # noqa: E402  (claude_call, State, Stop, CLAUDE_MODEL, QUOTA_STOP)
+R.CLAUDE_MODEL = "sonnet"  # fixed before any call: the project's default lane model; rival_eval's haiku default would weaken the stripped arm and favor (b)
 
 SKILL = ROOT / ".claude/skills/deep-code-review/SKILL.md"
 REF = ROOT / ".claude/skills/deep-code-review/references/security-api.md"

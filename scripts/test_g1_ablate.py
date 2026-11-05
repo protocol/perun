@@ -57,6 +57,9 @@ class Strip(unittest.TestCase):
         self.assertEqual(s, "\n\n".join(p for p in ref.split("\n\n") if p not in paras))
         self.assertEqual(len(ref) - len(s), sum(len(p) + 2 for p in paras))
 
+    def test_model_is_sonnet(self):
+        self.assertEqual(ablate.R.CLAUDE_MODEL, "sonnet")
+
 
 class Score(unittest.TestCase):
     def blk(self, items):
