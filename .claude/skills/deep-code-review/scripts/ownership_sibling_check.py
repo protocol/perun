@@ -176,12 +176,17 @@ def py_handlers(s, stores):
         m = re.match(r"^(\s*)(?:async\s+)?def\s+(\w+)\s*\(", ln)
         if not m: continue
         ind = len(m.group(1))
-        j, d = i, 0
+        j, d, one = i, 0, None
         while j < len(lines):  # signature ends at the line closing its brackets and ending in `:`
             d += sum(lines[j].count(c) for c in "([{") - sum(lines[j].count(c) for c in ")]}")
             if d <= 0 and lines[j].rstrip().endswith(":"): break
+            one = d <= 0 and re.search(r"\)\s*(?:->[^:]*)?:\s*(?=[^\s#])", lines[j])  # one-line handler `def f(): return 1`
+            if one: break
             j += 1
-        sig = "\n".join(lines[i:j + 1])
+        j = min(j, len(lines) - 1)
+        sig, inline, col = "\n".join(lines[i:j + 1]), "", 0
+        if one:
+            col = one.end(); sig = "\n".join(lines[i:j] + [lines[j][:col]]); inline = lines[j][col:]
         e = j + 1
         while e < len(lines) and (not lines[e].strip() or len(lines[e]) - len(lines[e].lstrip()) > ind): e += 1
         deco, k = [], i - 1
@@ -194,11 +199,11 @@ def py_handlers(s, stores):
         first = next((n for n in names if n not in ("self", "cls")), "")
         if not (PY_ROUTE.search(deco) or first in ("request", "req")): continue
         client = {n for n, ann, dflt in params if n not in INFRA and "Request" not in ann and not re.search(r"\b(?:Depends|Security)\(", dflt)}
-        body = "\n".join(lines[j + 1:e])
+        body = "\n".join(([inline] if one else []) + lines[j + 1:e])
         for a in re.finditer(r"^\s*([\w, ]+?)\s*=\s*(.*)$", body, re.M):
             if re.search(PY_SRC, a.group(2)): client |= {x.strip() for x in a.group(1).split(",") if x.strip().isidentifier()}
         ctx = deco + "\n" + sig + "\n" + class_ctx(lines, i, ind)
-        h = H(m.group(2), offs[j + 1], body, ctx, client, False)
+        h = H(m.group(2), offs[j] + col if one else offs[j + 1], body, ctx, client, False)
         h.sig = sig
         hs.append(h)
     return hs
@@ -375,7 +380,10 @@ def main(argv):
         if rel.startswith(".."): rel = os.path.abspath(f)
         if f in seen: continue
         seen.add(f)
-        for _, _, line in scan_file(f, rel):
+        try: out = list(scan_file(f, rel))
+        except Exception as ex:
+            print(f"ownership_sibling_check: skipped {rel}: {ex}", file=sys.stderr); continue
+        for _, _, line in out:
             print(line); n += 1
     print(f"heuristic; scanned {len(seen)} files; silence is not proof of object-level authorization", file=sys.stderr)
     return 0

@@ -313,6 +313,42 @@ class OwnershipSiblingCheck(unittest.TestCase):
         self.assertEqual(run().returncode, 2)
         self.assertEqual(run("/nonexistent-acme-path").returncode, 2)
 
+    def test_one_line_handler_at_eof_no_crash(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "v.py").write_text(FLASK_BASE + "@app.route('/x')\ndef f(): return 1")
+            r = run(d)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertNotIn("Traceback", r.stderr)
+
+    def test_one_line_handler_matches_multiline(self):
+        sib = "@app.route('/o/<oid>', methods=['DELETE'])\ndef delete(oid):\n    o = Order.query.filter_by(id=oid, user_id=current_user.id).first_or_404()\n    return '', 204\n"
+        outs = []
+        for name, head in (("one", "@app.route('/o/<oid>')\ndef get(oid): return Order.query.get(oid)\n\n"),
+                           ("multi", "@app.route('/o/<oid>')\ndef get(oid):\n    return Order.query.get(oid)\n\n")):
+            with tempfile.TemporaryDirectory() as d:
+                (Path(d) / "v.py").write_text(FLASK_BASE + head + sib)
+                r = run(d)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(len(r.stdout.splitlines()), 1, r.stdout)
+                self.assertIn("get loads order by client id", r.stdout)
+                outs.append(r.stdout.split(": ", 1)[1])
+        self.assertEqual(outs[0], outs[1])
+
+    def test_failing_file_skipped_others_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "a_bad.py").write_text(FLASK_BASE)
+            (Path(d) / "b_good.py").write_text(CASES["pos_flask_query_get.py"][0])
+            wrap = ("import sys,runpy\nsys.argv=['x',%r]\nimport importlib.util as u\n"
+                    "sp=u.spec_from_file_location('osc',%r);m=u.module_from_spec(sp);sp.loader.exec_module(m)\n"
+                    "o=m.scan_file\n"
+                    "def sf(f,rel):\n    if 'a_bad' in f: raise ValueError('boom')\n    return o(f,rel)\n"
+                    "m.scan_file=sf\nsys.exit(m.main(sys.argv))\n") % (d, str(SCRIPT))
+            r = subprocess.run([sys.executable, "-I", "-c", wrap], capture_output=True, text=True, timeout=60, check=False)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("ownership_sibling_check: skipped", r.stderr)
+            self.assertIn("boom", r.stderr)
+            self.assertEqual(len(r.stdout.splitlines()), 1, r.stdout)
+
     def test_coverage_floor(self):
         self.assertGreaterEqual(sum(w is not None for _, w in CASES.values()), 8)
         self.assertGreaterEqual(sum(w is None for _, w in CASES.values()), 8)
