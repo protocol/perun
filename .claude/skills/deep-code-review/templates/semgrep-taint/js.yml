@@ -1631,7 +1631,7 @@ rules:
   - pattern-not: Object.assign([], ...)
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
-# OWASP API10:2023 unsafe consumption of APIs: a field of a fetch or axios response body (await res.json()/.text(), axios .data, a then-callback parameter, or a destructured { data }) reaches a SQL string passed to query/execute/raw, a file path (fs read/write calls, path.join/resolve), an outbound fetch/axios/got URL, or a child_process command with no validation on the way. parseInt/parseFloat/Number, path.basename, encodeURIComponent, Number.isInteger, an allowlist .has/.includes guard and a regex .test guard clear the value. A URL that starts with a literal scheme and host is skipped. ponytail: taint stays inside one file (no cross-file helper), a response bound to a variable is followed only when it is assigned from fetch/axios in the same function, and spawn/execFile argument lists are not sinks.
+# OWASP API10:2023 unsafe consumption of APIs: a field of a fetch or axios response body (await res.json()/.text(), axios .data, a then-callback parameter, a destructured { data }, also from an instance named like *client, *session, *api or *instance) reaches a SQL string passed to query/execute/raw, a file path (fs read/write calls), an outbound fetch/axios/got URL, or a child_process command with no validation on the way. A same-file helper (function, async arrow or class method, called plain or through this) that returns such a body is followed at its call sites, and a same-file wrapper whose first parameter goes straight to exec, a query or an fs call is a sink at its call sites. parseInt/parseFloat/Number, path.basename, encodeURIComponent, crypto.createHash(...).update, an as/validate/sanitize/ensure/assert/coerce/clean/escape prefixed function, a lookup in an ALL_CAPS constant map, Number.isInteger, an allowlist .has/.includes guard, a regex .test guard and new URL(value) clear the value. A URL that starts with a literal scheme and host is skipped. path.join is not a sink on its own: the fs call that uses its result is. ponytail: OSS semgrep taint is single-file, so a helper defined in another file is not followed, a helper must be defined before its caller, spawn/execFile argument lists are not sinks, and an instance named like http is not a source (the node http module shares the name).
 - id: perun.js.unsafe-api-consumption
   mode: taint
   languages: [javascript, typescript]
@@ -1641,9 +1641,7 @@ rules:
   - pattern-either:
     - pattern: (await fetch(...)).json()
     - pattern: (await fetch(...)).text()
-    - pattern: (await axios.$M(...)).data
     - pattern: (await axios(...)).data
-    - pattern: '{ ..., data: $D, ... } = await axios.$M(...)'
     - pattern: '{ ..., data: $D, ... } = await axios(...)'
     - patterns:
       - pattern-either:
@@ -1653,15 +1651,6 @@ rules:
           $R = await fetch(...);
           ...
     - patterns:
-      - pattern: $R.data
-      - pattern-inside: |
-          $R = await axios.$M(...);
-          ...
-    - patterns:
-      - pattern: $R.data
-      - pattern-inside: |
-          axios.$M(...).then(($R) => { ... })
-    - patterns:
       - pattern: $D
       - pattern-inside: |
           fetch(...).then(($R) => $R.json()).then(($D) => { ... })
@@ -1669,6 +1658,353 @@ rules:
       - pattern: $D
       - pattern-inside: |
           fetch(...).then(($R) => { return $R.json(); }).then(($D) => { ... })
+  - patterns:
+    - pattern: (await $C.$M(...)).data
+    - metavariable-regex:
+        metavariable: $C
+        regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+  - patterns:
+    - pattern: '{ ..., data: $D, ... } = await $C.$M(...)'
+    - metavariable-regex:
+        metavariable: $C
+        regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+  - patterns:
+    - pattern: $R.data
+    - pattern-inside: |
+        $R = await $C.$M(...);
+        ...
+    - metavariable-regex:
+        metavariable: $C
+        regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+  - patterns:
+    - pattern: $R.data
+    - pattern-inside: |
+        $C.$M(...).then(($R) => { ... })
+    - metavariable-regex:
+        metavariable: $C
+        regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+  - patterns:
+    - pattern: $F(...)
+    - pattern-either:
+      - patterns:
+        - pattern-inside: |
+            function $F(...) {
+              <... fetch(...) ...>;
+              ...
+              return <... $R.$P ...>;
+            }
+            ...
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+      - patterns:
+        - pattern-inside: |
+            function $F(...) {
+              <... $X.$M(...) ...>;
+              ...
+              return <... $R.$P ...>;
+            }
+            ...
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+      - patterns:
+        - pattern-inside: |
+            function $F(...) {
+              ...
+              { ..., data: $D, ... } = await $X.$M(...);
+              ...
+              return $D;
+            }
+            ...
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+      - patterns:
+        - pattern-inside: |
+            function $F(...) {
+              return <... $R.$P ...>;
+            }
+            ...
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $R
+            regex: '(?s)^\(?\s*await\s+(?:fetch\(|(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)\.\w+\()'
+      - patterns:
+        - pattern-inside: |
+            function $F(...) {
+              return fetch(...).then(($R) => $R.$P);
+            }
+            ...
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+      - patterns:
+        - pattern-inside: |
+            function $F(...) {
+              return $X.$M(...).then(($R) => $R.$P);
+            }
+            ...
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+      - patterns:
+        - pattern-inside: |
+            const $F = async (...) => {
+              <... fetch(...) ...>;
+              ...
+              return <... $R.$P ...>;
+            };
+            ...
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+      - patterns:
+        - pattern-inside: |
+            const $F = async (...) => {
+              <... $X.$M(...) ...>;
+              ...
+              return <... $R.$P ...>;
+            };
+            ...
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+      - patterns:
+        - pattern-inside: |
+            const $F = async (...) => {
+              ...
+              { ..., data: $D, ... } = await $X.$M(...);
+              ...
+              return $D;
+            };
+            ...
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+      - patterns:
+        - pattern-inside: |
+            const $F = async (...) => {
+              return <... $R.$P ...>;
+            };
+            ...
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $R
+            regex: '(?s)^\(?\s*await\s+(?:fetch\(|(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)\.\w+\()'
+      - patterns:
+        - pattern-inside: |
+            const $F = async (...) => {
+              return fetch(...).then(($R) => $R.$P);
+            };
+            ...
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+      - patterns:
+        - pattern-inside: |
+            const $F = async (...) => {
+              return $X.$M(...).then(($R) => $R.$P);
+            };
+            ...
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                <... fetch(...) ...>;
+                ...
+                return <... $R.$P ...>;
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                <... $X.$M(...) ...>;
+                ...
+                return <... $R.$P ...>;
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                ...
+                { ..., data: $D, ... } = await $X.$M(...);
+                ...
+                return $D;
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                return <... $R.$P ...>;
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $R
+            regex: '(?s)^\(?\s*await\s+(?:fetch\(|(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)\.\w+\()'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                return fetch(...).then(($R) => $R.$P);
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                return $X.$M(...).then(($R) => $R.$P);
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+  - patterns:
+    - pattern: this.$F(...)
+    - pattern-either:
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                <... fetch(...) ...>;
+                ...
+                return <... $R.$P ...>;
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                <... $X.$M(...) ...>;
+                ...
+                return <... $R.$P ...>;
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                ...
+                { ..., data: $D, ... } = await $X.$M(...);
+                ...
+                return $D;
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                return <... $R.$P ...>;
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $R
+            regex: '(?s)^\(?\s*await\s+(?:fetch\(|(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)\.\w+\()'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                return fetch(...).then(($R) => $R.$P);
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+      - patterns:
+        - pattern-inside: |
+            class $C {
+              ...
+              $F(...) {
+                return $X.$M(...).then(($R) => $R.$P);
+              }
+              ...
+            }
+        - metavariable-regex:
+            metavariable: $P
+            regex: '^(?:json|text|data|body)$'
+        - metavariable-regex:
+            metavariable: $X
+            regex: '^(?:axios|got|(?:.*\.)?\w*(?i:client|session|api|instance)\w*)$'
   pattern-sinks:
   - patterns:
     - pattern-either:
@@ -1677,8 +2013,6 @@ rules:
       - pattern: $C.raw($S, ...)
       - pattern: $C.$queryRawUnsafe($S, ...)
       - pattern: $C.$executeRawUnsafe($S, ...)
-      - pattern: path.join(..., $S, ...)
-      - pattern: path.resolve(..., $S, ...)
       - pattern: fetch($S, ...)
       - pattern: axios($S, ...)
       - pattern: axios.$M($S, ...)
@@ -1704,6 +2038,39 @@ rules:
         metavariable: $F
         regex: ^(?:readFile|readFileSync|writeFile|writeFileSync|appendFile|appendFileSync|createReadStream|createWriteStream|unlink|unlinkSync|rm|rmSync|rename|renameSync|readdir|readdirSync|open|openSync|copyFile|copyFileSync|mkdir|mkdirSync)$
     - focus-metavariable: $S
+  - patterns:
+    - pattern: $W($S, ...)
+    - pattern-either:
+      - pattern-inside: |
+          function $W($P, ...) {
+            ...
+            $K($P, ...);
+            ...
+          }
+          ...
+      - pattern-inside: |
+          function $W($P, ...) {
+            ...
+            return $K($P, ...);
+          }
+          ...
+      - pattern-inside: |
+          function $W($P, ...) {
+            ...
+            return new Promise(($A, $B) => {
+              ...
+              $K($P, ...);
+              ...
+            });
+          }
+          ...
+      - pattern-inside: |
+          const $W = ($P, ...) => $K($P, ...);
+          ...
+    - metavariable-regex:
+        metavariable: $K
+        regex: ^(?:exec|execSync|(?:child_process|cp)\.exec(?:Sync)?|(?:\w+\.)?(?:query|execute)|fs(?:\.promises)?\.(?:readFile|writeFile|readFileSync|writeFileSync|appendFile|createReadStream|createWriteStream|unlink))$
+    - focus-metavariable: $S
   pattern-sanitizers:
   - pattern-either:
     - pattern: parseInt(...)
@@ -1713,6 +2080,17 @@ rules:
     - pattern: encodeURIComponent(...)
     - pattern: encodeURI(...)
     - pattern: String(Number(...))
+    - pattern: crypto.createHash(...).update(...)
+    - patterns:
+      - pattern: $F(...)
+      - metavariable-regex:
+          metavariable: $F
+          regex: ^(?:as|validate|sanitize|ensure|assert|coerce|clean|escape)[A-Z_]\w*$
+    - patterns:
+      - pattern: $D[...]
+      - metavariable-regex:
+          metavariable: $D
+          regex: ^[A-Z][A-Z0-9_]+$
   - by-side-effect: true
     patterns:
     - pattern-either:
@@ -1721,10 +2099,11 @@ rules:
       - pattern: $RE.test($X)
       - pattern: Number.isInteger($X)
       - pattern: $X in $A
+      - pattern: new URL($X)
     - focus-metavariable: $X
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
-# OWASP API10:2023 TLS verification turned off on an outbound HTTP client: rejectUnauthorized: false in an options object (https.Agent, tls.connect, https.request, axios httpsAgent, node-fetch agent), strictSSL: false, process.env.NODE_TLS_REJECT_UNAUTHORIZED set to "0" or 0. ponytail: search-mode, so false held in a variable is not matched.
+# OWASP API10:2023 TLS verification turned off on an outbound HTTP client: rejectUnauthorized: false in an options object (https.Agent, tls.connect, https.request, axios httpsAgent, node-fetch agent), strictSSL: false, rejectUnauthorized: 0, process.env.NODE_TLS_REJECT_UNAUTHORIZED set to "0" or 0, also as a key in an env object. ponytail: search-mode, so false held in a variable is not matched.
 - id: perun.js.tls-verify-off
   languages: [javascript, typescript]
   severity: WARNING
@@ -1734,6 +2113,9 @@ rules:
   - pattern: '{ ..., strictSSL: false, ... }'
   - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
   - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
+  - pattern: '{ ..., NODE_TLS_REJECT_UNAUTHORIZED: "0", ... }'
+  - pattern: '{ ..., NODE_TLS_REJECT_UNAUTHORIZED: 0, ... }'
+  - pattern: '{ ..., rejectUnauthorized: 0, ... }'
   - pattern: process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
