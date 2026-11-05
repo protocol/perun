@@ -79,6 +79,25 @@ def reindex(user=Depends(get_current_user)):
     return {}
 """
 
+ROLE_PATCH_POS = """const express = require('express');
+const app = express();
+const { requireAuth } = require('./auth');
+app.patch('/users/:id/role', requireAuth, (req, res) => {
+  User.updateOne({ _id: req.params.id }, { role: req.body.role });
+  res.sendStatus(204);
+});
+"""
+
+ROLES_INCLUDES_NEG = """const express = require('express');
+const app = express();
+const { requireAuth } = require('./auth');
+app.patch('/users/:id/role', requireAuth, (req, res) => {
+  if (!req.user.roles.includes('admin')) return res.sendStatus(403);
+  User.updateOne({ _id: req.params.id }, { role: req.body.role });
+  res.sendStatus(204);
+});
+"""
+
 
 class Api5(unittest.TestCase):
     def rows(self, name, body, *flags):
@@ -93,6 +112,12 @@ class Api5(unittest.TestCase):
 
     def test_express_positive(self):
         self.assertEqual(self.priv("a.js", EXPRESS_POS), {("a.js", 4), ("a.js", 8)})
+
+    def test_role_word_in_body_still_flagged(self):
+        self.assertEqual(self.priv("r.js", ROLE_PATCH_POS), {("r.js", 4)})
+
+    def test_roles_includes_guard_clean(self):
+        self.assertEqual(self.priv("r.js", ROLES_INCLUDES_NEG), set())
 
     def test_flask_positive(self):
         self.assertEqual(self.priv("a.py", FLASK_POS), {("a.py", 4)})

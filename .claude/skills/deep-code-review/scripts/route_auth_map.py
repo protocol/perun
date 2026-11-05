@@ -703,7 +703,9 @@ def inventory(root):
 PRIVSEG = re.compile(r"admin|administrator|superuser|backoffice", re.I)
 PRIVROLE = re.compile(r"role|permission|privilege|grant|promote|demote", re.I)
 PRIVREC = re.compile(r"(?:^|/)(?:users?|accounts?|members?|profiles?|customers?)/:\w+")  # another user's record: a collection then an id param
-ROLECHK = re.compile(r"role|permission|admin|rbac|authoriz|ability|policy|staff|superuser|scope|\bcans?\b|\bcan_|has_perm", re.I)
+ROLECHK = re.compile(  # check shapes, not words: `{role: req.body.role}` is the write being guarded, not a guard
+    r"\b(?:roles?|permissions?)\b\s*(?:[!=]==?|\.(?:includes|has|some|indexOf)\(|\bin\b)|['\"`]\w+['\"`]\s+in\s+[\w.]*roles?\b|\.admin\b"
+    r"|is_?(?:admin|staff|superuser)|has_?(?:role|perm\w*)|require_?(?:role|admin|perm\w*)|permission_required|authoriz|\bcans?\(|\bcan_|rbac|polic(?:y|ies)|abilit", re.I)
 PATHLIT = re.compile(r"""(['"`])/[^'"`]*\1""")
 
 
@@ -726,7 +728,7 @@ def privileged(rows):
 def main(argv):
     a = [x for x in argv[1:] if x not in ("--paths", "--all", "--privileged")]
     if len(a) != 1 or not os.path.isdir(a[0]) or len({"--paths", "--all", "--privileged"} & set(argv[1:])) > 1:
-        print("usage: route_auth_map.py [--paths | --all] DIR", file=sys.stderr); return 2
+        print("usage: route_auth_map.py [--paths | --all | --privileged] DIR", file=sys.stderr); return 2
     if {"--paths", "--all"} & set(argv[1:]):
         inv = inventory(a[0])
         print("heuristic; %d routes; silence is not proof of authentication" % len(inv), file=sys.stderr)
