@@ -17,7 +17,7 @@ Report parsing (location format = G0 contract, references/whole-project-report.m
   Under a heading naming routes / endpoints / entry points / inventory, every `path:line` line is a "route_inventory" row.
   Class = run_and_score.classify("agent", "", text); else the generic AGENT_CLASS fallback; else "unmapped" (side file).
 """
-import argparse, json, os, re, signal, subprocess, sys, tempfile, time
+import argparse, json, os, re, signal, subprocess, sys, tempfile, time, urllib.error, urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -49,6 +49,17 @@ INIT_BAD = "isolation: init skills lack a plugin deep-code-review skill or hold 
 
 class Stop(Exception):
     pass
+
+
+INFRA = re.compile(r"proxy|tunnel|connect|ECONN|ENOTFOUND|ETIMEDOUT|socket|network|overloaded|\b5\d\d\b", re.I)
+
+
+def probe_api(url="https://api.anthropic.com/", timeout=10):
+    """Free reachability probe through the environment's proxy: any HTTP status is reachable; a connection or tunnel error raises."""
+    try:
+        urllib.request.urlopen(url, timeout=timeout)
+    except urllib.error.HTTPError:
+        pass
 
 
 def cites(s, prefix=""):
@@ -244,7 +255,7 @@ def sh_claude(prompt, cwd, detector, cap, timeout=1500):
     return r
 
 
-def run(detector, out, fixtures, cap=15.0, per_call=3.0, parser=parse_report_v2):
+def run(detector, out, fixtures, cap=15.0, per_call=3.0, parser=parse_report_v2, *, probe=None):
     """parser: parse_report_v2 (default; 3-tuple, extra list -> out_of_vocab.json) or v1 parse_report (2-tuple)."""
     out = Path(out)
     out.mkdir(parents=True)
@@ -254,6 +265,11 @@ def run(detector, out, fixtures, cap=15.0, per_call=3.0, parser=parse_report_v2)
     json.dump(dict(model=MODEL, prompt=PROMPT, detector=str(detector), cap=cap, per_call=per_call, allowed=ALLOWED,
                    disallowed=DENIED, quota_stop=QUOTA_STOP), open(out / "meta.json", "w"), indent=1)
     try:
+        if probe:
+            try:
+                probe()
+            except Exception as e:
+                raise Stop("infrastructure fault: api.anthropic.com unreachable before any fixture (%r)" % e)
         for fx in sorted(p.name for p in Path(fixtures).iterdir() if (p / ".git").exists()):
             left = cap - spent
             if util >= QUOTA_STOP:
@@ -273,6 +289,8 @@ def run(detector, out, fixtures, cap=15.0, per_call=3.0, parser=parse_report_v2)
             bad_init = not init_ok(r["init_skills"])
             if r["err"]:
                 errors.append(dict(fixture=fx, error=r["err"], subtype=r["subtype"], returncode=r["returncode"], stderr=r["stderr"][-500:]))
+            if (r["err"] and INFRA.search(r["err"] + r["stderr"])) or (not r["skill_loaded"] and r["cost"] == 0):
+                raise Stop("infrastructure fault: %s (fixture %s)" % (r["err"] or "skill not loaded at $0", fx))
             if bad_init:
                 raise Stop("%s (fixture %s)" % (INIT_BAD, fx))
             if not r["skill_loaded"]:  # evidence: a Skill tool_use, or a tool_use touching <detector>/.claude/skills/deep-code-review/
@@ -303,12 +321,12 @@ def main(argv=None):
     ap.add_argument("--per-call", type=float, default=3.0)
     a = ap.parse_args(argv)
     if a.fixtures:
-        return 1 if run(a.detector, a.out, a.fixtures, a.cap, a.per_call)[2] else 0
+        return 1 if run(a.detector, a.out, a.fixtures, a.cap, a.per_call, probe=probe_api)[2] else 0
     with tempfile.TemporaryDirectory() as tmp:
         t = os.path.join(tmp, a.set)
         with tempfile.TemporaryDirectory() as meta:  # the answer key is deleted before the agent runs (it can Read $TMPDIR)
             subprocess.run([sys.executable, str(HERE.parent / a.set / "build.py"), t, "--truth", os.path.join(meta, "truth.json")], check=True)
-        return 1 if run(a.detector, a.out, t, a.cap, a.per_call)[2] else 0
+        return 1 if run(a.detector, a.out, t, a.cap, a.per_call, probe=probe_api)[2] else 0
 
 
 if __name__ == "__main__":

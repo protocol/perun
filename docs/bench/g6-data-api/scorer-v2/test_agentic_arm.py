@@ -149,7 +149,7 @@ def test_answer_key_gone_before_run():
     (tmp / "set" / "build.py").write_text("import os, sys\nos.makedirs(sys.argv[1], exist_ok=True)\nopen(sys.argv[3], 'w').write('[]')\n"
                                           "open(%r, 'w').write(sys.argv[3])\n" % str(tmp / "where"))
     seen, orig = [], A.run
-    A.run = lambda *a: seen.append(os.path.exists((tmp / "where").read_text())) or ([], [], [])
+    A.run = lambda *a, **k: seen.append(os.path.exists((tmp / "where").read_text())) or ([], [], [])
     try:
         A.main(["--detector", str(tmp), "--out", str(tmp / "o"), "--set", str(tmp / "set")])
     finally:
