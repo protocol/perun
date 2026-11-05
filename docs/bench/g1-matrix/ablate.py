@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """G1 pilot ablation for the status (b) items (API1, API3, API5, API10). Protocol: ABLATION.md in this directory.
 
-  ablate.py freeze                 fill the "Frozen inputs" section of ABLATION.md (no model calls)
-  ablate.py run --out DIR [--cap]  stripped arm, step arm, confirmation; raw answers, spend and utilization go to DIR
-  ablate.py score TEXT_FILE ID     score one saved answer against fixture ID (prints pass/fail)
+  ablate.py [--set evals-b|evals-b2] freeze                 fill that set's "Frozen inputs" section of ABLATION.md (no model calls)
+  ablate.py [--set evals-b|evals-b2] run --out DIR [--cap]  stripped arm, step arm, confirmation; raw answers, spend and utilization go to DIR
+  ablate.py [--set evals-b|evals-b2] score TEXT_FILE ID     score one saved answer against fixture ID (prints pass/fail)
+--set picks the fixture set (default evals-b). Sections: "## Frozen inputs" (evals-b), "## Frozen inputs (b2)" (evals-b2).
 
 Exit codes for run: 0 finished, 2 infrastructure fault (attempt void), 3 stopped by cap or quota (open items stay unstatused).
 """
@@ -24,7 +25,9 @@ R.CLAUDE_MODEL = "sonnet"  # fixed before any call: the project's default lane m
 
 SKILL = ROOT / ".claude/skills/deep-code-review/SKILL.md"
 REF = ROOT / ".claude/skills/deep-code-review/references/security-api.md"
-EVALS = HERE / "evals-b/evals.json"
+SET = "evals-b"
+EVALS = HERE / SET / "evals.json"
+HEADINGS = {"evals-b": "## Frozen inputs", "evals-b2": "## Frozen inputs (b2)"}
 ABLATION = HERE / "ABLATION.md"
 LEADS = ("**API1 + API5", "**API3", "**API10")
 CAP = 15.0
@@ -33,6 +36,11 @@ INSTRUCTION = ("Review the files above for security flaws that fall under the OW
                "Write a short review, then end your answer with exactly one fenced ```json block holding a list of findings, "
                'each {"file": "<file name>", "line": <number>, "owasp_api_2023": "<label, API1 to API10>"}. '
                "Use an empty list when you find none.")
+
+
+def use_set(name):
+    global SET, EVALS
+    SET, EVALS = name, HERE / name / "evals.json"
 
 
 def stripped(ref):
@@ -51,7 +59,7 @@ def labels():
 
 
 def user_prompt(ev):
-    d = HERE / "evals-b" / ev["dir"]
+    d = HERE / SET / ev["dir"]
     files = "\n\n".join(f"### {f.name}\n```\n{f.read_text()}\n```" for f in sorted(d.iterdir()))
     return f"{files}\n\nClasses:\n{labels()}\n\n{INSTRUCTION}"
 
@@ -132,7 +140,7 @@ def run_cmd(a):
     def flush(code, verdict=None, note=""):
         passes = getattr(decide, "last", ({}, {}))[0]
         (out / "result.json").write_text(json.dumps(
-            {"model": R.CLAUDE_MODEL, "cap": a.cap, "spent": st.spent, "util": st.util, "exit": code, "note": note,
+            {"set": SET, "model": R.CLAUDE_MODEL, "cap": a.cap, "spent": st.spent, "util": st.util, "exit": code, "note": note,
              "verdict": verdict or getattr(decide, "last", ({}, {}))[1], "passes": passes, "calls": log}, indent=1))
 
     def call(arm, ev, n):
@@ -167,16 +175,23 @@ def freeze():
     blob = lambda p: subprocess.check_output(["git", "hash-object", str(p)], text=True).strip()  # noqa: E731
     rows = [("model", f"`{R.CLAUDE_MODEL}`"), ("`SKILL.md` git blob", blob(SKILL)), ("`security-api.md` git blob", blob(REF)),
             ("`evals.json` sha256", sha(EVALS)), ("`ablate.py` sha256", sha(__file__))]
-    rows += [(f"fixture `{p.relative_to(HERE / 'evals-b')}` sha256", sha(p)) for p in sorted((HERE / "evals-b/fixtures").rglob("*")) if p.is_file()]
+    rows += [(f"fixture `{p.relative_to(HERE / SET)}` sha256", sha(p)) for p in sorted((HERE / SET / "fixtures").rglob("*")) if p.is_file()]
     table = "| Input | Value |\n|---|---|\n" + "\n".join(f"| {k} | {v} |" for k, v in rows) + "\n"
     s = ABLATION.read_text()
-    head = s[: s.index("## Frozen inputs")]
-    ABLATION.write_text(head + "## Frozen inputs\n" + table)
+    h = HEADINGS[SET]
+    m = re.search(rf"^{re.escape(h)}[ \t]*\n", s, re.M)
+    if not m:  # section missing: append at the end
+        ABLATION.write_text(s + ("" if s.endswith("\n") else "\n") + "\n" + h + "\n" + table)
+    else:  # replace the body up to the next "## " heading; the rest stays byte-identical
+        n = re.search(r"^## ", s[m.end():], re.M)
+        tail = s[m.end() + n.start():] if n else ""
+        ABLATION.write_text(s[: m.end()] + table + ("\n" if tail else "") + tail)
     print("froze", len(rows), "inputs")
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--set", choices=sorted(HEADINGS), default="evals-b")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("freeze")
     r = sub.add_parser("run")
@@ -186,6 +201,7 @@ def main(argv=None):
     s.add_argument("text_file")
     s.add_argument("fixture_id")
     a = ap.parse_args(argv)
+    use_set(a.set)
     if a.cmd == "freeze":
         return freeze()
     if a.cmd == "run":

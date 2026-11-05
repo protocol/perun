@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Tests for docs/bench/g1-matrix/ablate.py: stripped text, scorer, run order/stop rule/confirmation (fake `claude` on PATH), fail-closed cap and quota."""
+import contextlib
+import io
 import json
 import os
 import re
@@ -9,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 ABL = ROOT / "docs/bench/g1-matrix/ablate.py"
@@ -129,6 +132,52 @@ class Run(unittest.TestCase):
         p, log, res = self.go("mixed", noquota=True)
         self.assertEqual(p.returncode, 3)
         self.assertEqual(log, ["preflight"])
+
+
+class SetAndFreeze(unittest.TestCase):
+    def tearDown(self):
+        ablate.use_set("evals-b")
+
+    def test_default_set_is_evals_b(self):
+        self.assertEqual(ablate.EVALS, ablate.HERE / "evals-b/evals.json")
+        ablate.main(["score", "/dev/null", "api1-c"])
+        self.assertEqual(ablate.SET, "evals-b")
+
+    def test_set_b2_reads_b2_evals(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(ablate, "HERE", Path(d)):
+            (Path(d) / "evals-b2").mkdir()
+            (Path(d) / "evals-b2/evals.json").write_text(json.dumps([{"id": "z-1", "item": "API1", "kind": "neg", "dir": "z"}]))
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                ablate.main(["--set", "evals-b2", "score", "/dev/null", "z-1"])
+            self.assertEqual(ablate.EVALS, Path(d) / "evals-b2/evals.json")
+            self.assertEqual(out.getvalue().strip(), "pass")
+
+    def freeze(self, text, name):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(ablate, "ABLATION", Path(d) / "A.md"), contextlib.ExitStack() as st:
+            (Path(d) / "A.md").write_text(text)
+            if name == "evals-b2":  # no real b2 set required: fake tree
+                (Path(d) / name / "fixtures/x").mkdir(parents=True)
+                (Path(d) / name / "evals.json").write_text("[]")
+                (Path(d) / name / "fixtures/x/f.js").write_text("1")
+                st.enter_context(mock.patch.object(ablate, "HERE", Path(d)))
+            with contextlib.redirect_stdout(io.StringIO()):
+                ablate.main(["--set", name, "freeze"])
+            return (Path(d) / "A.md").read_text()
+
+    def test_freeze_keeps_following_sections(self):
+        doc = "# T\n\n## Frozen inputs\nold\n\n## Result\nr\n\n## Frozen inputs (b2)\nkeep\n\n## Next path\nn\n"
+        out = self.freeze(doc, "evals-b")
+        self.assertNotIn("old", out)
+        self.assertTrue(out.startswith("# T\n\n## Frozen inputs\n| Input | Value |"))
+        self.assertTrue(out.endswith("\n\n## Result\nr\n\n## Frozen inputs (b2)\nkeep\n\n## Next path\nn\n"))
+
+    def test_freeze_b2_replaces_only_b2_and_appends_when_missing(self):
+        out = self.freeze("## Frozen inputs\nb\n\n## Frozen inputs (b2)\nold\n\n## Next path\nn\n", "evals-b2")
+        self.assertTrue(out.startswith("## Frozen inputs\nb\n\n## Frozen inputs (b2)\n| Input"))
+        self.assertTrue(out.endswith("\n\n## Next path\nn\n"))
+        self.assertNotIn("old", out)
+        out = self.freeze("# T\n\n## Result\nr\n", "evals-b2")
+        self.assertTrue(out.startswith("# T\n\n## Result\nr\n\n## Frozen inputs (b2)\n| Input"))
 
 
 if __name__ == "__main__":
