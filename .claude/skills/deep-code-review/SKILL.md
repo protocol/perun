@@ -8,7 +8,7 @@ description: >-
 license: MIT
 metadata:
   author: deep-code-review contributors
-  version: "1.651.0"
+  version: "1.652.0"
 ---
 
 # Deep Code Review
