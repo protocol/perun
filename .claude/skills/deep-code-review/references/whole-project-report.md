@@ -27,7 +27,7 @@ Needs a running system: deployed config, WAF, runtime authz, vault, infra outsid
 <lockfile and advisory results, or what could not be read>
 
 ## Route inventory
-- <METHOD> <path> <repo-relative file>:<line> auth=<none|...> rate-limit=<yes|no>
+- <METHOD> <path> <repo-relative file>:<line> auth=<none|...> rate-limit=<yes|no> csrf=<none|token|origin|samesite|n/a>
 ```
 
 ## Findings format
@@ -49,6 +49,8 @@ Example: `- [pii-data] src/api/users.py:42 high: serves SSNs and dates of birth 
 - `pass` needs a check that ran: `tool:<name>` whose tool is not under NOT RUN, or `guided:<id>`. A guided pass also lists the files it examined and a backtick-quoted negative that appears in a cited file. Cited paths resolve inside `--root`, as `path` or `path:line[-line]` only.
 - Every cited `path` or `path:line` exists under `--root`; cite the repo-relative path; a bare file name such as `app.py:9` resolves only for a file at the repo root, in prose or backticks (`bad-citation`).
 - `missing-route-inventory`: no `## Route inventory` section. List one route or handler per line, never grouped (not "POST /a, /b"), each at its own declaration `file:line`; fill it from `route_auth_map.py --all` where it supports the stack, else grep. `inventory-no-cite`: a list line there without exactly one repo-relative `path:line` that exists under `--root` (only tokens with a file extension count as cites, so `host:8080` does not). An empty section fails `missing-route-inventory` unless it holds an explicit `- none` line. `inventory-not-list`: a non-blank line in the section that is not a list item.
+- `inventory-no-csrf`: an inventory row with METHOD POST, PUT, PATCH or DELETE and an `auth=` value naming a cookie or session has no `csrf=<value>` field.
+- `csrf-unfiled`: such a row has `csrf=none` and no `- [csrf]` Findings line either names the row's route path or cites the row's file at a line from the row's line up to the next inventory row of that file.
 - More than 40% of items `not-checked` without a NOT RUN reason (a `tool:` basis whose tool has a reason under NOT RUN) fails.
 - No safety claim ("no vulnerabilities", "is secure", "safe to deploy" and paraphrases; list in the script's `CLAIMS`). State what was checked, never that the project is safe. A zero count starts with its tool (`trivy: 0 findings in package-lock.json`).
 - NOT RUN holds one `- <tool>: <reason>` line per tool that did not run, and nothing else; tools that ran go in the Basis column.

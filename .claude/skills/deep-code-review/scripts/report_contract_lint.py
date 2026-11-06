@@ -143,6 +143,37 @@ def sink_problem(cls, full, a, b):
             return "finding-not-on-sink", f"[{cls}] cited line +-2 shows no {what}: cite the sink line, not the route/helper"
 
 
+def csrf_check(live, add):
+    """Cookie/session POST/PUT/PATCH/DELETE inventory rows need csrf=<defence>; csrf=none needs a `- [csrf]` finding."""
+    rows, fnd, inv, invlv = [], [], False, 0
+    nd = lambda x: re.sub(r"^(?:\./)+", "", x)
+    for k, l in enumerate(live):
+        if h := re.match(r"#+\s+(.*)", l):
+            lv = len(l) - len(l.lstrip("#"))
+            if not (inv and lv > invlv):  # a sub-heading stays inside the inventory
+                inv, invlv = bool(re.search(SECTIONS["missing-route-inventory"], h.group(1), re.I)), lv
+            continue
+        lm = re.match(r"\s*(?:[-*]|\d+[.)])\s+(.*)", l)
+        if not lm:
+            continue
+        t = lm.group(1).replace("`", "").replace("**", "")
+        if m := re.match(r"\[csrf\]\s+(\S+?):(\d+)\b", t, re.I):
+            fnd.append((nd(m.group(1)), int(m.group(2)), t))
+        elif inv and (m := re.match(r"(\w+)\s+(\S+)\s", t)) and (c := re.findall(r"([^\s:]+\.\w+):(\d+)", t)):
+            rows.append((k, m.group(1).upper(), m.group(2).rstrip(".,;:)]"), nd(c[0][0]), int(c[0][1]), t))
+    for k, meth, route, f, ln, t in rows:
+        a = re.search(r"\bauth=(\S+)", t)
+        if meth not in ("POST", "PUT", "PATCH", "DELETE") or not a or not re.search(r"cookie|session", a.group(1), re.I):
+            continue
+        c = re.search(r"\bcsrf=(\S+)", t)
+        if not c:
+            add(k, "inventory-no-csrf", "cookie/session state-changing route needs `csrf=<none|token|origin|samesite|n/a>`: " + t[:60])
+        elif c.group(1).strip(".,;:)]'\"").lower() in ("none", "no", "off", "false", "disabled", "missing", "absent"):
+            end = min((x[4] for x in rows if x[3] == f and x[4] > ln), default=10**9)
+            if not any((re.search(rf"(?<![\w/]){re.escape(route)}(?![\w/-])", x[2]) or x[0] == f and ln <= x[1] < end) for x in fnd):
+                add(k, "csrf-unfiled", "file a [csrf] finding at the line that commits the change (name the route path), or name the defence in csrf=: " + t[:60])
+
+
 def lint(path, root, text=None):
     raw = (text if text is not None else sys.stdin.read() if path == "-" else open(path, errors="replace").read()).splitlines()
     live, fence = [], False  # fenced lines are blanked, indexes preserved
@@ -178,6 +209,7 @@ def lint(path, root, text=None):
                         add(k, "inventory-no-cite", f"route line needs exactly one repo-relative path:line that exists under --root: {live[k].strip()[:60]!r}")
                 elif live[k].strip():
                     add(k, "inventory-not-list", f"inventory line is not a list item: {live[k].strip()[:60]!r}")
+    csrf_check(live, add)
     not_run = {}
     for n, (i, _, t) in enumerate(heads):
         if re.search(r"not[ _-]?run", t, re.I):
