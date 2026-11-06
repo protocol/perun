@@ -1,0 +1,8 @@
+import '#start/routes/atlas'
+import '#start/routes/bridge'
+import '#start/routes/copse'
+import '#start/routes/delta'
+import '#start/routes/ember'
+import '#start/routes/fjord'
+import '#start/routes/grove'
+import '#start/routes/harbor'
