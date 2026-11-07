@@ -1121,7 +1121,7 @@ FX["api/deps.py"] = "from fastapi import Depends, FastAPI\n\napp = FastAPI()\n" 
 GOLD += [("api/deps.py", '@app.post("/d-%s")' % k, "INFO: POST /d-%s auth=Depends(f_%s_dep)" % (k, k)) for k in DEPKW]
 
 JSID = ("getServerSession", "getSession", "getToken", "getAuth", "auth", "currentUser", "getUser", "getCurrentUser", "requireAuth", "requireAuthLevel", "requireUserRole",
-        "requireSessionX", "requireLoginX", "requireAdminX", "withAuth", "authMiddleware", "authGuard", "authenticate", "authenticateUser", "authorize", "authorizeRole",
+        "requireSessionX", "requireLoginX", "requireAdminX", "requireMemberX", "requireAccountX", "requireViewerX", "requirePrincipalX", "withAuth", "authMiddleware", "authGuard", "authenticate", "authenticateUser", "authorize", "authorizeRole",
         "isAuthenticated", "isLoggedIn", "ensureAuth", "ensureAuthX", "ensureLoggedInX", "protect", "validateRequest", "verify", "verifyToken", "constructEvent",
         "jwt", "expressjwt", "checkJwt", "bearerAuth", "basicAuth", "clerkMiddleware")  # one Express route per IDENTITY name that reads as a call; the bare forms pin the `\w*` suffixes
 FX["server/idents.js"] = 'const app = require("express")();\n' + "".join('app.post("/i-%s", (req, res) => { %s(req); res.send("ok"); });\n' % (n, n) for n in JSID)
@@ -1129,6 +1129,12 @@ GOLD += [("server/idents.js", '"/i-%s"' % n, "INFO: POST /i-%s auth=%s" % (n, n)
 PYID = ("login_required", "jwt_required", "token_required", "auth_required", "requires_auth", "permission_required", "get_current_admin")  # one Flask route per decorator name
 FX["api/idents.py"] = "from flask import Flask\n\napp = Flask(__name__)\n" + "".join('\n\n@app.post("/p-%s")\n@%s\ndef f_%s():\n    return 1\n' % (n, n, n) for n in PYID)
 GOLD += [("api/idents.py", '@app.post("/p-%s")' % n, "INFO: POST /p-%s auth=%s" % (n, n)) for n in PYID]
+
+FX["app/api/bff401/route.ts"] = 'export async function POST(req: Request) {\n  const h = resolveAuthHeader(req);\n  if (!h) return Response.json({}, { status: 401 });\n  return fetch("https://api.example.com/x", { method: "POST", headers: { authorization: h } });\n}\n'  # a handler that answers 401 itself
+GOLD.append(("app/api/bff401/route.ts", "function POST", "INFO: POST /api/bff401 auth=presence-check"))
+
+FX["server/optmember.js"] = 'const app = require("express")();\napp.use(async (req, res, next) => { req.member = await resolve(req); next(); });\napp.post("/om", (req, res) => res.send("x"));\n'  # assigning req.member is no check
+GOLD.append(("server/optmember.js", 'app.post("/om"', "HIGH: POST /om auth=none"))
 
 FX["server/latest.js"] = 'const app = require("express")();\napp.post("/latest", (req, res) => res.send("x"));\n'  # `test.` inside a file name does not make a test file
 FX["lib/contests/api.js"] = 'const app = require("express")();\napp.post("/contest", (req, res) => res.send("x"));\n'  # nor does `tests/` inside a directory name
@@ -1656,10 +1662,10 @@ MUTANTS = [
     ('MARK = "route-auth-ok"', 'MARK = "route-auth-no"'),
     ("H = V.lower()", "H = V"),
     # IDENTITY regex members (the plain members are mutated one by one in identity_mutants)
-    *each(r"require(?:Auth|User|Session|Login|Admin)\w*", "(?:", ")", "|"),
+    *each(r"require(?:Auth|User|Session|Login|Admin|Member|Account|Viewer|Principal)\w*", "(?:", ")", "|"),
     *each(r"auth(?:Middleware|Guard)", "(?:", ")", "|"),
     *each(r"ensure(?:Auth|LoggedIn)\w*", "(?:", ")", "|"),
-    (r"require(?:Auth|User|Session|Login|Admin)\w*", r"require(?:Auth|User|Session|Login|Admin)"),
+    (r"require(?:Auth|User|Session|Login|Admin|Member|Account|Viewer|Principal)\w*", r"require(?:Auth|User|Session|Login|Admin|Member|Account|Viewer|Principal)"),
     (r"ensure(?:Auth|LoggedIn)\w*", r"ensure(?:Auth|LoggedIn)"),
     (r"authenticate\w*", "authenticate"), (r"authorize\w*", "authorize"), (r'verify\w*"', 'verify"'), (r'get_current_\w+"', 'get_current_"'),
     # CALL / USE: a called or bare identity name, not the tail of a longer name or an object key
@@ -1681,7 +1687,7 @@ MUTANTS = [
     # REQ: the request's user, not a mere import of the name
     (r'"\b((?:req', r'"((?:req'), (r'g\.user)\b")', r'g\.user)")'),
     (r"(?:req|request)", "(?:request)"), (r"(?:req|request)", "(?:req)"),
-    (r"(?:user|auth)", "(?:user)"), (r"(?:user|auth)", "(?:auth)"),
+    (r"(?:user|auth|member(?!\s*=(?!=)))", "(?:user)"), (r"(?:user|auth|member(?!\s*=(?!=)))", "(?:auth)"), (r"member(?!\s*=(?!=))", "member"),
     (r"|current_user(?=\.)", ""), (r"current_user(?=\.)", "current_user"), (r"|g\.user)", ")"),
     # token: a header read plus a secret comparison on one line
     *each(r"[!=]=|timingSafeEqual|compare_digest", "", "", "|"),
@@ -1901,9 +1907,9 @@ MUTANTS = [
     ("any(x.fullmatch(route) for x in pats)", "all(x.fullmatch(route) for x in pats)"),
     ("lab = pre or use or", "lab = use or"), ("lab = pre or use or", "lab = pre or"), ("lab = pre or use or", "lab = use or pre or"),
     ('next((g[0] for g in got if g[0]), None) or ("token"', '("token"'),
-    ('or ("token" if any(g[1] for g in got) else None) or mw', "or mw"),
+    ('("presence-check" if any(EARLY401.search(mk[a:b]) for a, b in spans) else None) or "none"', '"none"'),
     ('or mw or ("root-hook" if gated(sites, route)', 'or ("root-hook" if gated(sites, route)'),
-    ('or ("root-hook" if gated(sites, route) or meth != "GET" and gated([("", mine)], route) else None) or "none"', 'or "none"'), ("if gated(sites, route) or meth", "if sites or meth"),
+    ('or ("root-hook" if gated(sites, route) or meth != "GET" and gated([("", mine)], route) else None) or ("presence-check"', 'or ("presence-check"'), ("if gated(sites, route) or meth", "if sites or meth"),
     ('or ("token" if any(g[1] for g in got) else None) or mw or ("root-hook"', 'or mw or ("token" if any(g[1] for g in got) else None) or ("root-hook"'),
     ("any(g[1] for g in got)", "all(g[1] for g in got)"),
     ("rl[max(0, ln - 2):ln]", "rl[max(0, ln - 1):ln]"), ("rl[max(0, ln - 2):ln]", "rl[max(0, ln - 3):ln]"),
@@ -2047,10 +2053,12 @@ MUTANTS = [
     ('if "--all" in argv[1:]:', 'if "--all" in argv[2:]:'),
     ('m in ("GET", "ANY")', 'm in ("GET",)'), ('m in ("GET", "ANY")', 'm in ("ANY",)'), ('m in ("GET", "ANY")', 'm in ("GET", "ANY", "POST")'),
     ("        return 0\n    rows, files =", "        return 1\n    rows, files ="),
-    ('r[4] == "none" and any(x != "GET" for x in r[2].split("|"))', 'r[4] != "public" and any(x != "GET" for x in r[2].split("|"))'),
-    ('r[4] == "none" and any(x != "GET" for x in r[2].split("|"))', 'r[4] == "none" and all(x != "GET" for x in r[2].split("|"))'),
-    ('r[4] == "none" and any(x != "GET" for x in r[2].split("|"))', 'r[4] == "none" and any(x == "POST" for x in r[2].split("|"))'),
-    ('r[4] == "none" and any(x != "GET" for x in r[2].split("|"))', 'any(x != "GET" for x in r[2].split("|"))'),
+    (' and (r[0], r[1]) not in FWDROWS)', ')'),
+    ('r[4] == "presence-check" and', 'r[4] != "x" and'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|"))', 'r[4] != "public" and any(x != "GET" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|"))', 'r[4] == "none" and all(x != "GET" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|"))', 'r[4] == "none" and any(x == "POST" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|"))', 'any(x != "GET" for x in r[2].split("|"))'),
     ('"%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4])', '("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))[:-1]'),
 ]
 

@@ -32,7 +32,7 @@ OF AUTHENTICATION: the scan only sees the call shapes listed below.
    does); a path in the condition of a refusing `if` is a scope (`startsWith` scopes the routes under it by path segment, `===` and any other test only that path), and a `!` before it covers nothing. A quoted path anywhere else (a role table the hook reads, a path
    test in a refusing `if` after the first refusal) says nothing, and a route-registration literal never counts. A bare return before the first refusal under a condition that is no path test and no
    identity check (`if (req.headers["x-preview"]) return;`) is a bypass: the hook covers nothing. The `prefix` option of the register call is put before the route when such a path is judged); else `none`.
-3. SEV: HIGH when auth is none and the handler mutates (any method but GET; ANY and ACTION count as mutating), else INFO.
+3. SEV: HIGH when auth is none (or presence-check with no Authorization/Bearer credential forwarded in the handler) and the handler mutates (any method but GET; ANY and ACTION count as mutating), else INFO.
 
 Known limits (NOT covered, so silence proves nothing): auth applied at a mount in another file (`app.use("/api", authedRouter)`) reads none;
 a middleware's path rules are read only as quoted `/path` literals: any such literal in the file (an allow-list array or Set, a Clerk-style `createRouteMatcher([...])`
@@ -68,7 +68,7 @@ autoload, `.route`, a plugin that registers another, `import type`, `export defa
 (Flask/FastAPI register the undecorated function) is ignored, so `@login_required` placed there reads none. A JS handler ends at the next line
 that starts at column 0 and a Python one at the next line indented no deeper than its decorator, so minified one-line files blur spans.
 Public-by-design routes (login, webhooks, health, NextAuth `[...nextauth]`) read none, or `middleware` when a gate lets them through by a rule that is not a literal path:
-after reviewing one, put a `route-auth-ok` comment on its line or the line above and the row reads `auth=public`. Edit IDENTITY and RECEIVERS for house guards.
+after reviewing one, put a `route-auth-ok` comment on its line or the line above and the row reads `auth=public`. Edit IDENTITY and RECEIVERS for house guards; a handler that itself answers 401 (`status: 401`, `.status(401)`, `sendStatus(401)`, `abort(401)`, `HTTPException(status_code=401)`) reads auth=presence-check (a presence gate, not verification).
 
 Output: one row per handler sorted by path then line, one JSON summary line (handlers, files, high, findings = the HIGH rows) and a stderr line
 `heuristic; scanned N files with M handlers; ...`. `--paths` prints the unique GET and ANY routes (dynamic segments as `:name`) and no JSON; `--all` prints one `METHOD /path file:line` line per route and method and no JSON (the two flags exclude each other).
@@ -82,9 +82,9 @@ sys.dont_write_bytecode = True  # `python3 -I` drops this dir from sys.path: add
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tenant_scope_check import SKIP_DIR, close_of, lineno, mask, parts  # noqa: E402
 
-IDENTITY = (  # configurable: a call, decorator or (in `.use`/route middleware) bare name like these counts as an identity check
+IDENTITY = (  # configurable (require* takes Auth, User, Session, Member, Account...): a call, decorator or (in `.use`/route middleware) bare name like these counts as an identity check
     "getServerSession", "getSession", "getToken", "getAuth", "auth", "currentUser", "getUser", "getCurrentUser",
-    r"require(?:Auth|User|Session|Login|Admin)\w*", "withAuth", r"auth(?:Middleware|Guard)", r"authenticate\w*", r"authorize\w*",
+    r"require(?:Auth|User|Session|Login|Admin|Member|Account|Viewer|Principal)\w*", "withAuth", r"auth(?:Middleware|Guard)", r"authenticate\w*", r"authorize\w*",
     "isAuthenticated", "isLoggedIn", r"ensure(?:Auth|LoggedIn)\w*", "protect", "validateRequest", r"verify\w*", "constructEvent",
     "jwt", "expressjwt", "checkJwt", "bearerAuth", "basicAuth", "clerkMiddleware",
     "login_required", "jwt_required", "token_required", "auth_required", "requires_auth", "permission_required", r"get_current_\w+")
@@ -99,7 +99,7 @@ CALL = re.compile(r"(?<![\w$])(%s)\(" % ID)
 DECO = re.compile(r"@(?:\w+\.)*(%s)\b(?!\.(?:%s|route)\()" % (ID, H))  # not a route decorator on a blueprint named auth
 DEP = re.compile(r"(?:Depends|Security)\(\s*[\w.]*(?:user|auth|token|current|bearer|jwt|api_?key|verify|login)\w*", re.I)
 USE = re.compile(r"(?<![\w$])(%s)\b(?!:)" % ID)  # a bare name; `auth: false` (an object key) is not evidence
-REQ = re.compile(r"\b((?:req|request)\.(?:user|auth)|current_user(?=\.)|g\.user)\b")  # `current_user.` only: an import of the name is not a check
+REQ = re.compile(r"\b((?:req|request)\.(?:user|auth|member(?!\s*=(?!=)))|current_user(?=\.)|g\.user)\b")  # `current_user.` only: an import of the name is not a check
 CMP = re.compile(r"[!=]=|timingSafeEqual|compare_digest")
 SEC = re.compile(r"secret|token|api.?key|password", re.I)
 HDR = re.compile(r"header|authorization", re.I)
@@ -108,6 +108,8 @@ NAPP = re.compile(r"(?:(.*)/)?app/(?:(.*)/)?route\.(?:[tj]sx?|mjs)$")
 NAPI = re.compile(r"(?:(.*)/)?pages/(api/.+)\.(?:[tj]sx?|mjs)$")
 MWF = re.compile(r"(?:middleware|proxy)\.[jt]s")
 REFUSE = re.compile(r"""\bstatus[:(]\s*40[13]|Response\(\s*["'](?:Unauthorized|Forbidden)|\.code\(\s*40[13]|\bstatusCode\s*=\s*40[13]|\.(?:unauthorized|forbidden)\(""")  # a middleware or hook that can answer 401/403 gates what it covers, whatever its check is called
+FWD = re.compile(r"""(?:^|[{,])\s*["']?authorization["']?\s*:|Bearer\s*\$\{|Bearer\s*["'`]\s*\+|(?<!res)(?<!response)\.set\(\s*["']authorization""", re.I | re.M)  # a credential forwarded in an outbound call: the upstream verifies it (object-key position only, so a string "authorization: none" is no forward; res.set is a response header)
+EARLY401 = re.compile(r"""\bstatus\s*(?::|\()\s*401\b|sendStatus\(\s*401|abort\(\s*401|HTTPException\(\s*status_code\s*=\s*401""")  # a handler that answers 401 itself (a BFF forwarding an Authorization header it checked) has identity evidence
 GATE = re.compile(REFUSE.pattern + "|" + CALL.pattern)  # text that can refuse a request or calls an identity check
 END = re.compile(r"^\S", re.M)  # a JS span ends at the next line that starts at column 0 (its closing brace or the next declaration)
 JSFN = re.compile(r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)|^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\b|function\b|\()", re.M)
@@ -581,6 +583,7 @@ def priv_ctx(ctx, rcv, route, pos, fn, mk):
     return "", gt, False
 
 
+FWDROWS = set()  # (file, line) of handlers whose span forwards an Authorization/Bearer credential
 BODY = {}  # (file, line) -> the handler's own and helper text with strings kept, filled by analyze() for --privileged
 
 
@@ -619,12 +622,13 @@ def analyze(rel, raw, mws, sites=None, hooks=None):
         r_ = rcv or (re.compile(r"\s*@(\w+)\.").match(m, pos) or [0, None])[1]
         pfx, gt, gate = priv_ctx(ctx, r_, route, pos, fn, mk)
         EXTRA[(rel, ln)] = (pfx, gt, gate)
+        if any(FWD.search(mk[a:b]) for a, b in spans): FWDROWS.add((rel, ln))
         got = [(ident(m[a:b]), tok(mk[a:b])) for a, b in spans + [fn[w] for w in sorted(set(re.findall(r"[\w$]+", own))) if w in fn]] + [(mod, False)]
         use = next((u[3] for u in uses if u[0] == rcv and u[1] < pos and (route == u[2] or route.startswith(u[2] + "/"))), None)
         pats = mws.get(mwb) if mwb is not None else None
         mw = "middleware" if pats and any(x.fullmatch(route) for x in pats) else None
         mine = [h for p, q, h in hooks.get(rcv, ()) if p < pos < q]  # hooks on this route's receiver declared before it, in a block that holds it
-        lab = pre or use or next((g[0] for g in got if g[0]), None) or ("token" if any(g[1] for g in got) else None) or mw or ("root-hook" if gated(sites, route) or meth != "GET" and gated([("", mine)], route) else None) or "none"
+        lab = pre or use or next((g[0] for g in got if g[0]), None) or ("token" if any(g[1] for g in got) else None) or mw or ("root-hook" if gated(sites, route) or meth != "GET" and gated([("", mine)], route) else None) or ("presence-check" if any(EARLY401.search(mk[a:b]) for a, b in spans) else None) or "none"
         if any(MARK in l for l in rl[max(0, ln - 2):ln]): lab = "public"
         out.append((rel, ln, meth, route, lab))
     return out
@@ -891,7 +895,7 @@ def main(argv):
         for r, why in pv: print("%s:%d: PRIV: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why))
         return 0
     print("heuristic; scanned %d files with %d handlers; silence is not proof of authentication" % (files, len(rows)), file=sys.stderr)
-    out = [(r, "HIGH" if r[4] == "none" and any(x != "GET" for x in r[2].split("|")) else "INFO") for r in rows]
+    out = [(r, "HIGH" if (r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|")) else "INFO") for r in rows]
     for r, s in out: print("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))
     hi = [(r, s) for r, s in out if s == "HIGH"]
     print(json.dumps({"tool": "route_auth_map", "handlers": len(rows), "files": files, "high": len(hi),
