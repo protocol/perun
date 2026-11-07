@@ -1,0 +1,5 @@
+### Added
+- The Perun gitleaks template gains a `capability-url` rule: a URL whose query carries a long invite, share or access token, a magic link or a signature is reported, since whoever holds the link gets access. Runs of `x` and `example` values are skipped.
+- `route_auth_map.py` recognises more house guards: `require*` now takes Member, Account, Viewer and Principal, and `req.member` / `request.member` reads count as identity evidence (an assignment does not).
+- `route_auth_map.py` labels a handler that answers 401 itself (`status: 401`, `.status(401)`, `sendStatus(401)`, `abort(401)`, `HTTPException(status_code=401)`) as `auth=presence-check`. Such a mutating row drops to INFO only when the handler forwards the caller's credential in an outbound `Authorization` header or a Bearer value, so the upstream verifies it; a presence check that then trusts the header stays HIGH.
+- size-budget-raise: .claude/skills/deep-code-review/references/method-situational.md 44699→44807 capability-url rule named in the gitleaks template line

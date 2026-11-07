@@ -28,4 +28,13 @@ printf '[extend]\nuseDefault = true\n' >.gitleaks.toml
 git add -A && git -c user.email=t@example.com -c user.name=t commit -q -m cfg
 out=$(bash "$RC" --base base 2>/dev/null | jq -c '.[] | select(.tool == "gitleaks")') || true
 grep -q '.history/old.txt' <<<"$out"; chk $? "repo with its own .gitleaks.toml does not get the template"
+# capability-url rule: invite link with a long token is reported; placeholder tokens are not
+cd "$T" && git rm -q .gitleaks.toml && git -c user.email=t@example.com -c user.name=t commit -q -m nocfg
+tok=$(openssl rand -hex 20)  # synthetic, built at test time
+printf 'join: https://app.example.com/invite/l?inviteId=inv1&inviteToken=%s\n' "$tok" >src/invite.md
+printf 'join: https://app.example.com/invite/l?inviteToken=%s\nand https://app.example.com/i?token=<your-token-here-0123456789>\n' "xxxxxxxxxxxxxxxxxxxxxxxx" >src/ph.md
+git add -A && git -c user.email=t@example.com -c user.name=t commit -q -m cap
+out=$(bash "$RC" --base base 2>/dev/null | jq -c '.[] | select(.tool == "gitleaks")') || true
+grep -q 'capability-url' <<<"$out" && grep -q 'src/invite.md' <<<"$out"; chk $? "capability-url reports an invite link with a long token"
+! grep -q 'src/ph.md' <<<"$out"; chk $? "capability-url skips placeholder tokens"
 echo "Tests: $pass/$total"; [ "$pass" -eq "$total" ]
