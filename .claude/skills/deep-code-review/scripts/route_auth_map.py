@@ -32,7 +32,7 @@ OF AUTHENTICATION: the scan only sees the call shapes listed below.
    does); a path in the condition of a refusing `if` is a scope (`startsWith` scopes the routes under it by path segment, `===` and any other test only that path), and a `!` before it covers nothing. A quoted path anywhere else (a role table the hook reads, a path
    test in a refusing `if` after the first refusal) says nothing, and a route-registration literal never counts. A bare return before the first refusal under a condition that is no path test and no
    identity check (`if (req.headers["x-preview"]) return;`) is a bypass: the hook covers nothing. The `prefix` option of the register call is put before the route when such a path is judged); else `none`.
-3. SEV: HIGH when auth is none (or presence-check with no Authorization/Bearer credential forwarded in the handler) and the handler mutates (any method but GET; ANY and ACTION count as mutating), else INFO.
+3. SEV: HIGH when auth is none (or presence-check with no Authorization/Bearer credential forwarded in the handler) and the handler mutates (any method but GET; ANY and ACTION count as mutating), else INFO. A handler with no other evidence that reads the caller's cookie/header and forwards it as Authorization/Bearer reads `auth=forwarded` (INFO); a Bearer built from a server secret stays `none`.
 
 Known limits (NOT covered, so silence proves nothing): auth applied at a mount in another file (`app.use("/api", authedRouter)`) reads none;
 a middleware's path rules are read only as quoted `/path` literals: any such literal in the file (an allow-list array or Set, a Clerk-style `createRouteMatcher([...])`
@@ -109,6 +109,54 @@ NAPI = re.compile(r"(?:(.*)/)?pages/(api/.+)\.(?:[tj]sx?|mjs)$")
 MWF = re.compile(r"(?:middleware|proxy)\.[jt]s")
 REFUSE = re.compile(r"""\bstatus[:(]\s*40[13]|Response\(\s*["'](?:Unauthorized|Forbidden)|\.code\(\s*40[13]|\bstatusCode\s*=\s*40[13]|\.(?:unauthorized|forbidden)\(""")  # a middleware or hook that can answer 401/403 gates what it covers, whatever its check is called
 FWD = re.compile(r"""(?:^|[{,])\s*["']?authorization["']?\s*:|Bearer\s*\$\{|Bearer\s*["'`]\s*\+|(?<!res)(?<!response)\.set\(\s*["']authorization""", re.I | re.M)  # a credential forwarded in an outbound call: the upstream verifies it (object-key position only, so a string "authorization: none" is no forward; res.set is a response header)
+READ = re.compile(r"""(?:\(await\s+)?(?:cookies|headers)\(\)\)?\s*\.get\([^()]*\)|\bcookieStore\.get\([^()]*\)|\bget(?:Header|Cookie)\([^()]*\)|\breq(?:uest)?\.(?:headers|cookies)(?:\.get\([^()]*\)|\.\w+|\[[^\]]*\])?""")  # the forms of reading the caller's own cookie/header; a trailing ?.value is allowed by pure()
+SECRET = re.compile(r"process\.env|import\.meta\.env|Deno\.env|\benv\.|\bconfig\.|\bsettings\.|\bget(?:Env|Secret)\(")  # extra guard on top of the allowlist in pure()
+def vexpr(t, i, nl=True):
+    """The expression that starts at t[i]: up to the first , ; or closer at bracket depth 0 (a newline also ends it when nl is false and the next line does not continue it). Strings and balanced template literals are skipped whole."""
+    d, q, pend, j = 0, None, [], i
+    while j < len(t):
+        c = t[j]
+        if q:
+            if c == "\\": j += 1
+            elif q == "`" and t[j:j + 2] == "${": pend.append(d); d += 1; q = None; j += 1
+            elif c == q: q = None
+        elif c in "'\"`": q = c
+        elif c in "([{": d += 1
+        elif c in "}])":
+            if d == 0: return t[i:j]
+            d -= 1
+            if pend and pend[-1] == d: pend.pop(); q = "`"
+        elif d == 0 and c in ",;": return t[i:j]
+        elif d == 0 and c == "\n" and not nl and not re.match(r"\s*[?|&+.:*/<>=-]", t[j + 1:]): return t[i:j]
+        j += 1
+    return t[i:]
+def forwarded(t, action=False):
+    """True when every credential forwarded as Authorization/Bearer (or fed to a *header* helper as token/auth) is provably the caller's own. Each full value expression must hold nothing but caller reads (cookies().get, headers().get, req.headers, getHeader/getCookie; ?., .value, a `?? ''` literal), string literals and allowed variables, with at least one read. An allowed variable is a parameter of a server action's own signature or one whose every assignment is itself such an expression; any other identifier, call, ternary or operator rejects it, so a server secret, a helper parameter or a mixed value stays HIGH."""
+    sig = action and re.match(r"[^(){}]*\(([^()]*)\)", t)  # only a server action's arguments are caller-supplied; a route handler's are the request
+    nm = lambda v: r"(?<![\w$.])" + re.escape(v) + r"(?![\w$])"
+    seen = set()
+    def fed(v):
+        if v in seen: return False
+        seen.add(v)
+        inits = [vexpr(t, m.end(), False) for m in re.finditer(nm(v) + r"\s*[-+*/%|&?]{0,2}=(?![=>])", t)]
+        r = all(pure(x) for x in inits) and (bool(inits) or bool(sig and re.search(nm(v), sig.group(1))))
+        seen.discard(v)
+        return r
+    def pure(e):
+        if SECRET.search(e): return False
+        e = re.sub(r"'[^'\n]*'|\"[^\"\n]*\"", "¤", e)
+        e = READ.sub("§", e)
+        e = re.sub(r"(?<![\w$.])Bearer(?![\w$])", "", e)
+        e = re.sub(r"(?<![\w$.§])(?:[A-Za-z_]|\$(?=\w))[\w$]*", lambda m: "§" if fed(m.group()) else "!", e)
+        e = re.sub(r"\??\.value|\?\?|\|\|", "", e)
+        return "§" in e and re.fullmatch(r"[\s+`${}§¤]*", e) is not None
+    vals = []
+    for m in FWD.finditer(t):
+        k = m.end() + len((re.match(r"[\"']?\s*,", t[m.end():]) or [""])[0])
+        if t[m.start():m.end()].lower().find("bearer") >= 0: k = max(t.rfind(c, 0, m.start()) for c in "'\"`")
+        vals.append(vexpr(t, k))
+    vals = [pure(x.strip()) for x in vals] + [fed(v) for v in re.findall(r"\b\w*header\w*\(\s*(\w*(?:token|auth|jwt)\w*)\b", t, re.I)]
+    return bool(vals) and all(vals)
 EARLY401 = re.compile(r"""\bstatus\s*(?::|\()\s*401\b|sendStatus\(\s*401|abort\(\s*401|HTTPException\(\s*status_code\s*=\s*401""")  # a handler that answers 401 itself (a BFF forwarding an Authorization header it checked) has identity evidence
 GATE = re.compile(REFUSE.pattern + "|" + CALL.pattern)  # text that can refuse a request or calls an identity check
 END = re.compile(r"^\S", re.M)  # a JS span ends at the next line that starts at column 0 (its closing brace or the next declaration)
@@ -628,7 +676,7 @@ def analyze(rel, raw, mws, sites=None, hooks=None):
         pats = mws.get(mwb) if mwb is not None else None
         mw = "middleware" if pats and any(x.fullmatch(route) for x in pats) else None
         mine = [h for p, q, h in hooks.get(rcv, ()) if p < pos < q]  # hooks on this route's receiver declared before it, in a block that holds it
-        lab = pre or use or next((g[0] for g in got if g[0]), None) or ("token" if any(g[1] for g in got) else None) or mw or ("root-hook" if gated(sites, route) or meth != "GET" and gated([("", mine)], route) else None) or ("presence-check" if any(EARLY401.search(mk[a:b]) for a, b in spans) else None) or "none"
+        lab = pre or use or next((g[0] for g in got if g[0]), None) or ("token" if any(g[1] for g in got) else None) or mw or ("root-hook" if gated(sites, route) or meth != "GET" and gated([("", mine)], route) else None) or ("presence-check" if any(EARLY401.search(mk[a:b]) for a, b in spans) else None) or ("forwarded" if forwarded("\n".join(mk[a:b] for a, b in spans + [fn[w] for w in set(re.findall(r"[\w$]+", own)) if w in fn]), meth == "ACTION") else None) or "none"
         if any(MARK in l for l in rl[max(0, ln - 2):ln]): lab = "public"
         out.append((rel, ln, meth, route, lab))
     return out

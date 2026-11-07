@@ -1907,7 +1907,7 @@ MUTANTS = [
     ("any(x.fullmatch(route) for x in pats)", "all(x.fullmatch(route) for x in pats)"),
     ("lab = pre or use or", "lab = use or"), ("lab = pre or use or", "lab = pre or"), ("lab = pre or use or", "lab = use or pre or"),
     ('next((g[0] for g in got if g[0]), None) or ("token"', '("token"'),
-    ('("presence-check" if any(EARLY401.search(mk[a:b]) for a, b in spans) else None) or "none"', '"none"'),
+    ('("presence-check" if any(EARLY401.search(mk[a:b]) for a, b in spans) else None) or ("forwarded" if', '("forwarded" if'),
     ('or mw or ("root-hook" if gated(sites, route)', 'or ("root-hook" if gated(sites, route)'),
     ('or ("root-hook" if gated(sites, route) or meth != "GET" and gated([("", mine)], route) else None) or ("presence-check"', 'or ("presence-check"'), ("if gated(sites, route) or meth", "if sites or meth"),
     ('or ("token" if any(g[1] for g in got) else None) or mw or ("root-hook"', 'or mw or ("token" if any(g[1] for g in got) else None) or ("root-hook"'),

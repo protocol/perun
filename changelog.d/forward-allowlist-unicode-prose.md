@@ -1,0 +1,3 @@
+### Changed
+- `route_auth_map.py` treats a mutating handler that forwards the caller's credential upstream as verified by that upstream, so those rows no longer report as HIGH. On the real-repo corpus HIGH rows drop 43 to 35, the 2 confirmed unauthenticated routes stay HIGH, and the fixtures stay at 223.
+- `invisible_chars.py` goes quiet in a prose or data file for an isolated U+200B, U+200D, U+FE0F or U+FEFF. A file with 4 or more of them gets one summary row, and locale files are exempt. Runs, tag and variation-selector characters, bidi controls and everything else still report, and the agent-instruction file list is widened. Agent-instruction files, `.github`/`.claude`/`.cursor` paths and code keep full reporting. Hidden-unicode corpus rows drop 262 to 55.
