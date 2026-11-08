@@ -24,9 +24,9 @@
 # zstd, xz, 7z, lz4, bzip2, avro, pdf, zlib; the list and its ceilings are in committed_personal_data.py). gitleaks looks for secrets, not for exported personal data.
 # Built-in too, base mode only (a --full scan has no diff): sibling_sweep.py lists the unchanged call sites, in non-test code, of a function whose call arguments the diff changed elsewhere (tool `sibling-sweep`,
 # rule `unchanged-sibling-call`, message starts "lead:"): the sibling route a fix may have missed. Leads to open, never findings; a name with more than 25 call sites is skipped; scope and ceilings are in its docstring.
-# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler, raw node:http or fetch-handler pathname-and-method dispatch included, with no authentication evidence; SKIPPED without handlers), header_config.py (tool `header-config`: a security header the repo config never names, a lead to confirm with dynamic_probe.py; SKIPPED without a supported web app; a package.json, .conf file or directory it could not read gives not-checked rows instead) and attempt_limit_map.py (tool `attempt-limit`, rule `missing-attempt-limit`: a password, one-time-code or reset-code check with no attempt-limit evidence in its file or package, a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without a credential check or sign-in route) and cost_limit_map.py (tool `cost-limit`, rules `missing-cost-limit` and `unbounded-body`: an LLM or paid-API proxy, email or SMS send, upload, search, export or client-sized-page handler with no rate or quota limit evidence in its file or package, or a handler that reads the whole request body, or a body-parser limit of 10 MB or more, with no byte cap; a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without an HTTP handler) and csrf_cookie_map.py (tool `csrf-cookie`, rules `missing-csrf-protection` and `missing-cookie-flags`: a cookie-session state-changing handler with no anti-forgery token, Origin check or CSRF layer, or a session cookie set without Secure, HttpOnly or SameSite; a lead to confirm by reading the handler; SKIPPED without an HTTP handler or cookie) and ownership_sibling_check.py (tool `ownership`, rule `ownership-sibling`: a handler that loads a record by a client-sent id where a sibling handler of the same file checks ownership, a lead to confirm by reading the handler; a file it could not read is a not-checked row) and route_auth_map.py --privileged (tool `privileged-route`, rule `privileged-route`: an admin or role-changing route guarded by authentication alone, with no role or permission check; a lead to confirm by reading the handler). gitleaks runs once over the working tree, then (tool `gitleaks-history`) over the last REVIEW_HISTORY_MAX commits of HEAD (default 1000; 0 = skip, listed as "history not scanned"), so a secret removed from the tree but still in history is reported. gitleaks drops
+# `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler, raw node:http or fetch-handler pathname-and-method dispatch included, with no authentication evidence; a state-changing route in a language it does not judge (Go, Spring, PHP, Django urlconf) is a not-checked row, SKIPPED only without handlers or such routes), header_config.py (tool `header-config`: a security header the repo config never names, a lead to confirm with dynamic_probe.py; SKIPPED without a supported web app; a package.json, .conf file or directory it could not read gives not-checked rows instead) and attempt_limit_map.py (tool `attempt-limit`, rule `missing-attempt-limit`: a password, one-time-code or reset-code check with no attempt-limit evidence in its file or package, a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without a credential check or sign-in route) and cost_limit_map.py (tool `cost-limit`, rules `missing-cost-limit` and `unbounded-body`: an LLM or paid-API proxy, email or SMS send, upload, search, export or client-sized-page handler with no rate or quota limit evidence in its file or package, or a handler that reads the whole request body, or a body-parser limit of 10 MB or more, with no byte cap; a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without an HTTP handler) and csrf_cookie_map.py (tool `csrf-cookie`, rules `missing-csrf-protection` and `missing-cookie-flags`: a cookie-session state-changing handler with no anti-forgery token, Origin check or CSRF layer, or a session cookie set without Secure, HttpOnly or SameSite; a lead to confirm by reading the handler; SKIPPED without an HTTP handler or cookie) and ownership_sibling_check.py (tool `ownership`, rule `ownership-sibling`: a handler that loads a record by a client-sent id where a sibling handler of the same file checks ownership, a lead to confirm by reading the handler; a file it could not read is a not-checked row) and route_auth_map.py --privileged (tool `privileged-route`, rule `privileged-route`: an admin or role-changing route guarded by authentication alone, with no role or permission check; a lead to confirm by reading the handler). gitleaks runs once over the working tree, then (tool `gitleaks-history`) over the last REVIEW_HISTORY_MAX commits of HEAD (default 1000; 0 = skip, listed as "history not scanned"), so a secret removed from the tree but still in history is reported. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
-# gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row per top fixture dir when it has >3 (every other rule, and name-only matches, stay rows); REVIEW_FIXTURE_ROWS=all lists every hit.
+# gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row when a group has >3: per top fixture dir (tagged likely-fixture) for hits under a fixture dir, else per file (rule `generic-api-key-summary`, first hit as line) for any other file; every other rule, and name-only matches, stay rows; REVIEW_FIXTURE_ROWS=all lists every hit.
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
 # dirs and .claude/worktrees are never scanned; each heavy scanner takes the heavy lease only when it runs (waits
 # REVIEW_LEASE_WAIT s, default 120) and releases it afterwards. If the lease is still full after the wait the scanners
@@ -891,10 +891,12 @@ if [ "$full" = 1 ]; then
   # route_auth_map.py: HIGH rows (a state-changing handler with no auth evidence) become rows; INFO rows stay in the script's own report. SKIPPED when it finds no handler.
   if have python3 && run_one route-auth python3 -I "$here/route_auth_map.py" "$PWD" && scan_ok route-auth; then
     n=$(sed -nE 's/.*"handlers": ([0-9]+).*/\1/p' "$out" | tail -n1)
-    if [ "${n:-0}" = 0 ]; then skip route-auth "SKIPPED: no HTTP handlers"
+    u=$(sed -nE 's/.*"unjudged": ([0-9]+).*/\1/p' "$out" | tail -n1)
+    if [ "${n:-0}" = 0 ] && [ "${u:-0}" = 0 ]; then skip route-auth "SKIPPED: no HTTP handlers"
     else
       echo "route-auth: heuristic; scanned $n handlers; silence is not proof of authentication" >&2
       while IFS=$'\t' read -r p l m; do add route-auth "$p" "$l" missing-auth "$m"; done < <(sed -nE 's/^(.+):([0-9]+): HIGH: (.*)$/\1\t\2\t\3/p' "$out")
+      while IFS=$'\t' read -r p l m; do add route-auth "$p" "$l" not-checked "$m"; done < <(sed -nE 's/^(.+):([0-9]+): UNJUDGED: (.*)$/\1\t\2\t\3/p' "$out")
     fi
   fi
   # ownership_sibling_check.py: each "path:line: OWNERSHIP: msg" line is a row (rule ownership-sibling); a file it skipped is a not-checked row, never silent.
@@ -1019,7 +1021,7 @@ REVIEW_STATE="$(git rev-parse --git-common-dir)/review-checks-last.json" HERE="$
 import json, os, re, shlex, sys, time
 rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1], encoding="utf-8", errors="replace")]
 rows = [t for i, t in enumerate(rows) if t[3:4] != ["not-checked"] or t not in rows[:i]]  # a tool failing on N files is one not-checked row
-# Triage hint, not a verdict (only big generic-api-key fixture groups collapse, below): a secret or hidden-character finding under a sample/fixture/test/mock/docs path is usually dummy data.
+# Triage hint, not a verdict (only big generic-api-key groups collapse, below): a secret or hidden-character finding under a sample/fixture/test/mock/docs path is usually dummy data.
 FXD = re.compile(r"(^|/)(fixtures?|samples?|examples?|tests?|__tests__|testdata|mocks?|__mocks__|docs?)/", re.I)  # whole directory segment
 FXB = re.compile(r"(^|[._-])(fixture|sample|example|mock|test)s?([._-]|$)", re.I)  # file name only, so test-runner/ or sample-service/ stay untagged
 def fx(p): return FXD.search(p) or FXB.search(p.rsplit("/", 1)[-1])
@@ -1028,9 +1030,9 @@ def row(t):
     if t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "invisible-chars") and fx(t[1]):
         d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
     return d
-# Low-confidence bucket: only generic-api-key (the low-signal rule) hits under a fixture DIRECTORY collapse, and only when a (tool, top fixture dir)
-# group has more than 3; every other rule (stripe, github-pat, openai, anthropic, private-key, ...) and every name-only match stays a per-row finding.
-# REVIEW_FIXTURE_ROWS=all (or ALL, 1, true) keeps every row.
+# Low-confidence buckets: generic-api-key (the low-signal rule) hits from gitleaks or gitleaks-history collapse when they are more than 3 in one group:
+# under a fixture DIRECTORY per (tool, top fixture dir), tagged likely-fixture; elsewhere per (tool, file), rule generic-api-key-summary, untagged unless the file is name-only fixture-like.
+# Every other rule (stripe, github-pat, openai, anthropic, private-key, ...) stays a per-row finding. REVIEW_FIXTURE_ROWS=all (or ALL, 1, true) keeps every row.
 LOW = {"generic-api-key"}
 opt = os.environ.get("REVIEW_FIXTURE_ROWS", "").lower() in ("all", "1", "true")
 def top(p):
@@ -1041,16 +1043,25 @@ def summ(k, g):
     n = len(g); r = sorted((t[1], row(t)["line"]) for t in g)[:3]
     m = f"{n} generic-api-key hits under {k[1]} tagged likely-fixture (showing 3 of {n}; REVIEW_FIXTURE_ROWS=all for every row): {', '.join(f'{f}:{l}' for f, l in r)}"
     return {"file": k[1], "line": 0, "rule": "likely-fixture-summary", "message": m, "text": f"{k[0]}: {m} [likely-fixture]", "tool": k[0], "hint": "likely-fixture"}
+def fsumm(k, g):
+    n = len(g); L = sorted(row(t)["line"] for t in g)
+    m = f"{n} generic-api-key hits in this file (showing 3 of {n}; REVIEW_FIXTURE_ROWS=all for every row): {', '.join(map(str, L[:3]))}"
+    d = {"file": k[1], "line": L[0], "rule": "generic-api-key-summary", "message": m, "text": f"{k[0]}: {m}", "tool": k[0], "_lines": L}  # _lines: every member line, popped before printing
+    if fx(k[1]): d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
+    return d
 data = [t for t in rows if len(t) == 5]
 key = lambda t: not opt and t[0] in ("gitleaks", "gitleaks-history") and t[3] in LOW and FXD.search(t[1]) and (t[0], top(t[1]))
+fkey = lambda t: not opt and t[0] in ("gitleaks", "gitleaks-history") and t[3] in LOW and (t[0], t[1], "")
 groups = {}
 for t in data:
     if key(t): groups.setdefault(key(t), []).append(t)
+    elif fkey(t): groups.setdefault(fkey(t), []).append(t)
 out, done = [], set()
 for t in data:
-    k = key(t)
+    k = key(t) or fkey(t)
     if not k or len(groups[k]) <= 3: out.append(row(t))
-    elif k not in done: done.add(k); out.append(summ(k, groups[k]))
+    elif k not in done: done.add(k); out.append(summ(k, groups[k]) if key(t) else fsumm(k, groups[k]))
+ML = [r.pop("_lines", None) for r in out]  # per-file summary rows: every member line; popped here in every mode so the key never prints
 ud = sys.argv[11]  # `git diff -U0` of BASE...HEAD; "" under --full/--history or when a git read above failed (no "new" key)
 if ud:
     dirty = {e[3:] for e in open(sys.argv[12], "rb").read().decode("utf-8", "replace").split("\0")}  # "XY path" entries: files with a staged or working-tree change, or untracked
@@ -1061,9 +1072,14 @@ if ud:
             inh = True; m = re.match(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@", l)
             if cur and m: adds[cur].append((int(m[1]), 1 if m[2] is None else int(m[2])))  # "+N" is one line, "+N,0" none
         elif not inh and l.startswith("+++ b/"): cur = l[6:].rstrip("\n").split("\t")[0]; adds[cur] = []  # git adds a tab after a name with a space; a quoted name or /dev/null leaves cur unset
-    for r in out:  # a row in a dirty file is null (unknown); else file-level rows (line 0, no file) are never new; every path is read relative to the repo root, as the tools print it ("./x", absolute)
+    for r, ml in zip(out, ML):  # a row in a dirty file is null (unknown); else file-level rows (line 0, no file) are never new; a per-file summary is new when any member line is added; every path is read relative to the repo root, as the tools print it ("./x", absolute)
         f = os.path.relpath(r["file"]) if r["file"] not in ("", "-") else None
-        r["new"] = None if f in dirty else r["line"] > 0 and f is not None and any(a <= r["line"] < a + c for a, c in adds.get(f, ()))
+        hit = [r["line"]] if ml is None else ml
+        r["new"] = None if f in dirty else any(l > 0 and f is not None and a <= l < a + c for l in hit for a, c in adds.get(f, ()))
+        if ml is not None and f is not None and f not in dirty:  # added member lines past the 3 shown are named, so the summary says why it is new
+            ext = [l for l in ml[3:] if l > 0 and any(a <= l < a + c for a, c in adds.get(f, ()))]
+            if ext:
+                old = r["message"]; r["message"] += f"; added: {', '.join(map(str, ext))}"; r["text"] = r["text"].replace(old, r["message"], 1)
 print(json.dumps(out, indent=1))
 n = len(out); nc = sum(r["rule"] == "not-checked" for r in out)  # not-checked rows are unchecked surface, so they are counted apart from findings
 dg, w1 = sys.argv[5].split(), sys.argv[6].split()  # lease full: "1 worker" only for tools whose single-worker flag ran; "nice 19" only when nice worked
