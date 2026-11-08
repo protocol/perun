@@ -11,7 +11,14 @@ cover), and a message carrying the codepoint and 1-based column. At most 20 find
 at most 200 rows in all, then one `not-checked` row and the scan stops. Only the first 2 MB of a file is read; a larger file adds a
 `partially scanned` row. Path-based leniency (callers that want none, like audit_skills.py, use control_findings and
 HIDDEN directly): locale files (.po .arb .xlf .xliff .properties .strings, or under locales/ i18n/ l10n/) report only bidi
-overrides and isolates, not RLM/LRM/embeds/ZWSP; ESC alone is not reported in .snap, .golden, .ansi, .log or __snapshots__/.
+overrides and isolates, not RLM/LRM/embeds/ZWSP; prose and data files (.md .mdx .txt .rst .json .toml .yaml .yml)
+report everything in HIDDEN except an isolated U+200B, U+200D, U+FE0F or U+FEFF (no hidden character directly before or after it;
+one pasted character cannot carry a payload) and when the file holds 4 or more of them they are not listed one by one: one row at the line of the first reports
+the count ("N isolated zero-width/BOM characters in one prose file (first U+XXXX at col C); 4 or more can carry a payload").
+Locale files (above) are exempt from this count: they keep only bidi overrides and isolates. Bidi controls, tag and variation-selector characters and any 2+ adjacent hidden characters always report as usual.
+Agent-read files keep full reporting: CLAUDE*.md, AGENT.md, AGENTS.md, GEMINI.md, SKILL.md, CONVENTIONS.md, JULES.md, QWEN.md,
+copilot-instructions.md, *.prompt*, *.instructions.md, .cursorrules, .clinerules, (.)mcp.json, anything under .github/ .claude/
+.cursor/ .windsurf/ .codex/ .roo/ .kiro/ .gemini/ prompt/ prompts/ agents/ (CI workflows too); code is never lenient. ESC alone is not reported in .snap, .golden, .ansi, .log or __snapshots__/.
 Fixture and test paths are not dropped here; review_checks.sh tags their rows `[likely-fixture]` (its FXD/FXB patterns).
 Binary files: a known binary extension is skipped; a NUL in the first 8 KB makes git show a file as binary, so a file with a
 known text/source extension still reports its first control character and any other early-NUL file is skipped silently. UTF-16
@@ -31,6 +38,11 @@ BINARY_EXT = frozenset(".png .jpg .jpeg .gif .ico .webp .bmp .tif .tiff .pdf .zi
                        ".bin .wasm .woff .woff2 .ttf .otf .eot .mp3 .mp4 .mov .avi .webm .ogg .wav .flac .pyc .pyo .pyd .sqlite .sqlite3 .db .pkl .pickle .npy .npz .parquet".split())
 CTRL_NOESC = re.compile(r"[\x00-\x08\x0b\x0e-\x1a\x1c-\x1f]")  # CTRL minus ESC (U+001B): terminal colour codes in snapshots and logs
 OVERRIDE = re.compile("[\u202d\u202e\u2066-\u2069]")  # bidi overrides and isolates: the ones that reorder what a reviewer reads, the only hidden rows kept in locale files
+_HID = r"\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufe00-\ufe0f\ufeff\U000e0000-\U000e007f\U000e0100-\U000e01ef"  # every char that may hide text
+PROSE = re.compile(r"(?![\u200b\u200d\ufe0f\ufeff](?<![" + _HID + r"].)(?![" + _HID + r"]))(?:" + HIDDEN.pattern + ")")  # HIDDEN minus an isolated ZWSP/ZWJ/VS16/FEFF
+PROSE_EXT = frozenset(".md .mdx .txt .rst .json .toml .yaml .yml".split())
+AGENT_FILE = re.compile(r"(^|/)(claude[^/]*|agents?|gemini|skill|conventions|jules|qwen|copilot-instructions)\.md$|(^|/)[^/]*\.prompt[^/]*$|(^|/)\.cursorrules$|[^/]\.instructions\.md$|"
+                        r"(^|/)\.(github|claude|cursor|windsurf|codex|roo|kiro|gemini)/|(^|/)\.clinerules(/|$)|(^|/)(prompts?|agents)/|(^|/)\.?mcp\.json$", re.I)
 FLAG = re.compile("\U0001f3f4[\U000e0020-\U000e007e]+\U000e007f")  # flag emoji (England, Scotland, Wales): black flag + tag letters + cancel tag
 NULB = re.compile(b"\0")
 TEXT_EXT = frozenset((".py .pyi .js .jsx .mjs .cjs .ts .tsx .vue .svelte .json .jsonc .yml .yaml .toml .ini .cfg .conf .env .md .mdx .rst .txt .csv .tsv .xml .svg .html .htm "
@@ -100,7 +112,16 @@ def scan_file(rel, raw):
     out = [(n, "control-char", m) for n, m in control_findings(rel, text, binary, CTRL_NOESC if esc_ok else CTRL)]
     if not binary:
         locale = ext in LOCALE_EXT or LOCALE_DIR.search(rel)
-        out += [(n, "hidden-unicode", m) for n, m in hidden_hits(text, OVERRIDE if locale else HIDDEN)]
+        prose = ext in PROSE_EXT and not AGENT_FILE.search(rel)
+        extra = []
+        if prose and not locale:  # 4 or more isolated quiet characters in one file can carry a payload, one bit per gap: one summary row, not one per character
+            t = unflag(text)
+            quiet = [m for m in islice((m for m in HIDDEN.finditer(t) if not PROSE.match(t, m.start())), MORE_CAP)]
+            if len(quiet) > 3:
+                f, tt = quiet[0], t.replace("\r\n", "\n").replace("\r", "\n")
+                extra = [(tt.count("\n", 0, f.start()) + 1, "hidden-unicode", "%d%s isolated zero-width/BOM characters in one prose file (first U+%04X at col %d); 4 or more can carry a payload" % (
+                    len(quiet), "+" * (len(quiet) == MORE_CAP), ord(f.group()), f.start() - tt.rfind("\n", 0, f.start())))]
+        out += [(n, "hidden-unicode", m) for n, m in hidden_hits(text, OVERRIDE if locale else PROSE if prose else HIDDEN)] + extra
     return out
 
 
