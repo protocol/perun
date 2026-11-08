@@ -389,7 +389,9 @@ class Cov(unittest.TestCase):
                     self.assertEqual(e.code, 0)
         dc.DEADLINE = None
         self.assertLess(time.time() - t0, 3)
-        self.assertGreaterEqual(out.getvalue().count("time budget exhausted"), 100)
+        m = re.search(r"(\d+) \S+ packages not checked in this file .*time budget exhausted", out.getvalue())
+        self.assertIsNotNone(m, out.getvalue()[:300])
+        self.assertGreaterEqual(int(m[1]), 100)
 
     def test_catalog_and_pnpm_drift(self):
         """versions.toml version.ref feeds gradle drift; pnpm drift uses the direct installs (v9 importers, v6 top-level, v5 inline), not transitive copies."""

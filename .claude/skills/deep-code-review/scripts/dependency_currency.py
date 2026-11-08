@@ -39,7 +39,9 @@ OUTPUT
 ------
 Default: TSV `file<TAB>line<TAB>rule<TAB>message`, only non-current rows, KEV first. Rule: kev, vulnerable, eol, outdated, drift,
 unpinned, vendored or not-checked. The message carries name, current, latest, behind, vulnerable ids and the upgrade target.
-`--json` prints every row (also current ones) with those fields. Exit 0 always; the caller reads the rows.
+Not-checked rows that share file, ecosystem and note collapse to one row when there are more than 3 (rule not-checked, smallest line,
+message `N <eco> packages not checked in this file (first 3: a, b, c; --json lists every one): <note>`); 3 or fewer print unchanged.
+`--json` prints every row (also current ones) with those fields, never collapsed. Exit 0 always; the caller reads the rows.
 
 KNOWN CEILINGS
 --------------
@@ -1485,7 +1487,7 @@ def run(root, files, today, budget=45.0):
 
 
 def main(argv=None):
-    """CLI entry: print TSV rows (non-current) or JSON (all rows); exit 0."""
+    """CLI entry: print TSV rows (non-current, not-checked groups over 3 collapsed) or JSON (all rows); exit 0."""
     ap = argparse.ArgumentParser(description="dependency currency detector")
     ap.add_argument("--root", default=".")
     ap.add_argument("--stdin", action="store_true", help="newline-separated paths relative to --root (default: git ls-files)")
@@ -1499,9 +1501,24 @@ def main(argv=None):
     if a.json:
         print(json.dumps([dict(r, rule=rule_of(r)) for r in rows], indent=1))
     else:
+        groups = {}  # not-checked rows sharing file, ecosystem and note
         for r in rows:
-            if rule_of(r) != "current":
-                print(f"{r['file']}\t{r['line']}\t{rule_of(r)}\t{message(r)}")
+            if rule_of(r) == "not-checked":
+                groups.setdefault((r["file"], r["kind"], r["note"]), []).append(r)
+        done = set()
+        for r in rows:
+            rule = rule_of(r)
+            key = (r["file"], r["kind"], r["note"])
+            g = groups.get(key, []) if rule == "not-checked" else []
+            if rule == "current" or (len(g) > 3 and key in done):
+                continue
+            if len(g) > 3:  # more than 3 print as one row at the smallest line
+                done.add(key)
+                first = ", ".join(x["name"] for x in g[:3])
+                msg = f"{len(g)} {r['kind']} packages not checked in this file (first 3: {first}; --json lists every one): {r['note']}"
+                print(f"{r['file'].replace(chr(9), ' ').replace(chr(10), ' ')}\t{min(x['line'] for x in g)}\t{rule}\t{msg.replace(chr(9), ' ').replace(chr(10), ' ')}")
+            else:
+                print(f"{r['file'].replace(chr(9), ' ').replace(chr(10), ' ')}\t{r['line']}\t{rule}\t{message(r).replace(chr(9), ' ').replace(chr(10), ' ')}")
     if STUCK:  # worker threads blocked in sockets would hold the interpreter open past the budget
         sys.stdout.flush()
         sys.stderr.flush()
