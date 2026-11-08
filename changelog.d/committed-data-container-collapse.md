@@ -1,0 +1,2 @@
+### Changed
+- `committed_personal_data.py` (committed-data check) prints one `not-checked` row for a compressed or columnar container kind that more than 3 files share, instead of one row per file: under the first path in sorted order, message `N <kind> containers not scanned (first 3: a, b, c)`. A repository with thousands of PDFs no longer prints thousands of rows. Groups of 3 or fewer, partial-scan rows, address findings and the repository total are unchanged; the container rows now print after the per-file rows.

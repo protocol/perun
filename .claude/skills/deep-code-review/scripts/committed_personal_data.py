@@ -72,6 +72,11 @@ label applies), and once for the repository total under the path `.` ("69 distin
 `not-checked` is surface this scan did not cover (an unreadable file, one over the size cap, or a compressed/columnar container). Never an address,
 a domain or a line of a file: only the path and the counts (or the container format). Silent when there is nothing to report. Read-only; stdlib only.
 
+Container rows of one kind collapse: when more than 3 files get a not-checked container row of the same kind (not a partial-scan one), one row
+replaces them, under the first path in sorted order: "N <kind> containers not scanned (first 3: a, b, c): addresses inside their pages may not
+be seen, so this is not a clean result". Those rows print after the per-file rows, before the repository total. Groups of 3 or fewer print one
+row per file as before.
+
 EXIT CODES (fail closed)
 ------------------------
   0  advisory: finished, whatever it found (with `--strict`, nothing was flagged).
@@ -114,6 +119,8 @@ REPO_THRESHOLD = 50  # distinct addresses, over the files below THRESHOLD, at or
 MAX_READ = 32 << 20  # bytes read per file; the rest is reported as not scanned
 MAX_READ_CAP = 1 << 30  # --max-bytes ceiling: read(n) sizes its buffer up front, so a huge n is a traceback (exit 1, which --strict reads as a finding)
 MAX_COUNT = 100_000  # distinct addresses counted per file; the scan of that file stops there (bounds memory)
+COLLAPSE_OVER = 3  # more not-checked container rows of one kind than this print as one row (the first COLLAPSE_OVER paths named); partial-scan rows never collapse
+CONTAINER_ROW = "compressed/columnar container (%s): addresses inside its pages may not be seen, so this is not a clean result%s"
 # (start, end, kind) byte regexes: a file that opens with `start` and ends with `end` holds compressed or columnar pages, where an address is
 # not reliably seen, so it must not pass silently. Parquet (PAR1, or PARE with an encrypted footer) and Arrow repeat their magic as the
 # footer, and an ORC postscript ends with "ORC" and one length byte: requiring that, and that the two magics do not overlap, keeps a text
@@ -232,9 +239,14 @@ def tracked(root: str) -> list[str]:
     return [os.fsdecode(p) for p in r.stdout.split(b"\0") if p]
 
 
+def flat(s: str) -> str:
+    """`s` with tab and newline turned into spaces, so a hostile file name cannot split a TSV row."""
+    return s.replace("\t", " ").replace("\n", " ")
+
+
 def row(rel: str, rule: str, msg: str) -> None:
     """Print one TSV finding row, flushed. Tab and newline in the path become spaces so a hostile file name cannot split the row."""
-    print("%s\t0\t%s\t%s" % (rel.replace("\t", " ").replace("\n", " "), rule, msg), flush=True)
+    print("%s\t0\t%s\t%s" % (flat(rel), rule, msg), flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -259,6 +271,7 @@ def main(argv: list[str] | None = None) -> int:
     paths = [p for p in sys.stdin.read().split("\n") if p] if a.stdin else tracked(a.root)
     flagged = holders = 0
     spread: set[bytes] = set()  # the distinct addresses of the files that stay under --threshold, for the repository total
+    held: dict[str, list[str]] = {}  # container kind -> paths of its not-checked rows, printed after the loop so a kind can collapse
     for rel in paths:
         p = os.path.join(a.root, rel)
         if os.path.islink(p) or not os.path.isfile(p):
@@ -289,10 +302,20 @@ def main(argv: list[str] | None = None) -> int:
         holders += bool(found)
         if len(spread) < MAX_COUNT:  # bounds memory: the total stops growing there
             spread |= found
-        if kind:
-            row(rel, "not-checked", "compressed/columnar container (%s): addresses inside its pages may not be seen, so this is not a clean result%s" % (kind, partial))
+        if kind and big:
+            row(rel, "not-checked", CONTAINER_ROW % (kind, partial))
+        elif kind:
+            held.setdefault(kind, []).append(rel)  # one row per kind unless 3 or fewer files share it: see collapse below
         elif big:
             row(rel, "not-checked", "partially scanned: file over %d bytes, only the first %d were read" % (a.max_bytes, a.max_bytes))
+    for kind, group in held.items():
+        group.sort()
+        if len(group) > COLLAPSE_OVER:
+            row(group[0], "not-checked", "%d %s containers not scanned (first %d: %s): addresses inside their pages may not be seen, so this is not a clean result" % (
+                len(group), kind, COLLAPSE_OVER, ", ".join(flat(g) for g in group[:COLLAPSE_OVER])))
+        else:
+            for rel in group:
+                row(rel, "not-checked", CONTAINER_ROW % (kind, ""))
     if len(spread) >= a.repo_threshold:
         flagged += 1
         row(".", "email-addresses", "%d%s distinct email addresses across %d file(s) that each stay below the file threshold %d (repository threshold %d; --threshold 1 lists the files)" % (
