@@ -437,7 +437,22 @@ elif kind == "trufflehog":  # only ruleId (the detector), uri and startLine are 
     for run in d["runs"]:
         for r in run["results"]:
             p = r["locations"][0]["physicalLocation"]
-            rows.append((nf(p["artifactLocation"]["uri"]), p.get("region", {}).get("startLine", 0), r["ruleId"], "secret detected (unverified: offline scan, --no-verification)"))
+            f, n = nf(p["artifactLocation"]["uri"]), p.get("region", {}).get("startLine", 0)
+            if f.endswith(".gz"):  # X.gz beside X with the same bytes: scanned there. Any read or decode error keeps the row
+                try:
+                    import gzip
+                    if os.path.exists(f[:-3]) and gzip.decompress(open(f, "rb").read()) == open(f[:-3], "rb").read(): continue
+                except Exception: pass
+            if re.search(r"(^|/)\.?(sprockets-)?manifest-[0-9a-f]{16,}\.json$", f): continue  # digest manifest: hex asset digests, not credentials
+            # blob noise, dropped only in notebook/css-family blob types: trufflehog decodes base64, so a long base64 line in yaml/env/json/source/map can be a real encoded secret and is kept. A line number below 1 keeps its row (it would read the last line). .ipynb: a blob only as an output mime key at line start ("image/<type>":) or a data:<mime>;base64, URI, so a code-cell base64 or hex literal is kept. Other blob types: >=200 unbroken base64 chars, a wrapped base64 chunk, or >2000 chars. An unreadable line keeps its row
+            if n >= 1 and f.endswith((".ipynb", ".css", ".scss", ".less", ".nb")):
+                try:
+                    ln = open(f, errors="replace").read().split("\n")[n - 1]
+                    if f.endswith(".ipynb"): blob = re.match(r'\s*"image/[\w.+-]+"\s*:', ln) or re.search(r"data:[\w.+-]+/[\w.+-]+;base64,", ln)
+                    else: blob = re.fullmatch(r"[A-Za-z0-9+/]{60,}={0,2}", re.sub(r"\\n|[\s\"',]", "", ln)) or re.search(r"[A-Za-z0-9+/=_-]{200}", ln) or len(ln) > 2000
+                    if blob: continue
+                except (OSError, IndexError): pass
+            rows.append((f, n, r["ruleId"], "secret detected (unverified: offline scan, --no-verification)"))
 elif kind == "guarddog":  # threat-* rules only (capability-* fire on benign code); one row per rule from its first hit, relative to the package dir; code and match are source snippets and are never read
     for r, h in d["results"].items():
         if r.startswith("threat-") and h:
