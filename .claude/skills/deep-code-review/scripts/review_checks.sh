@@ -25,8 +25,8 @@
 # Built-in too, base mode only (a --full scan has no diff): sibling_sweep.py lists the unchanged call sites, in non-test code, of a function whose call arguments the diff changed elsewhere (tool `sibling-sweep`,
 # rule `unchanged-sibling-call`, message starts "lead:"): the sibling route a fix may have missed. Leads to open, never findings; a name with more than 25 call sites is skipped; scope and ceilings are in its docstring.
 # `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler, raw node:http or fetch-handler pathname-and-method dispatch included, with no authentication evidence; a state-changing route in a language it does not judge (Go, Spring, PHP, Django urlconf) is a not-checked row, SKIPPED only without handlers or such routes), header_config.py (tool `header-config`: a security header the repo config never names, a lead to confirm with dynamic_probe.py; SKIPPED without a supported web app; a package.json, .conf file or directory it could not read gives not-checked rows instead) and attempt_limit_map.py (tool `attempt-limit`, rule `missing-attempt-limit`: a password, one-time-code or reset-code check with no attempt-limit evidence in its file or package, a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without a credential check or sign-in route) and cost_limit_map.py (tool `cost-limit`, rules `missing-cost-limit` and `unbounded-body`: an LLM or paid-API proxy, email or SMS send, upload, search, export or client-sized-page handler with no rate or quota limit evidence in its file or package, or a handler that reads the whole request body, or a body-parser limit of 10 MB or more, with no byte cap; a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without an HTTP handler) and csrf_cookie_map.py (tool `csrf-cookie`, rules `missing-csrf-protection` and `missing-cookie-flags`: a cookie-session state-changing handler with no anti-forgery token, Origin check or CSRF layer, or a session cookie set without Secure, HttpOnly or SameSite; a lead to confirm by reading the handler; SKIPPED without an HTTP handler or cookie) and ownership_sibling_check.py (tool `ownership`, rule `ownership-sibling`: a handler that loads a record by a client-sent id where a sibling handler of the same file checks ownership, a lead to confirm by reading the handler; a file it could not read is a not-checked row) and route_auth_map.py --privileged (tool `privileged-route`, rule `privileged-route`: an admin or role-changing route guarded by authentication alone, with no role or permission check; a lead to confirm by reading the handler). gitleaks runs once over the working tree, then (tool `gitleaks-history`) over the last REVIEW_HISTORY_MAX commits of HEAD (default 1000; 0 = skip, listed as "history not scanned"), so a secret removed from the tree but still in history is reported. gitleaks drops
-# fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
-# gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row when a group has >3: per top fixture dir (tagged likely-fixture) for hits under a fixture dir, else per file (rule `generic-api-key-summary`, first hit as line) for any other file; bandit B101 (assert) hits collapse per file the same way when a file has >3 (rule `B101-summary`, message "N B101 hits in this file"); every other rule, and name-only matches, stay rows; REVIEW_FIXTURE_ROWS=all lists every hit.
+# fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full); history reads .gitleaks.toml as of BASE. Airtable object IDs (rec/app/tbl/fld/viw + 14 alnum) are allowlisted for airtable-api-key on gitleaks >= 8.25.1.
+# gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row when a group has >3: per top fixture dir (tagged likely-fixture) for hits under a fixture dir, else per file (rule `generic-api-key-summary`, first hit as line) for any other file; bandit B101 (assert) and ruff F821 (undefined name) hits collapse per file the same way when a file has >3 (rules `B101-summary`, `F821-summary`; the F821 message names the undefined names); a semgrep `github-actions-mutable-action-tag` row is dropped when zizmor flagged the same file:line as `unpinned-uses` (one defect, two tools); every other rule, and name-only matches, stay rows; REVIEW_FIXTURE_ROWS=all lists every hit.
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
 # dirs and .claude/worktrees are never scanned; each heavy scanner takes the heavy lease only when it runs (waits
 # REVIEW_LEASE_WAIT s, default 120) and releases it afterwards. If the lease is still full after the wait the scanners
@@ -223,10 +223,19 @@ fi
 
 js_files=$(changed '\.(js|mjs|cjs)$')
 if [ -n "$js_files" ] && have node; then
+  jsx=()
   while IFS= read -r f; do
     run_one node-check node --check "./$f" || continue
-    [ "$rc" = 0 ] || add node-check "$f" "$(sed -nE 's/^.*:([0-9]+)$/\1/p' "$out" | head -n1)" SyntaxError "$(grep -m1 'Error' "$out" || head -n1 "$out")"
+    if [ "$rc" != 0 ]; then
+      # JSX or markup in a .js file: node cannot parse it, so it is unchecked here, not a SyntaxError
+      if grep -q "Unexpected token '<'" "$out" && grep -qE '</|/>' "$f"; then jsx+=("$f")
+      else add node-check "$f" "$(sed -nE 's/^.*:([0-9]+)$/\1/p' "$out" | head -n1)" SyntaxError "$(grep -m1 'Error' "$out" || head -n1 "$out")"; fi
+    fi
   done <<<"$js_files"
+  if [ "${#jsx[@]}" -gt 0 ]; then
+    first=$(printf '%s, ' "${jsx[@]:0:3}"); first=${first%, }
+    add node-check "${jsx[0]}" 1 not-checked "${#jsx[@]} .js files hold JSX or markup that node --check cannot parse (first 3: $first); a JSX-aware linter or the project build judges them"
+  fi
 fi
 
 # tsc: PATH first, else $PWD or the git toplevel's node_modules/.bin/tsc (never a parent above it: that is an unrelated binary).
@@ -499,6 +508,16 @@ PY
 tplre=; tplwhat="under .history/, fixtures/, testdata/, generated registry JSON or lockfiles"
 [ -f .gitleaks.toml ] || tplre=$(sed -n "s/^  '''\(.*\)''',\$/\1/p" "$here/../templates/gitleaks.toml" 2>/dev/null | paste -sd'|' - || true)
 if have gitleaks; then
+  # Airtable object IDs (17 chars) match airtable-api-key's shape; one global [[allowlists]] block drops them, added to every gitleaks config below. Needs gitleaks >= 8.25.1 (8.25.0 had the global table broken): older builds get no block.
+  glal=; gv=$(gitleaks version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+  # A repo config without useDefault has no airtable-api-key rule, and targetRules naming a missing rule fails the whole load: no block then.
+  if [ "$(printf '%s\n8.25.1\n' "$gv" | sort -V | head -1)" = 8.25.1 ] && { [ ! -f .gitleaks.toml ] || grep -qE '^[[:space:]]*useDefault[[:space:]]*=[[:space:]]*true' .gitleaks.toml; }; then glal=$td/airtable.toml; cat >"$glal" <<'EOT'
+[[allowlists]]
+description = "Airtable object IDs (rec/app/tbl/fld/viw + 14 alnum): not API keys"
+targetRules = ["airtable-api-key"]
+regexes = ['''^(?:rec|app|tbl|fld|viw)[A-Za-z0-9]{14}$''']
+EOT
+  fi
   # Content-hash allowlist (templates/gitleaks.toml): trusted only as of BASE, so a change cannot approve its own secret.
   # A missing file or unresolvable base means an empty list; an entry the change adds or edits is itself a finding.
   export GL_ALLOW=$gla; git show "$ref:.gitleaks-allow" >"$gla" 2>/dev/null || : >"$gla"
@@ -512,7 +531,9 @@ if have gitleaks; then
   fi
   if [ "$wr" = 1 ]; then # one batched scan of the working tree; only tracked, non-vendored files are reported
     : >"$rep"; glw=$td/glw # extend the config; skip vendored trees at scan time
-    printf '[extend]\npath = "%s"\n[allowlist]\npaths = [\x27\x27\x27(^|/)(node_modules|vendor|\\.claude/worktrees)/\x27\x27\x27]\n' "${glcfg[1]:-$PWD/.gitleaks.toml}" >"$glw"
+    vk='[allowlist]'; [ -z "$glal" ] || vk='[[allowlists]]' # the global table cannot sit beside the deprecated [allowlist]
+    printf '[extend]\npath = "%s"\n%s\npaths = [\x27\x27\x27(^|/)(node_modules|vendor|\\.claude/worktrees)/\x27\x27\x27]\n' "${glcfg[1]:-$PWD/.gitleaks.toml}" "$vk" >"$glw"
+    [ -z "$glal" ] || cat "$glal" >>"$glw"
     if run_one gitleaks gitleaks detect --config "$glw" --gitleaks-ignore-path "$gli" --no-git --no-banner --exit-code 0 -f json -r "$rep" -s . && scan_ok gitleaks; then
       [ -s "$rep" ] || echo '[]' >"$rep"
       if sjson gitleaks "$rep" >"$tsv"; then
@@ -520,10 +541,11 @@ if have gitleaks; then
       else skip gitleaks "unparseable report; secrets were not scanned"; fi
     fi
   else
+    pcfg=(); if [ -n "$glal" ]; then pcfg=(--config "$td/glc.toml"); { if [ -n "${glcfg[1]:-}" ]; then printf '[extend]\npath = "%s"\n' "${glcfg[1]}"; else printf '[extend]\nuseDefault = true\n'; fi; cat "$glal"; } >"$td/glc.toml"; else pcfg=(${glcfg[@]+"${glcfg[@]}"}); fi
     while IFS= read -r f; do
       [ -f "$f" ] || continue
       : >"$rep" # a stale report from the previous file must never be read for this one
-      run_one gitleaks gitleaks detect ${glcfg[@]+"${glcfg[@]}"} --gitleaks-ignore-path "$gli" --no-git --no-banner --exit-code 0 -f json -r "$rep" -s "./$f" || continue
+      run_one gitleaks gitleaks detect ${pcfg[@]+"${pcfg[@]}"} --gitleaks-ignore-path "$gli" --no-git --no-banner --exit-code 0 -f json -r "$rep" -s "./$f" || continue
       scan_ok gitleaks || continue
       [ -s "$rep" ] || echo '[]' >"$rep" # gitleaks may leave an empty report for a clean file
       sjson gitleaks "$rep" >"$tsv" || { skip gitleaks "unparseable report for $f"; continue; }
@@ -531,9 +553,12 @@ if have gitleaks; then
     done <<<"$files"
   fi
   if [ "$hist" = 1 ]; then # history: the commits BASE..HEAD adds, not just the final file state (never BASE...HEAD: that also scans every BASE-only commit when HEAD is behind)
-    : >"$rep"
+    : >"$rep"; hb=$td/hist-base.toml; git show "$ref:.gitleaks.toml" >"$hb" 2>/dev/null || hb= # read as of BASE like .gitleaksignore, so a change cannot allowlist its own commits
+    if [ -n "$hb" ]; then printf '[extend]\npath = "%s"\n' "$hb" >"$td/hist.toml"; else printf '[extend]\nuseDefault = true\n' >"$td/hist.toml"; fi
+    if [ -n "$glal" ] && { [ -z "$hb" ] || grep -qE '^[[:space:]]*useDefault[[:space:]]*=[[:space:]]*true' "$hb"; }; then cat "$glal" >>"$td/hist.toml"; fi
+    hc=(--config "$td/hist.toml")
     lo=(--log-opts "$base..HEAD"); [ "$full" = 0 ] || lo=(); [ -z "$hmax" ] || lo=(--log-opts "--max-count=$hmax") # default: only the commits since BASE (default origin/main, never a possibly stale local main)
-    if run_one gitleaks-history gitleaks detect --no-banner --exit-code 0 -f json -r "$rep" ${lo[@]+"${lo[@]}"} -s . && scan_ok gitleaks-history; then
+    if run_one gitleaks-history gitleaks detect ${hc[@]+"${hc[@]}"} --no-banner --exit-code 0 -f json -r "$rep" ${lo[@]+"${lo[@]}"} -s . && scan_ok gitleaks-history; then
       [ -s "$rep" ] || echo '[]' >"$rep"
       if sjson gitleaks "$rep" >"$tsv"; then while IFS=$'\t' read -r f l r m; do [[ $f =~ $XRE ]] || add gitleaks-history "$f" "$l" "$r" "$m"; done <"$tsv"
       else skip gitleaks-history "unparseable report"; fi
@@ -1033,9 +1058,9 @@ def row(t):
 # Low-confidence buckets: generic-api-key (the low-signal rule) hits from gitleaks or gitleaks-history collapse when they are more than 3 in one group:
 # under a fixture DIRECTORY per (tool, top fixture dir), tagged likely-fixture; elsewhere per (tool, file), rule generic-api-key-summary, untagged unless the file is name-only fixture-like.
 # Every other rule (stripe, github-pat, openai, anthropic, private-key, ...) stays a per-row finding. REVIEW_FIXTURE_ROWS=all (or ALL, 1, true) keeps every row.
-# Per-file collapse also covers bandit B101 (assert, common in test dirs): per (tool, file) when more than 3, rule B101-summary; no fixture-dir bucket for it.
+# Per-file collapse also covers bandit B101 (assert) and ruff F821 (undefined name, e.g. a harness's injected globals): per (tool, file) when more than 3, rule B101-summary or F821-summary; no fixture-dir bucket for them.
 LOW = {"generic-api-key"}
-FILE = {("gitleaks", "generic-api-key"), ("gitleaks-history", "generic-api-key"), ("bandit", "B101")}
+FILE = {("gitleaks", "generic-api-key"), ("gitleaks-history", "generic-api-key"), ("bandit", "B101"), ("ruff", "F821")}
 opt = os.environ.get("REVIEW_FIXTURE_ROWS", "").lower() in ("all", "1", "true")
 def top(p):
     s = p.split("/")[:-1]; j = next(i for i, x in enumerate(s) if FXD.search(x + "/"))
@@ -1048,10 +1073,16 @@ def summ(k, g):
 def fsumm(k, g):  # k = (tool, file, "", rule): the rule names the message and the summary row
     n = len(g); L = sorted(row(t)["line"] for t in g); R = k[3]
     m = f"{n} {R} hits in this file (showing 3 of {n}; REVIEW_FIXTURE_ROWS=all for every row): {', '.join(map(str, L[:3]))}"
+    if R == "F821":  # distinct backticked names in first-appearance order: first 5, "…" if more
+        nm = list(dict.fromkeys(x for t in g for x in re.findall(r"`([^`]+)`", t[4])[:1])); m += f"; names: {', '.join(nm[:5])}{'…' if len(nm) > 5 else ''}"
     d = {"file": k[1], "line": L[0], "rule": f"{R}-summary", "message": m, "text": f"{k[0]}: {m}", "tool": k[0], "_lines": L}  # _lines: every member line, popped before printing
     if k[0] in ("gitleaks", "gitleaks-history") and fx(k[1]): d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
     return d
 data = [t for t in rows if len(t) == 5]
+# Same defect, two tools: (dup tool, dup rule suffix): (keep tool, keep rule). A dup row goes only when the keep row sits on the same file:line.
+SUPERSEDES = {("semgrep", "github-actions-mutable-action-tag"): ("zizmor", "unpinned-uses")}
+kept = {(os.path.normpath(t[1]), t[2], t[0], t[3]) for t in data}
+data = [t for t in data if not any(t[0] == dt and t[3].endswith(dr) and (os.path.normpath(t[1]), t[2], kt, kr) in kept for (dt, dr), (kt, kr) in SUPERSEDES.items())]
 key = lambda t: not opt and t[0] in ("gitleaks", "gitleaks-history") and t[3] in LOW and FXD.search(t[1]) and (t[0], top(t[1]))
 fkey = lambda t: not opt and (t[0], t[3]) in FILE and (t[0], t[1], "", t[3])
 groups = {}

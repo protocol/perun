@@ -717,7 +717,7 @@ GOMETH = re.compile(r'\b([\w$]+)' + GOCH + r'\.(?:Handle|Method|MethodFunc|Add)\
 GOCLI = re.compile(r"(?:http|resty|req|session|\w*client)$", re.I)  # receivers of outbound calls: client.Post("/x", "application/json", body)
 GOGRP = re.compile(r'\b([\w$]+)\s*:?=\s*([\w$]+)\.(?:Group|PathPrefix)\(\s*"([^"]*)"')
 GORT = re.compile(r'\.(?:Route|Mount)\(\s*"([^"]*)"\s*,\s*func\b[^{]*\{')
-GOMS = re.compile(r'\s*\.Methods\(([^)]*)\)')
+GOMS = re.compile(r'(?:\s*\.\w+\([^()]*\))*\s*\.Methods\(([^)]*)\)')  # chained calls before .Methods: .Name("x").Methods("POST")
 JAVAM = re.compile(r'@(Get|Post|Put|Patch|Delete|Request)Mapping\b(?:\s*\(((?:[^()"]|"[^"]*"|\([^()]*\))*)\))?')
 JAVAX = re.compile(r"\bmethod\s*=[^,)]*|\b(?:consumes|produces|headers|params)\s*=\s*(?:\{[^}]*\}|[^,)]*)")
 DJ = re.compile(r'(?<![\w.])(re_path|path|url)\(\s*r?(["\'])(.*?)\2\s*,\s*(include\(\s*(?:r?["\']([\w.]+)["\'])?)?')
@@ -759,7 +759,7 @@ def go_routes(raw):
         elif k in ("Handle", "HandleFunc"):
             cl = close_of(mk, mk.index("(", t.end(3)))
             ms = GOMS.match(mk, cl + 1) if cl > 0 else None
-            meth = "|".join(v for v in VERBS if re.search(r'"%s"|\bMethod%s\b' % (v, v.capitalize()), ms[1], re.I)) if ms else "ANY"  # .Methods("POST") or .Methods(http.MethodPost)
+            meth = "|".join(v for v in VERBS + ("HEAD", "OPTIONS") if re.search(r'"%s"|\bMethod%s\b' % (v, v.capitalize()), ms[1], re.I)) if ms else "ANY"  # .Methods("POST") or .Methods(http.MethodPost)
         elif GOCLI.match(t[1]): continue  # client.Get("/x", ...) is an outbound call
         else: meth = k.upper()
         if p.startswith("/") or p == "" and q != "/": out.append((t.start(), meth, join(q, goroute(p))))
@@ -927,7 +927,7 @@ def unjudged(root):
     """[(file, line, count, METHOD, path)] per file of other_routes() (Go, Spring, Kotlin, PHP, Django urlconfs; auth is never judged for these) that accepts a state-changing method (anything but GET/HEAD/OPTIONS; ANY counts). One row per file: count of such routes and the first one by line. Reads-the-handler leads, never HIGH."""
     by = {}
     for m, p, f, ln in other_routes(root):
-        if m not in ("GET", "HEAD", "OPTIONS"): by.setdefault(f, []).append((ln, m, p))
+        if any(x not in ("GET", "HEAD", "OPTIONS") for x in m.split("|")): by.setdefault(f, []).append((ln, m, p))
     return [(f, first[0], len(x), first[1], first[2]) for f, x in sorted(by.items()) for first in [min(x)]]
 
 
