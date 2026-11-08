@@ -3,6 +3,37 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.653.0] — 2026-11-08
+
+### Changed
+- `review_checks.sh` collapses bandit B101 (assert) hits per file the same way as gitleaks generic-api-key hits: a file with more than 3 B101 rows becomes one `B101-summary` row (first hit as line, message "N B101 hits in this file", added-line `new` and `added: N` naming apply). Other bandit rules stay per row; 3 or fewer stay; `REVIEW_FIXTURE_ROWS=all` keeps every row. Test-dir B101 hits collapse per file, not into a fixture bucket.
+
+### Changed
+- `committed_personal_data.py` (committed-data check) prints one `not-checked` row for a compressed or columnar container kind that more than 3 files share, instead of one row per file: under the first path in sorted order, message `N <kind> containers not scanned (first 3: a, b, c)`. A repository with thousands of PDFs no longer prints thousands of rows. Groups of 3 or fewer, partial-scan rows, address findings and the repository total are unchanged; the container rows now print after the per-file rows.
+
+### Changed
+- `dependency_currency.py` TSV output (default mode, `review_checks.sh` dep-currency step) prints one `not-checked` row instead of one per package when more than 3 not-checked rows share a file, ecosystem and note. The row sits at the smallest line and names the first 3 packages; `--json` still lists every row. Groups of 3 or fewer and all other rules print unchanged.
+
+### Changed
+- `route_auth_map.py` treats a mutating handler that forwards the caller's credential upstream as verified by that upstream, so those rows no longer report as HIGH. On the real-repo corpus HIGH rows drop 43 to 35, the 2 confirmed unauthenticated routes stay HIGH, and the fixtures stay at 223.
+- `invisible_chars.py` goes quiet in a prose or data file for an isolated U+200B, U+200D, U+FE0F or U+FEFF. A file with 4 or more of them gets one summary row, and locale files are exempt. Runs, tag and variation-selector characters, bidi controls and everything else still report, and the agent-instruction file list is widened. Agent-instruction files, `.github`/`.claude`/`.cursor` paths and code keep full reporting. Hidden-unicode corpus rows drop 262 to 55.
+
+### Changed
+- `review_checks.sh` collapses gitleaks and gitleaks-history `generic-api-key` hits per file when one non-fixture file has more than 3 of them: one `generic-api-key-summary` row per file, at the first hit's line, with the count, the first three line numbers and a `REVIEW_FIXTURE_ROWS=all` hint. A file with 3 or fewer hits, any other rule in the same file, a fixture-directory bucket (which keeps its own summary) and `REVIEW_FIXTURE_ROWS=all` (every row) are unchanged. No secret value is printed. On a 3,937-row audit corpus the generic-api-key rows fell to 65.
+
+### Added
+- The Perun gitleaks template gains a `capability-url` rule: a URL whose query carries a long invite, share or access token, a magic link or a signature is reported, since whoever holds the link gets access. Runs of `x` and `example` values are skipped.
+- `route_auth_map.py` recognises more house guards: `require*` now takes Member, Account, Viewer and Principal, and `req.member` / `request.member` reads count as identity evidence (an assignment does not).
+- `route_auth_map.py` labels a handler that answers 401 itself (`status: 401`, `.status(401)`, `sendStatus(401)`, `abort(401)`, `HTTPException(status_code=401)`) as `auth=presence-check`. Such a mutating row drops to INFO only when the handler forwards the caller's credential in an outbound `Authorization` header or a Bearer value, so the upstream verifies it; a presence check that then trusts the header stays HIGH.
+- size-budget-raise: .claude/skills/deep-code-review/references/method-situational.md 44699→44807 capability-url rule named in the gitleaks template line
+
+### Added
+- `route_auth_map.py` (default mode, and `review_checks.sh --full` route-auth) no longer skips a repo whose handlers are in a language it does not judge. A Go, Spring, PHP or Django urlconf file with routes that accept a state-changing method (anything but GET, HEAD or OPTIONS; ANY counts) gets one `UNJUDGED` not-checked row at its first such route, with the count. Auth is not judged for those files; the row says to read the handlers. A Django app with only urlconf routes no longer reads "no HTTP handlers". `route-auth (SKIPPED: no HTTP handlers)` now shows only when there are no handlers and no unjudged routes.
+- `route_auth_map.py` reads `.Methods(http.MethodPost)`-style gorilla method constants, so a `http.MethodGet` route is no longer reported with an empty method.
+
+### Added
+- `review_checks.sh` drops a trufflehog row in notebook and css-family blob types (`.ipynb`, `.css`, `.scss`, `.less`, `.nb`) only when the line is a blob: in `.ipynb` an output mime key at line start (`"image/<type>":`) or a `data:<mime>;base64,` URI, so a code-cell base64 or hex literal is kept; in the other types a run of 200 or more unbroken base64-alphabet characters, a wrapped base64 chunk, or a line over 2000 characters. Rows are also dropped for a digest manifest (`.sprockets-manifest-<hex>.json`, asset digests) and for a `X.gz` whose decompressed bytes equal its `X`. Base64 lines in yaml, env, json, source and `.map` files are kept: trufflehog decodes base64, so such a line can be a real encoded secret, and `.map` files can carry `sourcesContent`. A row with line number below 1 is kept, and a row whose line cannot be re-read is kept.
+
 ## [1.652.0] — 2026-11-06
 
 ### Added
