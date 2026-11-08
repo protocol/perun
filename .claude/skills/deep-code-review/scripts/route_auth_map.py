@@ -11,7 +11,7 @@ OF AUTHENTICATION: the scan only sees the call shapes listed below.
    Fastify `<receiver>.get|post|put|patch|delete|all("/path", ...)` (TS type arguments allowed: `app.post<{ Body: Widget }>("/path", h)`), raw node:http / fetch-handler dispatch (a file that calls `createServer(`,
    `Deno.serve(`, `Bun.serve(` or defines `fetch(request) {`: one handler per `if (pathname === "/x" && req.method === "POST")` branch or `switch (pathname) { case "/x": ... }` case, either operand order,
    `url.pathname`, a `pathname` variable or `req.url`, a path literal or a same-file `const X = "/x"`; the method comes from the condition, the block or an enclosing `if`, and a branch with no method test, a branch in a class that is not `export default class` (a Durable Object), a `startsWith` or regex dispatch and an imported path constant are not seen; identity evidence before the dispatch in the enclosing function counts, an earlier branch's block does not), FastAPI `@x.get(...)` and Flask `@x.route(..., methods=[...])` decorators.
-   `--paths` and `--all` also inventory (no auth evidence is judged for these) Go (`HandleFunc|Handle("[METHOD ]/p")` incl. Go 1.22 patterns, chi/gin/echo `x.Get|GET|Any("/p")`, `x.Handle|Method|Add("GET", "/p")`,
+   `--paths` and `--all` also inventory (no auth evidence is judged for these; default mode prints one UNJUDGED line per file with state-changing Go, Spring, PHP or Django routes) Go (`HandleFunc|Handle("[METHOD ]/p")` incl. Go 1.22 patterns, chi/gin/echo `x.Get|GET|Any("/p")`, `x.Handle|Method|Add("GET", "/p")`,
    gorilla `.Methods(...)`, with `Group`/`PathPrefix` variables and chi `Route("/a", func...)` prefixes), Spring (`@Get|Post|Put|Patch|DeleteMapping`, `@RequestMapping` with `method=`, array paths, the class-level `@RequestMapping` prefix)
    Django urlconfs (`path|re_path|url`, method ANY, `include("pkg.urls")` prefixes resolved to a scanned file) and PHP (Symfony `#[Route(path, methods: [...])]` attributes and `@Route` annotations, with the class-level
    `#[Route]` prefix; Laravel `Route::get|post|put|patch|delete|any('/p', ...)`, no `prefix()`/`group()` nesting). Not seen there: DRF routers, `add_url_rule`, `include(module)`, Kotlin DSL, a prefix held in a variable.
@@ -759,7 +759,7 @@ def go_routes(raw):
         elif k in ("Handle", "HandleFunc"):
             cl = close_of(mk, mk.index("(", t.end(3)))
             ms = GOMS.match(mk, cl + 1) if cl > 0 else None
-            meth = "|".join(v for v in VERBS if re.search(r'"%s"' % v, ms[1], re.I)) if ms else "ANY"
+            meth = "|".join(v for v in VERBS if re.search(r'"%s"|\bMethod%s\b' % (v, v.capitalize()), ms[1], re.I)) if ms else "ANY"  # .Methods("POST") or .Methods(http.MethodPost)
         elif GOCLI.match(t[1]): continue  # client.Get("/x", ...) is an outbound call
         else: meth = k.upper()
         if p.startswith("/") or p == "" and q != "/": out.append((t.start(), meth, join(q, goroute(p))))
@@ -855,10 +855,9 @@ def django_routes(files):
     return out
 
 
-def inventory(root):
-    """[(METHOD, path, file, line)] of every route under root, sorted, one entry per method: the scan() handlers (JS/TS, Next, Python), Go, Spring, Django urlconfs and PHP."""
-    rows = [(m, r[3], r[0], r[1]) for r in scan(root)[0] for m in r[2].split("|")]
-    files, django = {}, {}
+def other_routes(root):
+    """[(METHOD, path, file, line)] of the routes scan() never judges, unsorted: Go, Spring, Kotlin, PHP and Django urlconfs (ANY). Walks root once; scan() is not re-run."""
+    rows, files, django = [], {}, {}
     for dp, dn, fn in os.walk(root):
         dn[:] = [d for d in sorted(dn) if d not in SKIP_DIR]
         for f in sorted(fn):
@@ -871,7 +870,13 @@ def inventory(root):
         for pos, ms, p in (go_routes if rel.endswith(".go") else php_routes if rel.endswith(".php") else java_routes)(raw):
             rows += [(m, p, rel, lineno(raw, pos)) for m in ms.split("|")]
     rows += [(m, p, rel, ln) for rel, ln, m, p in django_routes(django)]
-    return sorted(set(rows), key=lambda r: (r[1], r[0], r[2], r[3]))
+    return rows
+
+
+def inventory(root):
+    """[(METHOD, path, file, line)] of every route under root, sorted, one entry per method: the scan() handlers (JS/TS, Next, Python) plus other_routes()."""
+    rows = [(m, r[3], r[0], r[1]) for r in scan(root)[0] for m in r[2].split("|")]
+    return sorted(set(rows + other_routes(root)), key=lambda r: (r[1], r[0], r[2], r[3]))
 
 
 PRIVSEG = re.compile(r"admin|administrator|superuser|backoffice", re.I)
@@ -918,6 +923,14 @@ def privileged(rows):
     return out
 
 
+def unjudged(root):
+    """[(file, line, count, METHOD, path)] per file of other_routes() (Go, Spring, Kotlin, PHP, Django urlconfs; auth is never judged for these) that accepts a state-changing method (anything but GET/HEAD/OPTIONS; ANY counts). One row per file: count of such routes and the first one by line. Reads-the-handler leads, never HIGH."""
+    by = {}
+    for m, p, f, ln in other_routes(root):
+        if m not in ("GET", "HEAD", "OPTIONS"): by.setdefault(f, []).append((ln, m, p))
+    return [(f, first[0], len(x), first[1], first[2]) for f, x in sorted(by.items()) for first in [min(x)]]
+
+
 def main(argv):
     a = [x for x in argv[1:] if x not in ("--paths", "--all", "--privileged")]
     if len(a) != 1 or not os.path.isdir(a[0]) or len({"--paths", "--all", "--privileged"} & set(argv[1:])) > 1:
@@ -946,7 +959,9 @@ def main(argv):
     out = [(r, "HIGH" if (r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|")) else "INFO") for r in rows]
     for r, s in out: print("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))
     hi = [(r, s) for r, s in out if s == "HIGH"]
-    print(json.dumps({"tool": "route_auth_map", "handlers": len(rows), "files": files, "high": len(hi),
+    uj = unjudged(a[0])
+    for f, ln, n, m, p in uj: print("%s:%d: UNJUDGED: %d route(s) accept state-changing methods here (first %s %s); route-auth does not judge auth for this language, read the handlers" % (f, ln, n, m, p))
+    print(json.dumps({"tool": "route_auth_map", "handlers": len(rows), "files": files, "high": len(hi), "unjudged": sum(u[2] for u in uj),
                       "findings": [{"file": r[0], "line": r[1], "severity": s, "message": "%s %s auth=%s" % r[2:]} for r, s in hi]}))
     return 0
 

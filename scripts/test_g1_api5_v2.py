@@ -161,7 +161,7 @@ router.put('/users/:id', requireAuth, async (req, res) => { res.json({}); });
 PIN_OUT = """a.py:3: INFO: POST /tenants/:tid/disable auth=Depends(get_current_user)
 b.js:3: INFO: DELETE /admin/users/:id auth=requireAuth
 b.js:4: INFO: PUT /users/:id auth=requireAuth
-{"tool": "route_auth_map", "handlers": 3, "files": 2, "high": 0, "findings": []}
+{"tool": "route_auth_map", "handlers": 3, "files": 2, "high": 0, "unjudged": 0, "findings": []}
 """
 
 
