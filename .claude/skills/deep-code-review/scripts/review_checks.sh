@@ -26,7 +26,7 @@
 # rule `unchanged-sibling-call`, message starts "lead:"): the sibling route a fix may have missed. Leads to open, never findings; a name with more than 25 call sites is skipped; scope and ceilings are in its docstring.
 # `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler, raw node:http or fetch-handler pathname-and-method dispatch included, with no authentication evidence; a state-changing route in a language it does not judge (Go, Spring, PHP, Django urlconf) is a not-checked row, SKIPPED only without handlers or such routes), header_config.py (tool `header-config`: a security header the repo config never names, a lead to confirm with dynamic_probe.py; SKIPPED without a supported web app; a package.json, .conf file or directory it could not read gives not-checked rows instead) and attempt_limit_map.py (tool `attempt-limit`, rule `missing-attempt-limit`: a password, one-time-code or reset-code check with no attempt-limit evidence in its file or package, a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without a credential check or sign-in route) and cost_limit_map.py (tool `cost-limit`, rules `missing-cost-limit` and `unbounded-body`: an LLM or paid-API proxy, email or SMS send, upload, search, export or client-sized-page handler with no rate or quota limit evidence in its file or package, or a handler that reads the whole request body, or a body-parser limit of 10 MB or more, with no byte cap; a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without an HTTP handler) and csrf_cookie_map.py (tool `csrf-cookie`, rules `missing-csrf-protection` and `missing-cookie-flags`: a cookie-session state-changing handler with no anti-forgery token, Origin check or CSRF layer, or a session cookie set without Secure, HttpOnly or SameSite; a lead to confirm by reading the handler; SKIPPED without an HTTP handler or cookie) and ownership_sibling_check.py (tool `ownership`, rule `ownership-sibling`: a handler that loads a record by a client-sent id where a sibling handler of the same file checks ownership, a lead to confirm by reading the handler; a file it could not read is a not-checked row) and route_auth_map.py --privileged (tool `privileged-route`, rule `privileged-route`: an admin or role-changing route guarded by authentication alone, with no role or permission check; a lead to confirm by reading the handler). gitleaks runs once over the working tree, then (tool `gitleaks-history`) over the last REVIEW_HISTORY_MAX commits of HEAD (default 1000; 0 = skip, listed as "history not scanned"), so a secret removed from the tree but still in history is reported. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full).
-# gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row when a group has >3: per top fixture dir (tagged likely-fixture) for hits under a fixture dir, else per file (rule `generic-api-key-summary`, first hit as line) for any other file; every other rule, and name-only matches, stay rows; REVIEW_FIXTURE_ROWS=all lists every hit.
+# gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row when a group has >3: per top fixture dir (tagged likely-fixture) for hits under a fixture dir, else per file (rule `generic-api-key-summary`, first hit as line) for any other file; bandit B101 (assert) hits collapse per file the same way when a file has >3 (rule `B101-summary`, message "N B101 hits in this file"); every other rule, and name-only matches, stay rows; REVIEW_FIXTURE_ROWS=all lists every hit.
 # `--history` also runs gitleaks over BASE..HEAD (`--full-history`: the whole history). node_modules, vendor, build
 # dirs and .claude/worktrees are never scanned; each heavy scanner takes the heavy lease only when it runs (waits
 # REVIEW_LEASE_WAIT s, default 120) and releases it afterwards. If the lease is still full after the wait the scanners
@@ -1033,7 +1033,9 @@ def row(t):
 # Low-confidence buckets: generic-api-key (the low-signal rule) hits from gitleaks or gitleaks-history collapse when they are more than 3 in one group:
 # under a fixture DIRECTORY per (tool, top fixture dir), tagged likely-fixture; elsewhere per (tool, file), rule generic-api-key-summary, untagged unless the file is name-only fixture-like.
 # Every other rule (stripe, github-pat, openai, anthropic, private-key, ...) stays a per-row finding. REVIEW_FIXTURE_ROWS=all (or ALL, 1, true) keeps every row.
+# Per-file collapse also covers bandit B101 (assert, common in test dirs): per (tool, file) when more than 3, rule B101-summary; no fixture-dir bucket for it.
 LOW = {"generic-api-key"}
+FILE = {("gitleaks", "generic-api-key"), ("gitleaks-history", "generic-api-key"), ("bandit", "B101")}
 opt = os.environ.get("REVIEW_FIXTURE_ROWS", "").lower() in ("all", "1", "true")
 def top(p):
     s = p.split("/")[:-1]; j = next(i for i, x in enumerate(s) if FXD.search(x + "/"))
@@ -1043,15 +1045,15 @@ def summ(k, g):
     n = len(g); r = sorted((t[1], row(t)["line"]) for t in g)[:3]
     m = f"{n} generic-api-key hits under {k[1]} tagged likely-fixture (showing 3 of {n}; REVIEW_FIXTURE_ROWS=all for every row): {', '.join(f'{f}:{l}' for f, l in r)}"
     return {"file": k[1], "line": 0, "rule": "likely-fixture-summary", "message": m, "text": f"{k[0]}: {m} [likely-fixture]", "tool": k[0], "hint": "likely-fixture"}
-def fsumm(k, g):
-    n = len(g); L = sorted(row(t)["line"] for t in g)
-    m = f"{n} generic-api-key hits in this file (showing 3 of {n}; REVIEW_FIXTURE_ROWS=all for every row): {', '.join(map(str, L[:3]))}"
-    d = {"file": k[1], "line": L[0], "rule": "generic-api-key-summary", "message": m, "text": f"{k[0]}: {m}", "tool": k[0], "_lines": L}  # _lines: every member line, popped before printing
-    if fx(k[1]): d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
+def fsumm(k, g):  # k = (tool, file, "", rule): the rule names the message and the summary row
+    n = len(g); L = sorted(row(t)["line"] for t in g); R = k[3]
+    m = f"{n} {R} hits in this file (showing 3 of {n}; REVIEW_FIXTURE_ROWS=all for every row): {', '.join(map(str, L[:3]))}"
+    d = {"file": k[1], "line": L[0], "rule": f"{R}-summary", "message": m, "text": f"{k[0]}: {m}", "tool": k[0], "_lines": L}  # _lines: every member line, popped before printing
+    if k[0] in ("gitleaks", "gitleaks-history") and fx(k[1]): d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
     return d
 data = [t for t in rows if len(t) == 5]
 key = lambda t: not opt and t[0] in ("gitleaks", "gitleaks-history") and t[3] in LOW and FXD.search(t[1]) and (t[0], top(t[1]))
-fkey = lambda t: not opt and t[0] in ("gitleaks", "gitleaks-history") and t[3] in LOW and (t[0], t[1], "")
+fkey = lambda t: not opt and (t[0], t[3]) in FILE and (t[0], t[1], "", t[3])
 groups = {}
 for t in data:
     if key(t): groups.setdefault(key(t), []).append(t)

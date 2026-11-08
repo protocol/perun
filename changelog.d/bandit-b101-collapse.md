@@ -1,0 +1,2 @@
+### Changed
+- `review_checks.sh` collapses bandit B101 (assert) hits per file the same way as gitleaks generic-api-key hits: a file with more than 3 B101 rows becomes one `B101-summary` row (first hit as line, message "N B101 hits in this file", added-line `new` and `added: N` naming apply). Other bandit rules stay per row; 3 or fewer stay; `REVIEW_FIXTURE_ROWS=all` keeps every row. Test-dir B101 hits collapse per file, not into a fixture bucket.
