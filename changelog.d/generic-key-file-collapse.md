@@ -1,2 +1,0 @@
-### Changed
-- `review_checks.sh` collapses gitleaks and gitleaks-history `generic-api-key` hits per file when one non-fixture file has more than 3 of them: one `generic-api-key-summary` row per file, at the first hit's line, with the count, the first three line numbers and a `REVIEW_FIXTURE_ROWS=all` hint. A file with 3 or fewer hits, any other rule in the same file, a fixture-directory bucket (which keeps its own summary) and `REVIEW_FIXTURE_ROWS=all` (every row) are unchanged. No secret value is printed. On a 3,937-row audit corpus the generic-api-key rows fell to 65.
