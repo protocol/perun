@@ -1,2 +1,0 @@
-### Changed
-- `review_checks.sh` collapses ruff F821 (undefined name) hits per file the same way as bandit B101: a file with more than 3 F821 rows becomes one `F821-summary` row whose message names the distinct undefined names (first 5, then "…" if more), so injected harness globals such as `js` or `cdp` show at a glance. Other ruff rules stay per row; 3 or fewer stay; `REVIEW_FIXTURE_ROWS=all` keeps every row.
