@@ -41,6 +41,7 @@ Default: TSV `file<TAB>line<TAB>rule<TAB>message`, only non-current rows, KEV fi
 unpinned, vendored or not-checked. The message carries name, current, latest, behind, vulnerable ids and the upgrade target.
 Not-checked rows that share file, ecosystem and note collapse to one row when there are more than 3 (rule not-checked, smallest line,
 message `N <eco> packages not checked in this file (first 3: a, b, c; --json lists every one): <note>`); 3 or fewer print unchanged.
+Outdated rows of transitive npm packages (lockfile names no sibling package.json or lock root declares directly) collapse the same way per lockfile when more than 3, into one outdated row (smallest line, first 3 names, a major-behind count).
 `--json` prints every row (also current ones) with those fields, never collapsed. Exit 0 always; the caller reads the rows.
 
 KNOWN CEILINGS
@@ -1433,6 +1434,37 @@ def message(r):
     return "; ".join(p).replace("\t", " ").replace("\n", " ")
 
 
+NPM_LOCKS = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml")
+NPM_DEP_KEYS = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
+
+
+def npm_direct(root, lock):
+    """Names a npm lockfile declares directly: its sibling package.json plus, for package-lock v2/v3 the deps of every workspace/root `packages`
+    entry (key without node_modules/) and, for pnpm, the importers. None when neither source can be read, or when a yarn.lock sits beside a
+    package.json with "workspaces" (caller collapses nothing either way).
+    # ponytail: yarn workspace package.jsons are not read, so a yarn workspaces repo never collapses (folding them would hide direct deps)."""
+    out, have = set(), False
+    try:
+        txt = read(root, os.path.join(os.path.dirname(lock), "package.json"))
+        if txt is not None:
+            have = True
+            pj = json.loads(txt)
+            if os.path.basename(lock) == "yarn.lock" and "workspaces" in pj:
+                return None
+            out.update(n for k in NPM_DEP_KEYS for n in pj.get(k) or {})
+        ltxt = read(root, lock)
+        if os.path.basename(lock) == "pnpm-lock.yaml":
+            for direct in p_pnpm_root(ltxt).values():
+                out.update(direct)
+        elif os.path.basename(lock) in ("package-lock.json", "npm-shrinkwrap.json"):
+            for k, e in (json.loads(ltxt).get("packages") or {}).items():
+                if "node_modules/" not in k:
+                    out.update(n for kk in NPM_DEP_KEYS for n in e.get(kk) or {})
+    except Exception:  # noqa: BLE001 a crash here would drop every TSV row
+        return None  # unreadable or malformed (bad JSON, >5 MB, odd shape): fail safe, no collapse
+    return out if have or out else None
+
+
 def run(root, files, today, budget=45.0):
     """Collect, look up and return the sorted row dicts (every row, current ones included)."""
     global DEADLINE
@@ -1505,9 +1537,27 @@ def main(argv=None):
         for r in rows:
             if rule_of(r) == "not-checked":
                 groups.setdefault((r["file"], r["kind"], r["note"]), []).append(r)
+        tgroups, direct_of = {}, {}  # outdated transitive npm rows per lockfile; direct names per lockfile (None: collapse nothing)
+        for r in rows:
+            if rule_of(r) == "outdated" and r["kind"] == "npm" and os.path.basename(r["file"]) in NPM_LOCKS:
+                if r["file"] not in direct_of:
+                    direct_of[r["file"]] = npm_direct(a.root, r["file"])
+                if direct_of[r["file"]] is not None and r["name"] not in direct_of[r["file"]]:
+                    tgroups.setdefault(r["file"], []).append(r)
+        tcoll = {id(x) for g in tgroups.values() if len(g) > 3 for x in g}
+        tdone = set()
         done = set()
         for r in rows:
             rule = rule_of(r)
+            if id(r) in tcoll:  # transitive outdated rows of one lockfile: more than 3 print as one row at the smallest line
+                if r["file"] not in tdone:
+                    tdone.add(r["file"])
+                    g = tgroups[r["file"]]
+                    first = ", ".join(x["name"] for x in g[:3])
+                    msg = (f"{len(g)} transitive npm packages outdated in this lockfile ({sum('major' in x['behind'] for x in g)} a major behind; "
+                           f"first 3: {first}; --json lists every one): upgrade the direct dependencies that pull them in")
+                    print(f"{r['file'].replace(chr(9), ' ').replace(chr(10), ' ')}\t{min(x['line'] for x in g)}\t{rule}\t{msg.replace(chr(9), ' ').replace(chr(10), ' ')}")
+                continue
             key = (r["file"], r["kind"], r["note"])
             g = groups.get(key, []) if rule == "not-checked" else []
             if rule == "current" or (len(g) > 3 and key in done):
