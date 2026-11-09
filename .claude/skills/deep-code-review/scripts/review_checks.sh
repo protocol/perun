@@ -480,6 +480,7 @@ rc = 3 if err else 0  # 3 = the scan was partial (rows may be empty); 4 = errors
 if err and not rows:  # errors and no findings: partial when some scanned file raised no error, else exit 4 (nothing usable was scanned)
     bad = {e.get("path") if isinstance(e, dict) else None for e in err}
     rc = 3 if None not in bad and len(set((d.get("paths") or {}).get("scanned") or [])) > len(bad) else 4
+if kind == "semgrep" and not rows and (d.get("paths") or {}).get("scanned") == []: rc = 5  # semgrep scanned none of the files (all filtered or excluded): not a clean pass
 if kind == "semgrep" and rc == 3:  # name what semgrep could not fully read, at any level (a warn-level parse error is never downgraded to clean): counts by type and level on stderr, one not-checked row per errored path
     by, files = collections.Counter(), {}  # "<type> (<level>)" -> errors; path -> its distinct "<type>, <level>" pairs. An error with no path is counted, not rowed
     for e in err if isinstance(err, list) else [err]:
@@ -642,7 +643,7 @@ if [ ! -e "$sgc" ]; then
   if [ -z "${REVIEW_SEMGREP_CONFIG:-}" ] && [ "$sgc" = "$here/../templates/semgrep-taint" ]; then skip semgrep "bundled rules missing at $sgc (reinstall the skill)"
   else skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"; fi
 elif have semgrep; then
-  sg=() sgwas=$ran sgok=0 sgerr=0 sgj=() sgb=0 sgrx=0 sgbun=(--config "$sgc"); [ "$lease" != degraded ] || { sgj=(--jobs 1); w1+=" semgrep"; }
+  sg=() sgwas=$ran sgok=0 sgerr=0 sgzero=0 sgj=() sgb=0 sgrx=0 sgbun=(--config "$sgc"); [ "$lease" != degraded ] || { sgj=(--jobs 1); w1+=" semgrep"; }
   while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
   # sgrun CONFIG...: scan one chunk. sgreg=1 (seen by run_one) while the p/default pack (registry or snapshot) is in CONFIG (4 args, not 2), so its timeout is soft: the loop reruns with the bundled rules.
   sgrun() { local sgreg=0; [ $# -le 2 ] || sgreg=1; run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep "$@" ${sgj[@]+"${sgj[@]}"} --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}"; }
@@ -663,7 +664,8 @@ elif have semgrep; then
     scan_ok semgrep || continue
     [ "$sgb" = 0 ] || case " $ran " in *" semgrep(bundled-only) "*) ;; *) ran+=" semgrep(bundled-only)" ;; esac
     e=0; SG_CFG=$sgnorm sjson semgrep "$out" >"$tsv" || e=$?
-    if [ "$e" = 4 ]; then sgerr=$((sgerr + 1)) # errors on every scanned file and no results: nothing usable from this chunk; judged after the loop
+    if [ "$e" = 5 ]; then sgzero=$((sgzero + 1)) # a chunk that scanned 0 files: judged after the loop (NOT CHECKED only when no chunk scanned anything)
+    elif [ "$e" = 4 ]; then sgerr=$((sgerr + 1)) # errors on every scanned file and no results: nothing usable from this chunk; judged after the loop
     elif [ "$e" = 0 ] || [ "$e" = 3 ]; then
       sgok=1
       while IFS=$'\t' read -r p l r m; do add semgrep "$p" "$l" "$r" "$m"; done <"$tsv"
@@ -671,6 +673,7 @@ elif have semgrep; then
       [ "$e" = 0 ] || case " $ran " in *" semgrep(errors) "*) ;; *) ran+=" semgrep(errors)" ;; esac
     else skip semgrep "unparseable output"; fi
   done
+  if [ "$sgzero" -gt 0 ] && [ "$sgok" = 0 ] && [ "$sgerr" = 0 ]; then ran=$sgwas; skip semgrep "NOT CHECKED: semgrep scanned 0 files"; fi
   if [ "$sgerr" -gt 0 ] && [ "$sgok" = 1 ]; then # other chunks scanned fine: partial coverage, not a voided tool
     echo "review_checks: partial: semgrep errored with no findings on $sgerr chunk(s) of up to 200 files (those files were not scanned)" >&2
     add semgrep "" 0 not-checked "semgrep errored on $sgerr chunk(s) of up to 200 files; those files were not scanned"
