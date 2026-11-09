@@ -3,6 +3,27 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.654.0] — 2026-11-09
+
+### Changed
+- `review_checks.sh` drops a semgrep `github-actions-mutable-action-tag` row when zizmor reported `unpinned-uses` on the same file and line (one defect, one row); other lines and runs without zizmor keep the semgrep row.
+
+### Fixed
+- `review_checks.sh` no longer reports Airtable object IDs (`rec`/`app`/`tbl`/`fld`/`viw` + 14 alphanumerics) as `airtable-api-key` secrets: a global gitleaks allowlist, added to the tree, diff and history scans on gitleaks 8.25.1 or newer, drops them while a legacy `key` value still reports.
+
+### Changed
+- `dependency_currency.py` TSV output collapses outdated transitive npm packages (lockfile names that no sibling `package.json` or lock root declares directly) into one outdated row per lockfile when there are more than 3, naming the first 3 and counting the major-behind ones. Direct rows, vulnerable rows, non-npm files and `--json` (every row) print unchanged.
+
+### Fixed
+- `review_checks.sh --history` reads `.gitleaks.toml` as of BASE, like `.gitleaksignore` and `.gitleaks-allow`, and always passes `--config`. Before, gitleaks auto-loaded the working-tree file, so a change could add an allowlist that hid secrets in its own commits.
+
+### Fixed
+- `review_checks.sh` node-check no longer reports a `SyntaxError` for a `.js` file that holds JSX or markup. A file counts as JSX when node fails at `<` ("Unexpected token '<'") and the file holds `</` or `/>`; those give one `not-checked` row per run that names the count and the first three files. A JSX-aware linter or the project build judges them. Node stops at its first error, so a later error in such a file is not reported, as before. A plain syntax error in a `.js` file, including a `<T>x` cast with no closing tag, is still a `SyntaxError` row.
+- `route_auth_map.py` reads `.Methods("OPTIONS")` and `.Methods("HEAD")` as those methods instead of an empty method, and a route whose methods are all GET, HEAD or OPTIONS no longer gets an UNJUDGED row. A simple chained call with no nested parentheses before `.Methods(`, such as `.Name("x").Methods("POST")`, now yields the route's real method instead of ANY, so the route is no longer missed. `--all` inventory lists OPTIONS and HEAD routes with their method.
+
+### Changed
+- `review_checks.sh` collapses ruff F821 (undefined name) hits per file the same way as bandit B101: a file with more than 3 F821 rows becomes one `F821-summary` row whose message names the distinct undefined names (first 5, then "…" if more), so injected harness globals such as `js` or `cdp` show at a glance. Other ruff rules stay per row; 3 or fewer stay; `REVIEW_FIXTURE_ROWS=all` keeps every row.
+
 ## [1.653.0] — 2026-11-08
 
 ### Changed
