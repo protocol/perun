@@ -84,6 +84,22 @@ class T(unittest.TestCase):
         self.assertIn("route-auth (SKIPPED: no HTTP handlers)", r.stderr)
         self.assertEqual([x["message"] for x in json.loads(r.stdout) if x["tool"] == "route-auth"], ["SKIPPED: no HTTP handlers"])
 
+    def test_options_or_head_only_go_route_has_no_row(self):
+        for verbs in ('"OPTIONS"', '"GET","OPTIONS"', '"HEAD"', 'http.MethodOptions'):
+            src = 'package main\n\nfunc register(r *mux.Router) {\n\tr.HandleFunc("/widgets", h).Methods(%s)\n}\n' % verbs
+            rc, rows, js = run_map({"svc/main.go": src})
+            self.assertEqual((rows, js["unjudged"]), ([], 0), verbs)
+
+    def test_options_beside_post_counts_only_the_post(self):
+        src = 'package main\n\nfunc register(r *mux.Router) {\n\tr.HandleFunc("/widgets", h).Methods("OPTIONS", "POST")\n}\n'
+        rc, rows, js = run_map({"svc/main.go": src})
+        self.assertEqual(rows, ["svc/main.go:4: UNJUDGED: 1 route(s) accept state-changing methods here (first POST /widgets); route-auth does not judge auth for this language, read the handlers"])
+
+    def test_chained_call_before_methods_is_read(self):
+        src = 'package main\n\nfunc register(r *mux.Router) {\n\tr.HandleFunc("/widgets", h).Name("x").Methods("POST")\n}\n'
+        rc, rows, js = run_map({"svc/main.go": src})
+        self.assertEqual(rows, ["svc/main.go:4: UNJUDGED: 1 route(s) accept state-changing methods here (first POST /widgets); route-auth does not judge auth for this language, read the handlers"])
+
     def test_review_checks_full_wires_go_row_as_not_checked(self):
         with tempfile.TemporaryDirectory() as t:
             g = Path(t) / "go"

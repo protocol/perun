@@ -22,6 +22,7 @@ if [ -n "${SG_OUT:-}" ]; then echo "$SG_OUT"; else echo '{"results":[]}'; fi
 S
 cat >"$T/stub/gitleaks" <<'S'
 #!/usr/bin/env bash
+[ "${1:-}" = version ] && exit 0 # version probe: not a scan call
 echo "gitleaks $*" >>"$GL_LOG"
 while [ $# -gt 0 ]; do [ "$1" = -r ] && rep=$2; shift; done
 [ -z "${GL_EXIT:-}" ] || exit "$GL_EXIT"
