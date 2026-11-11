@@ -64,6 +64,7 @@ pinact (`pinact run`) is the fixer for unpinned-action findings; it needs the Gi
 | Tool | Covers | Command shape | Flags | Class |
 |---|---|---|---|---|
 | `repo_settings_audit.py` | Default-branch protection and rulesets, Actions token settings, collaborator counts, write deploy keys, insecure webhooks, unprotected environments, secret scanning; a 403 or 404 is `not checked`, never clean | `python3 .claude/skills/agentic-delivery/scripts/repo_settings_audit.py OWNER/NAME... [--repos-file FILE] [--json]` | own script, read-only GETs; fields read from the GitHub docs 2026-10-30. OSS options (READMEs read 2026-10-30, not run): `legitify` (`SCM_TOKEN=... legitify analyze --org ORG`; needs an `admin:org` token, fine-grained tokens unsupported) and OpenSSF Scorecard (some Branch-Protection settings need an admin token; `supply_chain_check.sh --scorecard owner/repo` runs it for a public repo) | own; OSS options route-only |
+| `org_settings_audit.py` | Read this when asked to audit a GitHub organization, not one repo: required 2FA, org Actions token and allowed actions, installed app permissions, outside collaborators, self-hosted runners, then `repo_settings_audit.py` on every repo; a 403, 404 or missing field is `not checked` naming the scope it needs, never clean | `python3 .claude/skills/agentic-delivery/scripts/org_settings_audit.py ORG [--max-repos N] [--token-env VAR] [--json]` | own script, read-only GETs over curl (token on stdin, never argv) | own |
 
 ## Route-only skills (opt-in, never vendored)
 
