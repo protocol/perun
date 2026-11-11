@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import shutil
@@ -287,7 +288,7 @@ def run_scorecard(slug):
         score = json.loads(p.stdout)["score"] if p.returncode == 0 else None
     except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
         score = None
-    if isinstance(score, bool) or not isinstance(score, (int, float)) or score < 0:
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score) or not 0 <= score <= 10:
         return None, ("scorecard run failed", "set GITHUB_AUTH_TOKEN, check the network and that the repository is public, then re-run")
     return score, None
 

@@ -76,7 +76,7 @@ class RunScorecard(unittest.TestCase):
         self.assertEqual(args, "--repo=github.com/acme/widgets --format=json")
 
     def test_bad_runs_are_errors(self):
-        for body in ("exit 1", "echo '{\"score\": 5}'; exit 2", "echo not-json", "echo '{}'", "echo '{\"score\": -1}'", "echo '{\"score\": true}'", "echo '{\"score\": \"7\"}'"):
+        for body in ("exit 1", "echo '{\"score\": 5}'; exit 2", "echo not-json", "echo '{}'", "echo '{\"score\": -1}'", "echo '{\"score\": true}'", "echo '{\"score\": 11}'", "echo '{\"score\": NaN}'", "echo '{\"score\": Infinity}'", "echo '{\"score\": 1e999}'", "echo '{\"score\": \"7\"}'"):
             with self.stub(body):
                 score, e = rsa.run_scorecard(SLUG)
                 self.assertIsNone(score, body)
