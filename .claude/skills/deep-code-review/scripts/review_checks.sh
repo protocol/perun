@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, gosec, grype, checkov, hadolint (snyk-agent-scan is unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, gosec, govulncheck, grype, checkov, hadolint (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -164,7 +164,7 @@ add() { printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" >>"$raw"; }
 run_one() {
   local tool=$1 nz=(); shift; rc=0
   # lease full: heavy scanners run at lowest priority and are named in the summary (never take the lease while degraded)
-  if [ "$lease" = degraded ]; then case $tool in gitleaks*|trufflehog|osv-scanner|semgrep|trivy|grype|checkov|gosec) [ "$nice19" != 1 ] || nz=(nice -n 19); case " $dg " in *" $tool "*) ;; *) dg+=" $tool" ;; esac ;; esac; fi
+  if [ "$lease" = degraded ]; then case $tool in gitleaks*|trufflehog|osv-scanner|semgrep|trivy|grype|checkov|gosec|govulncheck) [ "$nice19" != 1 ] || nz=(nice -n 19); case " $dg " in *" $tool "*) ;; *) dg+=" $tool" ;; esac ;; esac; fi
   [ -n "${hubtool:-}" ] || case " $ran " in *" $tool "*) ;; *) ran+=" $tool" ;; esac # hub tools count as ran only after a good parse
   tbox ${nz[@]+"${nz[@]}"} "$@" || rc=$?
   # degraded single-worker flag (semgrep --jobs 1, trivy --parallel 1) may be unsupported: after a crash retry once without it;
@@ -308,7 +308,14 @@ t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 m = re.search(r"^[\[{]", t, re.M)
 if not m:
     sys.exit("sjson: no JSON in scanner output")
-d = json.JSONDecoder().raw_decode(t[m.start():])[0]
+s, dec = t[m.start():], json.JSONDecoder()
+d, i = dec.raw_decode(s)
+if kind == "govulncheck":  # a stream of JSON objects (config, progress, osv, finding), not one document; a stray line inside it fails closed as unparseable
+    d = [d]
+    while s[i:].strip():
+        i += len(s[i:]) - len(s[i:].lstrip())
+        o, i = dec.raw_decode(s, i)
+        d.append(o)
 # Wrong-shape JSON must not read as clean: gitleaks is a list, semgrep and osv an object with a "results" list.
 if kind == "gitleaks":
     if not isinstance(d, list):
@@ -328,6 +335,9 @@ elif kind in ("gosec", "grype"):
         sys.exit(f"sjson: {kind} output has no {k} list")
     if kind == "gosec" and d.get("Golang errors"):  # package load errors leave Issues empty: -no-fail hides them
         sys.exit("sjson: gosec reported Golang errors")
+elif kind == "govulncheck":  # every run starts with a config message: without one the output is not govulncheck's
+    if not any(isinstance(x, dict) and isinstance(x.get("config"), dict) for x in d):
+        sys.exit("sjson: govulncheck output has no config message")
 elif kind == "checkov":
     ds = d if isinstance(d, list) else [d]
     # Nothing applicable to check (empty or variables-only .tf): checkov prints a flat summary with no "results", which is a clean file, not unparseable output.
@@ -410,6 +420,19 @@ elif kind == "gosec":
     for r in d["Issues"] or []:
         ln = str(r.get("line", "0")).split("-")[0]
         rows.append((os.path.relpath(r["file"]), int(ln) if ln.isdigit() else 0, r.get("rule_id"), r.get("details", "")))
+elif kind == "govulncheck":  # only called vulnerabilities: the first trace frame is the vulnerable symbol, the last the entry point in this repo; a frame with no function is imported-only, not reachable
+    seen = set()
+    for x in d:
+        f = x.get("finding") if isinstance(x, dict) else None
+        tr = [fr for fr in ((f or {}).get("trace") or []) if isinstance(fr, dict)]
+        if not tr or not tr[0].get("function"): continue
+        top, pos = tr[0], next((fr["position"] for fr in reversed(tr) if isinstance(fr.get("position"), dict)), {})
+        k = (f.get("osv"), top.get("package"), top.get("function"))
+        if k in seen: continue
+        seen.add(k)
+        site = f"{os.path.relpath(pos['filename'])}:{pos.get('line', 0)}" if pos.get("filename") else "an unknown call site"
+        fix = f"; fixed in {f['fixed_version']}" if f.get("fixed_version") else ""
+        rows.append(("go.mod", 0, cl(f.get("osv")), cl(f"{top.get('module')}@{top.get('version')} {top.get('package')}.{top.get('function')} is called from {site}{fix}")))  # the dependency is the fix site: rows land on go.mod
 elif kind == "grype":  # file comes from the caller (it scanned one target); "-" placeholder: the caller's `read` collapses an empty leading field
     for m in d["matches"]:
         v, a = m.get("vulnerability") or {}, m.get("artifact") or {}
@@ -749,6 +772,7 @@ hub=(
   'actionlint;verified;batch;^\.github/workflows/[^/]+\.ya?ml$;route-only;brew install actionlint'
   'bandit;verified;batch;\.py$;route-only;pipx install bandit'
   'gosec;verified;batch;\.go$;route-only;go install github.com/securego/gosec/v2/cmd/gosec@latest'
+  'govulncheck;verified;batch;^go\.mod$;route-only;go install golang.org/x/vuln/cmd/govulncheck@latest' # reachable vulnerabilities only; rows land on go.mod, so only a changed root go.mod triggers it
   'grype;verified;each;(^|/)([^/]*[-_.])?(sbom|bom|cdx|spdx)([-_.][^/]*)?\.json$;route-only;brew install grype'
   'checkov;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.tf)$;route-only;pipx install checkov'
   'hadolint;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.dockerfile)$;route-only;brew install hadolint'
@@ -763,6 +787,7 @@ hubcmd() {
     bandit) cmd=(bandit -q -f json --exit-zero "$@") ;;
     gosec) jf=$rep; : >"$rep"; cmd=(env GOPROXY=off gosec -fmt=json -no-fail -out "$rep" ./...) ;;
     # GRYPE_CHECK_FOR_APP_UPDATE=false: grype's own-version check calls toolbox-data.anchore.io even with the DB update off (env var, not a flag: an older grype crashes on an unknown flag)
+    govulncheck) cmd=(env GOPROXY=off GOTOOLCHAIN=local govulncheck -format json ./...) ;; # -format json exits 0 even with findings; the vuln DB (vuln.go.dev) is fetched, so an offline run crashes and reads as not run
     grype) cmd=(env GRYPE_DB_AUTO_UPDATE=false GRYPE_CHECK_FOR_APP_UPDATE=false grype "sbom:$1" -o json) ;; # SBOM only: dir: scans the whole tree (unverified for lockfiles)
     # CKV_SKIP_PACKAGE_UPDATE_CHECK=true: --skip-download leaves checkov's own-version lookup (pypi.org) on; env var, not a flag, so an older checkov ignores it
     checkov) cmd=(env CKV_SKIP_PACKAGE_UPDATE_CHECK=true checkov -f "$1" -o json --quiet --skip-download --soft-fail) ;;
@@ -777,8 +802,9 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   command -v "$hn" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
   hubtool=$hn
   # zizmor, actionlint, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
-  case $hn in grype|checkov|gosec) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
-  [ "$hn" != gosec ] || [ -f go.mod ] || { nc "no go.mod at repo root"; continue; }
+  case $hn in grype|checkov|gosec|govulncheck) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
+  case $hn in gosec|govulncheck) [ -f go.mod ] || { nc "no go.mod at repo root"; continue; } ;; esac
+  [ "$hn" != govulncheck ] || command -v go >/dev/null || { nc "go toolchain missing"; continue; }
   targets=()
   if [ "$hm" = batch ]; then while IFS= read -r f; do targets+=("./$f"); done <<<"$hf"; fi
   # ponytail: batch tools get every matching file in one call (argv/timeout ceiling); chunk like semgrep if it bites.

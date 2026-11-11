@@ -29,7 +29,11 @@ missing) that 404 is `not checked`. A weakness inside the protection (force push
 only when classic protection and rulesets were both readable, since either can fill what the other lacks. Not read:
 ruleset bypass lists (a `not checked` row says so whenever rulesets apply).
 
-USAGE: repo_settings_audit.py OWNER/NAME [OWNER/NAME ...] [--repos-file FILE] [--json]
+  scorecard         only with `--scorecard`: the OpenSSF Scorecard aggregate score of a public repository (info row,
+                    so it is stored in the `--json` rows); a private repository, a missing `scorecard` binary and a
+                    failed run are `not checked` rows, never blank
+
+USAGE: repo_settings_audit.py OWNER/NAME [OWNER/NAME ...] [--repos-file FILE] [--json] [--scorecard]
 `--repos-file` holds one OWNER/NAME per line (blank lines and `#` comments ignored). A repository twice, in any case,
 is audited once. `--json` prints `{"rows": [{repo, check, severity, fix}], "summary": {repos, findings, not_checked}}`.
 Severity is high, medium, low, info (a count with nothing to fix) or not-checked.
@@ -50,6 +54,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import urllib.parse
 
@@ -271,17 +276,48 @@ def analysis(repo):
     return out
 
 
-def audit(slug, get=gh_get):
+def run_scorecard(slug):
+    """(score, None) or (None, (label, fix)): the aggregate OpenSSF Scorecard score (0-10) of a public repository from
+    `scorecard --repo=github.com/<slug> --format=json`. Not installed, a failed or timed-out run, or output with no
+    numeric `score` is a fixed-phrase error, never a score. Side effects: Scorecard queries GitHub (token from its env)."""
+    if not shutil.which("scorecard"):
+        return None, ("scorecard not installed", "install OpenSSF Scorecard (brew install scorecard), then re-run")
+    try:
+        p = subprocess.run(["scorecard", "--repo=github.com/" + slug, "--format=json"], capture_output=True, text=True, timeout=300, check=False)
+        score = json.loads(p.stdout)["score"] if p.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+        score = None
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or score < 0:
+        return None, ("scorecard run failed", "set GITHUB_AUTH_TOKEN, check the network and that the repository is public, then re-run")
+    return score, None
+
+
+def scorecard(repo, slug, run):
+    """One row: the Scorecard score of a public repository (info), or not checked for a private one, a reply with no
+    `private` field, or a failed run. `run(slug)` is `run_scorecard` (tests inject a fake)."""
+    private = dig(repo, "private")
+    if not isinstance(private, bool):
+        return [nc("scorecard", NOT_REPORTED)]
+    if private:
+        return [nc("scorecard", ("private repository", "Scorecard scores public repositories only; review this repository's settings by hand"))]
+    score, e = run(slug)
+    if e:
+        return [nc("scorecard", e)]
+    return [("scorecard: aggregate score %s/10" % score, "info", "run `scorecard --repo=github.com/%s` for the per-check breakdown" % slug)]
+
+
+def audit(slug, get=gh_get, run=None):
     """Rows {repo, check, severity, fix} for one OWNER/NAME, worst first. `get(path, params=None)` -> parsed JSON or
     raises OSError (default `gh_get`; tests inject a fake). A repository the token cannot read gives one not-checked
-    row; a failed check gives its own and never stops the others. Never raises on a failed or odd reply."""
+    row; a failed check gives its own and never stops the others. `run` (default none) adds the Scorecard row.
+    Never raises on a failed or odd reply."""
     base = "/repos/" + slug
     repo, e = read(get, base, dict)
     if e:
         rows = [nc("repository", why(e, NOT_FOUND))]
     else:
         rows = [r for part in (protection(get, base, repo), actions(get, base), collaborators(get, base), deploy_keys(get, base),
-                               webhooks(get, base), environments(get, base), analysis(repo)) for r in part]
+                               webhooks(get, base), environments(get, base), analysis(repo), scorecard(repo, slug, run) if run else []) for r in part]
     rows.sort(key=lambda r: SEVERITY.index(r[1]))  # stable: checks keep their order within a severity
     return [{"repo": slug, "check": c, "severity": s, "fix": f} for c, s, f in rows]
 
@@ -301,6 +337,7 @@ def main(argv=None, get=gh_get):
     ap.add_argument("repos", nargs="*", metavar="OWNER/NAME")
     ap.add_argument("--repos-file", help="file with one OWNER/NAME per line (blank lines and # comments ignored)")
     ap.add_argument("--json", action="store_true", help="print JSON instead of a table")
+    ap.add_argument("--scorecard", action="store_true", help="add the OpenSSF Scorecard score per public repository (private: not checked)")
     a = ap.parse_args(argv)
     names = list(a.repos)
     if a.repos_file:
@@ -318,7 +355,7 @@ def main(argv=None, get=gh_get):
         pp.die("no repositories: pass OWNER/NAME or --repos-file")
     if get is gh_get and not shutil.which("gh"):
         pp.die("gh not found on PATH")
-    rows = [r for s in slugs.values() for r in audit(s, get)]
+    rows = [r for s in slugs.values() for r in audit(s, get, run_scorecard if a.scorecard else None)]
     text, summary = render(rows, len(slugs))
     print(json.dumps({"rows": rows, "summary": summary}, indent=2) if a.json else text)
     return 0

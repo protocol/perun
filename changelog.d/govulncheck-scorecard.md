@@ -1,0 +1,3 @@
+### Added
+- `review_checks.sh` tool hub routes `govulncheck` for Go repos when the root `go.mod` changes: only vulnerabilities the code actually calls become rows (on `go.mod`, with the call site in the message); imported-only ones are dropped. No `govulncheck` or no `go` toolchain is `NOT CHECKED`; output with no config message, a stray line in the stream or a crash is `not run`, never clean.
+- `repo_settings_audit.py --scorecard` adds one row per repository: the OpenSSF Scorecard aggregate score for a public repo (an `info` row, so it is stored in the `--json` rows), `not checked` for a private repo, a missing `scorecard` binary or a failed run.
