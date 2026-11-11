@@ -9,6 +9,10 @@ Output in --out: `<owner>__<repo>-<YYYYMMDD>.json` (the findings array) and `sum
 (repo, status OK|FAILED, findings, NOT CHECKED tools or the failure reason). A clone or scan failure is a FAILED
 row (a review_checks failure appends its last stderr line, 200 chars max), never skipped. Exit 0 = every repo scanned; 1 = any FAILED; 2 = usage or an empty list. NOT CHECKED tools do not fail the
 run but are listed per repo: they are unchecked surface, not a clean result.
+Private repos: if ORG_AUDIT_TOKEN is set it reaches ONLY the git clone/fetch children, as an `http.extraHeader` Basic
+auth header appended to the parent's GIT_CONFIG_COUNT/KEY_n/VALUE_n env at index COUNT (parent entries kept) (never in the URL, argv or .git/config). Every other child
+(review_checks and its scanners) runs with ORG_AUDIT_TOKEN, GH_TOKEN, GITHUB_TOKEN removed and no header, and the token
+(raw and base64) is masked in any FAILED reason. --out is created (or chmod-ed) 0700.
 Env: ORG_AUDIT_BASE_URL (default https://github.com) and ORG_AUDIT_REVIEW_CHECKS (script path) exist for tests.
 Side effects: network clones; writes only under --out and its own temp dir, which is removed on exit.
 Repo-local scanner config (.gitleaks.toml, .gitleaks-allow, .gitleaksignore, .trivyignore, ...) is deleted in the temp clone
@@ -17,7 +21,7 @@ files from UNTRUSTED_CFG are stripped: nested or other-named configs and linter 
 Every tracked symlink is removed too. Children run with stdin closed, no prompts, no host git config, hooks off,
 and are killed (whole process group) on --timeout. Two repos mapping to one output name: the later is FAILED.
 """
-import argparse, datetime, json, os, re, signal, subprocess, sys, tempfile
+import argparse, base64, datetime, json, os, re, signal, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Repo-root config an untrusted repo could use to allowlist or silence its own findings; review_checks.sh and the
@@ -29,7 +33,8 @@ NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/(?!\.{1,2}$)[A-Za-z0-9._-]+$")  
 
 
 # Neutral env for every child: no prompts, no host/system git config, only https/file transports, C locale.
-ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0", LC_ALL="C", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null",
+SECRET_ENV = ("ORG_AUDIT_TOKEN", "GH_TOKEN", "GITHUB_TOKEN")
+ENV = dict({k: v for k, v in os.environ.items() if k not in SECRET_ENV}, GIT_TERMINAL_PROMPT="0", LC_ALL="C", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null",
            GIT_ALLOW_PROTOCOL="https:file")
 GIT = ["git", "-c", "core.hooksPath=/dev/null"]
 
@@ -51,8 +56,12 @@ def audit(repo, tmp, rc_script, base_url, timeout):
     """Return (findings_json_text, rows, not_checked) or raise RuntimeError(reason)."""
     dest = os.path.join(tmp, "clone")
     url = f"{base_url}/{repo}.git"
+    tok = os.environ.get("ORG_AUDIT_TOKEN")
+    n = int(ENV.get("GIT_CONFIG_COUNT") or 0)  # keep parent proxy/CA entries, append the header after them
+    genv = ENV if not tok else dict(ENV, GIT_CONFIG_COUNT=str(n + 1), **{f"GIT_CONFIG_KEY_{n}": "http.extraHeader",
+        f"GIT_CONFIG_VALUE_{n}": "Authorization: Basic " + base64.b64encode(f"x-access-token:{tok}".encode()).decode()})
     for cmd in (GIT + ["clone", "--quiet", "--depth", "1", "--", url, dest], GIT + ["-C", dest, "fetch", "--quiet", "--unshallow"]):
-        r = run(cmd, timeout=timeout)
+        r = run(cmd, timeout=timeout, env=genv)
         if r.returncode and "--unshallow" in cmd and "does not make sense" in r.stderr:
             continue  # already complete (one-commit repo): nothing to unshallow
         if r.returncode:
@@ -103,7 +112,8 @@ def main():
     if not names:
         print("org_audit_driver: empty repo list", file=sys.stderr)
         return 2
-    os.makedirs(a.out, exist_ok=True)
+    os.makedirs(a.out, mode=0o700, exist_ok=True)
+    os.chmod(a.out, 0o700)
     day = datetime.date.today().strftime("%Y%m%d")
     rc_script = os.environ.get("ORG_AUDIT_REVIEW_CHECKS") or os.path.join(HERE, "review_checks.sh")
     base_url = os.environ.get("ORG_AUDIT_BASE_URL", "https://github.com").rstrip("/")
@@ -123,7 +133,11 @@ def main():
             lines.append(f"{repo}\tOK\t{len(rows)}\t" + ("; ".join(nc) or "-"))
         except (RuntimeError, subprocess.TimeoutExpired, OSError) as e:
             failed += 1
-            lines.append(f"{repo}\tFAILED\t-\t{str(e).replace(chr(9), ' ').replace(chr(10), ' ')}")
+            msg = str(e).replace(chr(9), ' ').replace(chr(10), ' ')
+            tok = os.environ.get("ORG_AUDIT_TOKEN")
+            for secret in (tok, tok and base64.b64encode(f"x-access-token:{tok}".encode()).decode()):
+                msg = msg.replace(secret, "***") if secret else msg
+            lines.append(f"{repo}\tFAILED\t-\t{msg}")
     out = "repo\tstatus\tfindings\tnot_checked_or_reason\n" + "\n".join(lines) + "\n"
     with open(os.path.join(a.out, f"summary-{day}.tsv"), "w") as f:
         f.write(out)

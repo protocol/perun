@@ -5,7 +5,7 @@ forced; NOT CHECKED tools are listed; a missing repo and a bad name are FAILED r
 .gitleaks.toml/.gitleaksignore and every symlink are gone from the scanned tree and HEAD; a one-commit repo works; a
 failing config-strip commit fails closed; a duplicate output name is FAILED; an empty list exits 2; the temp clone is
 removed. Also: the REAL review_checks.sh runs end to end on a file:// repo; owner/.github is accepted, owner/.. rejected; a failing review_checks puts its last stderr line in the reason. No network; every name is fictional."""
-import glob, os, shutil, subprocess, sys, tempfile
+import base64, glob, os, shutil, subprocess, sys, tempfile
 
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".claude", "skills", "deep-code-review", "scripts", "org_audit_driver.py")
 STUB = """#!/usr/bin/env bash
@@ -101,6 +101,30 @@ def main():
         r, _, rows = drive(t, "acme/solo\n", dict(env, ORG_AUDIT_REVIEW_CHECKS=bad), "g")
         reason = rows["acme/solo"][3]
         check("(exit 3): boom 000" in reason and "first" not in reason and len(reason) < 260, f"stderr in reason: {reason}")
+        # private-clone token: scoped to clone/fetch only, never leaked
+        tok = "sentinel-tok-9f3a"
+        hdr = "Authorization: Basic " + base64.b64encode(f"x-access-token:{tok}".encode()).decode()
+        glog, gw = os.path.join(t, "glog"), os.path.join(t, "gbin")
+        os.makedirs(gw)
+        open(os.path.join(gw, "git"), "w").write(f'#!/bin/sh\ncase " $* " in *" clone "*) {{ echo "ARGV $*"; env | grep -E "^GIT_CONFIG_(COUNT|KEY|VALUE)" | sort; }} >>"{glog}";; esac\nexec {real} "$@"\n')
+        os.chmod(os.path.join(gw, "git"), 0o755)
+        senv = dict(env, ORG_AUDIT_TOKEN=tok, GH_TOKEN=tok, GITHUB_TOKEN=tok, GIT_CONFIG_COUNT="2", GIT_CONFIG_KEY_0="core.abbrev",
+                    GIT_CONFIG_VALUE_0="7", GIT_CONFIG_KEY_1="core.quotepath", GIT_CONFIG_VALUE_1="false", PATH=gw + ":" + os.environ["PATH"])
+        senv["ORG_AUDIT_REVIEW_CHECKS"] = vis = os.path.join(t, "vis.sh")
+        open(vis, "w").write('#!/usr/bin/env bash\nenv | grep -E "^(ORG_AUDIT_TOKEN|GH_TOKEN|GITHUB_TOKEN|GIT_CONFIG_(COUNT|KEY|VALUE))" | sort >"$STUB_LOG"; echo "[]"\n')
+        r, out, rows = drive(t, "acme/solo\nacme/missing\n", senv, "h")
+        check(rows["acme/solo"][1] == "OK" and open(log).read() == "GIT_CONFIG_COUNT=2\nGIT_CONFIG_KEY_0=core.abbrev\nGIT_CONFIG_KEY_1=core.quotepath\nGIT_CONFIG_VALUE_0=7\nGIT_CONFIG_VALUE_1=false\n", f"scanner env: {open(log).read()!r}")
+        g = open(glog).read()
+        check(f"GIT_CONFIG_COUNT=3\nGIT_CONFIG_KEY_0=core.abbrev\nGIT_CONFIG_KEY_1=core.quotepath\nGIT_CONFIG_KEY_2=http.extraHeader\nGIT_CONFIG_VALUE_0=7\nGIT_CONFIG_VALUE_1=false\nGIT_CONFIG_VALUE_2={hdr}" in g and tok not in g.replace(hdr, "") and "ARGV" in g, "clone env lacks header or argv carries token")
+        blob = r.stdout + r.stderr + "".join(open(f).read() for f in glob.glob(out + "/*"))
+        check(tok not in blob and hdr.split()[-1] not in blob and rows["acme/missing"][1] == "FAILED", "token leaked in output")
+        open(bad, "w").write(f'#!/usr/bin/env bash\necho "boom {tok} $(printf x:{tok} | true)" >&2\nexit 3\n')
+        r, out, rows = drive(t, "acme/solo\n", dict(senv, ORG_AUDIT_REVIEW_CHECKS=bad), "i")
+        check(rows["acme/solo"][1] == "FAILED" and tok not in r.stdout + r.stderr, "token in FAILED reason")
+        check(os.stat(out).st_mode & 0o777 == 0o700, "out not 0700")
+        os.chmod(out, 0o755)
+        drive(t, "acme/solo\n", env, "i")
+        check(os.stat(out).st_mode & 0o777 == 0o700, "existing out not chmod 0700")
     print(f"Tests: {N[0]}/{N[0]}")
 
 
