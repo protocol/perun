@@ -9,12 +9,12 @@ DIGEST=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
 fails() {
   local b; b=$(grep -v '^ *#' "$1")
   ck() { local d=$1; shift; "$@" <<<"$b" >/dev/null 2>&1 || echo "$d"; }
-  ck "digest pinned" grep -qF "echo \"$DIGEST  gitleaks.tgz\" | sha256sum -c"
+  ck "digest pinned" grep -qE "^ *echo \"$DIGEST  gitleaks\.tgz\" \| sha256sum -c -\$"
   ck "version in URL" grep -q 'releases/download/v8\.30\.1/gitleaks_8\.30\.1_linux_x64\.tar\.gz'
   ck "checkout SHA" grep -qE 'uses: actions/checkout@[0-9a-f]{40}( |$)'
   ck "persist-credentials" grep -q 'persist-credentials: false'
   ck "permissions only contents read" bash -c "[ \"\$(sed -n '/^permissions:/,/^[a-z]/p' | grep '^  ')\" = '  contents: read' ]"
-  ck "no expression in run" bash -c "! awk '/^ *run: /{r=1;i=match(\$0,/[^ ]/);if(\$0~/\\\$\\{\\{/)f=1;next} r&&/^ *[^ ]/{if(match(\$0,/[^ ]/)<=i)r=0; else if(\$0~/\\\$\\{\\{/)f=1} END{exit !f}'"
+  ck "no expression in run" bash -c "! awk '/^ *(- )?run: /{r=1;i=match(\$0,/[^ ]/);if(\$0~/\\\$\\{\\{/)f=1;next} r&&/^ *[^ ]/{if(match(\$0,/[^ ]/)<=i)r=0; else if(\$0~/\\\$\\{\\{/)f=1} END{exit !f}'"
   ck "pull_request trigger" grep -qE '^  pull_request:'
   ck "push trigger" grep -qE '^  push:'
   ck "schedule trigger" grep -qE '^  schedule:'
@@ -26,6 +26,7 @@ fails() {
   ck "BASE_SHA guard" grep -qF 'if [ -n "$BASE_SHA" ]'
   ck "else full history" grep -qE '^ +else$'
   ck "PR scan base..head" grep -qF 'BASE_SHA..$HEAD_SHA'
+  ck "reset before PR scan" bash -c 'awk '"'"'/git show/{r=NR} /BASE_SHA\.\.\$HEAD_SHA/{p=NR} END{exit !(r&&p&&r<p)}'"'"
   ck "base config reset" grep -qF 'git show "$BASE_SHA:$f"'
 }
 pass=0 total=0
@@ -53,4 +54,7 @@ mut guard 's/-n "\$BASE_SHA"/-z "$BASE_SHA"/'
 mut else 's/^\( *\)else$/\1elif false; then/'
 mut range 's/BASE_SHA\.\.\$HEAD_SHA/HEAD_SHA/'
 mut reset 's/git show "\$BASE_SHA:\$f"/git show "HEAD:$f"/'
+mut digest-or 's/ | sha256sum -c -$/ | sha256sum -c - || true/'
+mut run-dash 's/^      - name: Install gitleaks v8.30.1$/      - run: echo ${{ github.actor }}/'
+mut reset-order -e '/git show/{h;d;}' -e '/--log-opts/G'
 echo "Tests: $pass/$total"; [ "$pass" -eq "$total" ]
