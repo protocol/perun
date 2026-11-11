@@ -66,6 +66,10 @@ pinact (`pinact run`) is the fixer for unpinned-action findings; it needs the Gi
 |---|---|---|---|---|
 | `repo_settings_audit.py` | Default-branch protection and rulesets, Actions token settings, collaborator counts, write deploy keys, insecure webhooks, unprotected environments, secret scanning; a 403 or 404 is `not checked`, never clean | `python3 .claude/skills/agentic-delivery/scripts/repo_settings_audit.py OWNER/NAME... [--repos-file FILE] [--json] [--scorecard]` | own script, read-only GETs (`--scorecard` also runs `scorecard --repo=github.com/OWNER/NAME --format=json` per public repo: an `info` row with the aggregate score; a private repo or a missing or failing `scorecard` is a `not checked` row); fields read from the GitHub docs 2026-10-30. OSS options (READMEs read 2026-10-30, not run): `legitify` (`SCM_TOKEN=... legitify analyze --org ORG`; needs an `admin:org` token, fine-grained tokens unsupported) and OpenSSF Scorecard (some Branch-Protection settings need an admin token; `supply_chain_check.sh --scorecard owner/repo` runs it for a public repo) | own; OSS options route-only |
 
+## Org-wide history leak sweep (own script, not run by `review_checks.sh`)
+
+Read this when asked to check every public repo of an org for secrets or internal names in git history, not one working tree. `python3 .claude/skills/deep-code-review/scripts/org_leak_sweep.py --org ORG --banlist .banlist.local.txt [--out PRIVATE_DIR]` lists public repos (curl and `gh auth token`, since `gh` TLS can fail in a sandbox), mirror-clones each, runs `gitleaks detect --redact` over all history and greps added lines against the banlist, then writes `leaks.tsv` (repo, file, commit, rule; never a secret or matched term) to the private out dir. The banlist is never committed (default `.banlist.local.txt`, gitignored); a missing one fails closed. `--local REPO` scans one local repo with no network. Exit 1 means hits or an unscanned repo, 3 means gitleaks missing: both are not clean.
+
 ## Route-only skills (opt-in, never vendored)
 
 | Skill | License note | Rule |
