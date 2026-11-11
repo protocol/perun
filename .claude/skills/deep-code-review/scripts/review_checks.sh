@@ -480,7 +480,7 @@ rc = 3 if err else 0  # 3 = the scan was partial (rows may be empty); 4 = errors
 if err and not rows:  # errors and no findings: partial when some scanned file raised no error, else exit 4 (nothing usable was scanned)
     bad = {e.get("path") if isinstance(e, dict) else None for e in err}
     rc = 3 if None not in bad and len(set((d.get("paths") or {}).get("scanned") or [])) > len(bad) else 4
-if kind == "semgrep" and not rows and (d.get("paths") or {}).get("scanned") == []: rc = 5  # semgrep scanned none of the files (all filtered or excluded): not a clean pass
+if kind == "semgrep" and not rows and not err and (d.get("paths") or {}).get("scanned") == []: rc = 5  # semgrep scanned none of the files (all filtered or excluded): not a clean pass
 if kind == "semgrep" and rc == 3:  # name what semgrep could not fully read, at any level (a warn-level parse error is never downgraded to clean): counts by type and level on stderr, one not-checked row per errored path
     by, files = collections.Counter(), {}  # "<type> (<level>)" -> errors; path -> its distinct "<type>, <level>" pairs. An error with no path is counted, not rowed
     for e in err if isinstance(err, list) else [err]:

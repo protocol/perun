@@ -43,4 +43,9 @@ eq "$(nc)" 1 "all chunks zero: one semgrep not-checked row"
 go "$ZERO" "$OKJ" # one chunk zero, one scanned normally
 eq "$(msg)" 0 "mixed chunks: semgrep not reported as scanning 0 files"
 eq "$(nc)" 0 "mixed chunks: no semgrep not-checked row"
+
+ERRJ='{"results":[],"errors":[{"type":"Timeout","level":"error","path":"src/f2.py"}],"paths":{"scanned":[]}}'
+go "$ERRJ" "$ZERO" # chunk 1 errored with nothing scanned, chunk 2 scanned 0: errors must not read as zero-files
+eq "$(msg)" 0 "errors + empty scanned: not reported as scanning 0 files"
+eq "$(jq '[.[]|select(.tool=="semgrep" and .rule=="not-checked")]|length' "$T/out")" 1 "errors + empty scanned: errored not-checked row kept"
 exit $fail
