@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""org_audit_driver.py: run review_checks.sh over a list of repos, one dated result file each, plus a summary.
+"""org_audit_driver.py: review_checks.sh over a repo list, one result file per repo.
 
 Usage: org_audit_driver.py --repos FILE --out DIR [--timeout SECS]
+
 FILE: one `owner/repo` per line ('#' and blank lines skipped). Per repo: shallow clone then `git fetch --unshallow`
 into a fresh mkdtemp dir, then `review_checks.sh --full --full-history` (never --tests, which runs repo
 code). Semgrep is forced to the bundled rules via REVIEW_SEMGREP_CONFIG, so a repo's own .semgrep.yml is ignored.

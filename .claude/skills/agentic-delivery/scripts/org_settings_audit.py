@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""org_settings_audit.py: read-only audit of GitHub organization settings, then every repository's settings.
+"""org_settings_audit.py: read-only audit of GitHub org settings, then each repo's.
 
 WHY: branch protection, required 2FA, Actions token defaults, installed apps and self-hosted runners are not visible in
 code, yet they decide whether a review gate means anything (the CIS GitHub benchmark covers them). Per repository this
@@ -14,6 +14,7 @@ A 403 or 404, a missing field or an odd reply is a `not checked` row that names 
 never a pass.
 
 USAGE: org_settings_audit.py ORG [--max-repos N] [--token-env VAR] [--json]
+
 Token: the env var named by --token-env, else `gh auth token`; it reaches curl on stdin only (never argv), as in
 org_leak_sweep.py. `GITHUB_API_URL` overrides https://api.github.com (tests point it at a stub).
 Output: `{"org": rows, "repos": {"OWNER/NAME": rows}, "summary": {...}}` with `--json`, else one table.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""org_inventory.py: dated TSV inventory of every repo in one or more GitHub orgs, reconciled against a previous run and a results dir.
+"""org_inventory.py: dated TSV inventory of GitHub org repos, reconciled with a previous run.
 
 Usage: org_inventory.py --org ORG [--org ORG ...] [--out DIR] [--previous TSV] [--results-dir DIR] [--max-age-days N]
                         [--token-env VAR] [--api-url URL]
