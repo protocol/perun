@@ -99,3 +99,5 @@ on any ungrounded gap row. Before posting, run `merge_findings.py [--cap N] [--r
 grounding, dedupes, ranks and caps. Rules and reasons live in the two script docstrings. Zero findings is valid: say NONE.
 
 Read this when you want PR-native review in CI: `templates/perun-review.yml` is an opt-in workflow (never installed by `install.sh`); its header lists the prerequisites and hardening.
+
+Read this when you want a free secret scan in CI: `templates/secret-scan.yml` is an opt-in workflow (never installed by `install.sh`) that runs a pinned, sha256-checked gitleaks binary with no license or secrets; a PR scans base..head, push and the weekly schedule scan full history, and false positives go in `.gitleaksignore`, never a path allowlist. `scripts/test-secret-scan-template.sh` pins those properties.
