@@ -3,11 +3,11 @@
 
 Usage: org_audit_driver.py --repos FILE --out DIR [--timeout SECS]
 FILE: one `owner/repo` per line ('#' and blank lines skipped). Per repo: shallow clone then `git fetch --unshallow`
-into a fresh mkdtemp dir, then `review_checks.sh --base <empty tree> --full-history` (never --tests, which runs repo
+into a fresh mkdtemp dir, then `review_checks.sh --full --full-history` (never --tests, which runs repo
 code). Semgrep is forced to the bundled rules via REVIEW_SEMGREP_CONFIG, so a repo's own .semgrep.yml is ignored.
 Output in --out: `<owner>__<repo>-<YYYYMMDD>.json` (the findings array) and `summary-<YYYYMMDD>.tsv`
 (repo, status OK|FAILED, findings, NOT CHECKED tools or the failure reason). A clone or scan failure is a FAILED
-row, never skipped. Exit 0 = every repo scanned; 1 = any FAILED; 2 = usage or an empty list. NOT CHECKED tools do not fail the
+row (a review_checks failure appends its last stderr line, 200 chars max), never skipped. Exit 0 = every repo scanned; 1 = any FAILED; 2 = usage or an empty list. NOT CHECKED tools do not fail the
 run but are listed per repo: they are unchecked surface, not a clean result.
 Env: ORG_AUDIT_BASE_URL (default https://github.com) and ORG_AUDIT_REVIEW_CHECKS (script path) exist for tests.
 Side effects: network clones; writes only under --out and its own temp dir, which is removed on exit.
@@ -25,7 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 UNTRUSTED_CFG = [".gitleaks.toml", ".gitleaks-allow", ".gitleaksignore", ".semgrep.yml", ".semgrep", ".semgrepignore",
                  ".trivyignore", "trivy.yaml", "osv-scanner.toml", ".checkov.yaml", ".checkov.yml", ".hadolint.yaml",
                  ".hadolint.yml", "zizmor.yml", ".github/zizmor.yml", ".trufflehogignore"]
-NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
+NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/(?!\.{1,2}$)[A-Za-z0-9._-]+$")  # repo may lead with a dot, never be . or ..
 
 
 # Neutral env for every child: no prompts, no host/system git config, only https/file transports, C locale.
@@ -73,19 +73,17 @@ def audit(repo, tmp, rc_script, base_url, timeout):
         r = run(GIT + ["-C", dest, "-c", "user.name=audit", "-c", "user.email=audit@example.com", "commit", "-qm", "drop repo-local scan config"], timeout=timeout)
         if r.returncode:
             raise RuntimeError(f"config strip commit failed (exit {r.returncode})")
-    r = run(GIT + ["-C", dest, "hash-object", "-t", "tree", "/dev/null"], timeout=timeout)
-    empty = r.stdout.strip()
-    if r.returncode or not empty:
-        raise RuntimeError("empty-tree hash failed")
     env = dict(ENV, REVIEW_SEMGREP_CONFIG=os.path.join(HERE, "..", "templates", "semgrep-taint"))
-    r = run(["bash", rc_script, "--repo", dest, "--base", empty, "--full-history"], env=env, timeout=timeout)
+    r = run(["bash", rc_script, "--repo", dest, "--full", "--full-history"], env=env, timeout=timeout)
+    last = next((l.strip() for l in reversed(r.stderr.splitlines()) if l.strip()), "")
+    why = f": {last.replace(chr(9), ' ')[:200]}" if last else ""
     try:
         rows = json.loads(r.stdout)
         assert isinstance(rows, list)
     except (ValueError, AssertionError):
-        raise RuntimeError(f"review_checks gave no JSON (exit {r.returncode})")
+        raise RuntimeError(f"review_checks gave no JSON (exit {r.returncode}){why}")
     if r.returncode:
-        raise RuntimeError(f"review_checks exit {r.returncode}")
+        raise RuntimeError(f"review_checks exit {r.returncode}{why}")
     nc = {m.strip() for m in re.findall(r"NOT CHECKED: ([^\n]*)", r.stderr)}
     nc |= {f"{x.get('tool')} ({x.get('message')})" for x in rows if x.get("rule") == "not-checked"}
     return r.stdout, rows, sorted(nc)

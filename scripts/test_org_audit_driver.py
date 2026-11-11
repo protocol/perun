@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Tests: org_audit_driver.py against local file:// fixture repos and a stub review_checks.sh. Checks: a good repo is
-scanned from a full (unshallowed) clone with --full-history, an empty-tree --base and no --tests, bundled semgrep rules
+scanned from a full (unshallowed) clone with --full-history, --full and no --tests, bundled semgrep rules
 forced; NOT CHECKED tools are listed; a missing repo and a bad name are FAILED rows with exit 1; a repo-local
 .gitleaks.toml/.gitleaksignore and every symlink are gone from the scanned tree and HEAD; a one-commit repo works; a
 failing config-strip commit fails closed; a duplicate output name is FAILED; an empty list exits 2; the temp clone is
-removed. No network; every name is fictional."""
+removed. Also: the REAL review_checks.sh runs end to end on a file:// repo; owner/.github is accepted, owner/.. rejected; a failing review_checks puts its last stderr line in the reason. No network; every name is fictional."""
 import glob, os, shutil, subprocess, sys, tempfile
 
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".claude", "skills", "deep-code-review", "scripts", "org_audit_driver.py")
@@ -64,7 +64,7 @@ def main():
         check(rows["acme/missing"][1] == "FAILED" and rows["bad name"][1] == "FAILED", "failed rows missing")
         flags, sg, n, clone, wt, hd, ln = open(log).read().splitlines()
         check("--full-history" in flags and "--tests" not in flags, f"flags: {flags}")
-        check("--base 4b825dc642cb6eb9a060e54bf8d69288fbee4904" in flags, "empty-tree base missing")
+        check("--full --full-history" in flags and "--base" not in flags, "want --full, no --base")
         check(sg.endswith("templates/semgrep-taint"), f"semgrep config not forced: {sg}")
         check(n == "3", f"want 2 history commits + 1 strip commit: {n}")
         check(wt == "0" and hd == "0", f"repo-local gitleaks config still present: tree {wt}, HEAD {hd}")
@@ -88,6 +88,19 @@ def main():
         os.chmod(os.path.join(wrap, "git"), 0o755)
         r, _, rows = drive(t, "acme/solo\n", dict(env, PATH=wrap + ":" + os.environ["PATH"]), "e")
         check(r.returncode == 1 and rows["acme/solo"][1] == "FAILED" and "commit" in rows["acme/solo"][3], f"strip commit failure: {r.stdout}")
+        # real review_checks.sh, no override: scan completes (fails if --base gets the empty-tree hash)
+        mk(t, ".github", 1)
+        renv = {k: v for k, v in env.items() if k != "ORG_AUDIT_REVIEW_CHECKS"}
+        r, _, rows = drive(t, "acme/.github\nacme/..\nacme/.\n", renv, "f")
+        check(rows["acme/.github"][1] == "OK", f"real review_checks / dot repo: {r.stdout} {r.stderr}")
+        check(rows["acme/.."][1] == "FAILED" and "bad repo name" in rows["acme/.."][3], "owner/.. accepted")
+        check(rows["acme/."][1] == "FAILED", "owner/. accepted")
+        # a failing review_checks: last non-empty stderr line lands in the reason, tabs/newlines gone, cut at 200
+        bad = os.path.join(t, "bad.sh")
+        open(bad, "w").write('#!/usr/bin/env bash\necho first >&2\nprintf "boom\\t%0300d\\n\\n" 0 >&2\nexit 3\n')
+        r, _, rows = drive(t, "acme/solo\n", dict(env, ORG_AUDIT_REVIEW_CHECKS=bad), "g")
+        reason = rows["acme/solo"][3]
+        check("(exit 3): boom 000" in reason and "first" not in reason and len(reason) < 260, f"stderr in reason: {reason}")
     print(f"Tests: {N[0]}/{N[0]}")
 
 
