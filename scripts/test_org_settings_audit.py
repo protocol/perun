@@ -81,6 +81,35 @@ class T(unittest.TestCase):
         self.assertTrue(any("capped at 1" in r["check"] for r in org))
         self.assertEqual(repos["acme/a"][0]["severity"], "not-checked")  # repo read 403, not a pass
 
+    def test_allowed_actions_absent_is_not_checked(self):
+        absent = {O + "/actions/permissions": {"enabled_repositories": "all"}}
+        org, _ = osa.audit("acme", fake(**absent))
+        self.assertEqual(checks(org)["org allowed actions: not checked (needs admin:org (fine-grained: Administration read))"], "not-checked")
+        org, _ = osa.audit("acme", fake(**{O + "/actions/permissions": {"enabled_repositories": "none"}}))
+        self.assertFalse(any("allowed actions" in r["check"] for r in org))
+
+    def test_installations_paginate(self):
+        app = {"permissions": {"contents": "write"}}
+        pages = {1: [app] * 100, 2: [app]}
+
+        def get(path, params=None):
+            if path == O + "/installations":
+                return {"installations": pages[params["page"]]}
+            return fake()(path, params)
+        org, _ = osa.audit("acme", get)
+        self.assertIn("101 installed app(s) hold write or admin on administration or contents", checks(org))
+
+    def test_api_url_must_be_https(self):
+        err = io.StringIO()
+        for u, rc in (("http://evil.example.com", 2), ("http://localhost.evil.com", 2), ("ftp://x", 2)):
+            with mock.patch.dict(os.environ, {"GITHUB_API_URL": u, "TOK": "x"}), contextlib.redirect_stderr(err):
+                self.assertEqual(osa.main(["acme", "--token-env", "TOK"]), rc)
+        self.assertIn("GITHUB_API_URL", err.getvalue())
+
+    def test_gh_missing_exits_2(self):
+        with mock.patch.dict(os.environ, {"PATH": ""}), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(osa.main(["acme"]), 2)
+
     def test_cli(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):

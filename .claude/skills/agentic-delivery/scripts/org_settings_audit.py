@@ -17,7 +17,7 @@ USAGE: org_settings_audit.py ORG [--max-repos N] [--token-env VAR] [--json]
 Token: the env var named by --token-env, else `gh auth token`; it reaches curl on stdin only (never argv), as in
 org_leak_sweep.py. `GITHUB_API_URL` overrides https://api.github.com (tests point it at a stub).
 Output: `{"org": rows, "repos": {"OWNER/NAME": rows}, "summary": {...}}` with `--json`, else one table.
-Exit codes: 0 the audit ran (findings do not change it), 2 usage or no token.
+Exit codes: 0 the audit ran (findings do not change it), 2 usage, no token, gh missing or a non-https GITHUB_API_URL.
 Side effects: HTTP GET only; nothing is written or changed. Counts and booleans only: no login, app name or API text.
 Limits: first --max-repos repositories (default 200); a longer org says so in a not-checked row.
 """
@@ -43,7 +43,7 @@ def curl_get(token):
     def get(path, params=None):
         url = os.environ.get("GITHUB_API_URL", API) + path + ("?" + urllib.parse.urlencode(params) if params else "")
         cfg = 'header = "Authorization: Bearer ' + token.replace("\\", "\\\\").replace('"', '\\"') + '"\n'
-        r = subprocess.run(["curl", "-sS", "-w", "\n%{http_code}", "-H", "Accept: application/vnd.github+json",
+        r = subprocess.run(["curl", "-sS", "--max-time", "60", "--connect-timeout", "15", "-w", "\n%{http_code}", "-H", "Accept: application/vnd.github+json",
                             "--config", "-", url], input=cfg, capture_output=True, text=True, errors="replace")
         body, _, code = r.stdout.rpartition("\n")
         if r.returncode or not code.isdigit():
@@ -86,13 +86,15 @@ def org_rows(get, org):
     a, e = rsa.read(get, base + "/actions/permissions", dict, need=(("enabled_repositories",),))
     if e:
         rows.append(rsa.nc("org allowed actions", rsa.why(e, need(adm))))
+    elif "allowed_actions" not in a and a["enabled_repositories"] != "none":
+        rows.append(rsa.nc("org allowed actions", need(adm)))  # absent field is never a pass
     elif a.get("allowed_actions") == "all":
         rows.append(("org allows all actions", "medium", "restrict allowed actions to GitHub-owned and an allowlist"))
-    ins, e = rsa.read(get, base + "/installations", dict, need=(("installations",),))
+    ins, e = rsa.listing(get, base + "/installations", key="installations")
     if e:
         rows.append(rsa.nc("installed apps", rsa.why(e, need("admin:read (fine-grained: Administration read)"))))
     else:
-        n = sum(1 for i in ins["installations"] if isinstance(i, dict) and any(
+        n = sum(1 for i in ins if isinstance(i, dict) and any(
             (i.get("permissions") or {}).get(k) in ("write", "admin") for k in ("administration", "contents")))
         rows.append(("%d installed app(s) hold write or admin on administration or contents" % n, "low" if n else "info",
                      "review each app's permissions in the organization installed apps settings"))
@@ -131,8 +133,16 @@ def main(argv=None, get=None):
         print("org_settings_audit: not an organization name", file=sys.stderr)
         return 2
     if get is None:
-        tok = os.environ.get(a.token_env, "") if a.token_env else subprocess.run(
-            ["gh", "auth", "token"], capture_output=True, text=True).stdout.strip()
+        u = os.environ.get("GITHUB_API_URL", API)
+        if not re.match(r"https://|http://(localhost|127\.0\.0\.1)([:/]|$)", u):
+            print("org_settings_audit: GITHUB_API_URL must be https:// (or http://localhost)", file=sys.stderr)
+            return 2
+        try:
+            tok = os.environ.get(a.token_env, "") if a.token_env else subprocess.run(
+                ["gh", "auth", "token"], capture_output=True, text=True).stdout.strip()
+        except OSError:
+            print("org_settings_audit: gh not runnable (set --token-env VAR)", file=sys.stderr)
+            return 2
         if not tok:
             print("org_settings_audit: no token (set --token-env VAR or run `gh auth login`)", file=sys.stderr)
             return 2
