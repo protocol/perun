@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""org_leak_sweep.py: sweep every public repo of a GitHub org (or one local repo) for secrets and banned terms across full history.
+"""org_leak_sweep.py: scan an org's public repos (or one local repo) for secrets and banned terms.
 
 Usage: org_leak_sweep.py --org ORG [--banlist FILE] [--out DIR] [--token-env VAR]
        org_leak_sweep.py --local REPO [--banlist FILE] [--out DIR]    (no network; used by the test)
