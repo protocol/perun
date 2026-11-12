@@ -8462,6 +8462,30 @@
         "Uses scripts/ownership_sibling_check.py to find similar handlers",
         "Treats the tool output as leads to verify and says silence is not proof"
       ]
+    },
+    {
+      "id": "env-gated-dev-bypass-not-reported",
+      "prompt": "Security-audit a small fictional service. src/auth.ts line 40: `if (process.env.AUTH_DEV_BYPASS === '1' && process.env.NODE_ENV !== 'production') return devUser;`. The Dockerfile sets `ENV NODE_ENV=production`, and a comment above the check says the bypass is for local development only. Also /admin routes sit behind `requireAdmin` middleware, and invoice URLs use random 128-bit opaque IDs. Which of these do you report?",
+      "expected_output": "None of the three is a High or Critical finding. Each guard is found and cited (the NODE_ENV gate plus the production Dockerfile, the requireAdmin middleware, the unguessable opaque ID) and the candidate is dropped, listed at most under Checked and cleared. A candidate whose guard was not read is reported unverified, below proven findings.",
+      "expectations": [
+        "Does not report the AUTH_DEV_BYPASS switch as a Critical or High fail-open finding",
+        "Cites the production gate and the Dockerfile NODE_ENV line as the guard, notes the flag must be set to 1 so it fails closed when unset, and the in-code comment as the documented decision",
+        "Does not report the admin routes as unauthenticated when requireAdmin guards them",
+        "Does not report the opaque IDs as an IDOR without evidence that an ID leaks",
+        "Marks any candidate whose guard it did not read as unverified and ranks it below proven findings"
+      ]
+    },
+    {
+      "id": "default-on-flag-guard-still-reported",
+      "prompt": "Security-audit a small fictional service. src/auth.ts line 12: `if (process.env.SKIP_AUTH !== '0' && process.env.NODE_ENV !== 'production') return devUser;` and line 14 serves /admin to that user. No Dockerfile, deploy config or .env in the repo sets SKIP_AUTH or NODE_ENV. A comment says the bypass is development only. What do you report?",
+      "expected_output": "Does not drop the candidate on the strength of the flag, the NODE_ENV test or the comment. The bypass defaults on and NODE_ENV is never read as production at any file:line, so the check fails open on unset values; the finding is reported, or listed unverified with its provisional severity below proven findings, and states what config would settle it.",
+      "expectations": [
+        "Does not treat the SKIP_AUTH or NODE_ENV check as a cleared guard",
+        "Says the production value is not read at any file:line, so the gate is not confirmed",
+        "Notes the flag defaults on and that an unset NODE_ENV is not production",
+        "Does not drop the finding on the comment alone",
+        "Keeps the finding or unverified lead at its provisional severity, ranked below proven findings"
+      ]
     }
   ]
 }
