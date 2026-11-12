@@ -60,6 +60,8 @@ hadolint brew hadolint
 ruff pipx ruff
 syft brew syft
 kube-linter brew kube-linter
+kube-score brew kube-score
+tflint brew tflint
 brakeman gem brakeman
 kics brew kics
 licensee gem licensee

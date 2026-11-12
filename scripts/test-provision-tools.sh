@@ -12,7 +12,7 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-prov.XXXXXX") && [ -n "$T" ] && [ -d "$T
 trap '[ -n "$T" ] && rm -rf "$T"' EXIT; fail=0
 ok() { echo "ok - $1"; }; bad() { echo "FAIL - $1"; fail=1; }
 BASH_BIN=$(type -P bash)
-ALL="gitleaks trufflehog semgrep trivy osv-scanner actionlint zizmor bandit scorecard gosec grype checkov hadolint ruff syft kube-linter brakeman kics licensee opengrep nuclei"
+ALL="gitleaks trufflehog semgrep trivy osv-scanner actionlint zizmor bandit scorecard gosec grype checkov hadolint ruff syft kube-linter kube-score tflint brakeman kics licensee opengrep nuclei"
 mkdir "$T/farm" "$T/ub" "$T/tmp" "$T/proj"
 for c in awk bash basename cat chmod cp cut date dirname env find git grep gtimeout head jq ls mkdir mktemp mv nice paste perl python3 readlink rm sed sleep sort tail tee timeout tr uname uniq wc xargs; do
   p=$(type -P "$c") || continue
@@ -29,14 +29,14 @@ cd "$T/proj"; PHYS=$(pwd -P); q() { printf '%q' "$1"; }
 
 # 1. dry run: lists every missing tool and cold cache, exits 0, writes nothing
 PA=; rc=0; o=$(PT 2>&1) || rc=$?
-[ "$rc" = 0 ] && [ "$(grep -c "^MISSING " <<<"$o")" = 21 ] && grep -q 'COLD     trivy DB' <<<"$o" && grep -q 'COLD     osv-scanner offline DB' <<<"$o" \
-  && grep -q 'COLD     semgrep p/default snapshot' <<<"$o" && grep -q '21 missing, 3 cold; nothing was installed' <<<"$o" && ok "dry run lists 21 missing, 3 cold" || { bad "dry run"; echo "$o"; }
+[ "$rc" = 0 ] && [ "$(grep -c "^MISSING " <<<"$o")" = 23 ] && grep -q 'COLD     trivy DB' <<<"$o" && grep -q 'COLD     osv-scanner offline DB' <<<"$o" \
+  && grep -q 'COLD     semgrep p/default snapshot' <<<"$o" && grep -q '23 missing, 3 cold; nothing was installed' <<<"$o" && ok "dry run lists 23 missing, 3 cold" || { bad "dry run"; echo "$o"; }
 [ ! -e "$T/cache" ] && [ ! -e "$T/home" ] && ok "dry run writes nothing" || bad "dry run wrote"
 
 # 2. --print: exactly one stdout line with the whole fix; the listing goes to stderr
 PA=; o=$(PT --print 2>"$T/e")
 [ "$(wc -l <<<"$o")" -eq 1 ] && ! grep -q 'MISSING' <<<"$o" && grep -q 'MISSING  gitleaks' "$T/e" && ok "--print: one stdout line, listing on stderr" || { bad "--print shape"; echo "$o"; }
-for want in "brew install pipx gitleaks trufflehog trivy osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kics opengrep nuclei" \
+for want in "brew install pipx gitleaks trufflehog trivy osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kube-score tflint kics opengrep nuclei" \
   "pipx install semgrep==1.182.1; pipx install zizmor==1.31.1; pipx install bandit==1.9.4; pipx install checkov==3.4.0; pipx install ruff; gem install brakeman; gem install licensee" \
   'mkdir -p '"$(q "$T/cache/dcr-tools/docker-config-empty")"' && DOCKER_CONFIG='"$(q "$T/cache/dcr-tools/docker-config-empty")"' trivy --cache-dir '"$(q "$T/cache/trivy")"' fs --download-db-only' \
   "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$(q "$T/cache") osv-scanner --offline-vulnerabilities --download-offline-databases $(q "$PHYS")" \
@@ -48,7 +48,7 @@ grep -qE '; bash [^ ]*/provision_tools\.sh$' <<<"$o" && ok "--print ends with a 
 # 3. present tools and warm caches are left out; pipx present means no `brew install pipx`
 PA=$(stubs gitleaks trufflehog trivy semgrep pipx); warm_trivy
 o=$(PT --print 2>/dev/null)
-grep -qF "brew install osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kics opengrep nuclei; pipx install zizmor==1.31.1" <<<"$o" && ! grep -q 'semgrep==\|download-db-only' <<<"$o" && ok "--print omits present tools and the warm trivy DB" || { bad "partial"; echo "$o"; }
+grep -qF "brew install osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kube-score tflint kics opengrep nuclei; pipx install zizmor==1.31.1" <<<"$o" && ! grep -q 'semgrep==\|download-db-only' <<<"$o" && ok "--print omits present tools and the warm trivy DB" || { bad "partial"; echo "$o"; }
 : >"$T/cache/trivy/db/trivy.db"; o=$(PT --print 2>/dev/null); grep -q 'download-db-only' <<<"$o" && ok "an empty trivy.db is cold" || bad "empty db warm"
 
 # 4. a tool only in ~/.local/bin (pipx, uv tool) counts as installed; DCR_USER_BIN= (empty) turns that off

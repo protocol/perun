@@ -1,0 +1,3 @@
+### Added
+- `review_checks.sh` tool hub routes `kube-score` (Kubernetes manifests, critical and warning grades) and `tflint` (Terraform, core ruleset, no `--init`, no module download), each `NOT CHECKED` when missing and `not run` on a crash, a tflint `errors` list or wrong-shape output; `provision_tools.sh` lists both (brew); `docs/standards-index.md` logs the sources fetched 2026-11-12; `tool-hub.md` records the tools not routed (cosign, dockle, trufflehog verified mode, prowler, scancode, cargo-deny, polaris) and why.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 31491→33563 kube-score and tflint rows plus the not-routed decisions

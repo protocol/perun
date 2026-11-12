@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, brakeman, eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored) (snyk-agent-scan is unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, brakeman, eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored) (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -338,6 +338,14 @@ elif kind in ("gosec", "grype"):
 elif kind == "kube-linter":  # Reports is a list, or null when clean
     if not isinstance(d, dict) or "Reports" not in d or not (d["Reports"] is None or isinstance(d["Reports"], list)):
         sys.exit("sjson: kube-linter output has no Reports list")
+elif kind == "kube-score":  # a list of scored objects, each with a checks list (a bare null never matches the JSON start above)
+    if not isinstance(d, list) or not d or not all(isinstance(x, dict) and isinstance(x.get("checks"), list) for x in d):
+        sys.exit("sjson: kube-score output is not a non-empty list of scored objects")
+elif kind == "tflint":  # {issues, errors}: any error leaves the module unlinted
+    if not isinstance(d, dict) or not isinstance(d.get("issues"), list) or not isinstance(d.get("errors"), list):
+        sys.exit("sjson: tflint output has no issues and errors lists")
+    if d["errors"]:
+        sys.exit("sjson: tflint reported errors")
 elif kind == "brakeman":
     if not isinstance(d, dict) or not isinstance(d.get("warnings"), list):
         sys.exit("sjson: brakeman output has no warnings list")
@@ -443,6 +451,10 @@ elif kind == "kics":  # actual_value and expected_value are never read (a secret
     rows = [(os.path.relpath(f.get("file_name") or "-"), f.get("line") or 0, q.get("query_name"), cl(f"{q.get('severity')}: {f.get('search_key')}")) for q in d["queries"] or [] for f in q.get("files") or []]
 elif kind == "kube-linter":  # a report with no file path cannot be attributed to a changed file: "-" is dropped and counted by the caller
     rows = [(os.path.relpath(((r.get("Object") or {}).get("Metadata") or {}).get("FilePath") or "-"), 0, r.get("Check"), cl((r.get("Diagnostic") or {}).get("Message", ""))) for r in d["Reports"] or []]
+elif kind == "kube-score":  # grade 1 critical, 5 warning (7 almost OK and 10 OK are not findings); skipped checks never count; a check with no comment still gets one row
+    rows = [(os.path.relpath(o.get("file_name") or "-"), o.get("file_row") or 0, (t.get("check") or {}).get("id"), cl(f"{'CRITICAL' if t['grade'] <= 1 else 'WARNING'}: {(t.get('check') or {}).get('name')}: {c.get('summary', '')}")) for o in d for t in o["checks"] if isinstance(t, dict) and isinstance(t.get("grade"), int) and t["grade"] <= 5 and not t.get("skipped") for c in (t.get("comments") or [{}])]
+elif kind == "tflint":  # message plus rule severity; callers and the rule link are not read
+    rows = [(os.path.relpath((i.get("range") or {}).get("filename") or "-"), ((i.get("range") or {}).get("start") or {}).get("line") or 0, (i.get("rule") or {}).get("name"), cl(f"{(i.get('rule') or {}).get('severity')}: {i.get('message', '')}")) for i in d["issues"]]
 elif kind == "brakeman":  # confirm/high/medium/weak is brakeman's own confidence, carried in the message
     rows = [(nf(r.get("file")), r.get("line") or 0, r.get("check_name"), cl(f"{r.get('warning_type')}: {r.get('message')} (confidence: {r.get('confidence')})")) for r in d["warnings"]]
 elif kind == "gosec":
@@ -824,6 +836,8 @@ hub=(
   'licensee;verified;each;(^|/)([Ll][Ii][Cc][Ee][Nn][CcSs][Ee]|[Cc][Oo][Pp][Yy][Ii][Nn][Gg]|[Nn][Oo][Tt][Ii][Cc][Ee])(\.([Mm][Dd]|[Tt][Xx][Tt]|[Rr][Ss][Tt]))?$;route-only;gem install licensee' # inventory: names the detected license, never a finding
   'syft;verified;each;(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.mod|Cargo\.lock|poetry\.lock|uv\.lock|requirements[^/]*\.txt|composer\.lock|Gemfile\.lock)$;route-only;brew install syft' # inventory: package count on stderr, SBOM kept in $TMPDIR, no finding rows
   'kube-linter;verified;batch;\.ya?ml$;route-only;brew install kube-linter' # only files with apiVersion: and kind: are passed
+  'kube-score;verified;batch;\.ya?ml$;route-only;brew install kube-score' # same Kubernetes-manifest filter as kube-linter; rows for critical and warning grades only
+  'tflint;verified;each;\.tf$;route-only;brew install tflint' # core terraform ruleset only: no `tflint --init`, no module download, so no network
   'brakeman;verified;batch;(^|/)(Gemfile(\.lock)?|[^/]+\.(rb|erb))$;route-only;gem install brakeman' # only when the root Gemfile names rails; scans the app, rows kept for changed files
   'snyk-agent-scan;unverified;each;(^|/)(\.mcp\.json|mcp[^/]*\.json|SKILL\.md)$;route-only;uvx snyk-agent-scan'
 )
@@ -843,6 +857,8 @@ hubcmd() {
     hadolint) cmd=(hadolint -f json --no-fail "$1") ;;
     ruff-security) cmd=(ruff check --select S --output-format json --no-cache --exit-zero "$@") ;;
     syft) sb=$(mktemp "${TMPDIR:-/tmp}/review_sbom.XXXXXX"); cmd=(env SYFT_CHECK_FOR_APP_UPDATE=false syft "$1" -o "syft-json=$sb") ;; # the update check phones home; the SBOM outlives the run
+    kube-score) cmd=(kube-score score -o json "$@"); okrc="1" ;; # exit 1 = a critical check failed, but also every error: a crash prints no JSON, so sjson turns it into not-run (renderer/json_v2/api.go: top-level array)
+    tflint) cmd=(tflint --format=json --no-color --call-module-type=none "--chdir=${1%/*}" "--filter=${1##*/}"); okrc="2" ;; # exit 2 = issues found, 1 = error (cmd/cli.go); no --init: plugins are never downloaded
     kube-linter) cmd=(kube-linter lint --format json "$@"); okrc="1" ;; # exit 1 = lint reports (command.go returns "found N lint errors")
     # the report goes to a fresh dir under $td; --disable-secrets (gitleaks owns secrets); DISABLE_CRASH_REPORT=false stops the only documented phone-home; exit 20-60 = results by severity (docs.kics.io/latest/results)
     kics) mkdir -p "$td/kics"; jf=$td/kics/results.json; okrc="20 30 40 50 60"; cmd=(env DISABLE_CRASH_REPORT=false kics scan -p "$(IFS=,; echo "$*")" --no-progress --disable-secrets --report-formats json -o "$td/kics") ;;
@@ -855,7 +871,7 @@ hubcmd() {
 while IFS=';' read -r hn hs hm hre _ hh; do
   hf=$(changed "$hre"); [ -n "$hf" ] || continue
   case $hn in
-    kube-linter) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do [[ $f == templates/* || $f == */templates/* || $f == kustomization.y*ml || $f == */kustomization.y*ml ]] && continue; grep -qE '^apiVersion:' -- "$f" && grep -qE '^kind:' -- "$f" && printf '%s\n' "$f"; done || true) ;; # Kubernetes manifests only (Helm templates and kustomization files are not plain manifests)
+    kube-linter|kube-score) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do [[ $f == templates/* || $f == */templates/* || $f == kustomization.y*ml || $f == */kustomization.y*ml ]] && continue; grep -qE '^apiVersion:' -- "$f" && grep -qE '^kind:' -- "$f" && printf '%s\n' "$f"; done || true) ;; # Kubernetes manifests only (Helm templates and kustomization files are not plain manifests)
     eslint-security) { compgen -G 'eslint.config.*' || compgen -G '.eslintrc*' || grep -qs '"eslintConfig"' package.json; } >/dev/null 2>&1 || hf= # no config of its own: not routed
       # a config that names no security plugin cannot produce security rows: not checked, never a run with 0 rows
       if [ -n "$hf" ] && ! { cf=$(ls -d eslint.config.* .eslintrc* 2>/dev/null) || true; [ -n "$cf" ] || cf=package.json; cat -- $cf 2>/dev/null; } | grep -qiE 'security|no-unsanitized'; then echo "NOT CHECKED: eslint-security (the eslint config names no security plugin)" >&2; add "$hn" "" 0 not-checked "the eslint config names no security plugin"; hf=; fi
