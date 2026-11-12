@@ -19,7 +19,7 @@ scanning and an SBOM — and, if an SBOM ships, is it paired with a **VEX** whos
 justification (see Fix)? **CI/CD trigger & token hygiene** — does a `pull_request_target` (or `workflow_run`) workflow
 check out untrusted PR head code? GitHub's hardening guide: these triggers "expose the repository to security
 compromises" and "must not explicitly check out untrusted code." Is untrusted `${{ github.event.* }}` interpolated
-straight into a `run:` step (script injection — route it through an intermediate `env:` var)? Is `GITHUB_TOKEN` /
+straight into a `run:` step (script injection — route it through an intermediate `env:` var)? **AI agent steps** (Claude Code, Codex, Gemini, Copilot actions or CLIs): does outsider-written issue, PR, comment or branch-name text reach the agent prompt while the job holds a write token or secrets, does a `pull_request_target`/`issue_comment` job check out the PR head beside an agent (its CLAUDE.md or AGENTS.md then steers it), is the sandbox or approval off, or is Bash allowed unrestricted? `scripts/agent_workflow_injection.py` (run by `review_checks.sh` as `agent-injection`) lists these as leads. Is `GITHUB_TOKEN` /
 `permissions` read-only by default and escalated per job? **But `permissions:` scopes the *token*, not a *secret*.** A
 repo- or org-level secret (`${{ secrets.PROD_DEPLOY_KEY }}`) has no per-job boundary — *any* job running in the
 repository context can reference it, including a lint/test job that never deploys — so a production deploy credential
