@@ -66,6 +66,7 @@ staticcheck brew staticcheck
 brakeman gem brakeman
 kics brew kics
 licensee gem licensee
+cosign brew cosign
 opengrep brew opengrep
 nuclei brew nuclei'
 lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin} # pipx and `uv tool` install here; a sandboxed PATH may lack it

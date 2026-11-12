@@ -1,0 +1,3 @@
+### Added
+- `review_checks.sh` tool hub routes two more installed tools, each `NOT CHECKED` when missing and `not run` on a crash or empty or whitespace output: `trufflehog-fs` (`trufflehog filesystem --no-verification --no-update --json`; a row is detector, file and line only, the secret fields are never read) and `cosign` (`verify-blob --insecure-ignore-tlog=true` offline, only for a `.bundle` with a `cosign.pub` and its signed file; raw signatures and attestations are `NOT CHECKED`). `provision_tools.sh` lists cosign; `tool-hub.md` documents both and `standards-index.md` logs the sources fetched 2026-11-12.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 35282→36755 hub rows for trufflehog-fs and cosign, and the not-routed list updated
