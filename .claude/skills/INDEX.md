@@ -146,6 +146,7 @@ Run `python3 <skill>/scripts/<name>` (`bash` for `.sh`). `name: purpose — argu
 - gate_map.py: read-only report: which suites each gate stage runs, and which… — [ROOT] [--stage NAME=PATH ...]
 - header_config.py: heuristic lead-finder for security response headers that a web… — DIR
 - impact_map.py: map a diff's changed symbols to callers and callees. — [--base REF] [--repo DIR] [--cap N]
+- insecure_defaults.py: deterministic lead-finder for fail-open and… — DIR
 - lint_ui_slop.py: zero-token, deterministic lint for common UI defects in HTML… — [--json] [--tokens FILE] PATH...
 - merge_findings.py: dedupe, rank and cap findings from one or more passes. — [--cap N] [--root DIR] [--ref REF]…
 - org_audit_driver.py: review_checks.sh over a repo list, one result file per repo. — --repos FILE --out DIR [--timeout SECS]

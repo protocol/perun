@@ -1,0 +1,2 @@
+### Added
+- `insecure_defaults.py` (wired into `review_checks.sh --full` as tool `insecure-defaults`) finds literal insecure defaults and fail-open paths: a security flag that defaults off, a broad exception in an auth check that returns allow, TLS or JWT verification disabled, debug on by default, and a wildcard CORS origin with credentials. Test files and fail-closed variants stay silent; tests in `scripts/test_insecure_defaults.py`. Whole-app security mode routes the rows to a shipped-config check.
