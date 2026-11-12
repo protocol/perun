@@ -60,7 +60,14 @@ hadolint brew hadolint
 ruff pipx ruff
 syft brew syft
 kube-linter brew kube-linter
-brakeman gem brakeman'
+kube-score brew kube-score
+tflint brew tflint
+staticcheck brew staticcheck
+brakeman gem brakeman
+kics brew kics
+licensee gem licensee
+opengrep brew opengrep
+nuclei brew nuclei'
 lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin} # pipx and `uv tool` install here; a sandboxed PATH may lack it
 miss=0 cold=0 brew=() pipx=() gem=() fix=()
 while read -r bin how spec; do

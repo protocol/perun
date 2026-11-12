@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, brakeman (snyk-agent-scan is unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, staticcheck (Go, offline), brakeman, eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored) (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -164,7 +164,7 @@ add() { printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" >>"$raw"; }
 run_one() {
   local tool=$1 nz=(); shift; rc=0
   # lease full: heavy scanners run at lowest priority and are named in the summary (never take the lease while degraded)
-  if [ "$lease" = degraded ]; then case $tool in gitleaks*|trufflehog|osv-scanner|semgrep|trivy|grype|checkov|gosec|govulncheck|codeql) [ "$nice19" != 1 ] || nz=(nice -n 19); case " $dg " in *" $tool "*) ;; *) dg+=" $tool" ;; esac ;; esac; fi
+  if [ "$lease" = degraded ]; then case $tool in gitleaks*|trufflehog|osv-scanner|semgrep|trivy|grype|checkov|gosec|govulncheck|staticcheck|codeql) [ "$nice19" != 1 ] || nz=(nice -n 19); case " $dg " in *" $tool "*) ;; *) dg+=" $tool" ;; esac ;; esac; fi
   [ -n "${hubtool:-}" ] || case " $ran " in *" $tool "*) ;; *) ran+=" $tool" ;; esac # hub tools count as ran only after a good parse
   tbox ${nz[@]+"${nz[@]}"} "$@" || rc=$?
   # degraded single-worker flag (semgrep --jobs 1, trivy --parallel 1) may be unsupported: after a crash retry once without it;
@@ -306,12 +306,12 @@ cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # 
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 # The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
 m = re.search(r"^[\[{]", t, re.M)
-if not m:
+if not m and not (kind == "staticcheck" and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
     sys.exit("sjson: no JSON in scanner output")
-s, dec = t[m.start():], json.JSONDecoder()
-d, i = dec.raw_decode(s)
-if kind == "govulncheck":  # a stream of JSON objects (config, progress, osv, finding), not one document; a stray line inside it fails closed as unparseable
-    d = [d]
+s, dec = (t[m.start():] if m else ""), json.JSONDecoder()
+d, i = dec.raw_decode(s) if m else (None, 0)
+if kind in ("govulncheck", "staticcheck"):  # a stream of JSON objects (govulncheck: config, progress, osv, finding; staticcheck: one per diagnostic), not one document; a stray line inside it fails closed as unparseable
+    d = [d] if m else []
     while s[i:].strip():
         i += len(s[i:]) - len(s[i:].lstrip())
         o, i = dec.raw_decode(s, i)
@@ -338,11 +338,34 @@ elif kind in ("gosec", "grype"):
 elif kind == "kube-linter":  # Reports is a list, or null when clean
     if not isinstance(d, dict) or "Reports" not in d or not (d["Reports"] is None or isinstance(d["Reports"], list)):
         sys.exit("sjson: kube-linter output has no Reports list")
+elif kind == "kube-score":  # a list of scored objects, each with a checks list, or null for an object with no checks (json_v2/api.go: a nil slice marshals to null); a bare top-level null never matches the JSON start above
+    if not isinstance(d, list) or not d or not all(isinstance(x, dict) and (x.get("checks") is None or isinstance(x["checks"], list)) for x in d):
+        sys.exit("sjson: kube-score output is not a non-empty list of scored objects")
+elif kind == "staticcheck":  # each diagnostic: code, severity (may be absent), location{file,line,column}, message (lintcmd/format.go)
+    if not all(isinstance(x, dict) and isinstance(x.get("code"), str) and isinstance(x.get("location"), dict) and "message" in x for x in d):
+        sys.exit("sjson: staticcheck output is not a stream of diagnostics")
+    if any(x["code"] == "compile" for x in d):  # a package failed to load or type-check: the rest of the module was not analysed, so never clean
+        sys.exit("sjson: staticcheck could not load a package (compile diagnostic)")
+elif kind == "tflint":  # {issues, errors}: any error leaves the module unlinted
+    if not isinstance(d, dict) or not isinstance(d.get("issues"), list) or not isinstance(d.get("errors"), list):
+        sys.exit("sjson: tflint output has no issues and errors lists")
+    if d["errors"]:
+        sys.exit("sjson: tflint reported errors")
 elif kind == "brakeman":
     if not isinstance(d, dict) or not isinstance(d.get("warnings"), list):
         sys.exit("sjson: brakeman output has no warnings list")
     if d.get("errors"):  # scan errors leave files unanalysed: --no-exit-on-error hides them
         sys.exit("sjson: brakeman reported scan errors")
+elif kind == "eslint-security":  # a list of {filePath, messages}; a fatal parse error leaves a file unanalysed
+    if not isinstance(d, list) or not all(isinstance(x, dict) and isinstance(x.get("messages"), list) for x in d):
+        sys.exit("sjson: eslint-security output is not a list of results with messages")
+    if any(isinstance(m, dict) and m.get("fatal") for x in d for m in x["messages"]):
+        sys.exit("sjson: eslint-security hit a fatal parse error")
+    if any(isinstance(m, dict) and m.get("ruleId") is None and str(m.get("message", "")).startswith("File ignored") for x in d for m in x["messages"]):
+        sys.exit("sjson: eslint-security skipped an ignored file")  # an ignored file was not analysed: not a clean run
+elif kind == "kics":  # queries is a list, or null when clean
+    if not isinstance(d, dict) or "queries" not in d or not (d["queries"] is None or isinstance(d["queries"], list)):
+        sys.exit("sjson: kics output has no queries list")
 elif kind == "govulncheck":  # every run starts with a config message: without one the output is not govulncheck's
     if not any(isinstance(x, dict) and isinstance(x.get("config"), dict) for x in d):
         sys.exit("sjson: govulncheck output has no config message")
@@ -426,8 +449,19 @@ elif kind == "bandit":  # issue_text (B105 embeds the secret) and code are never
     rows = [(os.path.relpath(r["filename"]), r.get("line_number", 0), r.get("test_id"), "potential issue (see the bandit docs for this test id)") for r in d["results"]]
 elif kind == "ruff-security":  # the S rules (flake8-bandit); messages name the construct, never the value
     rows = [(os.path.relpath(r["filename"]), (r.get("location") or {}).get("row", 0), r.get("code"), cl(r.get("message", ""))) for r in d]
+elif kind == "eslint-security":  # only security rules: the project's config may carry style rules too; ruleId null = an ignore or config note
+    SEC = re.compile(r"(security|no-unsanitized)/|(no-eval|no-implied-eval|no-new-func|no-script-url)$")
+    rows = [(os.path.relpath(x["filePath"]), m.get("line") or 0, m["ruleId"], cl(m.get("message", ""))) for x in d for m in x["messages"] if isinstance(m, dict) and isinstance(m.get("ruleId"), str) and SEC.match(m["ruleId"])]
+elif kind == "kics":  # actual_value and expected_value are never read (a secrets query can quote the value)
+    rows = [(os.path.relpath(f.get("file_name") or "-"), f.get("line") or 0, q.get("query_name"), cl(f"{q.get('severity')}: {f.get('search_key')}")) for q in d["queries"] or [] for f in q.get("files") or []]
 elif kind == "kube-linter":  # a report with no file path cannot be attributed to a changed file: "-" is dropped and counted by the caller
     rows = [(os.path.relpath(((r.get("Object") or {}).get("Metadata") or {}).get("FilePath") or "-"), 0, r.get("Check"), cl((r.get("Diagnostic") or {}).get("Message", ""))) for r in d["Reports"] or []]
+elif kind == "kube-score":  # grade 1 critical, 5 warning (7 almost OK and 10 OK are not findings); skipped checks never count; a check with no comment still gets one row
+    rows = [(os.path.relpath(o.get("file_name") or "-"), o.get("file_row") or 0, (t.get("check") or {}).get("id"), cl(f"{'CRITICAL' if t['grade'] <= 1 else 'WARNING'}: {(t.get('check') or {}).get('name')}: {c.get('summary', '')}")) for o in d for t in (o["checks"] or []) if isinstance(t, dict) and isinstance(t.get("grade"), int) and t["grade"] <= 5 and not t.get("skipped") for c in (t.get("comments") or [{}])]
+elif kind == "staticcheck":  # severity is omitted when empty; the check code (SA1000, S1000, ST1000, U1000) is the rule
+    rows = [(os.path.relpath(x["location"].get("file") or "-"), x["location"].get("line") or 0, x["code"], cl(f"{x.get('severity') or 'warning'}: {x['message']}")) for x in d]
+elif kind == "tflint":  # message plus rule severity; callers and the rule link are not read
+    rows = [(os.path.relpath((i.get("range") or {}).get("filename") or "-"), ((i.get("range") or {}).get("start") or {}).get("line") or 0, (i.get("rule") or {}).get("name"), cl(f"{(i.get('rule') or {}).get('severity')}: {i.get('message', '')}")) for i in d["issues"]]
 elif kind == "brakeman":  # confirm/high/medium/weak is brakeman's own confidence, carried in the message
     rows = [(nf(r.get("file")), r.get("line") or 0, r.get("check_name"), cl(f"{r.get('warning_type')}: {r.get('message')} (confidence: {r.get('confidence')})")) for r in d["warnings"]]
 elif kind == "gosec":
@@ -674,21 +708,23 @@ fi
 
 sgc=${REVIEW_SEMGREP_CONFIG:-}
 [ -n "$sgc" ] || for c in .semgrep.yml .semgrep; do [ -e "$c" ] && { sgc=$c; break; }; done
+# opengrep (semgrep fork, no telemetry) stands in when semgrep is absent: same rules, never the registry pack. Its flags are unverified (not in its README), so a crash is a not-run row, never clean.
+sgbin=semgrep sgsub=() sgx=(--metrics=off --disable-version-check); command -v semgrep >/dev/null || ! command -v opengrep >/dev/null || { sgbin=opengrep sgsub=(scan) sgx=(); echo "review_checks: semgrep absent; using opengrep (same rules, no registry pack)" >&2; }
 sgcfg=(--config "$sgc") sgsnap=
 if [ -z "$sgc" ]; then # no repo rules: bundled taint rules, plus the p/default registry pack unless REVIEW_SEMGREP_REGISTRY=0 (never --config auto)
   sgc=$here/../templates/semgrep-taint; sgcfg=(--config "$sgc")
   # the provisioned snapshot (a local file) stands in for p/default when present, so it loads without the network
-  [ "${REVIEW_SEMGREP_REGISTRY:-1}" = 0 ] || { sgsnap=$(bash "$here/provision_tools.sh" --cache semgrep 2>/dev/null || echo p/default); sgcfg+=(--config "$sgsnap"); }
+  [ "${REVIEW_SEMGREP_REGISTRY:-1}" = 0 ] || [ "$sgbin" = opengrep ] || { sgsnap=$(bash "$here/provision_tools.sh" --cache semgrep 2>/dev/null || echo p/default); sgcfg+=(--config "$sgsnap"); }
 fi
 sgnorm=$sgc; [ ! -f "$sgsnap" ] || sgnorm+=$'\n'$sgsnap # semgrep prefixes rule ids with each local config's directory (the bundled rules, a warm snapshot): sjson strips every one listed
 if [ ! -e "$sgc" ]; then
   if [ -z "${REVIEW_SEMGREP_CONFIG:-}" ] && [ "$sgc" = "$here/../templates/semgrep-taint" ]; then skip semgrep "bundled rules missing at $sgc (reinstall the skill)"
   else skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"; fi
-elif have semgrep; then
+elif have "$sgbin"; then
   sg=() sgwas=$ran sgok=0 sgerr=0 sgzero=0 sgj=() sgb=0 sgrx=0 sgbun=(--config "$sgc"); [ "$lease" != degraded ] || { sgj=(--jobs 1); w1+=" semgrep"; }
   while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
   # sgrun CONFIG...: scan one chunk. sgreg=1 (seen by run_one) while the p/default pack (registry or snapshot) is in CONFIG (4 args, not 2), so its timeout is soft: the loop reruns with the bundled rules.
-  sgrun() { local sgreg=0; [ $# -le 2 ] || sgreg=1; run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep "$@" ${sgj[@]+"${sgj[@]}"} --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}"; }
+  sgrun() { local sgreg=0; [ $# -le 2 ] || sgreg=1; run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" SEMGREP_SEND_METRICS=off "$sgbin" ${sgsub[@]+"${sgsub[@]}"} "$@" ${sgj[@]+"${sgj[@]}"} --json --quiet ${sgx[@]+"${sgx[@]}"} -- "${sg[@]:i:200}"; }
   # One call per 200 files: typically a single run, but bounded argv and a timeout that is not shared by everything.
   for ((i = 0; i < ${#sg[@]}; i += 200)); do
     sgr=0; [ ${#sgcfg[@]} -le 2 ] || sgr=1 # the p/default pack (the registry, or the provisioned snapshot standing in for it) is still in this chunk's config
@@ -720,6 +756,9 @@ elif have semgrep; then
     echo "review_checks: partial: semgrep errored with no findings on $sgerr chunk(s) of up to 200 files (those files were not scanned)" >&2
     add semgrep "" 0 not-checked "semgrep errored on $sgerr chunk(s) of up to 200 files; those files were not scanned"
   elif [ "$sgerr" -gt 0 ]; then ran=$sgwas; skip semgrep "scan errored, no findings"; fi
+  if [ "$sgbin" != semgrep ]; then # name the binary that ran, by exact token (semgrep or semgrep(note)), never a prefix of another name
+    set -f; for v in ran failed; do t=; for w in ${!v}; do case $w in semgrep|semgrep\(*) w=opengrep${w#semgrep} ;; esac; t+=" $w"; done; printf -v "$v" %s "$t"; done; set +f
+  fi
 fi
 
 # World-writable chmod in a Dockerfile RUN (777, a+w, o+w, incl. -R): no installed scanner (hadolint, checkov, trivy) has a rule for it.
@@ -799,8 +838,14 @@ hub=(
   'checkov;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.tf)$;route-only;pipx install checkov'
   'hadolint;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.dockerfile)$;route-only;brew install hadolint'
   'ruff-security;verified;batch;\.py$;route-only;pipx install ruff' # ruff check --select S (flake8-bandit rules), its own row beside bandit; binary is ruff
+  'eslint-security;verified;batch;\.(jsx?|tsx?|mjs|cjs)$;route-only;npm i -D eslint eslint-plugin-security (project-local, never npx)' # only with the project's own eslint config and node_modules/.bin/eslint
+  'kics;verified;batch;(^|/)(Dockerfile[^/]*|[^/]+\.(tf|dockerfile|ya?ml))$;route-only;brew install kics' # Dockerfile and .tf always, YAML only with apiVersion: or AWSTemplateFormatVersion:
+  'licensee;verified;each;(^|/)([Ll][Ii][Cc][Ee][Nn][CcSs][Ee]|[Cc][Oo][Pp][Yy][Ii][Nn][Gg]|[Nn][Oo][Tt][Ii][Cc][Ee])(\.([Mm][Dd]|[Tt][Xx][Tt]|[Rr][Ss][Tt]))?$;route-only;gem install licensee' # inventory: names the detected license, never a finding
   'syft;verified;each;(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.mod|Cargo\.lock|poetry\.lock|uv\.lock|requirements[^/]*\.txt|composer\.lock|Gemfile\.lock)$;route-only;brew install syft' # inventory: package count on stderr, SBOM kept in $TMPDIR, no finding rows
   'kube-linter;verified;batch;\.ya?ml$;route-only;brew install kube-linter' # only files with apiVersion: and kind: are passed
+  'kube-score;verified;batch;\.ya?ml$;route-only;brew install kube-score' # same Kubernetes-manifest filter as kube-linter; rows for critical and warning grades only
+  'tflint;verified;each;\.tf$;route-only;brew install tflint' # core terraform ruleset only: no `tflint --init`, no module download, so no network
+  'staticcheck;verified;batch;\.go$;route-only;brew install staticcheck' # whole module (./...), rows kept for changed files; loads packages, never runs repo code
   'brakeman;verified;batch;(^|/)(Gemfile(\.lock)?|[^/]+\.(rb|erb))$;route-only;gem install brakeman' # only when the root Gemfile names rails; scans the app, rows kept for changed files
   'snyk-agent-scan;unverified;each;(^|/)(\.mcp\.json|mcp[^/]*\.json|SKILL\.md)$;route-only;uvx snyk-agent-scan'
 )
@@ -820,27 +865,44 @@ hubcmd() {
     hadolint) cmd=(hadolint -f json --no-fail "$1") ;;
     ruff-security) cmd=(ruff check --select S --output-format json --no-cache --exit-zero "$@") ;;
     syft) sb=$(mktemp "${TMPDIR:-/tmp}/review_sbom.XXXXXX"); cmd=(env SYFT_CHECK_FOR_APP_UPDATE=false syft "$1" -o "syft-json=$sb") ;; # the update check phones home; the SBOM outlives the run
+    staticcheck) cmd=(env GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly GOWORK=off staticcheck -f json ./...); okrc="1" ;; # exit 1 = a problem found, but also a setup failure (lintcmd/cmd.go): empty output with exit 1 is not run, and a missing module cache fails offline; one JSON object per line
+    kube-score) cmd=(kube-score score -o json "$@"); okrc="1" ;; # exit 1 = a critical check failed, but also every error: a crash prints no JSON, so sjson turns it into not-run (renderer/json_v2/api.go: top-level array)
+    tflint) cmd=(tflint --format=json --no-color --call-module-type=none "--chdir=${1%/*}" "--filter=${1##*/}"); okrc="2" ;; # exit 2 = issues found, 1 = error (cmd/cli.go); no --init: plugins are never downloaded
     kube-linter) cmd=(kube-linter lint --format json "$@"); okrc="1" ;; # exit 1 = lint reports (command.go returns "found N lint errors")
+    # the report goes to a fresh dir under $td; --disable-secrets (gitleaks owns secrets); DISABLE_CRASH_REPORT=false stops the only documented phone-home; exit 20-60 = results by severity (docs.kics.io/latest/results)
+    kics) mkdir -p "$td/kics"; jf=$td/kics/results.json; okrc="20 30 40 50 60"; cmd=(env DISABLE_CRASH_REPORT=false kics scan -p "$(IFS=,; echo "$*")" --no-progress --disable-secrets --report-formats json -o "$td/kics") ;;
+    # exit 1 = lint errors; the project's own binary only (never npx, no network); -f json is the built-in formatter
+    eslint-security) cmd=(./node_modules/.bin/eslint -f json "$@"); okrc="1" ;;
+    licensee) cmd=(licensee detect --json "$1") ;;
     brakeman) cmd=(brakeman -q --no-pager -f json --no-exit-on-warn --no-exit-on-error) ;; # scans the cwd app; the flags keep findings and scan errors from changing the exit code
   esac
 }
 while IFS=';' read -r hn hs hm hre _ hh; do
   hf=$(changed "$hre"); [ -n "$hf" ] || continue
   case $hn in
-    kube-linter) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do [[ $f == templates/* || $f == */templates/* || $f == kustomization.y*ml || $f == */kustomization.y*ml ]] && continue; grep -qE '^apiVersion:' "$f" && grep -qE '^kind:' "$f" && printf '%s\n' "$f"; done || true) ;; # Kubernetes manifests only (Helm templates and kustomization files are not plain manifests)
+    kube-linter|kube-score) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do [[ $f == templates/* || $f == */templates/* || $f == kustomization.y*ml || $f == */kustomization.y*ml ]] && continue; grep -qE '^apiVersion:' -- "$f" && grep -qE '^kind:' -- "$f" && printf '%s\n' "$f"; done || true) ;; # Kubernetes manifests only (Helm templates and kustomization files are not plain manifests)
+    eslint-security) { compgen -G 'eslint.config.*' || compgen -G '.eslintrc*' || grep -qs '"eslintConfig"' package.json; } >/dev/null 2>&1 || hf= # no config of its own: not routed
+      # a config that names no security plugin cannot produce security rows: not checked, never a run with 0 rows
+      if [ -n "$hf" ] && ! { cf=$(ls -d eslint.config.* .eslintrc* 2>/dev/null) || true; [ -n "$cf" ] || cf=package.json; cat -- $cf 2>/dev/null; } | grep -qiE 'security|no-unsanitized'; then echo "NOT CHECKED: eslint-security (the eslint config names no security plugin)" >&2; add "$hn" "" 0 not-checked "the eslint config names no security plugin"; hf=; fi
+      # the config is code: a diff that changes it (or package.json) must not run it
+      if [ -n "$hf" ] && [ "$full" = 0 ] && [ -n "$(changed '(^|/)(eslint\.config\.[cm]?[jt]s|\.eslintrc[^/]*|package\.json)$')" ]; then echo "NOT CHECKED: eslint-security (eslint config or package.json changed in this diff: its config is code, not run)" >&2; add "$hn" "" 0 not-checked "eslint config or package.json changed in this diff: not run"; hf=; fi ;;
+    kics) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do [[ $f == *.yaml || $f == *.yml ]] && { grep -qE '^(apiVersion:|AWSTemplateFormatVersion:)' -- "$f" || continue; }; printf '%s\n' "$f"; done || true)
+      # -p takes a comma list: a name with a comma cannot be passed, so it is named as unchecked surface instead of dropped
+      kc=$(printf '%s\n' "$hf" | grep -c , || true)
+      if [ "$kc" -gt 0 ]; then echo "NOT CHECKED: kics ($kc file name(s) with a comma not scanned)" >&2; add kics "" 0 not-checked "$kc file name(s) with a comma not scanned"; hf=$(printf '%s\n' "$hf" | grep -v , || true); fi ;;
     brakeman) grep -qiE "^[[:space:]]*gem[[:space:]]+['\"]rails['\"]" Gemfile 2>/dev/null || hf= ;;
   esac
   [ -n "$hf" ] || continue
-  [ "$hs" != verified ] || [ "$hn" = syft ] || wired+=" $hn" # syft is an inventory, not a scanner: never wired or ran
+  [ "$hs" != verified ] || case $hn in syft|licensee) ;; *) wired+=" $hn" ;; esac # syft and licensee are inventories, not scanners: never wired or ran
   nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
   if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
-  hb=$hn; [ "$hn" != ruff-security ] || hb=ruff
+  hb=$hn; [ "$hn" != ruff-security ] || hb=ruff; [ "$hn" != eslint-security ] || hb=./node_modules/.bin/eslint
   command -v "$hb" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
   hubtool=$hn
   # zizmor, actionlint, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
-  case $hn in grype|checkov|gosec|govulncheck) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
-  case $hn in gosec|govulncheck) [ -f go.mod ] || { nc "no go.mod at repo root"; continue; } ;; esac
-  [ "$hn" != govulncheck ] || command -v go >/dev/null || { nc "go toolchain missing"; continue; }
+  case $hn in grype|checkov|gosec|govulncheck|staticcheck|kics) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
+  case $hn in gosec|govulncheck|staticcheck) [ -f go.mod ] || { nc "no go.mod at repo root"; continue; } ;; esac
+  case $hn in govulncheck|staticcheck) command -v go >/dev/null || { nc "go toolchain missing"; continue; } ;; esac
   targets=()
   if [ "$hm" = batch ]; then while IFS= read -r f; do targets+=("./$f"); done <<<"$hf"; fi
   # ponytail: batch tools get every matching file in one call (argv/timeout ceiling); chunk like semgrep if it bites.
@@ -850,12 +912,19 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     fi
     run_one "$hn" "${cmd[@]}" || { [ "$hn" != syft ] || rm -f "$sb"; [ "$hm" = batch ] && break; continue; }
     scan_ok "$hn" $okrc || { [ "$hn" != syft ] || rm -f "$sb"; [ "$hm" = batch ] && break; continue; }
+    if [ "$hn" = licensee ]; then # inventory only: name the detected license, never a finding row
+      if n=$(python3 -c 'import json,sys;s=open(sys.argv[1]).read();print(",".join(str(l["spdx_id"]) for l in json.JSONDecoder().raw_decode(s[s.index("{"):])[0]["licenses"]) or "none")' "$out" 2>/dev/null); then
+        echo "review_checks: license inventory (not a scan): licensee detected $(printf %s "$n" | tr -cd 'A-Za-z0-9.+,_-') in $f" >&2
+      else skip licensee "unparseable output"; fi
+      continue
+    fi
     if [ "$hn" = syft ]; then # inventory only: count packages, never a finding row
       if n=$(python3 -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["artifacts"]))' "$sb" 2>/dev/null); then
         echo "review_checks: SBOM inventory (not a vulnerability scan): syft listed $n packages in $f (SBOM: $sb)" >&2
       else rm -f "$sb"; skip syft "unparseable output"; fi
       continue
     fi
+    [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
     if sjson "$hn" "$jf" >"$tsv"; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
@@ -866,12 +935,89 @@ while IFS=';' read -r hn hs hm hre _ hh; do
         done <"$tsv"
         # A tool given explicit files reports only those, so a row for any other file means the paths do not line up and findings may be lost:
         # name it instead of reading as clean. gosec and brakeman scan the whole project and legitimately report files outside the changed list.
-        case $hn in gosec|brakeman) ;; *) [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing" ;; esac
+        case $hn in gosec|brakeman|staticcheck) ;; *) [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing" ;; esac
       else while IFS=$'\t' read -r _ l r m; do add "$hn" "$f" "$l" "$r" "$m"; done <"$tsv"; fi
     else skip "$hn" "unparseable output"; fi
     [ "$hm" != batch ] || break
   done <<<"$([ "$hm" = batch ] && echo x || printf '%s\n' "$hf")"
 done < <(printf '%s\n' "${hub[@]}")
+hubtool=
+
+# Posture and DAST routes (opt-in env, never file-matched). Missing tool = NOT CHECKED; a crash or unparseable output = not run, never clean.
+# REVIEW_SCORECARD=1: OpenSSF scorecard (needs GITHUB_TOKEN and network); rows for checks scoring 0-4 (-1 = inconclusive, ignored).
+# REVIEW_DAST_URL: nuclei (conservative, not passive: an info/low http allowlist, no interactsh) and ZAP baseline (zap-baseline.py, else the docker image) against ONE
+# localhost target; any other host is refused unless REVIEW_DAST_ALLOW_REMOTE=1. Network and consent notes: references/tool-hub.md.
+# pjson KIND FILE: tab rows "file line rule message"; rc 3 on wrong-shape or unparseable output.
+pjson() {
+  python3 -I - "$@" <<'PY' || return 3
+import json, sys
+k, f = sys.argv[1:]
+try:
+    t = open(f, encoding="utf-8", errors="replace").read()
+    if k == "scorecard":
+        cs = json.loads(t)["checks"]
+        if not cs or all(c["score"] == -1 for c in cs): sys.exit(3)  # no check concluded: not a clean score
+        rows = [(".", 0, "scorecard-" + c["name"], f"score {c['score']}/10: {c.get('reason', '')}") for c in cs if 0 <= c["score"] < 5]
+    elif k == "nuclei":  # JSONL: one finding per line; a non-JSON line is a failure, not noise
+        rows = []
+        for ln in filter(None, (x.strip() for x in t.splitlines())):
+            d = json.loads(ln); rows.append((d["matched-at"], 0, d["template-id"], f"{d['info']['severity']}: {d['info']['name']}"))
+    else:  # zap
+        rows = [(i.get("uri", "."), 0, "zap-" + a["pluginid"], f"{a['riskdesc']}: {a['alert']}") for s in json.loads(t)["site"] for a in s["alerts"] for i in (a.get("instances") or [{}])[:3]]
+except Exception:
+    sys.exit(3)
+for r in rows: print("\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in r))
+PY
+}
+# prun TOOL JSONFILE KIND CMD...: run one opt-in tool (stderr dropped so logs never corrupt the JSON) and land its rows.
+prun() {
+  local pt=$1 pf=$2 pk=$3; shift 3; hubtool=$pt
+  [ "$pk" = scorecard ] || set -- env -u GITHUB_TOKEN -u GITHUB_AUTH_TOKEN -u GH_TOKEN "$@" # the DAST tools never see a GitHub token
+  run_one "$pt" bash -c 'exec "$@" 2>/dev/null' _ "$@" || return 0
+  scan_ok "$pt" ${PRC:-} || return 0
+  [ "$pf" = "$out" ] || grep -q '[^[:space:]]' "$pf" || { skip "$pt" "no report written"; return 0; }
+  if pjson "$pk" "$pf" >"$tsv"; then
+    ran+=" $pt"; while IFS=$'\t' read -r p l r m; do add "$pt" "$p" "$l" "$r" "$m"; done <"$tsv"
+  else skip "$pt" "unparseable output"; fi
+}
+# pneed TOOL HINT: NOT CHECKED when the tool is not installed (returns 1).
+pneed() { command -v "$1" >/dev/null && return 0; echo "NOT CHECKED: $1 (install: $2)" >&2; add "$1" "" 0 not-checked "install: $2"; missing+=" $1"; miss "$1" "install: $2"; return 1; }
+if [ "${REVIEW_SCORECARD:-0}" = 1 ]; then
+  sc_slug=$(git remote get-url origin 2>/dev/null | sed -E 's#^(https://([^/@]*@)?|ssh://git@|git@)github\.com[:/]##; s#\.git$##')
+  case $sc_slug in */*) ;; *) sc_slug= ;; esac
+  hubtool=scorecard
+  if [ -z "${GITHUB_TOKEN:-}" ]; then skip scorecard "REVIEW_SCORECARD=1 needs GITHUB_TOKEN"
+  elif [ -z "$sc_slug" ]; then skip scorecard "origin is not a github.com remote"
+  elif pneed scorecard "brew install scorecard"; then
+    GITHUB_AUTH_TOKEN=$GITHUB_TOKEN prun scorecard "$out" scorecard scorecard --repo="github.com/$sc_slug" --format=json
+  fi
+fi
+if [ -n "${REVIEW_DAST_URL:-}" ]; then
+  hubtool=dast
+  # Refuse anything with @, a backslash, whitespace or control characters; then only an exact localhost origin unless REVIEW_DAST_ALLOW_REMOTE=1 (which still needs http(s)://host).
+  du=$REVIEW_DAST_URL dok=0
+  case $du in *[[:space:][:cntrl:]\\@]*) ;; *) if [[ $du =~ ^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/|$) ]] || { [ "${REVIEW_DAST_ALLOW_REMOTE:-0}" = 1 ] && [[ $du =~ ^https?://[][A-Za-z0-9.:-]+(/|$) ]]; }; then dok=1; fi ;; esac
+  if [ "$dok" = 0 ]; then skip dast "REVIEW_DAST_URL refused: not an exact localhost http(s) origin (set REVIEW_DAST_ALLOW_REMOTE=1 only for a host you own and may scan)"
+  elif ! curl -g --noproxy '*' -sf --max-time 5 -o /dev/null -- "$du" 2>/dev/null; then # an unreachable target would read as a clean scan; -g keeps [::1] literal, --noproxy: the probe never leaves through a proxy
+    echo "NOT CHECKED: dast (target did not answer a curl probe, or curl is missing)" >&2; add dast "" 0 not-checked "target did not answer a curl probe, or curl is missing"
+  else
+    dr=$td/dast; mkdir -m 700 "$dr"
+    # Conservative, not passive: nuclei sends real requests. Allowlist of info/low http templates tagged tech or exposure, minus risky tags; -ni = no interactsh (third-party OAST); -duc = no update check.
+    nf=(-s info,low -type http -tags tech,exposure -etags default-login,xss,ssrf,oast,fuzz,fuzzing,takeover,cve,intrusive,dos,bruteforce,rce,sqli)
+    if pneed nuclei "brew install nuclei"; then
+      # template-count signal: an empty scan only means clean when templates actually matched the filters
+      run_one nuclei bash -c 'exec "$@" 2>/dev/null' _ env -u GITHUB_TOKEN -u GITHUB_AUTH_TOKEN -u GH_TOKEN nuclei -tl -nc -duc "${nf[@]}" && scan_ok nuclei && {
+        if [ "$(grep -c . "$out")" -gt 0 ]; then prun nuclei "$out" nuclei nuclei -u "$du" -jsonl -silent -nc -ni -duc -rl 10 "${nf[@]}"
+        else echo "NOT CHECKED: nuclei (no templates matched the filters; templates not installed?)" >&2; add nuclei "" 0 not-checked "no templates matched the filters (templates not installed?)"; fi
+      } || true
+    fi
+    # zap-baseline.py: exit 0 pass, 1 fail, 2 warn (findings), 3 error. -m 1: one minute of spidering. docker only when no local script.
+    # The docker run drops root (--user) onto the 700 report dir. ZAP may follow redirects: a redirect off the target is still requested.
+    if command -v zap-baseline.py >/dev/null; then PRC="1 2" prun zap "$dr/zap.json" zap zap-baseline.py -t "$du" -J "$dr/zap.json" -m 1
+    elif command -v docker >/dev/null; then PRC="1 2" prun zap "$dr/zap.json" zap docker run --rm --pull=never --user "$(id -u)" --network host -v "$dr:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "$du" -J zap.json -m 1
+    else pneed zap-baseline.py "pipx install zaproxy, or docker + ghcr.io/zaproxy/zaproxy:stable" || true; fi
+  fi
+fi
 hubtool=
 
 # guarddog: the npm packages a changed package-lock.json newly adds (name@version absent from the merge-base lock, so a version bump counts) that are already installed at the locked version
