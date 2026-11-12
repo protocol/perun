@@ -1,0 +1,6 @@
+### Added
+- review_checks.sh routes detect-secrets (changed files, no baseline, `--no-verify` so no network, secret values and hashes never printed) and njsscan (Node.js source) through the tool hub. Each is NOT CHECKED with an install hint when missing and not run on a crash, empty or whitespace output, wrong-shape output, or an exit code that disagrees with the report (detect-secrets: any nonzero exit; njsscan: exit 0 with an ERROR row, exit 1 without one). Non-JSON log lines are skipped. bearer is not routed: its Elastic License 2.0 is not on the OSI approved-licenses list (tool-hub.md records why). Sources fetched 2026-11-12 are logged in standards-index.md.
+- Both tools count as wired scanners only once installed: a missing one is NOT CHECKED, never "not run, fixable", because provision_tools.sh does not install them. test-mode-coverage.sh now counts only the gitleaks not-checked row.
+- test-review-checks-hub-lang.sh covers the review nits from the mobsfscan and psalm row: a mobsfscan row for an unscanned file, mobsfscan exit 0 and exit 1 with only WARNING rows, and a psalm report whose rows are all in unchanged files.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 40570→43180 hub rows for detect-secrets and njsscan, bearer not routed
