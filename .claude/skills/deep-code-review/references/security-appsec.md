@@ -10,7 +10,7 @@ skill repo): OWASP Top 10:2025, OWASP API Security Top 10 (2023), OWASP ASVS 5.0
 
 > Verification etiquette: prove exploitability **locally and non-destructively** only. Never attack a system you don't
 > own or lack written authorization to test; never run an exploit against production, shared, or third-party
-> infrastructure. A plausible-but-unproven issue is still a finding — report it `unverified` with the reason.
+> infrastructure. Before filing, run the guard check in `appsec-verify.md` section 1; a plausible-but-unproven issue is reported `unverified` with the reason, ranked below proven findings.
 
 ## Routed depth — load a sub-file only on its trigger
 
