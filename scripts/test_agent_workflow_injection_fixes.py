@@ -37,6 +37,12 @@ class T(unittest.TestCase):
         rows = aw.scan("w.yml", mk("Bash"))
         self.assertEqual(rows[0][1], 11)
 
+    def test_allowed_after_disallowed(self):
+        mk = lambda a: ISS + "jobs:\n  a:\n    steps:\n" + AG + f"        with:\n          claude_args: {a}\n"  # noqa: E731
+        self.assertEqual(rules(mk("--disallowedTools Edit --allowedTools Bash")), ["agent-broad-tools"])
+        self.assertEqual(rules(mk("--allowedTools Read --disallowedTools Bash")), [])
+        self.assertEqual(rules(mk("--allowedTools Read --disallowedTools \"Bash Edit\"")), [])
+
     def test_cli_head_checkout(self):
         mk = lambda c, t=PRT: t + f"jobs:\n  a:\n    steps:\n      - run: {c}\n" + AG  # noqa: E731
         for c in ("gh pr checkout ${{ github.event.issue.number }}", "git fetch origin pull/7/head:pr", "git checkout ${{ github.head_ref }}"):

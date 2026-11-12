@@ -164,7 +164,7 @@ add() { printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" >>"$raw"; }
 run_one() {
   local tool=$1 nz=(); shift; rc=0
   # lease full: heavy scanners run at lowest priority and are named in the summary (never take the lease while degraded)
-  if [ "$lease" = degraded ]; then case $tool in gitleaks*|trufflehog|osv-scanner|semgrep|trivy|grype|checkov|gosec|govulncheck) [ "$nice19" != 1 ] || nz=(nice -n 19); case " $dg " in *" $tool "*) ;; *) dg+=" $tool" ;; esac ;; esac; fi
+  if [ "$lease" = degraded ]; then case $tool in gitleaks*|trufflehog|osv-scanner|semgrep|trivy|grype|checkov|gosec|govulncheck|codeql) [ "$nice19" != 1 ] || nz=(nice -n 19); case " $dg " in *" $tool "*) ;; *) dg+=" $tool" ;; esac ;; esac; fi
   [ -n "${hubtool:-}" ] || case " $ran " in *" $tool "*) ;; *) ran+=" $tool" ;; esac # hub tools count as ran only after a good parse
   tbox ${nz[@]+"${nz[@]}"} "$@" || rc=$?
   # degraded single-worker flag (semgrep --jobs 1, trivy --parallel 1) may be unsupported: after a crash retry once without it;

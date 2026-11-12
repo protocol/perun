@@ -130,7 +130,7 @@ def scan(path, text):
                     j = i + 1
                     while j < b and live(j) and not KEYLINE.match(lines[j]):
                         j += 1
-                    m = BASH.search(re.split(r"(?i)disallowed_?tools", "\n".join(lines[i:j]))[0])
+                    m = BASH.search(re.sub(r"(?i)disallowed_?tools\W+(\"[^\"]*\"|'[^']*'|\S+)", "", "\n".join(lines[i:j])))
                     if m:
                         broad(i, "allowedTools ... Bash")
         # job- and workflow-level env: reaches every step, so it reaches the agent
