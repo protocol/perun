@@ -344,6 +344,8 @@ elif kind == "kube-score":  # a list of scored objects, each with a checks list,
 elif kind == "staticcheck":  # each diagnostic: code, severity (may be absent), location{file,line,column}, message (lintcmd/format.go)
     if not all(isinstance(x, dict) and isinstance(x.get("code"), str) and isinstance(x.get("location"), dict) and "message" in x for x in d):
         sys.exit("sjson: staticcheck output is not a stream of diagnostics")
+    if any(x["code"] == "compile" for x in d):  # a package failed to load or type-check: the rest of the module was not analysed, so never clean
+        sys.exit("sjson: staticcheck could not load a package (compile diagnostic)")
 elif kind == "tflint":  # {issues, errors}: any error leaves the module unlinted
     if not isinstance(d, dict) or not isinstance(d.get("issues"), list) or not isinstance(d.get("errors"), list):
         sys.exit("sjson: tflint output has no issues and errors lists")
@@ -863,7 +865,7 @@ hubcmd() {
     hadolint) cmd=(hadolint -f json --no-fail "$1") ;;
     ruff-security) cmd=(ruff check --select S --output-format json --no-cache --exit-zero "$@") ;;
     syft) sb=$(mktemp "${TMPDIR:-/tmp}/review_sbom.XXXXXX"); cmd=(env SYFT_CHECK_FOR_APP_UPDATE=false syft "$1" -o "syft-json=$sb") ;; # the update check phones home; the SBOM outlives the run
-    staticcheck) cmd=(env GOPROXY=off GOTOOLCHAIN=local staticcheck -f json ./...); okrc="1" ;; # exit 1 = a problem found, but also a setup failure (lintcmd/cmd.go): empty output with exit 1 is not run, and a missing module cache fails offline; one JSON object per line
+    staticcheck) cmd=(env GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly GOWORK=off staticcheck -f json ./...); okrc="1" ;; # exit 1 = a problem found, but also a setup failure (lintcmd/cmd.go): empty output with exit 1 is not run, and a missing module cache fails offline; one JSON object per line
     kube-score) cmd=(kube-score score -o json "$@"); okrc="1" ;; # exit 1 = a critical check failed, but also every error: a crash prints no JSON, so sjson turns it into not-run (renderer/json_v2/api.go: top-level array)
     tflint) cmd=(tflint --format=json --no-color --call-module-type=none "--chdir=${1%/*}" "--filter=${1##*/}"); okrc="2" ;; # exit 2 = issues found, 1 = error (cmd/cli.go); no --init: plugins are never downloaded
     kube-linter) cmd=(kube-linter lint --format json "$@"); okrc="1" ;; # exit 1 = lint reports (command.go returns "found N lint errors")
@@ -922,7 +924,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       else rm -f "$sb"; skip syft "unparseable output"; fi
       continue
     fi
-    [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || [ -s "$jf" ] || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
+    [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
     if sjson "$hn" "$jf" >"$tsv"; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
@@ -973,7 +975,7 @@ prun() {
   [ "$pk" = scorecard ] || set -- env -u GITHUB_TOKEN -u GITHUB_AUTH_TOKEN -u GH_TOKEN "$@" # the DAST tools never see a GitHub token
   run_one "$pt" bash -c 'exec "$@" 2>/dev/null' _ "$@" || return 0
   scan_ok "$pt" ${PRC:-} || return 0
-  [ "$pf" = "$out" ] || [ -s "$pf" ] || { skip "$pt" "no report written"; return 0; }
+  [ "$pf" = "$out" ] || grep -q '[^[:space:]]' "$pf" || { skip "$pt" "no report written"; return 0; }
   if pjson "$pk" "$pf" >"$tsv"; then
     ran+=" $pt"; while IFS=$'\t' read -r p l r m; do add "$pt" "$p" "$l" "$r" "$m"; done <"$tsv"
   else skip "$pt" "unparseable output"; fi

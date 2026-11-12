@@ -17,7 +17,8 @@ printf 'module example.com/m\n\ngo 1.22\n' >go.mod; printf 'package pkg\n' >pkg/
 G add . && G commit -q -m files
 cat >"$T/bin/staticcheck" <<'S'
 #!/usr/bin/env bash
-echo "staticcheck $* GOPROXY=${GOPROXY:-}" >>"$HUB_LOG"
+echo "staticcheck $* GOPROXY=${GOPROXY:-} GOTOOLCHAIN=${GOTOOLCHAIN:-} GOFLAGS=${GOFLAGS:-} GOWORK=${GOWORK:-}" >>"$HUB_LOG"
+[ "${GOTOOLCHAIN:-}" = local ] && [ "${GOFLAGS:-}" = -mod=readonly ] && [ "${GOWORK:-}" = off ] || exit 8
 [ "${HUB_MODE:-}" != crash ] || exit 9
 printf '%s' "$J_sc"
 exit "${SC_RC:-1}"
@@ -39,7 +40,7 @@ ran() { grep -qE "analyzers ran:.*\bstaticcheck\b" "$T/err"; }
 : >"$HUB_LOG"; run
 row pkg/a.go SA4006 && row pkg/b.go U1000 && ok "findings: rows on changed files, absolute path made relative, absent severity defaults" || bad "rows: $(jq -c '[.[]|select(.tool=="staticcheck")|.file]' "$T/out")"
 jq -e 'any(.[]; .tool=="staticcheck" and .file=="other/c.go")|not' "$T/out" >/dev/null && ok "row for an unchanged file dropped" || bad "unchanged row"
-grep -qx 'staticcheck -f json ./... GOPROXY=off' "$HUB_LOG" && [ "$(grep -c ^staticcheck "$HUB_LOG")" = 1 ] && ok "one whole-module call, offline (GOPROXY=off)" || bad "args: $(cat "$HUB_LOG")"
+grep -qx 'staticcheck -f json ./... GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly GOWORK=off' "$HUB_LOG" && [ "$(grep -c ^staticcheck "$HUB_LOG")" = 1 ] && ok "one whole-module call, offline and hermetic (GOPROXY, GOTOOLCHAIN, GOFLAGS, GOWORK)" || bad "args: $(cat "$HUB_LOG")"
 ran && ok "exit 1 with diagnostics: ran" || bad "ran list"
 # clean: exit 0, nothing printed
 SC_RC=0 J_sc= run
@@ -49,6 +50,11 @@ SC_RC=1 J_sc= run
 grep -q 'not run: staticcheck' "$T/err" && ! ran && ok "exit 1 with empty output: not run" || bad "exit 1 empty"
 SC_RC=2 J_sc= run
 grep -q 'not run: staticcheck' "$T/err" && ! ran && ok "exit 2 (usage error): not run" || bad "exit 2"
+SC_RC=1 J_sc=$' \n\t\n' run
+grep -q 'not run: staticcheck' "$T/err" && ! ran && ok "exit 1 with whitespace-only output: not run" || bad "exit 1 whitespace"
+SC_RC=1 J_sc='{"code":"compile","severity":"error","location":{"file":"pkg/a.go","line":1,"column":1},"message":"undefined: x"}
+{"code":"SA4006","location":{"file":"pkg/b.go","line":1,"column":1},"message":"m"}' run
+grep -q 'not run: staticcheck' "$T/err" && ! ran && ok "compile diagnostic: not run, even beside real findings" || bad "compile row"
 SC_RC=1 J_sc='{"x":1}' run
 grep -q 'not run: staticcheck' "$T/err" && ! ran && ok "wrong-shape JSON: not run" || bad "wrong shape"
 SC_RC=1 J_sc='some text' run

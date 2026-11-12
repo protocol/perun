@@ -32,6 +32,7 @@ printf "%s\n" "{\"template-id\":\"missing-xfo\",\"info\":{\"name\":\"X-Frame-Opt
 stub sg semgrep 'printf "%s\n" "{\"results\":[],\"errors\":[],\"paths\":{\"scanned\":[\"a.py\"]}}"'
 stub zap zap-baseline.py '[ "${HUB_MODE:-}" != crash ] || exit 9
 while [ $# -gt 0 ]; do [ "$1" != -J ] || j=$2; shift; done
+[ -z "${ZAP_WS:-}" ] || { printf " \n\t\n" >"$j"; exit 2; }
 printf "%s\n" "{\"site\":[{\"alerts\":[{\"pluginid\":\"10038\",\"riskdesc\":\"Medium (High)\",\"alert\":\"CSP Header Not Set\",\"instances\":[{\"uri\":\"http://localhost:3000/\"}]}]}]}" >"$j"
 exit 2'
 printf '#!/bin/sh\necho %s\n' "'{\"Results\":[]}'" >"$T/base/trivy"; printf '#!/bin/sh\nexit 0\n' >"$T/base/gitleaks"; chmod +x "$T/base/trivy" "$T/base/gitleaks"
@@ -101,6 +102,7 @@ mkdir -p "$T/dk"; stub dk docker ':'
 REVIEW_DAST_URL=http://localhost:3000/ run "$T/dk"; grep -q '^docker run --rm --pull=never ' "$HUB_LOG" && ok "ZAP docker run never auto-pulls the image" || bad "docker pull"
 REVIEW_DAST_URL=http://[::1]:3000/ run "$T/nu:$T/zap"; grep -q 'nuclei -u http://\[::1\]:3000/' "$HUB_LOG" && ok "IPv6 loopback allowed" || bad "ipv6 loopback"
 HUB_MODE=crash REVIEW_DAST_URL=http://127.0.0.1:3000/ run "$T/nu:$T/zap"; grep -q 'not run: nuclei (exit 9)' "$T/err" && grep -q 'not run: zap (exit 9)' "$T/err" && ! ran nuclei && ! ran zap && ok "DAST crash: not run, not clean" || bad "DAST crash"
+ZAP_WS=1 REVIEW_DAST_URL=http://localhost:3000/ run "$T/nu:$T/zap"; grep -q 'not run: zap (no report written)' "$T/err" && ! ran zap && ok "ZAP whitespace-only report: not run, not clean" || bad "zap whitespace report"
 H=$ROOT/.claude/skills/deep-code-review/references/tool-hub.md
 for t in opengrep scorecard nuclei zap-baseline; do grep -q "^| \`$t" "$H" && ok "$t documented in tool-hub.md" || bad "$t documented"; done
 exit $fail
