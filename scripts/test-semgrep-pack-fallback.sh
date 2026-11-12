@@ -36,10 +36,10 @@ calls() { [ "$(paste -sd' ' "$LOG")" = "$*" ]; }                       # the exa
 err() { grep -qF -- "$1" "$T/e"; }                                     # stderr has this text
 st() { jq -e "$1" "$T/repo/.git/review-checks-last.json" >/dev/null; } # the record
 rows() { jq -e --argjson c "$1" '[.[] | select(.tool=="semgrep" and .rule=="not-checked")] | length == $c' "$T/o" >/dev/null; } # not-checked semgrep rows
-once() { # the one report: not-run line (with the fix), one NOT RUN entry, one row naming the fix, the rollup, and no "missing tools" row
+once() { # the one report: not-run line (with the fix), one NOT RUN entry, one row naming the fix, the rollup, and semgrep never named in the "missing tools" line (other uninstalled hub tools may be)
   err "review_checks: not run: semgrep p/default pack (timeout 2s); bundled rules only (warm a local snapshot: bash $SK/provision_tools.sh --print)" \
     && err "review_checks: ran 4 / wired 4 scanners; partial: semgrep(bundled-only); fixable: semgrep (run: bash $SK/provision_tools.sh --print)" \
-    && st '.not_run == [] and .partial == ["semgrep(bundled-only)"] and .fixable == ["semgrep"]' && ! err 'missing tools:' && rows 1 \
+    && st '.not_run == [] and .partial == ["semgrep(bundled-only)"] and .fixable == ["semgrep"]' && ! grep -qE '^review_checks: missing tools:.*semgrep' "$T/e" && rows 1 \
     && [ "$(grep '^review_checks: NOT RUN:' "$T/e" | grep -o 'semgrep p/default pack' | wc -l | tr -d ' ')" = 1 ] \
     && jq -e '[.[] | select(.tool=="semgrep" and .rule=="not-checked" and (.message | contains("provision_tools.sh --print")))] | length == 1' "$T/o" >/dev/null
 }

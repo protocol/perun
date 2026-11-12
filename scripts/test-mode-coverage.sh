@@ -76,7 +76,7 @@ ran=$(sed -n 's/.*analyzers ran: \([^;]*\);.*/\1/p' "$T/err"); grep -qw gitleaks
 grep -q 'not-checked' "$T/out" && grep -q '"tool": "gitleaks"' "$T/out"; chk $? "a skipped non-hub tool lands a not-checked row on stdout"
 printf '#!/usr/bin/env bash\nexit 124\n' >"$T/stub/gitleaks"
 PATH="$T/stub:$PATH" bash "$RC" --base base >"$T/out" 2>"$T/err"
-[ "$(grep '^review_checks: NOT RUN:' "$T/err" | grep -o 'gitleaks (timeout' | wc -l)" -eq 1 ] && [ "$(grep -c '"rule": "not-checked"' "$T/out")" -eq 1 ]; chk $? "two failing files give one NOT RUN entry and one not-checked row"
+[ "$(grep '^review_checks: NOT RUN:' "$T/err" | grep -o 'gitleaks (timeout' | wc -l)" -eq 1 ] && [ "$(jq '[.[] | select(.tool == "gitleaks" and .rule == "not-checked")] | length' "$T/out")" -eq 1 ]; chk $? "two failing files give one NOT RUN entry and one not-checked row"
 # a tool that is merely not installed is listed under "skipped (not installed)", never under NOT RUN
 rm "$T/stub/gitleaks"; printf '#!/usr/bin/env bash\nexit 0\n' >"$T/stub/semgrep"
 PATH="$T/stub:/usr/bin:/bin" bash "$RC" --base base >"$T/out" 2>"$T/err"
