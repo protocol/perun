@@ -115,4 +115,30 @@ grep -q 'NOT CHECKED: codeql (install:' "$T/err" && jq -e 'any(.[]; .tool=="code
 BASE=docs run "$T/bin"
 [ ! -s "$T/cq.log" ] && ! grep -q 'codeql' "$T/err" && ! grep -q 'dep-risk' "$T/err" && ok "unrelated change routes neither" || bad "routed without a matching change"
 grep -q 'dep_risk.py' "$ROOT/.claude/skills/deep-code-review/references/tool-hub.md" && ok "documented in tool-hub.md" || bad "documented in tool-hub.md"
+# follow-ups: dep_risk edge cases run directly in a fresh repo (untracked, malformed, peer/overrides, poetry, newline spec)
+DR="$ROOT/.claude/skills/deep-code-review/scripts/dep_risk.py"
+mkdir "$T/r2" && cd "$T/r2" && git init -q . && echo '{"name":"a"}' >package.json && G add . && G commit -q -m b
+printf 'reqeusts\n' >new-requirements.txt  # untracked: git diff shows nothing, the whole file must be read
+drun() { printf '%s\n' "$@" | python3 -I "$DR" --base HEAD; }
+drun new-requirements.txt | grep -q 'typosquat-near.*reqeusts' && ok "untracked manifest read whole" || bad "untracked manifest silent"
+printf '{"dependencies": ' >package.json
+drun package.json | grep -qE $'^package.json\t0\tnot-checked\t' && ok "malformed package.json is not-checked" || bad "malformed package.json"
+printf '{"name":"a","peerDependencies":{"p":"git+https://example.com/x.git"},"overrides":{"o":"*","nest":{"deep":"*"}},"resolutions":{"r":"github:acme/r"},"bundleDependencies":["reactt"],"dependencies":{"nl":"git+https://example.com/a\\nb"}}' >package.json
+out=$(drun package.json)
+for m in 'peerDependencies' 'o@\*' 'r@github' 'bundleDependencies'; do grep -q "$m" <<<"$out" && ok "package.json section: $m" || bad "package.json section: $m"; done
+[ -z "$(awk -F'\t' 'NF!=4' <<<"$out")" ] && ok "newline in a spec cannot split a row" || bad "row split by newline"
+printf '{"bundleDependencies":true,"scripts":{"postinstall":"node x.js"}}' >package.json
+drun package.json | grep -q 'install-script' && ok "bool bundleDependencies does not hide an install script" || bad "bool bundleDependencies crash"
+printf '[tool.poetry]\nname="a"\n[tool.poetry.dependencies]\nreqeusts="1"\n' >pyproject.toml
+drun pyproject.toml | grep -q 'not-checked.*poetry' && ok "poetry pyproject is not-checked" || bad "poetry pyproject silent"
+# codeql: --full keeps unchanged-file rows; a result with no location is not run; js-only repo never makes a python db
+cd "$T/repo"; : >"$T/cq.log"
+PATH="$T/bin:$T/base:$T/sys" bash "$RC" --full 2>"$T/err" >"$T/out" || true
+jq -e 'any(.[]; .tool=="codeql" and .file=="untouched.py")' "$T/out" >/dev/null && ok "--full keeps unchanged-file codeql rows" || bad "--full rows"
+CQ_SARIF='{"runs":[{"results":[{"ruleId":"x","message":{"text":"m"}}]}]}' run "$T/bin"
+grep -q 'not run: codeql' "$T/err" && ! grep -qE "analyzers ran:.*\bcodeql\b" "$T/err" && ok "sarif result without locations is not run" || bad "no-location sarif"
+mkdir "$T/r3" && cd "$T/r3" && git init -q . && echo 'let a=1;' >a.js && G add . && G commit -q -m b && git branch base && echo 'let b=2;' >>a.js && G commit -qam c
+: >"$T/cq.log"; PATH="$T/bin:$T/base:$T/sys" bash "$RC" --base base 2>"$T/err" >"$T/out" || true
+grep -q 'language=javascript-typescript' "$T/cq.log" && ! grep -q 'language=python' "$T/cq.log" && ok "js-only change builds no python db" || bad "js-only routing"
+grep -q 'govulncheck|codeql)' "$RC" && ok "codeql in the degraded-lease list" || bad "codeql not degraded-listed"
 exit $fail

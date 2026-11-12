@@ -12,7 +12,9 @@ Rules (every row is a lead for a reviewer, never a verdict; no network, no regis
   npm-alias       an "npm:" alias spec (a different package under this name); workspace: specs are fine
   install-script  package.json preinstall/install/postinstall/prepare, or a setup.py cmdclass override, added or changed
   not-checked     a manifest that could not be read or parsed (never read as clean)
-Manifests: package.json, requirements*.txt, pyproject.toml (typosquat + vcs only), setup.py (cmdclass only).
+Manifests: package.json (dependencies, devDependencies, optionalDependencies, peerDependencies, overrides, resolutions;
+bundled names get the typosquat check), requirements*.txt, pyproject.toml ([project] only: typosquat + vcs; a Poetry or PDM
+dependency table is a not-checked row), setup.py (cmdclass only). pyproject.toml needs Python >= 3.11 (tomllib); older is a not-checked row.
 Maintenance signals (age, last release, owners) are not derivable offline, so they are out of scope here.
 """
 import json, os, re, subprocess, sys
@@ -76,14 +78,14 @@ def lineof(text, needle):
 def pkg_json(f, base, row):
     cur = json.loads(open(f, encoding="utf-8").read())
     old = {}
-    prev = git("show", f"{base}:{f}")
+    prev = git("show", f"{base}:./{f}")
     if prev:
         try:
             old = json.loads(prev)
         except ValueError:
             pass
     text = open(f, encoding="utf-8").read()
-    for sec in ("dependencies", "devDependencies", "optionalDependencies"):
+    for sec in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies", "overrides", "resolutions"):
         for n, v in (cur.get(sec) or {}).items():
             if not isinstance(v, str) or v == (old.get(sec) or {}).get(n):
                 continue
@@ -93,6 +95,12 @@ def pkg_json(f, base, row):
                 row(f, ln, "typosquat-near", f"{n} is one edit from the popular package {t}; confirm it is the intended name [heuristic]")
             for r in spec_rules(n, v, "npm"):
                 row(f, ln, r, f"{n}@{v} ({sec}): " + ("fetched from a git/URL/path source, outside registry integrity checks" if r == "vcs-or-url-dep" else "floating spec: any published version installs" if r == "unpinned-dep" else "npm: alias installs a different package under this name"))
+    for sec in ("bundleDependencies", "bundledDependencies"):
+        new, prev_l = cur.get(sec), old.get(sec)
+        for n in new if isinstance(new, list) else []:  # `true` is a legal bundleDependencies value
+            t = isinstance(n, str) and n not in (prev_l if isinstance(prev_l, list) else []) and squat(n, "npm")
+            if t:
+                row(f, lineof(text, json.dumps(n)), "typosquat-near", f"{n} ({sec}) is one edit from the popular package {t}; confirm it is the intended name [heuristic]")
     for k in ("preinstall", "install", "postinstall", "prepare"):
         v = (cur.get("scripts") or {}).get(k)
         if isinstance(v, str) and v != (old.get("scripts") or {}).get(k):
@@ -124,6 +132,8 @@ def pip_line(f, ln, line, row, strict):
 
 def added(f, base):
     """(line number, text) for lines this diff adds to f; the whole file when base has none."""
+    if git("cat-file", "-e", f"{base}:./{f}") is None:  # untracked or new since base: git diff shows nothing, so read it whole
+        return list(enumerate(open(f, encoding="utf-8").read().split("\n"), 1))
     d = git("diff", "-U0", "--no-color", base, "--", f)
     if d is None:
         raise OSError("git diff failed")
@@ -141,7 +151,7 @@ def added(f, base):
 def main():
     base = sys.argv[sys.argv.index("--base") + 1] if "--base" in sys.argv else "HEAD"
     rows = []
-    row = lambda f, l, r, m: rows.append(f"{f}\t{l}\t{r}\t{m}")
+    row = lambda f, l, r, m: rows.append("\t".join((f, str(l), r, re.sub(r"\s+", " ", m))))  # a tab or newline in a spec would split the TSV row and drop the lead
     for f in filter(None, (x.strip() for x in sys.stdin)):
         b = os.path.basename(f)
         try:
@@ -158,6 +168,9 @@ def main():
                 import tomllib
                 d = tomllib.load(open(f, "rb"))
                 p = d.get("project", {})
+                tl = d.get("tool", {})
+                if "dependencies" in tl.get("poetry", {}) or "dev-dependencies" in tl.get("pdm", {}):
+                    row(f, 0, "not-checked", "dep-risk does not read [tool.poetry] or [tool.pdm] dependency tables: check them by hand")
                 want = {STRIP.sub("-", m.group(1).lower()) for _, t in added(f, base) for q in re.findall(r'"([^"]+)"', t) if (m := REQ.match(q))}
                 for dep in [*p.get("dependencies", []), *[x for v in p.get("optional-dependencies", {}).values() for x in v]]:
                     if (m := REQ.match(dep)) and STRIP.sub("-", m.group(1).lower()) in want:
