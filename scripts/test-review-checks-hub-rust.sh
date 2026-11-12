@@ -65,6 +65,17 @@ DENY_RC=1 J_deny='{"type":"summary","fields":{}}' AUDIT_RC=1 J_audit='{"vulnerab
 notrun cargo-deny && notrun cargo-audit && ok "exit 1 with no finding: not run" || bad "exit 1 no row"
 DENY_RC=0 J_deny='{"type":"summary","fields":{}}' AUDIT_RC=0 J_audit='{"vulnerabilities":{"found":false,"count":0,"list":[]}}' run
 ran cargo-deny && ran cargo-audit && ! grep -q 'not run: cargo-' "$T/err" && ok "exit 0 with a typed stream / empty list: clean, ran" || bad "clean"
+# a real clean cargo-deny run ends with a text summary line (stderr is merged); a bracketed stderr log line may precede the JSON
+DENY_RC=0 J_deny=$'{"type":"summary","fields":{}}\nadvisories ok, bans ok, licenses ok, sources ok\n' AUDIT_RC=0 J_audit=$'[INFO] scanning Cargo.lock\n{"vulnerabilities":{"found":false,"count":0,"list":[]}}' run
+ran cargo-deny && ran cargo-audit && ! grep -q 'not run: cargo-' "$T/err" && ok "trailing ok-summary line and a leading bracketed log line: clean, ran" || bad "summary/log line"
+DENY_RC=2 J_deny=$'[WARN] log\n{"type":"diagnostic","fields":{"code":"banned","message":"m","severity":"error"}}\nbans FAILED\n' run
+ran cargo-deny && row cargo-deny banned && ok "cargo-deny: text lines around diagnostics are skipped" || bad "deny text lines"
+DENY_RC=0 J_deny=$'bans ok\n' run
+ran cargo-deny && ok "cargo-deny: rc0 with only the ok-summary line is clean" || bad "deny ok-only"
+AUDIT_RC=1 J_audit='{"vulnerabilities":{"found":true,"count":1,"list":[]}}' run
+notrun cargo-audit && ok "cargo-audit: found:true with an empty list: not run" || bad "found/list mismatch"
+AUDIT_RC=1 J_audit='{"vulnerabilities":{"found":false,"count":0,"list":[{"advisory":{"id":"X"},"package":{"name":"a"}}]}}' run
+notrun cargo-audit && ok "cargo-audit: count 0 with a non-empty list: not run" || bad "count/list mismatch"
 DENY_RC=2 J_deny='{"x":1}' AUDIT_RC=1 J_audit='{"x":1}' run
 notrun cargo-deny && notrun cargo-audit && ok "wrong-shape JSON: not run" || bad "wrong shape"
 DENY_RC=2 J_deny='some text' AUDIT_RC=1 J_audit='some text' run

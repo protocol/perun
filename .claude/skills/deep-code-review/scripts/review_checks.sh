@@ -305,12 +305,15 @@ def nf(f):  # scanners echo the path they were given ("./.github/..."); rows mus
 cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package or file can be named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 # The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
-m = re.search(r"^[\[{]", t, re.M)
-if not m and not (kind == "staticcheck" and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
+m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny") else r"^[\[{]", t, re.M)  # cargo-audit and cargo-deny: stderr log lines can start with "[", the report is an object
+okl = kind == "cargo-deny" and re.search(r"^(advisories|bans|licenses|sources) ok\b", t, re.M)  # a clean cargo-deny run prints only its text summary
+if not m and not okl and not (kind == "staticcheck" and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
     sys.exit("sjson: no JSON in scanner output")
 s, dec = (t[m.start():] if m else ""), json.JSONDecoder()
 d, i = dec.raw_decode(s) if m else (None, 0)
-if kind in ("govulncheck", "staticcheck", "cargo-deny"):  # a stream of JSON objects (govulncheck: config, progress, osv, finding; staticcheck: one per diagnostic), not one document; a stray line inside it fails closed as unparseable
+if kind == "cargo-deny":  # JSON objects are the lines that start with "{"; the text summary and stray log lines are skipped, but a "{" line that does not parse fails closed
+    d = [json.loads(l) for l in t.splitlines() if l.startswith("{")]
+if kind in ("govulncheck", "staticcheck"):  # a stream of JSON objects (govulncheck: config, progress, osv, finding; staticcheck: one per diagnostic), not one document; a stray line inside it fails closed as unparseable
     d = [d] if m else []
     while s[i:].strip():
         i += len(s[i:]) - len(s[i:].lstrip())
@@ -347,12 +350,14 @@ elif kind == "staticcheck":  # each diagnostic: code, severity (may be absent), 
     if any(x["code"] == "compile" for x in d):  # a package failed to load or type-check: the rest of the module was not analysed, so never clean
         sys.exit("sjson: staticcheck could not load a package (compile diagnostic)")
 elif kind == "cargo-deny":  # every line is an object with a type; at least one, so empty output never reads as clean
-    if not d or not all(isinstance(x, dict) and isinstance(x.get("type"), str) for x in d):
+    if not (d or okl) or not all(isinstance(x, dict) and isinstance(x.get("type"), str) for x in d):
         sys.exit("sjson: cargo-deny output is not a stream of typed JSON objects")
 elif kind == "cargo-audit":  # a report object: vulnerabilities{found, count, list}
     v = d.get("vulnerabilities") if isinstance(d, dict) else None
     if not isinstance(v, dict) or not isinstance(v.get("list"), list) or not all(isinstance(x, dict) and isinstance(x.get("advisory"), dict) and isinstance(x.get("package"), dict) for x in v["list"]):
         sys.exit("sjson: cargo-audit output has no vulnerabilities list")
+    if v.get("count") != len(v["list"]) or v.get("found") is not bool(v["list"]):  # found/count must agree with the list, else the report is not trusted
+        sys.exit("sjson: cargo-audit found/count disagrees with its vulnerabilities list")
 elif kind == "tflint":  # {issues, errors}: any error leaves the module unlinted
     if not isinstance(d, dict) or not isinstance(d.get("issues"), list) or not isinstance(d.get("errors"), list):
         sys.exit("sjson: tflint output has no issues and errors lists")
