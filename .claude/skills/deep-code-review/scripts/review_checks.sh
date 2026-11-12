@@ -1020,6 +1020,18 @@ if [ -n "$cf" ]; then
   fi
 fi
 
+# Built-in, no tool to install: AI-agent steps in changed workflows that attacker text can steer (agent_workflow_injection.py). Rows: tool agent-injection, rule agent-untrusted-input|agent-head-checkout|agent-broad-tools|not-checked.
+# Cheap, so unleased. Leads, not findings; zizmor still owns generic script injection.
+wf=$(changed '^\.github/workflows/[^/]+\.ya?ml$')
+if [ -n "$wf" ]; then
+  ai="$here/agent_workflow_injection.py"
+  if [ ! -f "$ai" ]; then skip agent-injection "agent_workflow_injection.py missing"
+  else
+    aiok=0; run_one agent-injection python3 -I "$ai" <<<"$wf" && scan_ok agent-injection && aiok=1
+    if [ "$aiok" = 1 ] || [ "$rc" = 124 ] || [ "$rc" = 142 ]; then while IFS=$'\t' read -r f l r m; do add agent-injection "$f" "$l" "$r" "$m"; done <"$out"; fi
+  fi
+fi
+
 # Built-in, no tool to install: distinct non-reserved email addresses per changed file, binary data files included (committed_personal_data.py), over the same $cf as invisible-chars (vendored paths skipped). Cheap, so
 # unleased: it reads each file's bytes once (capped at 32 MiB). Rows: tool committed-data, rule email-addresses|not-checked (the row with path `.` is the repository total over files below the file threshold); the message has counts or the container format, never a value. No likely-fixture hint or tag (a real address in a fixture is still a leak); only the message leads `likely fixture:`, from the path and the share of placeholder-style or reserved-domain addresses.
 pd="$here/committed_personal_data.py"
