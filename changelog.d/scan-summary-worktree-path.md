@@ -1,0 +1,2 @@
+### Fixed
+- The scan-summary tests no longer fail when the checkout lives under a `.claude/worktrees/` path (every lane worktree): the "default excludes" check matched `worktrees` in the absolute `--config` path the tool logs, not in a scanned file. The check now strips the checkout path, and the hermetic suite runs the test from a worktrees-style path so the regression stays caught. The failure was blamed on the host semgrep cache; it was not.
