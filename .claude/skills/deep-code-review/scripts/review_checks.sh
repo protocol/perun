@@ -655,21 +655,23 @@ fi
 
 sgc=${REVIEW_SEMGREP_CONFIG:-}
 [ -n "$sgc" ] || for c in .semgrep.yml .semgrep; do [ -e "$c" ] && { sgc=$c; break; }; done
+# opengrep (semgrep fork, no telemetry) stands in when semgrep is absent: same rules, never the registry pack. Its flags are unverified (not in its README), so a crash is a not-run row, never clean.
+sgbin=semgrep sgsub=() sgx=(--metrics=off --disable-version-check); command -v semgrep >/dev/null || ! command -v opengrep >/dev/null || { sgbin=opengrep sgsub=(scan) sgx=(); echo "review_checks: semgrep absent; using opengrep (same rules, no registry pack)" >&2; }
 sgcfg=(--config "$sgc") sgsnap=
 if [ -z "$sgc" ]; then # no repo rules: bundled taint rules, plus the p/default registry pack unless REVIEW_SEMGREP_REGISTRY=0 (never --config auto)
   sgc=$here/../templates/semgrep-taint; sgcfg=(--config "$sgc")
   # the provisioned snapshot (a local file) stands in for p/default when present, so it loads without the network
-  [ "${REVIEW_SEMGREP_REGISTRY:-1}" = 0 ] || { sgsnap=$(bash "$here/provision_tools.sh" --cache semgrep 2>/dev/null || echo p/default); sgcfg+=(--config "$sgsnap"); }
+  [ "${REVIEW_SEMGREP_REGISTRY:-1}" = 0 ] || [ "$sgbin" = opengrep ] || { sgsnap=$(bash "$here/provision_tools.sh" --cache semgrep 2>/dev/null || echo p/default); sgcfg+=(--config "$sgsnap"); }
 fi
 sgnorm=$sgc; [ ! -f "$sgsnap" ] || sgnorm+=$'\n'$sgsnap # semgrep prefixes rule ids with each local config's directory (the bundled rules, a warm snapshot): sjson strips every one listed
 if [ ! -e "$sgc" ]; then
   if [ -z "${REVIEW_SEMGREP_CONFIG:-}" ] && [ "$sgc" = "$here/../templates/semgrep-taint" ]; then skip semgrep "bundled rules missing at $sgc (reinstall the skill)"
   else skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"; fi
-elif have semgrep; then
+elif have "$sgbin"; then
   sg=() sgwas=$ran sgok=0 sgerr=0 sgzero=0 sgj=() sgb=0 sgrx=0 sgbun=(--config "$sgc"); [ "$lease" != degraded ] || { sgj=(--jobs 1); w1+=" semgrep"; }
   while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
   # sgrun CONFIG...: scan one chunk. sgreg=1 (seen by run_one) while the p/default pack (registry or snapshot) is in CONFIG (4 args, not 2), so its timeout is soft: the loop reruns with the bundled rules.
-  sgrun() { local sgreg=0; [ $# -le 2 ] || sgreg=1; run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" semgrep "$@" ${sgj[@]+"${sgj[@]}"} --json --quiet --metrics=off --disable-version-check -- "${sg[@]:i:200}"; }
+  sgrun() { local sgreg=0; [ $# -le 2 ] || sgreg=1; run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" SEMGREP_SEND_METRICS=off "$sgbin" ${sgsub[@]+"${sgsub[@]}"} "$@" ${sgj[@]+"${sgj[@]}"} --json --quiet ${sgx[@]+"${sgx[@]}"} -- "${sg[@]:i:200}"; }
   # One call per 200 files: typically a single run, but bounded argv and a timeout that is not shared by everything.
   for ((i = 0; i < ${#sg[@]}; i += 200)); do
     sgr=0; [ ${#sgcfg[@]} -le 2 ] || sgr=1 # the p/default pack (the registry, or the provisioned snapshot standing in for it) is still in this chunk's config
@@ -701,6 +703,7 @@ elif have semgrep; then
     echo "review_checks: partial: semgrep errored with no findings on $sgerr chunk(s) of up to 200 files (those files were not scanned)" >&2
     add semgrep "" 0 not-checked "semgrep errored on $sgerr chunk(s) of up to 200 files; those files were not scanned"
   elif [ "$sgerr" -gt 0 ]; then ran=$sgwas; skip semgrep "scan errored, no findings"; fi
+  [ "$sgbin" = semgrep ] || ran=${ran// semgrep/ opengrep} failed=${failed// semgrep/ opengrep} # name the binary that ran
 fi
 
 # World-writable chmod in a Dockerfile RUN (777, a+w, o+w, incl. -R): no installed scanner (hadolint, checkov, trivy) has a rule for it.
@@ -833,6 +836,80 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     [ "$hm" != batch ] || break
   done <<<"$([ "$hm" = batch ] && echo x || printf '%s\n' "$hf")"
 done < <(printf '%s\n' "${hub[@]}")
+hubtool=
+
+# Posture and DAST routes (opt-in env, never file-matched). Missing tool = NOT CHECKED; a crash or unparseable output = not run, never clean.
+# REVIEW_SCORECARD=1: OpenSSF scorecard (needs GITHUB_TOKEN and network); rows for checks scoring 0-4 (-1 = inconclusive, ignored).
+# REVIEW_DAST_URL: nuclei (passive tags only, no interactsh) and ZAP baseline (zap-baseline.py, else the docker image) against ONE
+# localhost target; any other host is refused unless REVIEW_DAST_ALLOW_REMOTE=1. Network and consent notes: references/tool-hub.md.
+# pjson KIND FILE: tab rows "file line rule message"; rc 3 on wrong-shape or unparseable output.
+pjson() {
+  python3 -I - "$@" <<'PY' || return 3
+import json, sys
+k, f = sys.argv[1:]
+try:
+    t = open(f, encoding="utf-8", errors="replace").read()
+    if k == "scorecard":
+        rows = [(".", 0, "scorecard-" + c["name"], f"score {c['score']}/10: {c.get('reason', '')}") for c in json.loads(t)["checks"] if 0 <= c["score"] < 5]
+    elif k == "nuclei":  # JSONL: one finding per line; a non-JSON line is a failure, not noise
+        rows = []
+        for ln in filter(None, (x.strip() for x in t.splitlines())):
+            d = json.loads(ln); rows.append((d["matched-at"], 0, d["template-id"], f"{d['info']['severity']}: {d['info']['name']}"))
+    else:  # zap
+        rows = [(i.get("uri", "."), 0, "zap-" + a["pluginid"], f"{a['riskdesc']}: {a['alert']}") for s in json.loads(t)["site"] for a in s["alerts"] for i in (a.get("instances") or [{}])[:3]]
+except Exception:
+    sys.exit(3)
+for r in rows: print("\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in r))
+PY
+}
+# prun TOOL JSONFILE KIND CMD...: run one opt-in tool (stderr dropped so logs never corrupt the JSON) and land its rows.
+prun() {
+  local pt=$1 pf=$2 pk=$3; shift 3; hubtool=$pt
+  run_one "$pt" bash -c 'exec "$@" 2>/dev/null' _ "$@" || return 0
+  scan_ok "$pt" ${PRC:-} || return 0
+  [ "$pf" = "$out" ] || [ -s "$pf" ] || { skip "$pt" "no report written"; return 0; }
+  if pjson "$pk" "$pf" >"$tsv"; then
+    ran+=" $pt"; while IFS=$'\t' read -r p l r m; do add "$pt" "$p" "$l" "$r" "$m"; done <"$tsv"
+  else skip "$pt" "unparseable output"; fi
+}
+# pneed TOOL HINT: NOT CHECKED when the tool is not installed (returns 1).
+pneed() { command -v "$1" >/dev/null && return 0; echo "NOT CHECKED: $1 (install: $2)" >&2; add "$1" "" 0 not-checked "install: $2"; missing+=" $1"; miss "$1" "install: $2"; return 1; }
+if [ "${REVIEW_SCORECARD:-0}" = 1 ]; then
+  sc_slug=$(git remote get-url origin 2>/dev/null | sed -E 's#^(https://([^/@]*@)?|ssh://git@|git@)github\.com[:/]##; s#\.git$##')
+  case $sc_slug in */*) ;; *) sc_slug= ;; esac
+  hubtool=scorecard
+  if [ -z "${GITHUB_TOKEN:-}" ]; then skip scorecard "REVIEW_SCORECARD=1 needs GITHUB_TOKEN"
+  elif [ -z "$sc_slug" ]; then skip scorecard "origin is not a github.com remote"
+  elif pneed scorecard "brew install scorecard"; then
+    GITHUB_AUTH_TOKEN=$GITHUB_TOKEN prun scorecard "$out" scorecard scorecard --repo="github.com/$sc_slug" --format=json
+  fi
+fi
+if [ -n "${REVIEW_DAST_URL:-}" ]; then
+  hubtool=dast
+  if ! python3 -I - "$REVIEW_DAST_URL" "${REVIEW_DAST_ALLOW_REMOTE:-0}" <<'PY'
+import ipaddress, sys
+from urllib.parse import urlparse
+u, remote = sys.argv[1:]
+try: p = urlparse(u); h = p.hostname or ""; ok = p.scheme in ("http", "https") and bool(h)
+except ValueError: ok = False
+if not ok: sys.exit(1)
+try: loop = ipaddress.ip_address(h).is_loopback
+except ValueError: loop = h == "localhost"
+sys.exit(0 if loop or remote == "1" else 1)
+PY
+  then skip dast "REVIEW_DAST_URL refused: not a localhost http(s) URL (set REVIEW_DAST_ALLOW_REMOTE=1 only for a host you own and may scan)"
+  else
+    dr=$td/dast; mkdir -p "$dr"; chmod 777 "$dr" # docker's zap user writes the report here
+    # passive tags only; -ni keeps nuclei from calling a third-party OAST server; -duc skips the update check
+    if pneed nuclei "brew install nuclei"; then
+      prun nuclei "$out" nuclei nuclei -u "$REVIEW_DAST_URL" -jsonl -silent -nc -ni -duc -rl 10 -tags tech,misconfig,exposure -etags dos,fuzz,intrusive,bruteforce,rce,sqli
+    fi
+    # zap-baseline.py: exit 0 pass, 1 fail, 2 warn (findings), 3 error. -m 1: one minute of spidering. docker only when no local script.
+    if command -v zap-baseline.py >/dev/null; then PRC="1 2" prun zap "$dr/zap.json" zap zap-baseline.py -t "$REVIEW_DAST_URL" -J "$dr/zap.json" -m 1
+    elif command -v docker >/dev/null; then PRC="1 2" prun zap "$dr/zap.json" zap docker run --rm --network host -v "$dr:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "$REVIEW_DAST_URL" -J zap.json -m 1
+    else pneed zap-baseline.py "pipx install zaproxy, or docker + ghcr.io/zaproxy/zaproxy:stable" || true; fi
+  fi
+fi
 hubtool=
 
 # guarddog: the npm packages a changed package-lock.json newly adds (name@version absent from the merge-base lock, so a version bump counts) that are already installed at the locked version
