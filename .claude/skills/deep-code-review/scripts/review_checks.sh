@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, gosec, govulncheck, grype, checkov, hadolint (snyk-agent-scan is unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, brakeman (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -326,7 +326,7 @@ elif kind.startswith("trivy"):
 elif kind == "audit":  # npm audit (vulnerabilities), pnpm audit (advisories), pip-audit (dependencies)
     if not isinstance(d, dict) or not any(isinstance(d.get(k), (dict, list)) for k in ("vulnerabilities", "advisories", "dependencies")):
         sys.exit("sjson: audit output has no vulnerabilities, advisories or dependencies")
-elif kind in ("zizmor", "hadolint", "actionlint"):
+elif kind in ("zizmor", "hadolint", "actionlint", "ruff-security"):
     if not isinstance(d, list):
         sys.exit(f"sjson: {kind} output is not a list")
 elif kind in ("gosec", "grype"):
@@ -335,6 +335,14 @@ elif kind in ("gosec", "grype"):
         sys.exit(f"sjson: {kind} output has no {k} list")
     if kind == "gosec" and d.get("Golang errors"):  # package load errors leave Issues empty: -no-fail hides them
         sys.exit("sjson: gosec reported Golang errors")
+elif kind == "kube-linter":  # Reports is a list, or null when clean
+    if not isinstance(d, dict) or "Reports" not in d or not (d["Reports"] is None or isinstance(d["Reports"], list)):
+        sys.exit("sjson: kube-linter output has no Reports list")
+elif kind == "brakeman":
+    if not isinstance(d, dict) or not isinstance(d.get("warnings"), list):
+        sys.exit("sjson: brakeman output has no warnings list")
+    if d.get("errors"):  # scan errors leave files unanalysed: --no-exit-on-error hides them
+        sys.exit("sjson: brakeman reported scan errors")
 elif kind == "govulncheck":  # every run starts with a config message: without one the output is not govulncheck's
     if not any(isinstance(x, dict) and isinstance(x.get("config"), dict) for x in d):
         sys.exit("sjson: govulncheck output has no config message")
@@ -416,6 +424,12 @@ elif kind == "zizmor":  # row is 0-based in json-v1; fixes and snippets are neve
         rows.append((nf(f), r + 1, x.get("ident"), x.get("desc", "")))
 elif kind == "bandit":  # issue_text (B105 embeds the secret) and code are never read
     rows = [(os.path.relpath(r["filename"]), r.get("line_number", 0), r.get("test_id"), "potential issue (see the bandit docs for this test id)") for r in d["results"]]
+elif kind == "ruff-security":  # the S rules (flake8-bandit); messages name the construct, never the value
+    rows = [(os.path.relpath(r["filename"]), (r.get("location") or {}).get("row", 0), r.get("code"), cl(r.get("message", ""))) for r in d]
+elif kind == "kube-linter":  # a report with no file path cannot be attributed to a changed file: "-" is dropped and counted by the caller
+    rows = [(os.path.relpath(((r.get("Object") or {}).get("Metadata") or {}).get("FilePath") or "-"), 0, r.get("Check"), cl((r.get("Diagnostic") or {}).get("Message", ""))) for r in d["Reports"] or []]
+elif kind == "brakeman":  # confirm/high/medium/weak is brakeman's own confidence, carried in the message
+    rows = [(nf(r.get("file")), r.get("line") or 0, r.get("check_name"), cl(f"{r.get('warning_type')}: {r.get('message')} (confidence: {r.get('confidence')})")) for r in d["warnings"]]
 elif kind == "gosec":
     for r in d["Issues"] or []:
         ln = str(r.get("line", "0")).split("-")[0]
@@ -784,6 +798,10 @@ hub=(
   'grype;verified;each;(^|/)([^/]*[-_.])?(sbom|bom|cdx|spdx)([-_.][^/]*)?\.json$;route-only;brew install grype'
   'checkov;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.tf)$;route-only;pipx install checkov'
   'hadolint;verified;each;(^|/)(Dockerfile[^/]*|[^/]+\.dockerfile)$;route-only;brew install hadolint'
+  'ruff-security;verified;batch;\.py$;route-only;pipx install ruff' # ruff check --select S (flake8-bandit rules), its own row beside bandit; binary is ruff
+  'syft;verified;each;(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.mod|Cargo\.lock|poetry\.lock|uv\.lock|requirements[^/]*\.txt|composer\.lock|Gemfile\.lock)$;route-only;brew install syft' # inventory: package count on stderr, SBOM kept in $TMPDIR, no finding rows
+  'kube-linter;verified;batch;\.ya?ml$;route-only;brew install kube-linter' # only files with apiVersion: and kind: are passed
+  'brakeman;verified;batch;(^|/)(Gemfile(\.lock)?|[^/]+\.(rb|erb))$;route-only;gem install brakeman' # only when the root Gemfile names rails; scans the app, rows kept for changed files
   'snyk-agent-scan;unverified;each;(^|/)(\.mcp\.json|mcp[^/]*\.json|SKILL\.md)$;route-only;uvx snyk-agent-scan'
 )
 # hubcmd TOOL TARGET...: sets cmd (argv), okrc (extra non-crash exit codes) and jf (file the JSON lands in).
@@ -800,14 +818,24 @@ hubcmd() {
     # CKV_SKIP_PACKAGE_UPDATE_CHECK=true: --skip-download leaves checkov's own-version lookup (pypi.org) on; env var, not a flag, so an older checkov ignores it
     checkov) cmd=(env CKV_SKIP_PACKAGE_UPDATE_CHECK=true checkov -f "$1" -o json --quiet --skip-download --soft-fail) ;;
     hadolint) cmd=(hadolint -f json --no-fail "$1") ;;
+    ruff-security) cmd=(ruff check --select S --output-format json --no-cache --exit-zero "$@") ;;
+    syft) sb=$(mktemp "${TMPDIR:-/tmp}/review_sbom.XXXXXX"); cmd=(env SYFT_CHECK_FOR_APP_UPDATE=false syft "$1" -o "syft-json=$sb") ;; # the update check phones home; the SBOM outlives the run
+    kube-linter) cmd=(kube-linter lint --format json "$@"); okrc="1" ;; # exit 1 = lint reports (command.go returns "found N lint errors")
+    brakeman) cmd=(brakeman -q --no-pager -f json --no-exit-on-warn --no-exit-on-error) ;; # scans the cwd app; the flags keep findings and scan errors from changing the exit code
   esac
 }
 while IFS=';' read -r hn hs hm hre _ hh; do
   hf=$(changed "$hre"); [ -n "$hf" ] || continue
-  [ "$hs" != verified ] || wired+=" $hn"
+  case $hn in
+    kube-linter) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do [[ $f == templates/* || $f == */templates/* || $f == kustomization.y*ml || $f == */kustomization.y*ml ]] && continue; grep -qE '^apiVersion:' "$f" && grep -qE '^kind:' "$f" && printf '%s\n' "$f"; done || true) ;; # Kubernetes manifests only (Helm templates and kustomization files are not plain manifests)
+    brakeman) grep -qiE "^[[:space:]]*gem[[:space:]]+['\"]rails['\"]" Gemfile 2>/dev/null || hf= ;;
+  esac
+  [ -n "$hf" ] || continue
+  [ "$hs" != verified ] || [ "$hn" = syft ] || wired+=" $hn" # syft is an inventory, not a scanner: never wired or ran
   nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
   if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
-  command -v "$hn" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
+  hb=$hn; [ "$hn" != ruff-security ] || hb=ruff
+  command -v "$hb" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
   hubtool=$hn
   # zizmor, actionlint, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
   case $hn in grype|checkov|gosec|govulncheck) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
@@ -820,8 +848,14 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     if [ "$hm" = batch ]; then hubcmd "$hn" "${targets[@]}"; else
       hubcmd "$hn" "./$f"
     fi
-    run_one "$hn" "${cmd[@]}" || { [ "$hm" = batch ] && break; continue; }
-    scan_ok "$hn" $okrc || { [ "$hm" = batch ] && break; continue; }
+    run_one "$hn" "${cmd[@]}" || { [ "$hn" != syft ] || rm -f "$sb"; [ "$hm" = batch ] && break; continue; }
+    scan_ok "$hn" $okrc || { [ "$hn" != syft ] || rm -f "$sb"; [ "$hm" = batch ] && break; continue; }
+    if [ "$hn" = syft ]; then # inventory only: count packages, never a finding row
+      if n=$(python3 -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["artifacts"]))' "$sb" 2>/dev/null); then
+        echo "review_checks: SBOM inventory (not a vulnerability scan): syft listed $n packages in $f (SBOM: $sb)" >&2
+      else rm -f "$sb"; skip syft "unparseable output"; fi
+      continue
+    fi
     if sjson "$hn" "$jf" >"$tsv"; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
@@ -831,8 +865,8 @@ while IFS=';' read -r hn hs hm hre _ hh; do
           nout=$((nout + 1)); add "$hn" "$p" "$l" "$r" "$m"
         done <"$tsv"
         # A tool given explicit files reports only those, so a row for any other file means the paths do not line up and findings may be lost:
-        # name it instead of reading as clean. gosec scans ./... and legitimately reports files outside the changed list.
-        [ "$hn" = gosec ] || [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing"
+        # name it instead of reading as clean. gosec and brakeman scan the whole project and legitimately report files outside the changed list.
+        case $hn in gosec|brakeman) ;; *) [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing" ;; esac
       else while IFS=$'\t' read -r _ l r m; do add "$hn" "$f" "$l" "$r" "$m"; done <"$tsv"; fi
     else skip "$hn" "unparseable output"; fi
     [ "$hm" != batch ] || break
