@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (snyk-agent-scan is unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -305,7 +305,7 @@ def nf(f):  # scanners echo the path they were given ("./.github/..."); rows mus
 cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package or file can be named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 # The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
-m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny") else r"^[\[{]", t, re.M)  # cargo-audit and cargo-deny: stderr log lines can start with "[", the report is an object
+m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny", "mobsfscan") else r"^\[\s*[\{\]]" if kind == "psalm" else r"^[\[{]", t, re.M)  # cargo-audit, cargo-deny and mobsfscan: stderr log lines can start with "[", the report is an object; psalm: the report is a list, so "[" must be followed by an issue or "]" (a "[INFO] ..." log line is skipped)
 okl = kind == "cargo-deny" and re.search(r"^(advisories|bans|licenses|sources) ok\b", t, re.M)  # a clean cargo-deny run prints only its text summary
 if not m and not okl and not (kind == "staticcheck" and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
     sys.exit("sjson: no JSON in scanner output")
@@ -368,6 +368,14 @@ elif kind == "brakeman":
         sys.exit("sjson: brakeman output has no warnings list")
     if d.get("errors"):  # scan errors leave files unanalysed: --no-exit-on-error hides them
         sys.exit("sjson: brakeman reported scan errors")
+elif kind == "mobsfscan":  # {results: {rule id: {metadata, files}}, errors}; any error leaves files unanalysed
+    if not isinstance(d, dict) or not isinstance(d.get("results"), dict) or not all(isinstance(r, dict) for r in d["results"].values()):
+        sys.exit("sjson: mobsfscan output has no results object")
+    if d.get("errors"):
+        sys.exit("sjson: mobsfscan reported errors")
+elif kind == "psalm":  # a list of issue objects, each with a file and a line
+    if not isinstance(d, list) or not all(isinstance(x, dict) and x.get("file_name") and isinstance(x.get("line_from"), int) for x in d):
+        sys.exit("sjson: psalm output is not a list of issues")
 elif kind == "eslint-security":  # a list of {filePath, messages}; a fatal parse error leaves a file unanalysed
     if not isinstance(d, list) or not all(isinstance(x, dict) and isinstance(x.get("messages"), list) for x in d):
         sys.exit("sjson: eslint-security output is not a list of results with messages")
@@ -480,6 +488,14 @@ elif kind == "tflint":  # message plus rule severity; callers and the rule link 
     rows = [(os.path.relpath((i.get("range") or {}).get("filename") or "-"), ((i.get("range") or {}).get("start") or {}).get("line") or 0, (i.get("rule") or {}).get("name"), cl(f"{(i.get('rule') or {}).get('severity')}: {i.get('message', '')}")) for i in d["issues"]]
 elif kind == "brakeman":  # confirm/high/medium/weak is brakeman's own confidence, carried in the message
     rows = [(nf(r.get("file")), r.get("line") or 0, r.get("check_name"), cl(f"{r.get('warning_type')}: {r.get('message')} (confidence: {r.get('confidence')})")) for r in d["warnings"]]
+elif kind == "mobsfscan":  # severity is per rule: ERROR and WARNING are findings, INFO is not
+    for rid, r in d["results"].items():
+        md = r.get("metadata") or {}
+        for f in (r.get("files") or []) if md.get("severity") in ("ERROR", "WARNING") else []:
+            ln = (f.get("match_lines") or [0])[0]
+            rows.append((os.path.relpath(f.get("file_path") or "-"), ln if isinstance(ln, int) else 0, cl(rid), cl(f"{md['severity']}: {md.get('description', '')}")))
+elif kind == "psalm":  # taint findings only (is_security); psalm exits 2 on any issue
+    rows = [(nf(x["file_name"]), x["line_from"], cl(x.get("type")), cl(f"{x.get('severity')}: {x.get('message')}")) for x in d if x.get("is_security")]
 elif kind == "gosec":
     for r in d["Issues"] or []:
         ln = str(r.get("line", "0")).split("-")[0]
@@ -865,6 +881,8 @@ hub=(
   'cargo-deny;verified;batch;^Cargo\.lock$;route-only;cargo install cargo-deny --locked' # offline: bans, licenses, sources, plus advisories only when a local advisory DB exists; rows land on Cargo.lock; needs cargo; deny.toml decides what is an error
   'cargo-audit;verified;batch;^Cargo\.lock$;route-only;cargo install cargo-audit --locked' # local advisory DB only (--no-fetch --stale): no DB at CARGO_HOME/advisory-db is NOT CHECKED; rows land on Cargo.lock
   'brakeman;verified;batch;(^|/)(Gemfile(\.lock)?|[^/]+\.(rb|erb))$;route-only;gem install brakeman' # only when the root Gemfile names rails; scans the app, rows kept for changed files
+  'mobsfscan;verified;batch;(^|/)(AndroidManifest\.xml|[^/]+\.(java|kt|swift|m|mm|plist))$;route-only;pipx install mobsfscan' # only in a repo with a mobile marker (AndroidManifest.xml, Info.plist, Podfile, project.pbxproj); rows for ERROR and WARNING rules; exit 1 = an ERROR rule matched
+  'psalm;verified;batch;\.php$;route-only;composer global require vimeo/psalm' # taint analysis, whole project per the root psalm.xml, rows kept for changed files; psalm.xml is code: not run when the diff changes it or composer.json
   'cosign;verified;each;(^|/)[^/]+\.(sig|bundle)$|(^|/)\.sigstore(/|$);route-only;brew install cosign' # verify-blob offline, no finding rows: only a .bundle with a cosign.pub beside it or at the root and its signed blob is checked, else NOT CHECKED
   'snyk-agent-scan;unverified;each;(^|/)(\.mcp\.json|mcp[^/]*\.json|SKILL\.md)$;route-only;uvx snyk-agent-scan'
 )
@@ -897,6 +915,8 @@ hubcmd() {
     # exit 1 = lint errors; the project's own binary only (never npx, no network); -f json is the built-in formatter
     eslint-security) cmd=(./node_modules/.bin/eslint -f json "$@"); okrc="1" ;;
     licensee) cmd=(licensee detect --json "$1") ;;
+    mobsfscan) cmd=(mobsfscan --json "$@"); okrc="1" ;; # JSON to stdout without -o; exit 1 = an ERROR-severity rule matched (-w would add WARNING; not used)
+    psalm) cmd=(psalm --taint-analysis --output-format=json --no-cache --no-progress); okrc="2" ;; # exit 0 clean, 2 issues found, 1 problem running (psalm docs)
     brakeman) cmd=(brakeman -q --no-pager -f json --no-exit-on-warn --no-exit-on-error) ;; # scans the cwd app; the flags keep findings and scan errors from changing the exit code
   esac
 }
@@ -913,6 +933,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       # -p takes a comma list: a name with a comma cannot be passed, so it is named as unchecked surface instead of dropped
       kc=$(printf '%s\n' "$hf" | grep -c , || true)
       if [ "$kc" -gt 0 ]; then echo "NOT CHECKED: kics ($kc file name(s) with a comma not scanned)" >&2; add kics "" 0 not-checked "$kc file name(s) with a comma not scanned"; hf=$(printf '%s\n' "$hf" | grep -v , || true); fi ;;
+    mobsfscan) git ls-files | grep -qE '(^|/)(AndroidManifest\.xml|Info\.plist|Podfile|project\.pbxproj)$' || hf= ;; # no mobile project: not routed
     brakeman) grep -qiE "^[[:space:]]*gem[[:space:]]+['\"]rails['\"]" Gemfile 2>/dev/null || hf= ;;
   esac
   [ -n "$hf" ] || continue
@@ -927,6 +948,10 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   case $hn in gosec|govulncheck|staticcheck) [ -f go.mod ] || { nc "no go.mod at repo root"; continue; } ;; esac
   case $hn in govulncheck|staticcheck) command -v go >/dev/null || { nc "go toolchain missing"; continue; } ;; esac
   case $hn in cargo-deny) command -v cargo >/dev/null || { nc "cargo toolchain missing"; continue; } ;; cargo-audit) [ -d "${CARGO_HOME:-$HOME/.cargo}/advisory-db" ] || { nc "no local advisory DB at ${CARGO_HOME:-~/.cargo}/advisory-db (never fetched)"; continue; } ;; esac
+  if [ "$hn" = psalm ]; then
+    [ -f psalm.xml ] || [ -f psalm.xml.dist ] || { nc "no psalm.xml at repo root"; continue; }
+    [ "$full" != 0 ] || [ -z "$(changed '(^|/)(psalm\.xml(\.dist)?|composer\.json)$')" ] || { nc "psalm.xml or composer.json changed in this diff: its config is code, not run"; continue; }
+  fi
   targets=()
   if [ "$hm" = batch ]; then while IFS= read -r f; do targets+=("./$f"); done <<<"$hf"; fi
   # ponytail: batch tools get every matching file in one call (argv/timeout ceiling); chunk like semgrep if it bites.
@@ -944,7 +969,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       fi
       continue
     fi
-    if [ "$hm" = batch ]; then hubcmd "$hn" "${targets[@]}"; else
+    if [ "$hn" = psalm ]; then hubcmd psalm; elif [ "$hm" = batch ]; then hubcmd "$hn" "${targets[@]}"; else
       hubcmd "$hn" "./$f"
     fi
     run_one "$hn" "${cmd[@]}" || { [ "$hn" != syft ] || rm -f "$sb"; [ "$hm" = batch ] && break; continue; }
@@ -963,7 +988,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     fi
     [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
     # a failing exit with no row is a crash (cargo-deny exit 1 is also its advisories bit): not a finding, never clean
-    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; esac; }; then
+    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
         printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0
@@ -973,7 +998,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
         done <"$tsv"
         # A tool given explicit files reports only those, so a row for any other file means the paths do not line up and findings may be lost:
         # name it instead of reading as clean. gosec and brakeman scan the whole project and legitimately report files outside the changed list.
-        case $hn in gosec|brakeman|staticcheck) ;; *) [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing" ;; esac
+        case $hn in gosec|brakeman|staticcheck|psalm) ;; *) [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing" ;; esac
       else while IFS=$'\t' read -r _ l r m; do add "$hn" "$f" "$l" "$r" "$m"; done <"$tsv"; fi
     else skip "$hn" "unparseable output"; fi
     [ "$hm" != batch ] || break
