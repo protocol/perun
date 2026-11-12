@@ -56,7 +56,9 @@ scorecard brew scorecard
 gosec brew gosec
 grype brew grype
 checkov pipx checkov==3.4.0
-hadolint brew hadolint'
+hadolint brew hadolint
+opengrep brew opengrep
+nuclei brew nuclei'
 lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin} # pipx and `uv tool` install here; a sandboxed PATH may lack it
 miss=0 cold=0 brew=() pipx=() fix=()
 while read -r bin how spec; do
