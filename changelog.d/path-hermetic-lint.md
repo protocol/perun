@@ -1,0 +1,2 @@
+### Added
+- scripts/path_hermetic_lint.py flags a negative grep (`! grep ... worktrees ...`) in scripts/test-*.sh whose pattern is a path-segment word that also appears in the checkout path, unless the line or the one before it strips $ROOT/$PWD. Such a test passes in CI and fails in a lane worktree. Existing offenders are frozen in scripts/path-hermetic-baseline.tsv (one row today, fixed by an open PR); the regression test is registered through ci-tests.d.
