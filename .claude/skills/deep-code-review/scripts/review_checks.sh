@@ -929,7 +929,9 @@ k, f = sys.argv[1:]
 try:
     t = open(f, encoding="utf-8", errors="replace").read()
     if k == "scorecard":
-        rows = [(".", 0, "scorecard-" + c["name"], f"score {c['score']}/10: {c.get('reason', '')}") for c in json.loads(t)["checks"] if 0 <= c["score"] < 5]
+        cs = json.loads(t)["checks"]
+        if not cs or all(c["score"] == -1 for c in cs): sys.exit(3)  # no check concluded: not a clean score
+        rows = [(".", 0, "scorecard-" + c["name"], f"score {c['score']}/10: {c.get('reason', '')}") for c in cs if 0 <= c["score"] < 5]
     elif k == "nuclei":  # JSONL: one finding per line; a non-JSON line is a failure, not noise
         rows = []
         for ln in filter(None, (x.strip() for x in t.splitlines())):
@@ -970,7 +972,7 @@ if [ -n "${REVIEW_DAST_URL:-}" ]; then
   du=$REVIEW_DAST_URL dok=0
   case $du in *[[:space:][:cntrl:]\\@]*) ;; *) if [[ $du =~ ^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/|$) ]] || { [ "${REVIEW_DAST_ALLOW_REMOTE:-0}" = 1 ] && [[ $du =~ ^https?://[][A-Za-z0-9.:-]+(/|$) ]]; }; then dok=1; fi ;; esac
   if [ "$dok" = 0 ]; then skip dast "REVIEW_DAST_URL refused: not an exact localhost http(s) origin (set REVIEW_DAST_ALLOW_REMOTE=1 only for a host you own and may scan)"
-  elif ! curl -sf --max-time 5 -o /dev/null -- "$du" 2>/dev/null; then # an unreachable target would read as a clean scan
+  elif ! curl -g --noproxy '*' -sf --max-time 5 -o /dev/null -- "$du" 2>/dev/null; then # an unreachable target would read as a clean scan; -g keeps [::1] literal, --noproxy: the probe never leaves through a proxy
     echo "NOT CHECKED: dast (target did not answer a curl probe, or curl is missing)" >&2; add dast "" 0 not-checked "target did not answer a curl probe, or curl is missing"
   else
     dr=$td/dast; mkdir -m 700 "$dr"
@@ -986,7 +988,7 @@ if [ -n "${REVIEW_DAST_URL:-}" ]; then
     # zap-baseline.py: exit 0 pass, 1 fail, 2 warn (findings), 3 error. -m 1: one minute of spidering. docker only when no local script.
     # The docker run drops root (--user) onto the 700 report dir. ZAP may follow redirects: a redirect off the target is still requested.
     if command -v zap-baseline.py >/dev/null; then PRC="1 2" prun zap "$dr/zap.json" zap zap-baseline.py -t "$du" -J "$dr/zap.json" -m 1
-    elif command -v docker >/dev/null; then PRC="1 2" prun zap "$dr/zap.json" zap docker run --rm --user "$(id -u)" --network host -v "$dr:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "$du" -J zap.json -m 1
+    elif command -v docker >/dev/null; then PRC="1 2" prun zap "$dr/zap.json" zap docker run --rm --pull=never --user "$(id -u)" --network host -v "$dr:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "$du" -J zap.json -m 1
     else pneed zap-baseline.py "pipx install zaproxy, or docker + ghcr.io/zaproxy/zaproxy:stable" || true; fi
   fi
 fi

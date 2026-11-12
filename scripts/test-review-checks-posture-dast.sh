@@ -35,7 +35,7 @@ while [ $# -gt 0 ]; do [ "$1" != -J ] || j=$2; shift; done
 printf "%s\n" "{\"site\":[{\"alerts\":[{\"pluginid\":\"10038\",\"riskdesc\":\"Medium (High)\",\"alert\":\"CSP Header Not Set\",\"instances\":[{\"uri\":\"http://localhost:3000/\"}]}]}]}" >"$j"
 exit 2'
 printf '#!/bin/sh\necho %s\n' "'{\"Results\":[]}'" >"$T/base/trivy"; printf '#!/bin/sh\nexit 0\n' >"$T/base/gitleaks"; chmod +x "$T/base/trivy" "$T/base/gitleaks"
-printf '#!/bin/sh\n[ -z "${CURL_FAIL:-}" ]\n' >"$T/sys/curl"; chmod +x "$T/sys/curl"
+printf '#!/bin/sh\necho "$*" >>%s/curl.log\n[ -z "${CURL_FAIL:-}" ]\n' "$T" >"$T/sys/curl"; chmod +x "$T/sys/curl"
 for b in bash env git grep sed head tail cat rm mkdir mktemp dirname basename python3 perl timeout gtimeout jq true sort uniq paste tr cut wc awk date cp mv ls find touch tee readlink sleep chmod; do
   p=$(type -P "$b") || continue; ln -s "$p" "$T/sys/$b"
 done
@@ -55,6 +55,11 @@ REVIEW_SCORECARD=1 GITHUB_TOKEN=tok run ""; grep -q '^NOT CHECKED: scorecard (in
 REVIEW_SCORECARD=1 GITHUB_TOKEN=tok run "$T/sc"
 [ "$(jq '[.[]|select(.tool=="scorecard")]|length' "$T/out")" = 1 ] && row '.tool=="scorecard" and .rule=="scorecard-Fuzzing"' && grep -q 'scorecard --repo=github.com/acme/demo --format=json' "$HUB_LOG" && grep -q 'token=tok' "$HUB_LOG" && ran scorecard && ok "scorecard: only the score<5 check is a row; stderr noise ignored" || bad "scorecard findings"
 REVIEW_SCORECARD=1 GITHUB_TOKEN=tok HUB_MODE=crash run "$T/sc"; grep -q 'not run: scorecard (exit 9)' "$T/err" && ! ran scorecard && ok "scorecard crash: not run" || bad "scorecard crash"
+# scorecard that concluded nothing is not-checked, never a clean run
+for J in '{"score":-1,"checks":[]}' '{"score":-1,"checks":[{"name":"SAST","score":-1,"reason":"inconclusive"}]}'; do
+  stub sc scorecard "printf '%s\n' '$J'"
+  REVIEW_SCORECARD=1 GITHUB_TOKEN=tok run "$T/sc"; grep -q 'not run: scorecard (unparseable' "$T/err" && row '.tool=="scorecard" and .rule=="not-checked"' && ! ran scorecard && ok "scorecard with no concluded check: not-checked" || bad "scorecard empty: $J"
+done
 # DAST
 REVIEW_SCORECARD= run "$T/nu:$T/zap"; [ ! -s "$HUB_LOG" ] && ok "DAST opt-in off: nuclei and zap not run" || bad "DAST ran without opt-in"
 # refused targets: nothing runs, a not-run line and a not-checked row
@@ -91,6 +96,9 @@ TL_OUT= EMPTY_SCAN=1 REVIEW_DAST_URL=http://localhost:3000/ run "$T/nu"; grep -q
 EMPTY_SCAN=1 REVIEW_DAST_URL=http://localhost:3000/ run "$T/nu"; ran nuclei && ok "templates matched, no findings: ran clean" || bad "clean nuclei"
 GITHUB_TOKEN=tok REVIEW_DAST_URL=http://localhost:3000/ run "$T/nu:$T/zap"
 row '.tool=="nuclei" and .rule=="missing-xfo" and .file=="http://localhost:3000/"' && row '.tool=="zap" and .rule=="zap-10038"' && ran nuclei && ran zap && grep -q -- '-s info,low -type http -tags tech,exposure -etags default-login,xss,ssrf,oast,fuzz,fuzzing,takeover,cve,intrusive,dos' "$HUB_LOG" && grep -q -- ' -ni ' "$HUB_LOG" && ! grep -q 'gt=tok' "$HUB_LOG" && ok "nuclei and zap findings parsed, allowlist and exclusions, no interactsh, no GitHub token" || bad "DAST findings"
+grep -q -- "-g --noproxy \* -sf" "$T/curl.log" && ok "probe: curl -g --noproxy '*'" || bad "curl flags"
+mkdir -p "$T/dk"; stub dk docker ':'
+REVIEW_DAST_URL=http://localhost:3000/ run "$T/dk"; grep -q '^docker run --rm --pull=never ' "$HUB_LOG" && ok "ZAP docker run never auto-pulls the image" || bad "docker pull"
 REVIEW_DAST_URL=http://[::1]:3000/ run "$T/nu:$T/zap"; grep -q 'nuclei -u http://\[::1\]:3000/' "$HUB_LOG" && ok "IPv6 loopback allowed" || bad "ipv6 loopback"
 HUB_MODE=crash REVIEW_DAST_URL=http://127.0.0.1:3000/ run "$T/nu:$T/zap"; grep -q 'not run: nuclei (exit 9)' "$T/err" && grep -q 'not run: zap (exit 9)' "$T/err" && ! ran nuclei && ! ran zap && ok "DAST crash: not run, not clean" || bad "DAST crash"
 H=$ROOT/.claude/skills/deep-code-review/references/tool-hub.md
