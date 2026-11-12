@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (snyk-agent-scan is unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), detect-secrets (changed files, no baseline, no verification, values never printed), njsscan (Node.js), eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -305,7 +305,7 @@ def nf(f):  # scanners echo the path they were given ("./.github/..."); rows mus
 cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package or file can be named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 # The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
-m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny", "mobsfscan") else r"^\[\s*[\{\]]" if kind == "psalm" else r"^[\[{]", t, re.M)  # cargo-audit, cargo-deny and mobsfscan: stderr log lines can start with "[", the report is an object; psalm: the report is a list, so "[" must be followed by an issue or "]" (a "[INFO] ..." log line is skipped)
+m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny", "mobsfscan", "njsscan", "detect-secrets") else r"^\[\s*[\{\]]" if kind == "psalm" else r"^[\[{]", t, re.M)  # cargo-audit, cargo-deny and mobsfscan, njsscan and detect-secrets: stderr log lines can start with "[", the report is an object; psalm: the report is a list, so "[" must be followed by an issue or "]" (a "[INFO] ..." log line is skipped)
 okl = kind == "cargo-deny" and re.search(r"^(advisories|bans|licenses|sources) ok\b", t, re.M)  # a clean cargo-deny run prints only its text summary
 if not m and not okl and not (kind == "staticcheck" and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
     sys.exit("sjson: no JSON in scanner output")
@@ -373,6 +373,14 @@ elif kind == "mobsfscan":  # {results: {rule id: {metadata, files}}, errors}; an
         sys.exit("sjson: mobsfscan output has no results object")
     if d.get("errors"):
         sys.exit("sjson: mobsfscan reported errors")
+elif kind == "njsscan":  # {nodejs: {rule id: {metadata, files}}, templates: {same}, errors}; any error leaves files unanalysed
+    if not isinstance(d, dict) or not all(isinstance(d.get(k), dict) and all(isinstance(r, dict) for r in d[k].values()) for k in ("nodejs", "templates")) or "errors" not in d:
+        sys.exit("sjson: njsscan output has no nodejs and templates objects")
+    if d["errors"]:
+        sys.exit("sjson: njsscan reported errors")
+elif kind == "detect-secrets":  # {results: {file: [{type, filename, hashed_secret, is_verified, line_number}]}}
+    if not isinstance(d, dict) or not isinstance(d.get("results"), dict) or not all(isinstance(v, list) and all(isinstance(x, dict) and x.get("type") for x in v) for v in d["results"].values()):
+        sys.exit("sjson: detect-secrets output has no results object")
 elif kind == "psalm":  # a list of issue objects, each with a file and a line
     if not isinstance(d, list) or not all(isinstance(x, dict) and x.get("file_name") and isinstance(x.get("line_from"), int) for x in d):
         sys.exit("sjson: psalm output is not a list of issues")
@@ -494,6 +502,15 @@ elif kind == "mobsfscan":  # severity is per rule: ERROR and WARNING are finding
         for f in (r.get("files") or []) if md.get("severity") in ("ERROR", "WARNING") else []:
             ln = (f.get("match_lines") or [0])[0]
             rows.append((os.path.relpath(f.get("file_path") or "-"), ln if isinstance(ln, int) else 0, cl(rid), cl(f"{md['severity']}: {md.get('description', '')}")))
+elif kind == "njsscan":  # same per-rule severity as mobsfscan, over both the nodejs and templates sections
+    for sec in ("nodejs", "templates"):
+        for rid, r in d[sec].items():
+            md = r.get("metadata") or {}
+            for f in (r.get("files") or []) if md.get("severity") in ("ERROR", "WARNING") else []:
+                ln = (f.get("match_lines") or [0])[0]
+                rows.append((os.path.relpath(f.get("file_path") or "-"), ln if isinstance(ln, int) else 0, cl(rid), cl(f"{md['severity']}: {md.get('description', '')}")))
+elif kind == "detect-secrets":  # one row per potential secret; the message never carries the hashed or plain value
+    rows = [(os.path.relpath(fn), x["line_number"] if isinstance(x.get("line_number"), int) else 0, cl(x["type"]), "potential secret (value not printed)") for fn, v in d["results"].items() for x in v]
 elif kind == "psalm":  # taint findings only (is_security); psalm exits 2 on any issue
     rows = [(nf(x["file_name"]), x["line_from"], cl(x.get("type")), cl(f"{x.get('severity')}: {x.get('message')}")) for x in d if x.get("is_security")]
 elif kind == "gosec":
@@ -882,6 +899,8 @@ hub=(
   'cargo-audit;verified;batch;^Cargo\.lock$;route-only;cargo install cargo-audit --locked' # local advisory DB only (--no-fetch --stale): no DB at CARGO_HOME/advisory-db is NOT CHECKED; rows land on Cargo.lock
   'brakeman;verified;batch;(^|/)(Gemfile(\.lock)?|[^/]+\.(rb|erb))$;route-only;gem install brakeman' # only when the root Gemfile names rails; scans the app, rows kept for changed files
   'mobsfscan;verified;batch;(^|/)(AndroidManifest\.xml|[^/]+\.(java|kt|swift|m|mm|plist))$;route-only;pipx install mobsfscan' # only in a repo with a mobile marker (AndroidManifest.xml, Info.plist, Podfile, project.pbxproj); rows for ERROR and WARNING rules; exit 1 = an ERROR rule matched
+  'detect-secrets;verified;batch;.;route-only;pipx install detect-secrets' # changed files only, no baseline, --no-verify (no network); one row per potential secret, the value is never printed
+  'njsscan;verified;batch;\.(jsx?|mjs|cjs)$;route-only;pipx install njsscan' # Node.js source; rows for ERROR and WARNING rules in nodejs and templates; exit 1 = an ERROR rule matched or a file was not scanned
   'psalm;verified;batch;\.php$;route-only;composer global require vimeo/psalm' # taint analysis, whole project per the root psalm.xml, rows kept for changed files; psalm.xml is code: not run when the diff changes it or composer.json
   'cosign;verified;each;(^|/)[^/]+\.(sig|bundle)$|(^|/)\.sigstore(/|$);route-only;brew install cosign' # verify-blob offline, no finding rows: only a .bundle with a cosign.pub beside it or at the root and its signed blob is checked, else NOT CHECKED
   'snyk-agent-scan;unverified;each;(^|/)(\.mcp\.json|mcp[^/]*\.json|SKILL\.md)$;route-only;uvx snyk-agent-scan'
@@ -916,6 +935,8 @@ hubcmd() {
     eslint-security) cmd=(./node_modules/.bin/eslint -f json "$@"); okrc="1" ;;
     licensee) cmd=(licensee detect --json "$1") ;;
     mobsfscan) cmd=(mobsfscan --json "$@"); okrc="1" ;; # JSON to stdout without -o; exit 1 = an ERROR-severity rule matched (-w would add WARNING; not used)
+    detect-secrets) cmd=(detect-secrets scan --no-verify "$@") ;; # explicit files, no baseline; --no-verify turns off the network verification; scan exits 0 whatever it finds, so any other exit is a crash
+    njsscan) cmd=(njsscan --json "$@"); okrc="1" ;; # JSON to stdout without -o; exit 1 = an ERROR rule matched or errors (-w would add WARNING; not used)
     psalm) cmd=(psalm --taint-analysis --output-format=json --no-cache --no-progress); okrc="2" ;; # exit 0 clean, 2 issues found, 1 problem running (psalm docs)
     brakeman) cmd=(brakeman -q --no-pager -f json --no-exit-on-warn --no-exit-on-error) ;; # scans the cwd app; the flags keep findings and scan errors from changing the exit code
   esac
@@ -988,7 +1009,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     fi
     [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
     # a failing exit with no row is a crash (cargo-deny exit 1 is also its advisories bit): not a finding, never clean
-    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
+    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
         printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0

@@ -81,6 +81,18 @@ HUB_MODE=crash run
 notrun mobsfscan && notrun psalm && ok "crash: not run" || bad "crash"
 MOBS_RC=0 J_mobs='{"results":{"android_info":{"metadata":{"severity":"INFO","description":"n"},"files":[{"file_path":"A.kt","match_lines":[1,1]}]}},"errors":[]}'$LOG PSALM_RC=0 J_psalm=$'[INFO] x\n[]\nChecks took 1s\n' run
 ran mobsfscan && ran psalm && ! grep -q 'not run: \(mobsfscan\|psalm\)' "$T/err" && ok "exit 0 with INFO-only and an empty list plus log lines: clean, ran" || bad "clean"
+# row for a file outside the scanned list: findings may be lost, so mobsfscan is not run
+MOBS_RC=1 J_mobs='{"results":{"android_hardcoded":{"metadata":{"severity":"ERROR","description":"d"},"files":[{"file_path":"B.kt","match_lines":[1,1]}]}},"errors":[]}' run
+notrun mobsfscan && ! row mobsfscan B.kt android_hardcoded && ok "mobsfscan: a row for an unscanned file: not run" || bad "mobs unscanned file"
+# WARNING-only reports: the exit code does not have to be 1 (-w is not used), so exit 0 and exit 1 both keep the rows
+MW='{"results":{"android_logging":{"metadata":{"severity":"WARNING","description":"Logging"},"files":[{"file_path":"A.kt","match_lines":[5,5]}]}},"errors":[]}'
+MOBS_RC=0 J_mobs=$MW$LOG run
+ran mobsfscan && row mobsfscan A.kt android_logging && ok "mobsfscan: exit 0 with only WARNING rows keeps them" || bad "mobs exit0 warning"
+MOBS_RC=1 J_mobs=$MW$LOG run
+ran mobsfscan && row mobsfscan A.kt android_logging && ok "mobsfscan: exit 1 with only WARNING rows keeps them" || bad "mobs exit1 warning"
+# psalm scans the whole project: a report whose rows are all in unchanged files is clean for this diff, not a failure
+PSALM_RC=2 J_psalm='[{"severity":"error","line_from":4,"type":"TaintedHtml","message":"m","file_name":"other.php","is_security":true}]' run
+ran psalm && ! row psalm other.php TaintedHtml && ! grep -q 'not run: psalm' "$T/err" && ok "psalm: rows only in unchanged files are dropped, not a failure" || bad "psalm unchanged rows"
 # gates
 rm "$T/bin/mobsfscan" "$T/bin/psalm"; run
 grep -q 'NOT CHECKED: mobsfscan (install: pipx install mobsfscan)' "$T/err" && grep -q 'NOT CHECKED: psalm (install: composer global require vimeo/psalm)' "$T/err" && jq -e 'any(.[]; .tool=="psalm" and .rule=="not-checked")' "$T/out" >/dev/null && ok "missing tools: NOT CHECKED with install hint" || bad "missing tool"
