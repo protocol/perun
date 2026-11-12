@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, staticcheck (Go, offline), brakeman, eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored) (snyk-agent-scan is unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored), trufflehog-fs (trufflehog filesystem, --no-verification --json, detector file and line only), cosign (verify-blob offline against a repo cosign.pub) (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -305,17 +305,31 @@ def nf(f):  # scanners echo the path they were given ("./.github/..."); rows mus
 cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package or file can be named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 # The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
-m = re.search(r"^[\[{]", t, re.M)
-if not m and not (kind == "staticcheck" and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
+if kind == "trufflehog-fs":  # stdout JSON lines and stderr log lines share the file; a line that opens with { but is not JSON is skipped. Clean = TF_RC 0 and trufflehog's closing log line "finished scanning" (main.go logger.Info), which is printed even with no findings (then no JSON at all)
+    tfl = t.splitlines(); tfok = os.environ.get("TF_RC") == "0" and any(l[:1] != "{" and "finished scanning" in l for l in tfl); tfj = []
+    for l in tfl:
+        if l.startswith("{"):
+            try: tfj.append(json.loads(l))
+            except ValueError: pass
+    t = ""
+m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny") else r"^[\[{]", t, re.M)  # cargo-audit and cargo-deny: stderr log lines can start with "[", the report is an object
+okl = kind == "cargo-deny" and re.search(r"^(advisories|bans|licenses|sources) ok\b", t, re.M)  # a clean cargo-deny run prints only its text summary
+if not m and not okl and not (kind in ("staticcheck", "trufflehog-fs") and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
     sys.exit("sjson: no JSON in scanner output")
 s, dec = (t[m.start():] if m else ""), json.JSONDecoder()
 d, i = dec.raw_decode(s) if m else (None, 0)
+if kind == "cargo-deny":  # JSON objects are the lines that start with "{"; the text summary and stray log lines are skipped, but a "{" line that does not parse fails closed
+    d = [json.loads(l) for l in t.splitlines() if l.startswith("{")]
 if kind in ("govulncheck", "staticcheck"):  # a stream of JSON objects (govulncheck: config, progress, osv, finding; staticcheck: one per diagnostic), not one document; a stray line inside it fails closed as unparseable
     d = [d] if m else []
     while s[i:].strip():
         i += len(s[i:]) - len(s[i:].lstrip())
         o, i = dec.raw_decode(s, i)
         d.append(o)
+if kind == "trufflehog-fs":  # stderr log lines share the file: only lines that open an object are findings (Raw, RawV2 and Redacted on them are never read); no finding object at all is not run, never clean
+    d = [o for o in tfj if isinstance(o, dict) and "DetectorName" in o]
+    if not d and not tfok:
+        sys.exit("sjson: trufflehog-fs output has no finding objects and no clean-scan marker")
 # Wrong-shape JSON must not read as clean: gitleaks is a list, semgrep and osv an object with a "results" list.
 if kind == "gitleaks":
     if not isinstance(d, list):
@@ -346,6 +360,18 @@ elif kind == "staticcheck":  # each diagnostic: code, severity (may be absent), 
         sys.exit("sjson: staticcheck output is not a stream of diagnostics")
     if any(x["code"] == "compile" for x in d):  # a package failed to load or type-check: the rest of the module was not analysed, so never clean
         sys.exit("sjson: staticcheck could not load a package (compile diagnostic)")
+elif kind == "trufflehog-fs":
+    if not all(isinstance(o["DetectorName"], str) for o in d):
+        sys.exit("sjson: trufflehog-fs DetectorName is not a string")
+elif kind == "cargo-deny":  # every line is an object with a type; at least one, so empty output never reads as clean
+    if not (d or okl) or not all(isinstance(x, dict) and isinstance(x.get("type"), str) for x in d):
+        sys.exit("sjson: cargo-deny output is not a stream of typed JSON objects")
+elif kind == "cargo-audit":  # a report object: vulnerabilities{found, count, list}
+    v = d.get("vulnerabilities") if isinstance(d, dict) else None
+    if not isinstance(v, dict) or not isinstance(v.get("list"), list) or not all(isinstance(x, dict) and isinstance(x.get("advisory"), dict) and isinstance(x.get("package"), dict) for x in v["list"]):
+        sys.exit("sjson: cargo-audit output has no vulnerabilities list")
+    if v.get("count") != len(v["list"]) or v.get("found") is not bool(v["list"]):  # found/count must agree with the list, else the report is not trusted
+        sys.exit("sjson: cargo-audit found/count disagrees with its vulnerabilities list")
 elif kind == "tflint":  # {issues, errors}: any error leaves the module unlinted
     if not isinstance(d, dict) or not isinstance(d.get("issues"), list) or not isinstance(d.get("errors"), list):
         sys.exit("sjson: tflint output has no issues and errors lists")
@@ -460,6 +486,12 @@ elif kind == "kube-score":  # grade 1 critical, 5 warning (7 almost OK and 10 OK
     rows = [(os.path.relpath(o.get("file_name") or "-"), o.get("file_row") or 0, (t.get("check") or {}).get("id"), cl(f"{'CRITICAL' if t['grade'] <= 1 else 'WARNING'}: {(t.get('check') or {}).get('name')}: {c.get('summary', '')}")) for o in d for t in (o["checks"] or []) if isinstance(t, dict) and isinstance(t.get("grade"), int) and t["grade"] <= 5 and not t.get("skipped") for c in (t.get("comments") or [{}])]
 elif kind == "staticcheck":  # severity is omitted when empty; the check code (SA1000, S1000, ST1000, U1000) is the rule
     rows = [(os.path.relpath(x["location"].get("file") or "-"), x["location"].get("line") or 0, x["code"], cl(f"{x.get('severity') or 'warning'}: {x['message']}")) for x in d]
+elif kind == "trufflehog-fs":  # detector, file and line only: Raw, RawV2, Redacted and ExtraData are never read
+    rows = [(nf(((o.get("SourceMetadata") or {}).get("Data") or {}).get("Filesystem", {}).get("file") or "-"), ((o.get("SourceMetadata") or {}).get("Data") or {}).get("Filesystem", {}).get("line") or 0, cl(o["DetectorName"]), "credential detected (value not shown, not verified)") for o in d]
+elif kind == "cargo-deny":  # only error-level diagnostics (deny.toml sets what is an error); rows land on Cargo.lock: the dependency is the fix site
+    rows = [("Cargo.lock", 0, cl((x.get("fields") or {}).get("code") or "cargo-deny"), cl(f"error: {(x.get('fields') or {}).get('message')}")) for x in d if x.get("type") == "diagnostic" and (x.get("fields") or {}).get("severity") in ("error", "bug")]
+elif kind == "cargo-audit":  # advisory id, then package@version and the advisory title
+    rows = [("Cargo.lock", 0, cl(x["advisory"]["id"]), cl(f"{x['package'].get('name')}@{x['package'].get('version')}: {x['advisory'].get('title', '')}")) for x in d["vulnerabilities"]["list"]]
 elif kind == "tflint":  # message plus rule severity; callers and the rule link are not read
     rows = [(os.path.relpath((i.get("range") or {}).get("filename") or "-"), ((i.get("range") or {}).get("start") or {}).get("line") or 0, (i.get("rule") or {}).get("name"), cl(f"{(i.get('rule') or {}).get('severity')}: {i.get('message', '')}")) for i in d["issues"]]
 elif kind == "brakeman":  # confirm/high/medium/weak is brakeman's own confidence, carried in the message
@@ -846,7 +878,11 @@ hub=(
   'kube-score;verified;batch;\.ya?ml$;route-only;brew install kube-score' # same Kubernetes-manifest filter as kube-linter; rows for critical and warning grades only
   'tflint;verified;each;\.tf$;route-only;brew install tflint' # core terraform ruleset only: no `tflint --init`, no module download, so no network
   'staticcheck;verified;batch;\.go$;route-only;brew install staticcheck' # whole module (./...), rows kept for changed files; loads packages, never runs repo code
+  'cargo-deny;verified;batch;^Cargo\.lock$;route-only;cargo install cargo-deny --locked' # offline: bans, licenses, sources, plus advisories only when a local advisory DB exists; rows land on Cargo.lock; needs cargo; deny.toml decides what is an error
+  'cargo-audit;verified;batch;^Cargo\.lock$;route-only;cargo install cargo-audit --locked' # local advisory DB only (--no-fetch --stale): no DB at CARGO_HOME/advisory-db is NOT CHECKED; rows land on Cargo.lock
   'brakeman;verified;batch;(^|/)(Gemfile(\.lock)?|[^/]+\.(rb|erb))$;route-only;gem install brakeman' # only when the root Gemfile names rails; scans the app, rows kept for changed files
+  'trufflehog-fs;verified;batch;.;route-only;brew install trufflehog' # binary trufflehog; --no-verification always (found credentials are never tried) and --json, whose Raw/Redacted fields are never read: a row is detector, file and line
+  'cosign;verified;each;(^|/)[^/]+\.(sig|bundle)$|(^|/)\.sigstore(/|$);route-only;brew install cosign' # verify-blob offline, no finding rows: only a .bundle with a cosign.pub beside it or at the root and its signed blob is checked, else NOT CHECKED
   'snyk-agent-scan;unverified;each;(^|/)(\.mcp\.json|mcp[^/]*\.json|SKILL\.md)$;route-only;uvx snyk-agent-scan'
 )
 # hubcmd TOOL TARGET...: sets cmd (argv), okrc (extra non-crash exit codes) and jf (file the JSON lands in).
@@ -866,6 +902,10 @@ hubcmd() {
     ruff-security) cmd=(ruff check --select S --output-format json --no-cache --exit-zero "$@") ;;
     syft) sb=$(mktemp "${TMPDIR:-/tmp}/review_sbom.XXXXXX"); cmd=(env SYFT_CHECK_FOR_APP_UPDATE=false syft "$1" -o "syft-json=$sb") ;; # the update check phones home; the SBOM outlives the run
     staticcheck) cmd=(env GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly GOWORK=off staticcheck -f json ./...); okrc="1" ;; # exit 1 = a problem found, but also a setup failure (lintcmd/cmd.go): empty output with exit 1 is not run, and a missing module cache fails offline; one JSON object per line
+    # cargo-deny: --offline is global (docs: no network for cargo or cargo-deny; fetch policy Disallow); --format json prints one JSON object per line on stderr (merged into $out); exit is a bitset of failed checks (advisories 1, bans 2, licenses 4, sources 8), so 1-15 are findings, but 1 is also a plain crash: sjson and the guard below need an error diagnostic
+    cargo-deny) local w=(bans licenses sources); [ -d "${CARGO_HOME:-$HOME/.cargo}/advisory-dbs" ] && w+=(advisories); cmd=(cargo-deny --offline --format json check "${w[@]}"); okrc="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15" ;;
+    # cargo-audit: --no-fetch never touches the network, --stale accepts an old local DB; exit 1 = vulnerabilities found (also failure: the guard needs a row), 2 = error; the JSON report goes to stdout
+    cargo-audit) cmd=(cargo-audit audit --no-fetch --stale --json --file Cargo.lock --db "${CARGO_HOME:-$HOME/.cargo}/advisory-db"); okrc="1" ;;
     kube-score) cmd=(kube-score score -o json "$@"); okrc="1" ;; # exit 1 = a critical check failed, but also every error: a crash prints no JSON, so sjson turns it into not-run (renderer/json_v2/api.go: top-level array)
     tflint) cmd=(tflint --format=json --no-color --call-module-type=none "--chdir=${1%/*}" "--filter=${1##*/}"); okrc="2" ;; # exit 2 = issues found, 1 = error (cmd/cli.go); no --init: plugins are never downloaded
     kube-linter) cmd=(kube-linter lint --format json "$@"); okrc="1" ;; # exit 1 = lint reports (command.go returns "found N lint errors")
@@ -874,6 +914,7 @@ hubcmd() {
     # exit 1 = lint errors; the project's own binary only (never npx, no network); -f json is the built-in formatter
     eslint-security) cmd=(./node_modules/.bin/eslint -f json "$@"); okrc="1" ;;
     licensee) cmd=(licensee detect --json "$1") ;;
+    trufflehog-fs) cmd=(trufflehog filesystem --no-verification --no-update --json "$@") ;; # never verifies; exit 0 even with findings (no --fail); stdout and stderr share the file, so sjson reads only the JSON lines
     brakeman) cmd=(brakeman -q --no-pager -f json --no-exit-on-warn --no-exit-on-error) ;; # scans the cwd app; the flags keep findings and scan errors from changing the exit code
   esac
 }
@@ -896,17 +937,31 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   [ "$hs" != verified ] || case $hn in syft|licensee) ;; *) wired+=" $hn" ;; esac # syft and licensee are inventories, not scanners: never wired or ran
   nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
   if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
-  hb=$hn; [ "$hn" != ruff-security ] || hb=ruff; [ "$hn" != eslint-security ] || hb=./node_modules/.bin/eslint
+  hb=$hn; [ "$hn" != ruff-security ] || hb=ruff; [ "$hn" != trufflehog-fs ] || hb=trufflehog; [ "$hn" != eslint-security ] || hb=./node_modules/.bin/eslint
   command -v "$hb" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
   hubtool=$hn
   # zizmor, actionlint, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
   case $hn in grype|checkov|gosec|govulncheck|staticcheck|kics) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
   case $hn in gosec|govulncheck|staticcheck) [ -f go.mod ] || { nc "no go.mod at repo root"; continue; } ;; esac
   case $hn in govulncheck|staticcheck) command -v go >/dev/null || { nc "go toolchain missing"; continue; } ;; esac
+  case $hn in cargo-deny) command -v cargo >/dev/null || { nc "cargo toolchain missing"; continue; } ;; cargo-audit) [ -d "${CARGO_HOME:-$HOME/.cargo}/advisory-db" ] || { nc "no local advisory DB at ${CARGO_HOME:-~/.cargo}/advisory-db (never fetched)"; continue; } ;; esac
   targets=()
   if [ "$hm" = batch ]; then while IFS= read -r f; do targets+=("./$f"); done <<<"$hf"; fi
   # ponytail: batch tools get every matching file in one call (argv/timeout ceiling); chunk like semgrep if it bites.
   while IFS= read -r f; do
+    if [ "$hn" = cosign ]; then # offline verify-blob (--insecure-ignore-tlog and --offline=true: no transparency-log lookup; key plus bundle needs no TUF fetch); a pass proves the bundle matches a key kept in the repo, not who owns that key
+      ck=; for k in "${f%/*}/cosign.pub" cosign.pub; do [ -f "$k" ] && { ck=$k; break; }; done; bl=${f%.bundle}
+      if [[ $f != *.bundle ]]; then nc "$f: only a .bundle is verified offline (raw signatures and attestations are not)"
+      elif [ -z "$ck" ]; then nc "$f: no cosign.pub beside it or at the repo root"
+      elif [ ! -f "$bl" ]; then nc "$f: signed file $bl is missing"
+      elif run_one cosign cosign verify-blob --key "./$ck" --bundle "./$f" --insecure-ignore-tlog=true --offline=true "./$bl"; then
+        # cosign gives one exit code for a bad signature and for an error: both are not run, never clean; empty output is not run either
+        if [ "$rc" != 0 ]; then skip cosign "$f: verify-blob exit $rc (a bad signature and an error look alike)"
+        elif ! grep -q '[^[:space:]]' "$out"; then skip cosign "$f: verify-blob printed nothing"
+        else case " $ran " in *" cosign "*) ;; *) ran+=" cosign" ;; esac; echo "review_checks: cosign verify-blob OK for $f against $ck (offline, transparency log not checked)" >&2; fi
+      fi
+      continue
+    fi
     if [ "$hm" = batch ]; then hubcmd "$hn" "${targets[@]}"; else
       hubcmd "$hn" "./$f"
     fi
@@ -925,7 +980,8 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       continue
     fi
     [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
-    if sjson "$hn" "$jf" >"$tsv"; then
+    # a failing exit with no row is a crash (cargo-deny exit 1 is also its advisories bit): not a finding, never clean
+    if TF_RC=$rc sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; esac; }; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
         printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0
