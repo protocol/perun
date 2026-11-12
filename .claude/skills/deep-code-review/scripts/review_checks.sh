@@ -346,9 +346,9 @@ elif kind == "checkov":
         sys.exit("sjson: checkov output has no results object")
     if any(x["results"].get("parsing_errors") for x in ds):  # an unparsed file must not read as clean
         sys.exit("sjson: checkov could not parse the file")
-elif kind == "trufflehog":  # SARIF: runs[].results[]; a clean scan still prints the document with "results": []
+elif kind in ("trufflehog", "codeql"):  # SARIF: runs[].results[]; a clean scan still prints the document with "results": []
     if not isinstance(d, dict) or not isinstance(d.get("runs"), list) or not d["runs"] or not all(isinstance(x, dict) and isinstance(x.get("results"), list) for x in d["runs"]):
-        sys.exit("sjson: trufflehog output has no SARIF runs[].results list")
+        sys.exit(f"sjson: {kind} output has no SARIF runs[].results list")
 elif kind == "guarddog":  # results: rule -> hits; errors: rule -> why it did not run (its key stays in results, empty). A rule error costs that rule only: the other hits stay and a not-checked row names it
     if not isinstance(d, dict) or not isinstance(d.get("results"), dict) or not isinstance(d.get("errors") or {}, dict) or not any(str(r).startswith("threat-") for r in (*d["results"], *(d.get("errors") or {}))):
         sys.exit("sjson: guarddog output has no results object or no threat-* rule")
@@ -465,6 +465,11 @@ elif kind == "semgrep":
     ps = sorted({pfx(f) for f in fs} - {""}, key=len, reverse=True)
     cid = lambda i: next((i[len(q):] for q in ps if isinstance(i, str) and i.startswith(q)), i)
     rows = [(r["path"], r["start"]["line"], cid(r.get("check_id")), (r.get("extra") or {}).get("message", "")) for r in d["results"]]
+elif kind == "codeql":  # SARIF: ruleId, uri, startLine and the query's message text (never source); results with no location raise: unparseable, never dropped
+    for run in d["runs"]:
+        for r in run["results"]:
+            p = r["locations"][0]["physicalLocation"]
+            rows.append((nf(p["artifactLocation"]["uri"]), p.get("region", {}).get("startLine", 0), cl(r["ruleId"]), cl((r.get("message") or {}).get("text", ""))[:200]))
 elif kind == "trufflehog":  # only ruleId (the detector), uri and startLine are read; the message is ours. A result with no location raises: unparseable, never dropped
     for run in d["runs"]:
         for r in run["results"]:
@@ -1065,6 +1070,42 @@ if [ -n "$dcf" ]; then
     if [ "$dcok" = 1 ] || [ "$rc" = 124 ] || [ "$rc" = 142 ]; then while IFS=$'\t' read -r f l r m; do add dep-currency "$f" "$l" "$r" "$m"; done <"$out"; fi
   fi
 fi
+
+# Built-in, no tool to install: dependency risk (dep_risk.py), offline. New or changed deps in a changed package.json, requirements*.txt, pyproject.toml or setup.py: typosquat-near names, git/URL specs, floating
+# specs, install scripts. Rows: tool dep-risk; leads for the reviewer, never verdicts. Registry age and maintainer signals are not offline-derivable, so they are not checked here (dep-currency and guarddog cover them online).
+dr="$here/dep_risk.py"
+drf=$(changed '(^|/)(package\.json|[^/]*requirements[^/]*\.txt|pyproject\.toml|setup\.py)$')
+if [ -n "$drf" ]; then
+  if [ ! -f "$dr" ]; then skip dep-risk "dep_risk.py missing"
+  else
+    wired+=" dep-risk"; if [ "$full" = 1 ]; then drb=$base; else drb=$(git merge-base "$ref" HEAD 2>/dev/null || echo "$ref"); fi
+    if run_one dep-risk bash -c 'python3 -I "$1" --base "$2" <<<"$3"' _ "$dr" "$drb" "$drf" && scan_ok dep-risk; then
+      while IFS=$'\t' read -r f l r m; do [ -z "$m" ] || add dep-risk "$f" "$l" "$r" "$m"; done <"$out"
+    fi
+  fi
+fi
+
+# CodeQL (route-only, never bundled): Python and JavaScript/TypeScript need no build. One database per language over the whole repo, analyzed with the language's default queries and --no-download
+# (a cold query-pack cache is a "not run", never clean); in diff mode only rows on changed files are kept. Not installed: NOT CHECKED, only when a changed file matches. Heavy, so it takes the lease.
+# Flags verified against the CodeQL CLI manual (database create / analyze) on 2026-11-12; --format=sarifv2.1.0, not sarif-latest (whose version drifts per release).
+for cqp in 'python;\.py$' 'javascript-typescript;\.(js|jsx|mjs|cjs|ts|tsx)$'; do
+  cql=${cqp%%;*}; cqf=$(changed "${cqp#*;}"); [ -n "$cqf" ] || continue
+  hubtool=codeql
+  if ! command -v codeql >/dev/null; then echo "NOT CHECKED: codeql (install: brew install codeql)" >&2; add codeql "" 0 not-checked "install: brew install codeql"; missing+=" codeql"; miss codeql "install: brew install codeql"; hubtool=; break; fi
+  lease_take || { skip codeql "heavy lease full"; hubtool=; break; }
+  case " $wired " in *" codeql "*) ;; *) wired+=" codeql" ;; esac # counted only when installed: a missing tool is NOT CHECKED above, so it never skews the ran/wired ratio of repos that do not use it
+  cdb=$td/cql-$cql
+  if run_one codeql codeql database create "$cdb" --language="$cql" --source-root=. --overwrite --threads=1 && scan_ok codeql; then
+    : >"$rep"
+    if run_one codeql codeql database analyze "$cdb" --format=sarifv2.1.0 --output="$rep" --no-download --threads=1 && scan_ok codeql; then
+      if sjson codeql "$rep" >"$tsv"; then
+        case " $ran " in *" codeql "*) ;; *) ran+=" codeql" ;; esac
+        while IFS=$'\t' read -r f l r m; do [ "$full" = 1 ] || grep -qxF -- "$f" "$td/files" || continue; add codeql "$f" "$l" "$r" "$m"; done <"$tsv"
+      else skip codeql "unparseable output"; fi
+    fi
+  fi
+  hubtool=
+done
 
 # Built-in, no tool to install, base mode only: unchanged call sites of a function whose call arguments this diff changed (sibling_sweep.py; read-only git diff and git grep against commits, no checkout).
 # Cheap, so unleased. Rows: tool sibling-sweep, rule unchanged-sibling-call|not-checked; leads for the reviewer to open, never findings. The script's one-line stderr summary lands in $out too and is not a row (no tabs).
