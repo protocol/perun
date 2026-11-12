@@ -1,0 +1,4 @@
+### Added
+- review_checks.sh routes flawfinder (C/C++, SARIF), cppcheck (C/C++ without a project build, XML read from its stderr, primary location first) and devskim (multi-language, one file per run, SARIF) through the tool hub. Each is NOT CHECKED with an install hint when missing, counts as wired only once installed, and is not run on a crash, empty output, wrong-shape output or a non-zero exit. Changed files only. Flags, exit codes and licenses (GPLv2+, GPLv3, MIT) were checked against man pages, manuals and cloned source fetched 2026-11-12; no network code was found in any of the three (DevSkim's NuGet dependencies were not audited, marked unverified in tool-hub.md).
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 43180→46217 three hub rows with their verification and egress evidence
