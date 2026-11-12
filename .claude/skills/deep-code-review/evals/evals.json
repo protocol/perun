@@ -8486,6 +8486,18 @@
         "Does not drop the finding on the comment alone",
         "Keeps the finding or unverified lead at its provisional severity, ranked below proven findings"
       ]
+    },
+    {
+      "id": "insecure-defaults-fail-open-sweep",
+      "prompt": "Security-audit a small fictional service. review_checks.sh --full returns insecure-defaults rows: src/auth.py:20 default-on-security-flag (`os.getenv('AUTH_DISABLED', 'true')`), src/auth.py:41 fail-open-exception (a broad `except Exception: return True` inside `is_authorized`), and src/http.py:9 tls-verify-off (`verify=False`). deploy/prod.env sets AUTH_DISABLED=false; no config touches the other two. What do you report?",
+      "expected_output": "Treats each row as a lead and checks the shipped value. Drops or downgrades the AUTH_DISABLED row because deploy/prod.env sets it false at a cited file:line, while noting the default still fails open if the variable is ever unset. Reports the fail-open is_authorized exception path and the verify=False call as findings with file:line, since nothing in the code or config makes them fail closed; does not claim the repo is clean because only some rows survive.",
+      "expectations": [
+        "Cites deploy/prod.env as the evidence for dropping or downgrading the AUTH_DISABLED row",
+        "Keeps the fail-open except path in is_authorized as a finding with file:line",
+        "Keeps verify=False as a finding with file:line",
+        "Does not report all three rows unchecked, and does not dismiss all three",
+        "States the dropped row's fail-open default as residual risk"
+      ]
     }
   ]
 }
