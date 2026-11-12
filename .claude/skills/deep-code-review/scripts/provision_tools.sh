@@ -3,7 +3,7 @@
 # the tools and their offline caches are provisioned ONCE by the owner, outside the sandbox.
 # Default (dry run): list the scanner binaries not on PATH and the cold caches (trivy DB, osv-scanner offline DB, local semgrep p/default
 # snapshot). Installs nothing, writes nothing, exit 0.
-# --print: emit ONE copy-paste line (type it yourself outside the sandbox, with the `!` prefix) that installs what is missing (brew, pipx;
+# --print: emit ONE copy-paste line (type it yourself outside the sandbox, with the `!` prefix) that installs what is missing (brew, pipx, gem;
 # pipx pins are the PyPI versions checked 2026-10-29, brew formulae cannot be pinned) and warms the cold caches; it ends with this script's
 # dry run so the result is visible. Nothing missing or cold: a `# nothing to provision` comment. DIR (default: the current dir) is the
 # project whose root lockfiles osv-scanner downloads offline databases for (one per ecosystem found there). A DIR given on the command line
@@ -56,14 +56,18 @@ scorecard brew scorecard
 gosec brew gosec
 grype brew grype
 checkov pipx checkov==3.4.0
-hadolint brew hadolint'
+hadolint brew hadolint
+ruff pipx ruff
+syft brew syft
+kube-linter brew kube-linter
+brakeman gem brakeman'
 lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin} # pipx and `uv tool` install here; a sandboxed PATH may lack it
-miss=0 cold=0 brew=() pipx=() fix=()
+miss=0 cold=0 brew=() pipx=() gem=() fix=()
 while read -r bin how spec; do
   if command -v "$bin" >/dev/null; then echo "ok       $bin"; continue; fi
   if [ -n "$lb" ] && [ -x "$lb/$bin" ]; then echo "ok       $bin ($lb/$bin, not on PATH; review_checks.sh adds $lb)"; continue; fi
   echo "MISSING  $bin ($how install $spec)"; miss=$((miss + 1))
-  if [ "$how" = brew ]; then brew+=("$spec"); else pipx+=("$spec"); fi
+  case $how in brew) brew+=("$spec") ;; gem) gem+=("$spec") ;; *) pipx+=("$spec") ;; esac
 done <<<"$tools"
 [ ${#pipx[@]} -eq 0 ] || command -v pipx >/dev/null || brew=(pipx ${brew[@]+"${brew[@]}"})
 [ ${#brew[@]} -eq 0 ] || command -v brew >/dev/null || echo "note: brew not found; install Homebrew (https://brew.sh) or use each tool's own installer"
@@ -81,6 +85,7 @@ echo "provision_tools: $miss missing, $cold cold; nothing was installed or downl
 cmd=()
 [ ${#brew[@]} -eq 0 ] || cmd+=("brew install ${brew[*]}")
 for p in ${pipx[@]+"${pipx[@]}"}; do cmd+=("pipx install $p"); done
+for p in ${gem[@]+"${gem[@]}"}; do cmd+=("gem install $p"); done
 [ ${#fix[@]} -eq 0 ] || cmd+=("${fix[@]}")
 [ ${#cmd[@]} -gt 0 ] || { echo "# nothing to provision" >&3; exit 0; }
 cmd+=("bash $(q "$self")") # re-check at the end so the owner sees what is still missing
