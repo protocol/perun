@@ -140,5 +140,5 @@ grep -q 'not run: codeql' "$T/err" && ! grep -qE "analyzers ran:.*\bcodeql\b" "$
 mkdir "$T/r3" && cd "$T/r3" && git init -q . && echo 'let a=1;' >a.js && G add . && G commit -q -m b && git branch base && echo 'let b=2;' >>a.js && G commit -qam c
 : >"$T/cq.log"; PATH="$T/bin:$T/base:$T/sys" bash "$RC" --base base 2>"$T/err" >"$T/out" || true
 grep -q 'language=javascript-typescript' "$T/cq.log" && ! grep -q 'language=python' "$T/cq.log" && ok "js-only change builds no python db" || bad "js-only routing"
-grep -q 'govulncheck|codeql)' "$RC" && ok "codeql in the degraded-lease list" || bad "codeql not degraded-listed"
+grep -q 'staticcheck|codeql)' "$RC" && ok "codeql in the degraded-lease list" || bad "codeql not degraded-listed"
 exit $fail
