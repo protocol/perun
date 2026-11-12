@@ -1,0 +1,3 @@
+### Added
+- `review_checks.sh` tool hub routes four more installed tools, each `NOT CHECKED` when missing and `not run` on a crash or wrong-shape output: `ruff-security` (`ruff check --select S`, its own row beside `bandit`), `syft` (package count on stderr and the SBOM kept in `$TMPDIR`, no finding row), `kube-linter` (only YAML with `apiVersion:` and `kind:`) and `brakeman` (only when the root `Gemfile` names rails). `cargo-audit` is not routed: `osv-scanner` already reads `Cargo.lock` and OSV carries the RustSec advisories.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 19926→22199 hub rows for ruff-security, syft, kube-linter, brakeman and the cargo-audit decision
