@@ -61,6 +61,8 @@ ruff pipx ruff
 syft brew syft
 kube-linter brew kube-linter
 brakeman gem brakeman
+kics brew kics
+licensee gem licensee
 opengrep brew opengrep
 nuclei brew nuclei'
 lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin} # pipx and `uv tool` install here; a sandboxed PATH may lack it
