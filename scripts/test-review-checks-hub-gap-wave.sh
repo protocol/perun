@@ -21,7 +21,12 @@ cat >"$T/stub" <<'S'
 n=${0##*/}; v=J_${n//-/_}
 echo "$n $*" >>"$HUB_LOG"
 [ "${HUB_MODE:-}" != crash ] || exit 9
-printf '%s\n' "${!v}"
+o=${!v}
+if [ "$n" = tflint ]; then # real tflint reports range.filename as chdir joined with the filter (cmd/inspect.go: filterFiles = Join(Chdir, file)), so derive it from the args
+  for a in "$@"; do case $a in --chdir=*) cd_=${a#--chdir=} ;; --filter=*) fl=${a#--filter=} ;; esac; done
+  cd_=${cd_#./}; [ "$cd_" != . ] || cd_=; o=${o//@F@/${cd_:+$cd_/}$fl}
+fi
+printf '%s\n' "$o"
 [ "$n" != kube-score ] || exit "${KS_RC:-1}"
 exit "${TF_RC:-2}"
 S
@@ -34,7 +39,7 @@ for b in bash env git grep sed head tail cat rm mkdir mktemp dirname basename py
   p=$(type -P "$b") || continue; ln -s "$p" "$T/sys/$b"
 done
 export J_kube_score='[{"object_name":"v1/Deployment/web","type_meta":{},"object_meta":{},"file_name":"./deploy.yaml","file_row":1,"checks":[{"check":{"name":"Container Image Tag","id":"container-image-tag"},"grade":1,"skipped":false,"comments":[{"path":"web","summary":"Image with latest tag","description":"SECRETDESC"}]},{"check":{"name":"Pod Probes","id":"pod-probes"},"grade":5,"skipped":false,"comments":[]},{"check":{"name":"Stable API","id":"stable-api"},"grade":10,"skipped":false,"comments":[]},{"check":{"name":"Skipped","id":"skipped-check"},"grade":1,"skipped":true,"comments":[]}]}]'
-export J_tflint='{"issues":[{"rule":{"name":"terraform_unused_declarations","severity":"warning","link":"x"},"message":"variable v is declared but not used","range":{"filename":"main.tf","start":{"line":3,"column":1},"end":{"line":3,"column":9}},"callers":[],"fixable":false,"fixed":false}],"errors":[]}'
+export J_tflint='{"issues":[{"rule":{"name":"terraform_unused_declarations","severity":"warning","link":"x"},"message":"variable v is declared but not used","range":{"filename":"@F@","start":{"line":3,"column":1},"end":{"line":3,"column":9}},"callers":[],"fixable":false,"fixed":false}],"errors":[]}'
 run() { PATH="$T/bin:$T/base:$T/sys" bash "$RC" --base base 2>"$T/err" >"$T/out"; }
 row() { jq -e --arg t "$1" --arg f "$2" --arg r "$3" 'any(.[]; .tool==$t and .file==$f and .rule==$r)' "$T/out" >/dev/null; }
 nck() { jq -e --arg t "$1" 'any(.[]; .tool==$t and .rule=="not-checked" and .file=="")' "$T/out" >/dev/null; }
@@ -46,7 +51,7 @@ jq -e 'any(.[]; .rule=="stable-api" or .rule=="skipped-check")|not' "$T/out" >/d
 grep -qx 'kube-score score -o json ./deploy.yaml' "$HUB_LOG" && ok "kube-score: k8s manifest only (no plain yaml, no Helm template)" || bad "kube-score args: $(grep ^kube-score "$HUB_LOG")"
 grep -qx 'tflint --format=json --no-color --call-module-type=none --chdir=. --filter=main.tf' "$HUB_LOG" && grep -qx 'tflint --format=json --no-color --call-module-type=none --chdir=./sub --filter=b.tf' "$HUB_LOG" && ok "tflint: one call per .tf, chdir + filter, no module download" || bad "tflint args: $(grep ^tflint "$HUB_LOG")"
 ! grep -q 'init' "$HUB_LOG" && ok "tflint: never --init" || bad "tflint init"
-row tflint main.tf terraform_unused_declarations && ok "tflint: row on the changed file" || bad "tflint row"
+row tflint main.tf terraform_unused_declarations && row tflint sub/b.tf terraform_unused_declarations && ok "tflint: row per changed file, a sub/ file keeps its directory" || bad "tflint rows: $(jq -c '[.[]|select(.tool=="tflint")|.file]' "$T/out")"
 grep -qE "analyzers ran:.*\bkube-score\b" "$T/err" && grep -qE "analyzers ran:.*\btflint\b" "$T/err" && ok "both listed as ran" || bad "ran list"
 # exit codes: kube-score 0 (clean grades) and tflint 0 (no issues) are fine; kube-score 1 or tflint 2 are results (above); tflint 1 is an error
 export TF_RC=1; : >"$HUB_LOG"; run
@@ -59,6 +64,15 @@ grep -q 'not run: kube-score' "$T/err" && ok "kube-score: empty list is not run"
 grep -q 'not run: tflint' "$T/err" && ! grep -qE "analyzers ran:.*\btflint\b" "$T/err" && ok "tflint: errors list is not run, not ran" || bad "tflint errors"
 export J_kube_score='null' J_tflint='{"x":1}'; run
 grep -q 'not run: kube-score' "$T/err" && grep -q 'not run: tflint' "$T/err" && ok "null / wrong-shape JSON: not run" || bad "wrong shape"
+# empty stdout is never clean, whatever the exit code (a tool that died quietly)
+for rc in 0 2 1; do KS_RC=$rc TF_RC=$rc J_kube_score= J_tflint= run
+  grep -q 'not run: kube-score' "$T/err" && grep -q 'not run: tflint' "$T/err" && ! grep -qE "analyzers ran:.*\b(kube-score|tflint)\b" "$T/err" && ok "empty stdout, exit $rc: not run" || bad "empty stdout exit $rc"; done
+export KS_RC=1 TF_RC=2
+# a manifest with no checks (CRD or ConfigMap only) marshals checks as null: ran, no row, next object still scored
+export J_kube_score='[{"object_name":"c","file_name":"./deploy.yaml","file_row":1,"checks":null},'"${O_ks#[}"; run
+grep -qE "analyzers ran:.*\bkube-score\b" "$T/err" && ! grep -q 'not run: kube-score' "$T/err" && row kube-score deploy.yaml container-image-tag && ok "kube-score: checks null accepted, other objects still scored" || bad "checks null"
+export J_kube_score='[{"object_name":"c","file_name":"./deploy.yaml","file_row":1,"checks":null}]'; run
+grep -qE "analyzers ran:.*\bkube-score\b" "$T/err" && jq -e 'any(.[]; .tool=="kube-score")|not' "$T/out" >/dev/null && ok "kube-score: only checks null is clean, ran" || bad "checks null only"
 export J_kube_score=$O_ks J_tflint=$O_tf
 HUB_MODE=crash run
 grep -q 'not run: kube-score' "$T/err" && grep -q 'not run: tflint' "$T/err" && ! grep -qE "analyzers ran:.*\b(kube-score|tflint)\b" "$T/err" && ok "crash: not run, never clean" || bad "crash"

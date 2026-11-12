@@ -62,6 +62,7 @@ syft brew syft
 kube-linter brew kube-linter
 kube-score brew kube-score
 tflint brew tflint
+staticcheck brew staticcheck
 brakeman gem brakeman
 kics brew kics
 licensee gem licensee
