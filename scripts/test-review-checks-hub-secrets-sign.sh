@@ -19,13 +19,13 @@ cat >"$T/bin/trufflehog" <<'S'
 echo "trufflehog $*" >>"$HUB_LOG"
 [ "${HUB_MODE:-}" != crash ] || exit 9
 printf '%s' "$J_tf"
-exit 0
+exit "${TF_RC:-0}"
 S
 cat >"$T/bin/cosign" <<'S'
 #!/usr/bin/env bash
 echo "cosign $*" >>"$HUB_LOG"
 [ "${HUB_MODE:-}" != crash ] || exit 9
-printf '%s' "$CS_OUT"
+printf '%s' "$CS_OUT" >&2 # real cosign prints "Verified OK" to stderr
 exit "${CS_RC:-0}"
 S
 chmod +x "$T/bin/trufflehog" "$T/bin/cosign"
@@ -47,20 +47,29 @@ notrun() { grep -q "not run: $1" "$T/err" && ! ran "$1"; }
 : >"$HUB_LOG"; CS_OUT='Verified OK' run
 tf app.cfg AWS && ok "trufflehog-fs: row = detector, file, line on a changed file" || bad "tf row: $(jq -c '[.[]|select(.tool=="trufflehog-fs")]' "$T/out")"
 jq -e 'any(.[]; .tool=="trufflehog-fs" and .line==4)' "$T/out" >/dev/null && ok "line carried" || bad "line"
-! grep -rqF "$SECRET" "$T/out" "$T/err" && ! grep -qF 'SUPER***' "$T/out" "$T/err" && ok "secret value never printed (stdout, stderr)" || bad "secret leaked"
+! grep -rqF "$SECRET" "$T" && ! grep -rqF 'SUPER***' "$T" && ! grep -qF 'SUPER***' "$T/out" "$T/err" && ok "secret value never printed (stdout, stderr, every file under the temp dir)" || bad "secret leaked"
 grep -q '^trufflehog filesystem --no-verification --no-update --json ' "$HUB_LOG" && ! grep -q 'verif' <(grep '^trufflehog' "$HUB_LOG" | sed 's/--no-verification//') && ok "always --no-verification --json, never a verify flag" || bad "flags: $(grep ^trufflehog "$HUB_LOG")"
 ran trufflehog-fs && ok "trufflehog-fs: ran" || bad "tf ran: $(grep -E "ran|trufflehog-fs" "$T/err")"
 for c in '' $' \n\t\n' '2026 info-0 only log lines' 'not json' '{"x":1}'; do
   J_tf=$c run; notrun trufflehog-fs && ok "trufflehog-fs: not run on $(printf %q "$c")" || bad "tf not run: $(printf %q "$c")"
 done
 J_tf='{"SourceMetadata":{"Data":{"Filesystem":{"file":"other.txt","line":1}}},"DetectorName":"Slack","Raw":"x"}' run; grep -q 'not run: trufflehog-fs (1 of 1 rows named a file outside' "$T/err" && ok "trufflehog-fs: a row for a file outside the scanned list is not run, never clean" || bad "outside row"
+# real trufflehog prints no JSON when clean: exit 0 plus the stderr "finished scanning" log line is a clean run; anything else without a finding stays not run
+FIN=$'2026-01-01T00:00:01Z\tinfo-0\ttrufflehog\tfinished scanning\t{"chunks": 1}'
+J_tf=$FIN run; ran trufflehog-fs && ! tf app.cfg AWS && ! grep -q 'not run: trufflehog-fs' "$T/err" && ok "trufflehog-fs: exit 0 + finished scanning, no JSON = clean ran" || bad "tf clean marker: $(grep trufflehog "$T/err")"
+J_tf=$FIN TF_RC=1 run; notrun trufflehog-fs && ok "trufflehog-fs: marker with exit 1 is not run" || bad "tf marker rc1"
+J_tf='{"x":"finished scanning"}' run; notrun trufflehog-fs && ok "trufflehog-fs: marker inside a { line is not a marker" || bad "tf forged marker"
+J_tf=$'{not json\n'$FIN run; ran trufflehog-fs && ok "trufflehog-fs: a { line that is not JSON is skipped (clean with marker)" || bad "tf skip bad line"
+J_tf='{not json' run; notrun trufflehog-fs && ok "trufflehog-fs: only a bad { line and no marker is not run" || bad "tf bad line only"
+J_tf=$'{not json\n{"SourceMetadata":{"Data":{"Filesystem":{"file":"./app.cfg","line":4}}},"DetectorName":"AWS","Raw":"'$SECRET'"}' run
+tf app.cfg AWS && ran trufflehog-fs && ! grep -rqF "$SECRET" "$T" && ok "trufflehog-fs: bad { line skipped, the finding after it still parses, no Raw leak" || bad "tf skip + finding"
 HUB_MODE=crash run; notrun trufflehog-fs && ok "trufflehog-fs: crash is not run" || bad "tf crash"
 # cosign: only a .bundle with a cosign.pub and its signed file; nothing else is verified
 : >"$HUB_LOG"; CS_OUT='Verified OK' run
 grep -q 'NOT CHECKED: cosign (raw.sig: only a .bundle' "$T/err" && grep -q 'NOT CHECKED: cosign (art.tgz.bundle: no cosign.pub' "$T/err" && ok "cosign: raw .sig and a bundle with no key: NOT CHECKED" || bad "cosign gates: $(grep cosign "$T/err")"
 ! grep -q '^cosign' "$HUB_LOG" && ok "cosign: nothing run without a key" || bad "cosign ran keyless"
 printf 'pub\n' >cosign.pub; G add . && G commit -q -m key; : >"$HUB_LOG"; CS_OUT='Verified OK' run
-grep -qx 'cosign verify-blob --key ./cosign.pub --bundle ./art.tgz.bundle --insecure-ignore-tlog=true ./art.tgz' "$HUB_LOG" && [ "$(grep -c ^cosign "$HUB_LOG")" = 1 ] && ok "cosign: verify-blob offline (key, bundle, ignore-tlog), one call for the bundle" || bad "cosign argv: $(grep ^cosign "$HUB_LOG")"
+grep -qx 'cosign verify-blob --key ./cosign.pub --bundle ./art.tgz.bundle --insecure-ignore-tlog=true --offline=true ./art.tgz' "$HUB_LOG" && [ "$(grep -c ^cosign "$HUB_LOG")" = 1 ] && ok "cosign: verify-blob offline (key, bundle, ignore-tlog), one call for the bundle" || bad "cosign argv: $(grep ^cosign "$HUB_LOG")"
 ran cosign && jq -e 'any(.[]; .tool=="cosign" and .rule!="not-checked")|not' "$T/out" >/dev/null && ok "cosign: ran, no finding rows" || bad "cosign ran"
 for c in '' $' \n'; do CS_OUT=$c run; notrun cosign && ok "cosign: exit 0 with $(printf %q "$c") output is not run" || bad "cosign empty"; done
 CS_RC=1 CS_OUT='error: invalid signature' run; notrun cosign && ok "cosign: exit 1 is not run, never clean" || bad "cosign exit 1"

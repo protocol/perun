@@ -305,8 +305,15 @@ def nf(f):  # scanners echo the path they were given ("./.github/..."); rows mus
 cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package or file can be named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 # The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
+if kind == "trufflehog-fs":  # stdout JSON lines and stderr log lines share the file; a line that opens with { but is not JSON is skipped. Clean = TF_RC 0 and trufflehog's closing log line "finished scanning" (main.go logger.Info), which is printed even with no findings (then no JSON at all)
+    tfl = t.splitlines(); tfok = os.environ.get("TF_RC") == "0" and any(l[:1] != "{" and "finished scanning" in l for l in tfl); tfj = []
+    for l in tfl:
+        if l.startswith("{"):
+            try: tfj.append(json.loads(l))
+            except ValueError: pass
+    t = ""
 m = re.search(r"^[\[{]", t, re.M)
-if not m and not (kind == "staticcheck" and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
+if not m and not (kind in ("staticcheck", "trufflehog-fs") and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
     sys.exit("sjson: no JSON in scanner output")
 s, dec = (t[m.start():] if m else ""), json.JSONDecoder()
 d, i = dec.raw_decode(s) if m else (None, 0)
@@ -317,9 +324,9 @@ if kind in ("govulncheck", "staticcheck"):  # a stream of JSON objects (govulnch
         o, i = dec.raw_decode(s, i)
         d.append(o)
 if kind == "trufflehog-fs":  # stderr log lines share the file: only lines that open an object are findings (Raw, RawV2 and Redacted on them are never read); no finding object at all is not run, never clean
-    d = [o for o in (json.loads(l) for l in t.splitlines() if l.startswith("{")) if isinstance(o, dict) and "DetectorName" in o]
-    if not d:
-        sys.exit("sjson: trufflehog-fs output has no finding objects")
+    d = [o for o in tfj if isinstance(o, dict) and "DetectorName" in o]
+    if not d and not tfok:
+        sys.exit("sjson: trufflehog-fs output has no finding objects and no clean-scan marker")
 # Wrong-shape JSON must not read as clean: gitleaks is a list, semgrep and osv an object with a "results" list.
 if kind == "gitleaks":
     if not isinstance(d, list):
@@ -919,12 +926,12 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   if [ "$hm" = batch ]; then while IFS= read -r f; do targets+=("./$f"); done <<<"$hf"; fi
   # ponytail: batch tools get every matching file in one call (argv/timeout ceiling); chunk like semgrep if it bites.
   while IFS= read -r f; do
-    if [ "$hn" = cosign ]; then # offline verify-blob (--insecure-ignore-tlog: no transparency-log lookup, so no network); a pass proves the bundle matches a key kept in the repo, not who owns that key
+    if [ "$hn" = cosign ]; then # offline verify-blob (--insecure-ignore-tlog and --offline=true: no transparency-log lookup; key plus bundle needs no TUF fetch); a pass proves the bundle matches a key kept in the repo, not who owns that key
       ck=; for k in "${f%/*}/cosign.pub" cosign.pub; do [ -f "$k" ] && { ck=$k; break; }; done; bl=${f%.bundle}
       if [[ $f != *.bundle ]]; then nc "$f: only a .bundle is verified offline (raw signatures and attestations are not)"
       elif [ -z "$ck" ]; then nc "$f: no cosign.pub beside it or at the repo root"
       elif [ ! -f "$bl" ]; then nc "$f: signed file $bl is missing"
-      elif run_one cosign cosign verify-blob --key "./$ck" --bundle "./$f" --insecure-ignore-tlog=true "./$bl"; then
+      elif run_one cosign cosign verify-blob --key "./$ck" --bundle "./$f" --insecure-ignore-tlog=true --offline=true "./$bl"; then
         # cosign gives one exit code for a bad signature and for an error: both are not run, never clean; empty output is not run either
         if [ "$rc" != 0 ]; then skip cosign "$f: verify-blob exit $rc (a bad signature and an error look alike)"
         elif ! grep -q '[^[:space:]]' "$out"; then skip cosign "$f: verify-blob printed nothing"
@@ -950,7 +957,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       continue
     fi
     [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
-    if sjson "$hn" "$jf" >"$tsv"; then
+    if TF_RC=$rc sjson "$hn" "$jf" >"$tsv"; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
         printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0
