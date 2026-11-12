@@ -2,7 +2,7 @@
 # review_checks.sh hub routing for ruff-security (ruff check --select S), syft, kube-linter and brakeman, with stub binaries on a hermetic PATH
 # (no real tool, no network): findings land as rows, syft only counts packages (stderr, SBOM kept in TMPDIR, no row), a missing tool is "NOT CHECKED"
 # with a not-checked row, a crash or wrong-shape JSON is "not run" (never clean), kube-linter only sees real Kubernetes manifests, brakeman only runs
-# when the root Gemfile names rails, and cargo-audit is deliberately not routed (osv-scanner covers Cargo.lock; see tool-hub.md).
+# when the root Gemfile names rails (cargo-audit and cargo-deny: test-review-checks-hub-rust.sh).
 # REVIEW_CHECKS=<path> runs another copy of the script (used to prove the cases fail before the change).
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -88,8 +88,6 @@ grep -q 'not run: syft (exit 9)' "$T/err" && ! grep -qE "analyzers ran:.*\bsyft\
 G rm -q deploy.yaml; printf "source 'https://rubygems.org'\ngem 'sinatra'\n" >Gemfile; G add -A; G commit -q -m nok8s
 : >"$HUB_LOG"; run ""
 ! grep -qE 'NOT CHECKED: (kube-linter|brakeman)' "$T/err" && ok "no manifest / no rails: not routed" || bad "gating"
-# cargo-audit: not routed, and the doc says why
-! grep -q cargo-audit "$RC" && grep -q 'cargo-audit' "$ROOT/.claude/skills/deep-code-review/references/tool-hub.md" && ok "cargo-audit skipped and explained" || bad "cargo-audit"
 H=$ROOT/.claude/skills/deep-code-review/references/tool-hub.md
 for t in ruff-security syft kube-linter brakeman; do grep -q "^| \`$t\` |" "$H" && ok "$t documented" || bad "$t documented"; done
 exit $fail
