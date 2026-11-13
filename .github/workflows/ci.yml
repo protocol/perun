@@ -519,7 +519,7 @@ jobs:
   # (pinned, hash-locked where the ecosystem allows; no advisory-DB download, except govulncheck and grype, which fetch their vulnerability DB online) and checks each is RAN with its rule id on one canary. trivy, bundler-audit, kubescape and retire need a downloaded DB or rule set, so they stay stub-only; syft is an inventory the hub never counts as ran.
   real-hub:
     runs-on: ubuntu-24.04  # pinned: the cppcheck .deb below is the noble build and its runtime deps come from noble
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -676,7 +676,8 @@ jobs:
           GOBIN: ${{ runner.temp }}/bin
         run: |
           set -euo pipefail
-          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          # bounded retry (3 tries, 10s then 20s backoff) for a transient proxy error
+          for i in 1 2 3; do if go install golang.org/x/vuln/cmd/govulncheck@v1.9.0; then break; fi; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
           go version -m "$RUNNER_TEMP/bin/govulncheck" | grep -qE "golang.org/x/vuln[[:space:]]+v1.9.0[[:space:]]+h1:12VaqnI9kJfqwRoPptxoqsUhQtdfrSbdksT7X/KY/sc="
       - name: Install grype 0.121.3 (pinned sha256 from the release checksums file; vulnerability DB fetched online, checksum-verified by grype, not pinned)
         run: |
@@ -689,7 +690,7 @@ jobs:
           grep -F ' grype_0.121.3_linux_amd64.tar.gz' grype_0.121.3_checksums.txt | sha256sum -c -
           echo "e9da18cc1429e786722e32161288103600efffd8e483c90761f90485bd1bec85  grype_0.121.3_linux_amd64.tar.gz" | sha256sum -c -
           tar -xzf grype_0.121.3_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" grype
-          GRYPE_CHECK_FOR_APP_UPDATE=false "$RUNNER_TEMP/bin/grype" db update
+          for i in 1 2 3; do if GRYPE_CHECK_FOR_APP_UPDATE=false "$RUNNER_TEMP/bin/grype" db update; then break; fi; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
 

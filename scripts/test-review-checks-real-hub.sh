@@ -50,12 +50,13 @@ case " $tools " in *" govulncheck "*)
   mkdir vulncanary && printf 'package vulncanary\n\nimport "gopkg.in/yaml.v2"\n\nfunc F(b []byte) error {\n\tvar v interface{}\n\treturn yaml.Unmarshal(b, &v)\n}\n' >vulncanary/canary.go
   printf 'module example.com/canary\n\ngo 1.21\n\nrequire gopkg.in/yaml.v2 v2.2.2\n' >go.mod
   # go.sum from the module proxy and checksum DB, module cache filled; the hub run itself is GOPROXY=off
-  GOFLAGS=-mod=mod go mod tidy >"$T/tidy" 2>&1 || { cat "$T/tidy"; echo "FAIL - go mod tidy for the govulncheck canary"; exit 1; } ;;
+  for i in 1 2 3; do GOFLAGS=-mod=mod go mod tidy >"$T/tidy" 2>&1 && break; [ "$i" -lt 3 ] || { cat "$T/tidy"; echo "FAIL - go mod tidy for the govulncheck canary"; exit 1; }; sleep $((i * 10)); done ;;
 esac
 # grype scans an SBOM (the hub never points it at a lockfile): a CycloneDX file with one known-vulnerable package (lodash 4.17.15, GHSA-35jh-r3h4-6jhm); its vulnerability DB is fetched online by the CI step before this runs
 mkdir sbom && printf '{"bomFormat":"CycloneDX","specVersion":"1.5","version":1,"components":[{"type":"library","name":"lodash","version":"4.17.15","purl":"pkg:npm/lodash@4.17.15"}]}\n' >sbom/bom.json
 G add . && G commit -q -m canaries
-rc=0; bash "$RC" --base base >"$T/out" 2>"$T/err" || rc=$?
+# govulncheck (vuln.go.dev) and grype are online: a transient fetch error reads as not run, so retry the hub run up to 3 times while either is not run
+for i in 1 2 3; do rc=0; bash "$RC" --base base >"$T/out" 2>"$T/err" || rc=$?; grep -qE 'not run:.*\b(govulncheck|grype)\b' "$T/err" && [ "$i" -lt 3 ] || break; sleep $((i * 10)); done
 echo "review_checks exit $rc; stderr tail:"; tail -n 15 "$T/err"
 # tool -> rule id regex (rubocop and ansible-lint ids are exact; tfsec and cfn-lint match the rule family, unpinned ids)
 want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-when' ;; rubocop) echo '^Security/Eval$' ;; cfn-lint) echo '^E3' ;;
@@ -63,7 +64,7 @@ want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-wh
   kube-linter) echo '^latest-tag$' ;; flawfinder) echo '^FF1013$' ;; detect-secrets) echo '^Basic Auth Credentials$' ;;
   gitleaks) echo '^github-pat$' ;; trufflehog) echo '^Github$' ;; checkov) echo '^CKV_DOCKER_(3|7)$' ;; kube-score) echo '^container-image-tag$' ;; semgrep) echo '^acme-canary$' ;; njsscan) echo '^eval_nodejs$' ;;
   tflint) echo '^terraform_unused_declarations$' ;; kics) echo "^Image Version Using 'latest'\$" ;; cppcheck) echo '^arrayIndexOutOfBounds$' ;; devskim) echo '^DS126858$' ;;
-  govulncheck) echo '^GO-(2020-0036|2021-0061|2022-0956)$' ;; grype) echo '^GHSA-(35jh-r3h4-6jhm|p6mc-m468-83gw)$' ;; esac; }
+  govulncheck) echo '^GO-(2020-0036|2021-0061|2022-0956)$' ;; grype) echo '^(GHSA-(35jh-r3h4-6jhm|p6mc-m468-83gw)|CVE-2021-23337|CVE-2020-8203)$' ;; esac; }
 # tool -> its canary path (a row must be on this file, not just carry the rule id)
 cany() { case $1 in tfsec) echo infra/main.tf ;; ansible-lint) echo playbooks/site.yml ;; rubocop) echo app/canary.rb ;; cfn-lint) echo infra/stack.yaml ;;
   pmd) echo app/Canary.java ;; solhint) echo contracts/Canary.sol ;; hadolint) echo docker/Dockerfile ;; bandit|ruff-security) echo app/canary.py ;; actionlint) echo .github/workflows/canary.yml ;; zizmor) echo .github/workflows/zcanary.yml ;; gosec|staticcheck) echo gocanary/canary.go ;;
@@ -94,5 +95,7 @@ for t in $tools; do
     echo "--- raw $t output (first 40 lines, exit via rerun) ---"; { raw "$t" 2>&1 || echo "[exit $?]"; } >"$T/raw" || true; head -n 40 "$T/raw"; echo "--- end raw $t ---"
   fi
 done
+# the govulncheck canary package must not feed the other Go canaries (its go.mod has to stay at the repo root: the hub runs govulncheck only there)
+jq -e 'any(.[]; (.tool=="gosec" or .tool=="staticcheck") and (.file|tostring|test("vulncanary")))' "$T/out" >/dev/null && { echo "FAIL - gosec/staticcheck reported a row on vulncanary"; fail=1; }
 [ "$fail" = 0 ] && echo "PASS: test-review-checks-real-hub"
 exit "$fail"
