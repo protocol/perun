@@ -1,0 +1,3 @@
+### Added
+- `review_checks.sh` tool hub routes `pmd` (Java, one file per run, PMD's built-in security ruleset only, SARIF) and `solhint` (Solidity, one file per run, a throwaway `solhint:recommended` config so a project `.solhint.json` that can load plugins is never read, SARIF). Both are `NOT CHECKED` when missing and `not run` on a crash, empty or wrong-shape output or a non-zero exit with no row; neither is in `provision_tools.sh`. Flags are from the fetched upstream docs; solhint exit codes, the SARIF shapes and the PMD `sarif` format name are marked unverified in `tool-hub.md`.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 58341→59805 hub rows for pmd and solhint
