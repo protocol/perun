@@ -4560,6 +4560,13 @@ grep -qF 'is such a grant for push and merge only' "$ROOT/commands/perun-run.md"
 if [ "$_dtg" -eq 1 ]; then record 0 "drive-to-goal: rule, two spend modes and override present"; else record 1 "drive-to-goal: rule, two spend modes and override present"; fi
 
 fi
+
+# action pins: perun-review.yml has no tag-only `uses: x@vN`; dcr-gates.yml checkout does not persist credentials; train_land.sh quotes "${@:3}"
+_pin=1
+grep -qE '^\s*-?\s*uses:\s*[^ ]+@v[0-9]' "$ROOT/.claude/skills/deep-code-review/templates/perun-review.yml" && _pin=0
+grep -qF 'persist-credentials: false' "$ROOT/.claude/skills/deep-code-review/templates/dcr-gates.yml" || _pin=0
+grep -qF '${@:3}' "$ROOT/.claude/skills/agentic-delivery/scripts/train_land.sh" && ! grep -qF '"${@:3}"' "$ROOT/.claude/skills/agentic-delivery/scripts/train_land.sh" && _pin=0
+if [ "$_pin" -eq 1 ]; then record 0 "pins: review template SHA-pinned, gates checkout persist-credentials false, train_land quotes args"; else record 1 "pins: review template SHA-pinned, gates checkout persist-credentials false, train_land quotes args"; fi
 # hermeticity sentinel (own lane, appended at the end by convention): nothing
 # above wrote outside $WORK. A regression here means some case dropped a
 # fixture into the real checkout instead of $WORK — exactly the kind of
