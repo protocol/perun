@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real-tool smoke for the review_checks.sh hub: runs the REAL tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff (ruff-security), actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, semgrep (repo rules) and njsscan, tflint, kics, cppcheck and devskim (no stubs) on one tiny
+# Real-tool smoke for the review_checks.sh hub: runs the REAL tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff (ruff-security), actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, semgrep (repo rules) and njsscan, tflint, kics, cppcheck, devskim, govulncheck and grype (no stubs) on one tiny
 # known-bad canary each, in a throwaway repo, and asserts each is reported as RAN (stderr "analyzers ran:", no "not run:" line)
 # with its expected rule id in the JSON rows. The stub tests (scripts/test-review-checks-hub-*.sh) pin routing and failure
 # handling; this pins the real flags, SARIF/JSON shapes and exit codes. Not covered: syft (an inventory the hub never counts as ran), trivy (its vuln scan needs the downloaded DB, so the hub reports it NOT CHECKED), bundler-audit, kubescape and retire need a
@@ -11,7 +11,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh}
 fail=0; tools=
 bin() { [ "$1" = ruff-security ] && echo ruff || echo "$1"; }  # the hub tool name ruff-security runs the ruff binary
-for t in tfsec ansible-lint rubocop cfn-lint pmd solhint hadolint bandit ruff-security actionlint zizmor gosec staticcheck kube-linter flawfinder detect-secrets gitleaks trufflehog checkov kube-score semgrep njsscan tflint kics cppcheck devskim; do
+for t in tfsec ansible-lint rubocop cfn-lint pmd solhint hadolint bandit ruff-security actionlint zizmor gosec staticcheck kube-linter flawfinder detect-secrets gitleaks trufflehog checkov kube-score semgrep njsscan tflint kics cppcheck devskim govulncheck grype; do
   if command -v "$(bin "$t")" >/dev/null 2>&1; then tools+=" $t"
   elif [ "${REQUIRE_REAL_HUB:-}" = 1 ]; then echo "FAIL - $t not installed (REQUIRE_REAL_HUB=1)"; fail=1
   else echo "skip - $t not installed"; fi
@@ -45,6 +45,15 @@ printf "var express = require('express');\nvar app = express();\napp.get('/', fu
 printf 'variable "acme_unused" {\n  type = string\n}\n' >tfl/main.tf  # tflint terraform_unused_declarations (bundled ruleset, recommended preset, no --init)
 printf 'void f(void) {\n  char a[4];\n  a[10] = 0;\n}\n' >app/cpp_canary.c  # cppcheck arrayIndexOutOfBounds (default checks)
 printf 'import hashlib\n\nh = hashlib.md5(b"acme")\n' >app/ds_canary.py  # devskim DS126858 weak hash
+# govulncheck (CI online runs: the Go modules and vuln.go.dev are fetched) needs a called symbol of a vulnerable module: yaml.v2 2.2.2 (GO-2020-0036, GO-2021-0061, GO-2022-0956). Added only when govulncheck is under test, so the other Go canaries stay stdlib-only offline
+case " $tools " in *" govulncheck "*)
+  mkdir vulncanary && printf 'package vulncanary\n\nimport "gopkg.in/yaml.v2"\n\nfunc F(b []byte) error {\n\tvar v interface{}\n\treturn yaml.Unmarshal(b, &v)\n}\n' >vulncanary/canary.go
+  printf 'module example.com/canary\n\ngo 1.21\n\nrequire gopkg.in/yaml.v2 v2.2.2\n' >go.mod
+  # go.sum from the module proxy and checksum DB, module cache filled; the hub run itself is GOPROXY=off
+  GOFLAGS=-mod=mod go mod tidy >"$T/tidy" 2>&1 || { cat "$T/tidy"; echo "FAIL - go mod tidy for the govulncheck canary"; exit 1; } ;;
+esac
+# grype scans an SBOM (the hub never points it at a lockfile): a CycloneDX file with one known-vulnerable package (lodash 4.17.15, GHSA-35jh-r3h4-6jhm); its vulnerability DB is fetched online by the CI step before this runs
+mkdir sbom && printf '{"bomFormat":"CycloneDX","specVersion":"1.5","version":1,"components":[{"type":"library","name":"lodash","version":"4.17.15","purl":"pkg:npm/lodash@4.17.15"}]}\n' >sbom/bom.json
 G add . && G commit -q -m canaries
 rc=0; bash "$RC" --base base >"$T/out" 2>"$T/err" || rc=$?
 echo "review_checks exit $rc; stderr tail:"; tail -n 15 "$T/err"
@@ -53,13 +62,14 @@ want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-wh
   pmd) echo '^(HardCodedCryptoKey|InsecureCryptoIv)$' ;; solhint) echo '^avoid-tx-origin$' ;; hadolint) echo '^DL3007$' ;; bandit) echo '^B602$' ;; ruff-security) echo '^S602$' ;; actionlint) echo '^syntax-check$' ;; zizmor) echo '^unpinned-uses$' ;; gosec) echo '^G(401|501)$' ;; staticcheck) echo '^SA4000$' ;;
   kube-linter) echo '^latest-tag$' ;; flawfinder) echo '^FF1013$' ;; detect-secrets) echo '^Basic Auth Credentials$' ;;
   gitleaks) echo '^github-pat$' ;; trufflehog) echo '^Github$' ;; checkov) echo '^CKV_DOCKER_(3|7)$' ;; kube-score) echo '^container-image-tag$' ;; semgrep) echo '^acme-canary$' ;; njsscan) echo '^eval_nodejs$' ;;
-  tflint) echo '^terraform_unused_declarations$' ;; kics) echo "^Image Version Using 'latest'\$" ;; cppcheck) echo '^arrayIndexOutOfBounds$' ;; devskim) echo '^DS126858$' ;; esac; }
+  tflint) echo '^terraform_unused_declarations$' ;; kics) echo "^Image Version Using 'latest'\$" ;; cppcheck) echo '^arrayIndexOutOfBounds$' ;; devskim) echo '^DS126858$' ;;
+  govulncheck) echo '^GO-(2020-0036|2021-0061|2022-0956)$' ;; grype) echo '^GHSA-(35jh-r3h4-6jhm|p6mc-m468-83gw)$' ;; esac; }
 # tool -> its canary path (a row must be on this file, not just carry the rule id)
 cany() { case $1 in tfsec) echo infra/main.tf ;; ansible-lint) echo playbooks/site.yml ;; rubocop) echo app/canary.rb ;; cfn-lint) echo infra/stack.yaml ;;
   pmd) echo app/Canary.java ;; solhint) echo contracts/Canary.sol ;; hadolint) echo docker/Dockerfile ;; bandit|ruff-security) echo app/canary.py ;; actionlint) echo .github/workflows/canary.yml ;; zizmor) echo .github/workflows/zcanary.yml ;; gosec|staticcheck) echo gocanary/canary.go ;;
   kube-linter) echo k8s/pod.yaml ;; flawfinder) echo app/canary.c ;; detect-secrets) echo app/notes.txt ;; gitleaks|trufflehog) echo app/token.cfg ;;
   checkov) echo docker/Dockerfile ;; kube-score) echo k8s/pod.yaml ;; semgrep) echo app/sg.txt ;; njsscan) echo app/canary.js ;;
-  tflint) echo tfl/main.tf ;; kics) echo docker/Dockerfile ;; cppcheck) echo app/cpp_canary.c ;; devskim) echo app/ds_canary.py ;; esac; }
+  tflint) echo tfl/main.tf ;; kics) echo docker/Dockerfile ;; cppcheck) echo app/cpp_canary.c ;; devskim) echo app/ds_canary.py ;; govulncheck) echo go.mod ;; grype) echo sbom/bom.json ;; esac; }
 # the hub's own capture is private to its run: on a failure, rerun the tool's hub argv here and show its raw output head
 raw() { case $1 in tfsec) (cd infra && tfsec . --format sarif --no-colour --soft-fail --no-module-downloads) ;; ansible-lint) ansible-lint --offline --nocolor -q -f sarif ./playbooks/site.yml ;;
   rubocop) rubocop --force-default-config --fail-level fatal --format json --cache false -- ./app/canary.rb ;; cfn-lint) cfn-lint --format json -- ./infra/stack.yaml ;;
@@ -72,7 +82,8 @@ raw() { case $1 in tfsec) (cd infra && tfsec . --format sarif --no-colour --soft
   checkov) CKV_SKIP_PACKAGE_UPDATE_CHECK=true checkov -f ./docker/Dockerfile -o json --quiet --skip-download --soft-fail ;; kube-score) kube-score score -o json ./k8s/pod.yaml ;;
   semgrep) HOME="$T" semgrep --config .semgrep.yml --metrics=off --disable-version-check --json --quiet ./app/sg.txt ;; njsscan) njsscan --json ./app/canary.js ;;
   tflint) tflint --format=json --no-color --call-module-type=none --chdir=./tfl --filter=main.tf ;; kics) kics scan -p ./docker/Dockerfile --no-progress --disable-secrets --report-formats json -o "$T/kics-raw"; cat "$T/kics-raw/results.json" ;;
-  cppcheck) cppcheck --xml-version=2 --quiet ./app/cpp_canary.c ;; devskim) devskim analyze --source-code ./app/ds_canary.py --file-format sarif ;; esac; }
+  cppcheck) cppcheck --xml-version=2 --quiet ./app/cpp_canary.c ;; devskim) devskim analyze --source-code ./app/ds_canary.py --file-format sarif ;;
+  govulncheck) GOPROXY=off GOTOOLCHAIN=local govulncheck -format json ./... ;; grype) GRYPE_DB_AUTO_UPDATE=false GRYPE_CHECK_FOR_APP_UPDATE=false grype sbom:./sbom/bom.json -o json ;; esac; }
 for t in $tools; do
   re=$(want "$t"); cf=$(cany "$t")
   if grep -qE "analyzers ran:.*\b$t\b" "$T/err" && ! grep -q "not run: $t" "$T/err" && ! grep -q "NOT CHECKED: $t" "$T/err" \
