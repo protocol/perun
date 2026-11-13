@@ -3,7 +3,9 @@
 # Skips (exit 0) when gitleaks is absent. Otherwise requires that
 # (1) a fake AWS key in a temp file outside the allowlisted paths is detected
 # as an aws-access-token finding, both with the repo config and (control) with
-# the default config, and (2) the allowlisted fixture tree scans clean.
+# the default config, (2) the allowlisted fixture tree scans clean, and (3) a
+# fresh key appended to a copy of each narrowly allowlisted test script, at its
+# real relative path, is still detected while the unmodified copy stays clean.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 if ! command -v gitleaks >/dev/null 2>&1; then
@@ -47,5 +49,24 @@ for p in "${fixtures[@]}"; do
     echo "FAIL: allowlisted fixture path still flagged: $p"
     exit 1
   fi
+done
+
+# Narrow allowlist: only the fictional values in the 2 scripts are exempt.
+cfg=$PWD/.gitleaks.toml
+for f in scripts/test_secret_extra_rules_w5.py scripts/test_secret_precision.py; do
+  mkdir -p "$tmp/rel/$(dirname "$f")" && cp "$f" "$tmp/rel/$f" || { echo "FAIL: copy $f"; exit 1; }
+done
+scan_rel() { (cd "$tmp/rel" && gitleaks dir --no-banner --config "$cfg" "$@" . >/dev/null 2>&1); }
+if ! scan_rel; then
+  echo "FAIL: unmodified script copies flagged at their real relative paths"
+  exit 1
+fi
+for f in scripts/test_secret_extra_rules_w5.py scripts/test_secret_precision.py; do
+  printf 'probe_key = "%s"\n' "AKIA""ZXCVBNM3QW""ERTY27" >> "$tmp/rel/$f"
+  if scan_rel; then
+    echo "FAIL: real key appended to $f not detected"
+    exit 1
+  fi
+  cp "$f" "$tmp/rel/$f"
 done
 echo "PASS: test_gitleaks_allowlist"
