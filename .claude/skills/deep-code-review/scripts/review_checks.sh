@@ -387,6 +387,11 @@ elif kind == "bundler-audit":  # {version, created_at, results: [{type: unpatche
 elif kind == "cfn-lint":  # a list of matches (JsonFormatter): Rule.Id, Level, Location.Start.LineNumber, Filename, Message
     if not isinstance(d, list) or not all(isinstance(x, dict) and isinstance(x.get("Rule"), dict) and x["Rule"].get("Id") and isinstance(x.get("Level"), str) and x.get("Filename") and isinstance(((x.get("Location") or {}).get("Start") or {}).get("LineNumber"), int) for x in d):
         sys.exit("sjson: cfn-lint output is not a list of matches with rule, level, file and line")
+elif kind == "rubocop":  # {metadata, files: [{path, offenses: [{severity, message, cop_name, location: {start_line}}]}], summary: {offense_count, inspected_file_count}} (formatters page); counts must agree with the lists
+    if not isinstance(d, dict) or not isinstance(d.get("files"), list) or not isinstance(d.get("summary"), dict) or not all(isinstance(x, dict) and x.get("path") and isinstance(x.get("offenses"), list) and all(isinstance(o, dict) and o.get("cop_name") and isinstance(o.get("severity"), str) and isinstance((o.get("location") or {}).get("start_line"), int) for o in x["offenses"]) for x in d["files"]):
+        sys.exit("sjson: rubocop output has no files list of known shape")
+    if d["summary"].get("offense_count") != sum(len(x["offenses"]) for x in d["files"]) or d["summary"].get("inspected_file_count") != len(d["files"]):
+        sys.exit("sjson: rubocop summary disagrees with its files list")
 elif kind == "brakeman":
     if not isinstance(d, dict) or not isinstance(d.get("warnings"), list):
         sys.exit("sjson: brakeman output has no warnings list")
@@ -543,6 +548,8 @@ elif kind == "bundler-audit":  # file is the caller's lockfile ("-" placeholder 
         else: rows.append(("-", 0, x["advisory"]["id"], f"{x['gem'].get('name')}@{x['gem'].get('version')}: {x['advisory'].get('title', '')} (criticality: {x['advisory'].get('criticality')})"))
 elif kind == "cfn-lint":  # Error and Warning levels are findings, Informational is not; the template's own message text is the only free text read
     rows = [(os.path.relpath(x["Filename"]), x["Location"]["Start"]["LineNumber"], x["Rule"]["Id"], cl(f"{x['Level']}: {x.get('Message', '')}")) for x in d if x["Level"] in ("Error", "Warning")]
+elif kind == "rubocop":  # Security department offenses only (--only Security): cop name is the rule, severity and message are the text read
+    rows = [(os.path.relpath(x["path"]), o["location"]["start_line"], o["cop_name"], cl(f"{o['severity']}: {o.get('message', '')}")) for x in d["files"] for o in x["offenses"]]
 elif kind == "brakeman":  # confirm/high/medium/weak is brakeman's own confidence, carried in the message
     rows = [(nf(r.get("file")), r.get("line") or 0, r.get("check_name"), cl(f"{r.get('warning_type')}: {r.get('message')} (confidence: {r.get('confidence')})")) for r in d["warnings"]]
 elif kind == "mobsfscan":  # severity is per rule: ERROR and WARNING are findings, INFO is not
@@ -955,6 +962,7 @@ hub=(
   'detect-secrets;verified;batch;.;route-only;pipx install detect-secrets' # changed files only, no baseline, --no-verify (no network); one row per potential secret, the value is never printed
   'bundler-audit;verified;each;(^|/)Gemfile\.lock$;route-only;gem install bundler-audit' # Ruby lockfile vs the LOCAL ruby-advisory-db only (no --update); without a local db the tool would download one, so it is NOT CHECKED instead
   'cfn-lint;verified;batch;\.(ya?ml|json|template)$;route-only;pipx install cfn-lint' # CloudFormation templates only (files naming AWSTemplateFormatVersion); Error and Warning rows, Informational dropped
+  'rubocop;verified;batch;\.(rb|rake|gemspec)$|(^|/)(Rakefile|Gemfile|config\.ru)$;route-only;gem install rubocop' # Ruby, Security cops only, built-in default config (the project's .rubocop.yml can require code and is never loaded); no network
   'sobelow;verified;batch;\.(exs?|eex|heex|leex)$;route-only;mix escript.install hex sobelow' # only when the root mix.exs names :phoenix and is unchanged in the diff; scans the whole app (--private: no update check), rows kept for changed files; --exit low makes exit 1 mean findings
   'flawfinder;verified;batch;\.(c|h|cc|cpp|cxx|hpp|hh|hxx)$;route-only;pipx install flawfinder' # C/C++ source, --sarif --quiet, no --error-level: exit 0 whatever it finds, so any other exit is a crash
   'cppcheck;verified;batch;\.(c|h|cc|cpp|cxx|hpp|hh|hxx)$;route-only;brew install cppcheck' # C/C++ source without a project build; --xml-version=2 (written to stderr) --quiet, default checks; no --error-exitcode, so any non-zero exit is a crash
@@ -1003,6 +1011,7 @@ hubcmd() {
     njsscan) cmd=(njsscan --json "$@"); okrc="1" ;; # JSON to stdout without -o; exit 1 = an ERROR rule matched or errors (-w would add WARNING; not used)
     bundler-audit) cmd=(bundle-audit check "${1%/*}" --gemfile-lock "${1##*/}" --format json); okrc="1" ;; # exit 1 = vulnerable (cli.rb `exit(1) if report.vulnerable?`) but also every error: a crash prints no JSON, so sjson makes it not-run
     cfn-lint) cmd=(cfn-lint --format json -- "$@"); okrc="2 4 6 8 10 12 14" ;; # exit = bitwise OR of 2 error, 4 warning, 8 informational (documented); anything else is a crash
+    rubocop) cmd=(rubocop --force-default-config --only Security --format json --cache false -- "$@"); okrc="1" ;; # exit 0 clean, 1 offenses at or above --fail-level, 2 abnormal end (CLI reference); --force-default-config, --cache false and explicit files bypassing AllCops Exclude are unverified: the inspected-count check below makes any miss not-run
     sobelow) cmd=(sobelow --format json --private --exit low); okrc="1" ;; # JSON to stdout; exit 1 = at least one finding (Sobelow.exit_with_status), not-Phoenix text exits 0 with no JSON
     psalm) cmd=(psalm --taint-analysis --output-format=json --no-cache --no-progress); okrc="2" ;; # exit 0 clean, 2 issues found, 1 problem running (psalm docs)
     brakeman) cmd=(brakeman -q --no-pager -f json --no-exit-on-warn --no-exit-on-error) ;; # scans the cwd app; the flags keep findings and scan errors from changing the exit code
@@ -1086,8 +1095,10 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       continue
     fi
     [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
+    # rubocop may skip an explicit file (excludes, unparseable): its inspected count must equal the files passed, else findings may be missing
+    if [ "$hn" = rubocop ] && ! python3 -I -c 'import json,sys;sys.exit(0 if json.load(open(sys.argv[1]))["summary"]["inspected_file_count"]==int(sys.argv[2]) else 1)' "$jf" "$(printf '%s\n' "$hf" | grep -c .)" 2>/dev/null; then skip rubocop "inspected file count differs from the changed Ruby files"; break; fi
     # a failing exit with no row is a crash (cargo-deny exit 1 is also its advisories bit): not a finding, never clean
-    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan|retire) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; sobelow|bundler-audit) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
+    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan|retire) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; sobelow|bundler-audit|rubocop) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
         printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0

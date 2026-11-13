@@ -1,0 +1,4 @@
+### Added
+- review_checks.sh routes rubocop (changed Ruby files, Security department cops only, the built-in default config so a project `.rubocop.yml` that can `require` code is never loaded) through the tool hub. It is NOT CHECKED with an install hint when missing, counts as wired only once installed, and is not run on a crash, empty output, wrong-shape output, a summary that disagrees with its files list, an unexpected exit, or an inspected-file count that differs from the files passed. terrascan is documented as not routed: its repository is archived and its first scan downloads policies. Exit codes, the JSON shape and cop names were read from the upstream docs fetched 2026-11-13; `--force-default-config` and `--cache false` are marked `unverified`; stub-tested only, no real tool output was run.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 54797→56235 rubocop row and terrascan not-routed row with verification evidence
