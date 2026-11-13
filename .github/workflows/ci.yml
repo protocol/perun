@@ -567,7 +567,7 @@ jobs:
           gem install --no-document --install-dir "$RUNNER_TEMP/gems" --bindir "$RUNNER_TEMP/gems/bin" rubocop -v 1.69.2
           echo "GEM_HOME=$RUNNER_TEMP/gems" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gems/bin" >> "$GITHUB_PATH"
-      - name: Install solhint 6.2.5 (package-lock integrity hashes)
+      - name: Install solhint 6.2.5, eslint 9.39.5 and eslint-plugin-security 4.2.1 (package-lock integrity hashes)
         run: |
           set -euo pipefail
           npm ci --ignore-scripts --silent --no-audit --no-fund --prefix scripts/real-hub-npm
@@ -792,6 +792,18 @@ jobs:
           echo "cfa9e5214e4925842f4bc849a64f8a7e6c5d0425fe98eac8d7b7bc60fdc17e07  brakeman-8.1.0.gem" | sha256sum -c -
           gem install --local --no-document --ignore-dependencies --install-dir "$RUNNER_TEMP/gems" --bindir "$RUNNER_TEMP/gems/bin" ./brakeman-8.1.0.gem
           GEM_HOME="$RUNNER_TEMP/gems" "$RUNNER_TEMP/gems/bin/brakeman" --version | grep -qF 8.1.0
+      - name: Install mobsfscan 1.1.0 (hash-locked, own venv, a wrapper puts it first on PATH so mobsfscan runs its pinned semgrep 1.172.0 and not the njsscan venv one)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv-mobsfscan"
+          "$RUNNER_TEMP/venv-mobsfscan/bin/pip" install --quiet --retries 5 --require-hashes --only-binary=:all: -r scripts/real-hub-requirements-mobsfscan.txt
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat > "$RUNNER_TEMP/bin/mobsfscan" <<EOF
+          #!/bin/sh
+          PATH="$RUNNER_TEMP/venv-mobsfscan/bin:\$PATH" exec "$RUNNER_TEMP/venv-mobsfscan/bin/mobsfscan" "\$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/bin/mobsfscan"
+          test "$("$RUNNER_TEMP/venv-mobsfscan/bin/semgrep" --version)" = 1.172.0
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
 
