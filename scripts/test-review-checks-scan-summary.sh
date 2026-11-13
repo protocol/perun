@@ -65,7 +65,9 @@ mkdir -p node_modules/p .claude/worktrees/w vendor
 printf 'x\n' >node_modules/p/a.txt; printf 'x\n' >.claude/worktrees/w/b.txt; printf 'x\n' >vendor/c.txt; printf 'x\n' >real.txt
 git add -f . && git -c user.email=t@example.com -c user.name=t commit -q -m vendored
 : >"$GL_LOG"; : >"$SG_LOG"; run
-grep -q 'real.txt' "$GL_LOG" && ! grep -Eq 'node_modules|worktrees|vendor' "$GL_LOG" "$SG_LOG" && ok "default excludes" || bad "default excludes"
+# Strip the checkout path first: a lane worktree (.claude/worktrees/...) puts "worktrees" in the absolute --config path.
+cat "$GL_LOG" "$SG_LOG" | while IFS= read -r l; do printf '%s\n' "${l//"$ROOT"/}"; done >"$T/args.log"
+grep -q 'real.txt' "$GL_LOG" && ! grep -Eq 'node_modules|worktrees|vendor' "$T/args.log" && ok "default excludes" || bad "default excludes"
 grep -q -- '--skip-dirs node_modules,.claude/worktrees,vendor' "$TV_LOG" && ok "trivy skip-dirs" || bad "trivy skip-dirs"
 
 # Heavy lease: with one slot (tokens=off) taken by a live holder, REVIEW_LEASE_FULL=skip skips heavy scanners (default: degraded, see test-review-checks-lease-degraded.sh).
