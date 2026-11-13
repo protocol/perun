@@ -537,12 +537,22 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      - name: Install ansible-lint, ansible-core, cfn-lint, bandit, ruff, zizmor, flawfinder, detect-secrets and checkov (hash-locked, venv)
+      - name: Install ansible-lint, ansible-core, cfn-lint, bandit, ruff, zizmor, flawfinder and detect-secrets (hash-locked, venv)
         run: |
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet --require-hashes --only-binary=:all: -r scripts/real-hub-requirements.txt
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          # upstream detect-secrets, not the bc-detect-secrets fork that checkov pulls in (same module name)
+          test "$("$RUNNER_TEMP/venv/bin/detect-secrets" --version)" = 1.5.0
+      - name: Install checkov (hash-locked, own venv so bc-detect-secrets cannot shadow detect-secrets)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv-checkov"
+          "$RUNNER_TEMP/venv-checkov/bin/pip" install --quiet --require-hashes --only-binary=:all: -r scripts/real-hub-requirements-checkov.txt
+          mkdir -p "$RUNNER_TEMP/bin"
+          ln -s "$RUNNER_TEMP/venv-checkov/bin/checkov" "$RUNNER_TEMP/bin/checkov"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Install rubocop 1.69.2 (pinned, private GEM_HOME)
         run: |
           set -euo pipefail
