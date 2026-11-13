@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Guard for .gitleaks.toml: the fixture allowlist must not blind gitleaks.
 # Gitleaks absent: exit 1 when CI or REQUIRE_GITLEAKS=1 is set, else SKIP (exit 0).
-# A shallow checkout skips only the history step. Otherwise requires that
+# A shallow checkout or missing .git skips only the history step; with CI or REQUIRE_GITLEAKS=1 it FAILs. Otherwise requires that
 # (1) a fake AWS key in a temp file outside the allowlisted paths is detected
 # as an aws-access-token finding, both with the repo config and (control) with
 # the default config, (2) the allowlisted fixture tree scans clean, and (3) a
@@ -86,9 +86,14 @@ for f in scripts/test_secret_extra_rules_w5.py scripts/test_secret_precision.py;
   cp "$f" "$tmp/rel/$f"
 done
 # History scan: .gitleaksignore covers the triaged fictional hits, so 0 findings remain.
+strict=; { [ -n "${CI:-}" ] || [ "${REQUIRE_GITLEAKS:-}" = 1 ]; } && strict=1
 if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = true ]; then
+  [ -n "$strict" ] && { echo "FAIL: history scan needs full history (shallow checkout, CI or REQUIRE_GITLEAKS=1)"; exit 1; }
   echo "SKIP: history scan (shallow checkout)"
-elif [ -e .git ]; then
+elif [ ! -e .git ]; then
+  [ -n "$strict" ] && { echo "FAIL: history scan needs .git (CI or REQUIRE_GITLEAKS=1)"; exit 1; }
+  echo "SKIP: history scan (no .git)"
+else
   rm -f "$tmp/h.json"
   gitleaks git --no-banner --log-opts=HEAD -c .gitleaks.toml --report-format json --report-path "$tmp/h.json" >/dev/null 2>&1
   if [ "$?" -ne 0 ] || [ "$(grep -c '"Fingerprint"' "$tmp/h.json" 2>/dev/null)" != 0 ]; then
