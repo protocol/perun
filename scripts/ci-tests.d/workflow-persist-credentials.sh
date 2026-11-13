@@ -1,0 +1,1 @@
+python3 scripts/test_workflow_persist_credentials.py
