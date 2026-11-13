@@ -515,7 +515,7 @@ jobs:
       - name: Allowlist guard
         run: REQUIRE_GITLEAKS=1 bash scripts/test_gitleaks_allowlist.sh
 
-  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder and detect-secrets
+  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov and kube-score
   # (pinned, hash-locked where the ecosystem allows; no advisory-DB download) and checks each is RAN with its rule id on one canary. bundler-audit, kubescape and retire need a downloaded DB, so they stay stub-only.
   real-hub:
     runs-on: ubuntu-latest
@@ -537,7 +537,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      - name: Install ansible-lint, ansible-core, cfn-lint, bandit, ruff, zizmor, flawfinder and detect-secrets (hash-locked, venv)
+      - name: Install ansible-lint, ansible-core, cfn-lint, bandit, ruff, zizmor, flawfinder, detect-secrets and checkov (hash-locked, venv)
         run: |
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/venv"
@@ -594,6 +594,20 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/stackrox/kube-linter/releases/download/v0.8.3/kube-linter-linux.tar.gz
           echo "1a6d8419b11971372971fdbc22682b684ebfb7cf1c39591662d1b6ca736c41df  kube-linter-linux.tar.gz" | sha256sum -c -
           tar -xzf kube-linter-linux.tar.gz -C "$RUNNER_TEMP/bin" kube-linter
+      - name: Install gitleaks 8.30.1, trufflehog 3.99.9 and kube-score 1.20.0 (pinned sha256 from each upstream checksums file)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks_8.30.1_linux_x64.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks_8.30.1_linux_x64.tar.gz -C "$RUNNER_TEMP/bin" gitleaks
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/trufflesecurity/trufflehog/releases/download/v3.99.9/trufflehog_3.99.9_linux_amd64.tar.gz
+          echo "12050095c8063bf4d34f9f6cbce6ba9fa8d0deea9d503d0570364feba093658e  trufflehog_3.99.9_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf trufflehog_3.99.9_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" trufflehog
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/zegl/kube-score/releases/download/v1.20.0/kube-score_1.20.0_linux_amd64.tar.gz
+          echo "ff777b4b3f45905b2d22c69e93c57a7a170e61529a79d54e59cb95cca4bc2a55  kube-score_1.20.0_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf kube-score_1.20.0_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" kube-score
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
 
