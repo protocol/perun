@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), detect-secrets (changed files, no baseline, no verification, values never printed), njsscan (Node.js), sobelow (Elixir Phoenix, local source, no update check), eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (snyk-agent-scan is unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), detect-secrets (changed files, no baseline, no verification, values never printed), njsscan (Node.js), sobelow (Elixir Phoenix, local source, no update check), flawfinder, cppcheck (C/C++, no build) and devskim (multi-language), eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -305,7 +305,19 @@ def nf(f):  # scanners echo the path they were given ("./.github/..."); rows mus
 cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package or file can be named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 # The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
-m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny", "mobsfscan", "njsscan", "detect-secrets", "sobelow") else r"^\[\s*[\{\]]" if kind == "psalm" else r"^[\[{]", t, re.M)  # cargo-audit, cargo-deny and mobsfscan, njsscan and detect-secrets: stderr log lines can start with "[", the report is an object; psalm: the report is a list, so "[" must be followed by an issue or "]" (a "[INFO] ..." log line is skipped)
+if kind == "cppcheck":  # XML, not JSON: <results version="2"><cppcheck/><errors><error id severity msg><location file line/></error></errors></results>; the tool writes it to stderr, which the runner merges. Anything else is damaged output
+    import xml.etree.ElementTree as ET
+    try: root = ET.fromstring(t[t.index("<?xml"):] if "<?xml" in t else t[t.index("<results"):])
+    except Exception: sys.exit("sjson: cppcheck output is not XML")
+    es = root.find("errors") if root.tag == "results" else None
+    if es is None or not all(e.get("id") and e.get("severity") for e in es.findall("error")): sys.exit("sjson: cppcheck output has no results/errors list")
+    for e in es.findall("error"):
+        if e.get("severity") == "information": continue  # missingInclude and similar notes, not findings
+        ls = e.findall("location")
+        if not ls or not ls[0].get("file") or not (ls[0].get("line") or "").isdigit(): sys.exit("sjson: cppcheck finding has no file and line")
+        print("\t".join((nf(ls[0].get("file")), ls[0].get("line"), cl(e.get("id")), cl(f"{e.get('severity')}: {e.get('msg', '')}")[:200])))
+    sys.exit(0)
+m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny", "mobsfscan", "njsscan", "detect-secrets", "sobelow", "flawfinder", "devskim") else r"^\[\s*[\{\]]" if kind == "psalm" else r"^[\[{]", t, re.M)  # cargo-audit, cargo-deny and mobsfscan, njsscan and detect-secrets: stderr log lines can start with "[", the report is an object; psalm: the report is a list, so "[" must be followed by an issue or "]" (a "[INFO] ..." log line is skipped)
 okl = kind == "cargo-deny" and re.search(r"^(advisories|bans|licenses|sources) ok\b", t, re.M)  # a clean cargo-deny run prints only its text summary
 if not m and not okl and not (kind == "staticcheck" and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
     sys.exit("sjson: no JSON in scanner output")
@@ -409,7 +421,7 @@ elif kind == "checkov":
         sys.exit("sjson: checkov output has no results object")
     if any(x["results"].get("parsing_errors") for x in ds):  # an unparsed file must not read as clean
         sys.exit("sjson: checkov could not parse the file")
-elif kind in ("trufflehog", "codeql"):  # SARIF: runs[].results[]; a clean scan still prints the document with "results": []
+elif kind in ("trufflehog", "codeql", "flawfinder", "devskim"):  # SARIF: runs[].results[]; a clean scan still prints the document with "results": []
     if not isinstance(d, dict) or not isinstance(d.get("runs"), list) or not d["runs"] or not all(isinstance(x, dict) and isinstance(x.get("results"), list) for x in d["runs"]):
         sys.exit(f"sjson: {kind} output has no SARIF runs[].results list")
 elif kind == "guarddog":  # results: rule -> hits; errors: rule -> why it did not run (its key stays in results, empty). A rule error costs that rule only: the other hits stay and a not-checked row names it
@@ -568,7 +580,7 @@ elif kind == "semgrep":
     ps = sorted({pfx(f) for f in fs} - {""}, key=len, reverse=True)
     cid = lambda i: next((i[len(q):] for q in ps if isinstance(i, str) and i.startswith(q)), i)
     rows = [(r["path"], r["start"]["line"], cid(r.get("check_id")), (r.get("extra") or {}).get("message", "")) for r in d["results"]]
-elif kind == "codeql":  # SARIF: ruleId, uri, startLine and the query's message text (never source); results with no location raise: unparseable, never dropped
+elif kind in ("codeql", "flawfinder", "devskim"):  # SARIF: ruleId, uri, startLine and the query's message text (never source); results with no location raise: unparseable, never dropped
     for run in d["runs"]:
         for r in run["results"]:
             p = r["locations"][0]["physicalLocation"]
@@ -907,6 +919,9 @@ hub=(
   'mobsfscan;verified;batch;(^|/)(AndroidManifest\.xml|[^/]+\.(java|kt|swift|m|mm|plist))$;route-only;pipx install mobsfscan' # only in a repo with a mobile marker (AndroidManifest.xml, Info.plist, Podfile, project.pbxproj); rows for ERROR and WARNING rules; exit 1 = an ERROR rule matched
   'detect-secrets;verified;batch;.;route-only;pipx install detect-secrets' # changed files only, no baseline, --no-verify (no network); one row per potential secret, the value is never printed
   'sobelow;verified;batch;\.(exs?|eex|heex|leex)$;route-only;mix escript.install hex sobelow' # only when the root mix.exs names :phoenix and is unchanged in the diff; scans the whole app (--private: no update check), rows kept for changed files; --exit low makes exit 1 mean findings
+  'flawfinder;verified;batch;\.(c|h|cc|cpp|cxx|hpp|hh|hxx)$;route-only;pipx install flawfinder' # C/C++ source, --sarif --quiet, no --error-level: exit 0 whatever it finds, so any other exit is a crash
+  'cppcheck;verified;batch;\.(c|h|cc|cpp|cxx|hpp|hh|hxx)$;route-only;brew install cppcheck' # C/C++ source without a project build; --xml-version=2 (written to stderr) --quiet, default checks; no --error-exitcode, so any non-zero exit is a crash
+  'devskim;verified;each;\.(c|h|cc|cpp|cs|java|js|jsx|ts|tsx|py|rb|php|go|rs|swift|kt|sh|ps1|sql)$;route-only;dotnet tool install --global Microsoft.CST.DevSkim.CLI' # one file per run (-I takes one path), SARIF to stdout (--file-format sarif is the default), no -E: exit 0 whatever it finds
   'njsscan;verified;batch;\.(jsx?|mjs|cjs)$;route-only;pipx install njsscan' # Node.js source; rows for ERROR and WARNING rules in nodejs and templates; exit 1 = an ERROR rule matched or a file was not scanned
   'psalm;verified;batch;\.php$;route-only;composer global require vimeo/psalm' # taint analysis, whole project per the root psalm.xml, rows kept for changed files; psalm.xml is code: not run when the diff changes it or composer.json
   'cosign;verified;each;(^|/)[^/]+\.(sig|bundle)$|(^|/)\.sigstore(/|$);route-only;brew install cosign' # verify-blob offline, no finding rows: only a .bundle with a cosign.pub beside it or at the root and its signed blob is checked, else NOT CHECKED
@@ -943,6 +958,9 @@ hubcmd() {
     licensee) cmd=(licensee detect --json "$1") ;;
     mobsfscan) cmd=(mobsfscan --json "$@"); okrc="1" ;; # JSON to stdout without -o; exit 1 = an ERROR-severity rule matched (-w would add WARNING; not used)
     detect-secrets) cmd=(detect-secrets scan --no-verify "$@") ;; # explicit files, no baseline; --no-verify turns off the network verification; scan exits 0 whatever it finds, so any other exit is a crash
+    flawfinder) cmd=(flawfinder --sarif --quiet "$@") ;;
+    cppcheck) cmd=(cppcheck --xml-version=2 --quiet "$@") ;;
+    devskim) cmd=(devskim analyze --source-code "$@" --file-format sarif) ;;
     njsscan) cmd=(njsscan --json "$@"); okrc="1" ;; # JSON to stdout without -o; exit 1 = an ERROR rule matched or errors (-w would add WARNING; not used)
     sobelow) cmd=(sobelow --format json --private --exit low); okrc="1" ;; # JSON to stdout; exit 1 = at least one finding (Sobelow.exit_with_status), not-Phoenix text exits 0 with no JSON
     psalm) cmd=(psalm --taint-analysis --output-format=json --no-cache --no-progress); okrc="2" ;; # exit 0 clean, 2 issues found, 1 problem running (psalm docs)
@@ -967,13 +985,13 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     brakeman) grep -qiE "^[[:space:]]*gem[[:space:]]+['\"]rails['\"]" Gemfile 2>/dev/null || hf= ;;
   esac
   [ -n "$hf" ] || continue
-  [ "$hs" != verified ] || case $hn in syft|licensee|detect-secrets|njsscan|sobelow) ;; *) wired+=" $hn" ;; esac # syft and licensee are inventories, not scanners: never wired or ran; detect-secrets (matches every file) and njsscan are wired only once installed (below), as provision_tools.sh does not install them, so a missing one is NOT CHECKED, never "fixable"
+  [ "$hs" != verified ] || case $hn in syft|licensee|detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim) ;; *) wired+=" $hn" ;; esac # syft and licensee are inventories, not scanners: never wired or ran; detect-secrets (matches every file) and njsscan are wired only once installed (below), as provision_tools.sh does not install them, so a missing one is NOT CHECKED, never "fixable"
   nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
   if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
   hb=$hn; [ "$hn" != ruff-security ] || hb=ruff; [ "$hn" != eslint-security ] || hb=./node_modules/.bin/eslint
   command -v "$hb" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
   hubtool=$hn
-  case $hn in detect-secrets|njsscan|sobelow) wired+=" $hn" ;; esac
+  case $hn in detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim) wired+=" $hn" ;; esac
   if [ "$hn" = sobelow ] && [ "$full" = 0 ] && [ -n "$(changed '(^|/)(mix\.exs|\.sobelow-conf)$')" ]; then nc "mix.exs or .sobelow-conf changed in this diff: its config is code, not run"; continue; fi
   # zizmor, actionlint, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
   case $hn in grype|checkov|gosec|govulncheck|staticcheck|kics) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
