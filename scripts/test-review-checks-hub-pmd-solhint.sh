@@ -31,7 +31,7 @@ echo "solhint $*" >>"$HUB_LOG"
 # without --config the real tool would read the project's .solhint.json (plugins = code): the stub flags that as a finding
 if [ "$1" != --config ] && [ -f .solhint.json ]; then printf '{"runs":[{"results":[{"ruleId":"plugin-loaded","message":{"text":"m"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"contracts/T.sol"},"region":{"startLine":1}}}]}]}]}'; exit 1; fi
 # the canary scan (a throwaway contract in the review temp dir): a rule row, or none when the config loads no rules
-case "${*: -1}" in */canary.sol) if [ "${CANARY:-ok}" = ok ]; then printf '{"runs":[{"results":[{"ruleId":"avoid-tx-origin","message":{"text":"m"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"canary.sol"},"region":{"startLine":2}}}]}]}]}'; else printf '{"runs":[{"results":[]}]}'; fi; exit 1 ;; esac
+case "${*: -1}" in canary.sol) if [ "${CANARY:-ok}" = ok ]; then printf '{"runs":[{"results":[{"ruleId":"avoid-tx-origin","message":{"text":"m"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"canary.sol"},"region":{"startLine":2}}}]}]}]}'; else printf '{"runs":[{"results":[]}]}'; fi; exit 1 ;; esac
 printf '%s' "$J_sol"
 exit "${SOL_RC:-1}"
 S

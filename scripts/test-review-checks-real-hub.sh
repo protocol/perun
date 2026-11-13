@@ -54,7 +54,7 @@ for t in $tools; do
     echo "ok - $t: RAN, rule matching $re reported"
   else
     echo "FAIL - $t: not RAN or no rule matching $re; its rows: $(jq -c --arg t "$t" '[.[]|select(.tool==$t)|{file,rule}]' "$T/out" 2>&1 | head -c 400)"; fail=1
-    echo "--- raw $t output (first 40 lines, exit via rerun) ---"; { raw "$t" 2>&1 || echo "[exit $?]"; } | head -n 40 || true; echo "--- end raw $t ---"
+    echo "--- raw $t output (first 40 lines, exit via rerun) ---"; { raw "$t" 2>&1 || echo "[exit $?]"; } >"$T/raw" || true; head -n 40 "$T/raw"; echo "--- end raw $t ---"
   fi
 done
 [ "$fail" = 0 ] && echo "PASS: test-review-checks-real-hub"
