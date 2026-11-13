@@ -37,7 +37,7 @@ PA=; rc=0; o=$(PT 2>&1) || rc=$?
 PA=; o=$(PT --print 2>"$T/e")
 [ "$(wc -l <<<"$o")" -eq 1 ] && ! grep -q 'MISSING' <<<"$o" && grep -q 'MISSING  gitleaks' "$T/e" && ok "--print: one stdout line, listing on stderr" || { bad "--print shape"; echo "$o"; }
 for want in "brew install pipx gitleaks trufflehog trivy osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kube-score tflint staticcheck kics cosign opengrep nuclei" \
-  "pipx install semgrep==1.182.1; pipx install zizmor==1.31.1; pipx install bandit==1.9.4; pipx install checkov==3.4.0; pipx install ruff; gem install brakeman; gem install licensee" \
+  "pipx install semgrep==1.182.1; pipx install zizmor==1.31.1; pipx install bandit==1.9.4; pipx install checkov==3.4.5; pipx install ruff; gem install brakeman; gem install licensee" \
   'mkdir -p '"$(q "$T/cache/dcr-tools/docker-config-empty")"' && DOCKER_CONFIG='"$(q "$T/cache/dcr-tools/docker-config-empty")"' trivy --cache-dir '"$(q "$T/cache/trivy")"' fs --download-db-only' \
   "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$(q "$T/cache") osv-scanner --offline-vulnerabilities --download-offline-databases $(q "$PHYS")" \
   "curl -fsSL https://semgrep.dev/c/p/default -o $(q "$T/cache/dcr-tools/semgrep/p-default.yml.part") && mv " ; do
