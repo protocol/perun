@@ -515,11 +515,11 @@ jobs:
       - name: Allowlist guard
         run: REQUIRE_GITLEAKS=1 bash scripts/test_gitleaks_allowlist.sh
 
-  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, semgrep, njsscan, tflint, kics, cppcheck and devskim
-  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download) and checks each is RAN with its rule id on one canary. trivy, bundler-audit, kubescape and retire need a downloaded DB or rule set, so they stay stub-only; syft is an inventory the hub never counts as ran.
+  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, semgrep, njsscan, tflint, kics, cppcheck, devskim, govulncheck and grype
+  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download, except govulncheck and grype, which fetch their vulnerability DB online) and checks each is RAN with its rule id on one canary. trivy, bundler-audit, kubescape and retire need a downloaded DB or rule set, so they stay stub-only; syft is an inventory the hub never counts as ran.
   real-hub:
     runs-on: ubuntu-24.04  # pinned: the cppcheck .deb below is the noble build and its runtime deps come from noble
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -670,6 +670,27 @@ jobs:
           if dotnet nuget verify --help >/dev/null 2>&1; then dotnet nuget verify "$RUNNER_TEMP/nupkg/microsoft.cst.devskim.cli.1.0.100.nupkg"; fi
           dotnet tool install Microsoft.CST.DevSkim.CLI --version 1.0.100 --tool-path "$RUNNER_TEMP/devskim" --add-source "$RUNNER_TEMP/nupkg"
           echo "$RUNNER_TEMP/devskim" >> "$GITHUB_PATH"
+      - name: Install govulncheck 1.9.0 (source build on the pinned Go 1.26.11; module hash pinned, checksum DB verified; the vuln DB vuln.go.dev is fetched online at run time, not pinned)
+        env:
+          GOTOOLCHAIN: local
+          GOBIN: ${{ runner.temp }}/bin
+        run: |
+          set -euo pipefail
+          # bounded retry (3 tries, 10s then 20s backoff) for a transient proxy error
+          for i in 1 2 3; do if go install golang.org/x/vuln/cmd/govulncheck@v1.9.0; then break; fi; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
+          go version -m "$RUNNER_TEMP/bin/govulncheck" | grep -qE "golang.org/x/vuln[[:space:]]+v1.9.0[[:space:]]+h1:12VaqnI9kJfqwRoPptxoqsUhQtdfrSbdksT7X/KY/sc="
+      - name: Install grype 0.121.3 (pinned sha256 from the release checksums file; vulnerability DB fetched online, checksum-verified by grype, not pinned)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/anchore/grype/releases/download/v0.121.3/grype_0.121.3_checksums.txt
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/anchore/grype/releases/download/v0.121.3/grype_0.121.3_linux_amd64.tar.gz
+          test "$(grep -cF ' grype_0.121.3_linux_amd64.tar.gz' grype_0.121.3_checksums.txt)" = 1
+          grep -F ' grype_0.121.3_linux_amd64.tar.gz' grype_0.121.3_checksums.txt | sha256sum -c -
+          echo "e9da18cc1429e786722e32161288103600efffd8e483c90761f90485bd1bec85  grype_0.121.3_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf grype_0.121.3_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" grype
+          for i in 1 2 3; do if GRYPE_CHECK_FOR_APP_UPDATE=false "$RUNNER_TEMP/bin/grype" db update; then break; fi; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
 
