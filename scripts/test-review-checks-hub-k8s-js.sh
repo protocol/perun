@@ -23,6 +23,7 @@ cat >"$T/bin/kubescape" <<'S'
 echo "kubescape $*" >>"$HUB_LOG"
 [ "${HUB_MODE:-}" != crash ] || exit 9
 t=${4#./}; o=; while [ $# -gt 0 ]; do [ "$1" != --output ] || o=$2; shift; done
+case $o in *.json) ;; *) o=$o.json ;; esac  # real kubescape appends .json to an --output path that lacks it
 printf '%s' "${J_ks//@F@/$t}" >"$o"
 S
 cat >"$T/bin/retire" <<'S'

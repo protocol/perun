@@ -1,0 +1,5 @@
+### Fixed
+- `review_checks.sh` now writes the kubescape report to a path ending in `.json` and reads that same path. Real kubescape appends `.json` to an `--output` path that lacks it, so the hub read an empty file and reported kubescape as not run ("unparseable output") on every real run. The stub in `scripts/test-review-checks-hub-k8s-js.sh` now mimics that suffix rule, so the test fails on the old code.
+
+### Changed
+- The real-hub CI job now also runs real kubescape 3.0.48 through `review_checks.sh` on a fictional privileged-pod canary, and fails unless kubescape ran and reported `C-0057` on that file with no not-run or NOT CHECKED line. The binary is pinned by sha256 from the release `checksums.sha256`. The offline `nsa` and `cis-v1.23-t1.0.1` frameworks are regolibrary v1.0.316 release assets, pinned by sha256 recorded at pin time because that release publishes no checksums; the fetches retry up to 3 times. The frameworks are a fixed release, not the latest rules, so rule drift is only picked up when the pin is bumped.
