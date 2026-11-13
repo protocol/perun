@@ -1,0 +1,2 @@
+### Added
+- CI now runs a `real-hub` job: it installs the real tfsec 1.28.11 (sha256-checked), ansible-lint 24.12.2, cfn-lint 1.20.0 and rubocop 1.69.2, then scripts/test-review-checks-real-hub.sh runs review_checks.sh on one known-bad canary per tool and asserts each is reported as RAN with its expected rule id, so the real flags, output shapes and exit codes are checked and not only the stub behaviour. bundler-audit, kubescape and retire need a downloaded advisory DB or rule set and stay stub-tested. The script skips absent tools unless REQUIRE_REAL_HUB=1.
