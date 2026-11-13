@@ -23,6 +23,7 @@ cat >"$T/bin/tfsec" <<'S'
 #!/usr/bin/env bash
 echo "tfsec cwd=${PWD##*/} $*" >>"$HUB_LOG"
 [ "${HUB_MODE:-}" != crash ] || exit 9
+[ -z "${HUB_ERR:-}" ] || echo "$HUB_ERR" >&2
 printf '%s' "$J_tf"
 S
 cat >"$T/bin/ansible-lint" <<'S'
@@ -74,6 +75,17 @@ AL_RC=7 J_al="$(sarif "$(res yaml-x playbooks/site.yml 2)")" run
 notrun ansible-lint && ok "ansible-lint: undocumented exit 7: not run" || bad "al exit7"
 AL_RC=2 J_al="$(sarif "$(res yaml-x playbooks/elsewhere.yml 2)")" run
 notrun ansible-lint && ok "ansible-lint: a row for a file outside the changed list: not run" || bad "al outside"
+# tfsec row-path and stderr guards: never a false clean
+HUB_MODE= J_tf="$(sarif "$(res aws-x-1 ./a.tf 3)")" run
+row tfsec infra/tf/a.tf aws-x-1 && ok "tfsec: a ./-prefixed uri maps to the changed file" || bad "tf dot-slash"
+J_tf="$(sarif "$(res aws-x-1 /elsewhere/x.tf 3)")" run
+notrun tfsec && ok "tfsec: a row path outside the scanned directory: not run, not clean" || bad "tf unmatched"
+J_tf="$(sarif "$(res aws-x-1 ../x.tf 3)")" run
+notrun tfsec && ok "tfsec: a ../ row path: not run" || bad "tf dotdot"
+HUB_ERR='Error: failed to parse main.tf: unexpected token' J_tf="$(sarif "")" run
+notrun tfsec && ok "tfsec: parse error on stderr with an empty SARIF (--soft-fail hides the exit): not run, not clean" || bad "tf parse error"
+AL_RC=2 J_tf="$(sarif "")" J_al="$(sarif "")" run
+grep -q 'ansible-lint.*exit 2 with no row' "$T/err" && ok "ansible-lint: the skip names the exit with no row" || bad "al message: $(grep ansible-lint "$T/err")"
 # gates
 cp "$T/keep/tfsec" "$T/keep/ansible-lint" "$T/bin/"; rm "$T/bin/tfsec" "$T/bin/ansible-lint"; run
 grep -q 'NOT CHECKED: tfsec (install: brew install tfsec)' "$T/err" && grep -q 'NOT CHECKED: ansible-lint (install: pipx install ansible-lint)' "$T/err" && jq -e 'any(.[]; .tool=="tfsec" and .rule=="not-checked")' "$T/out" >/dev/null && ok "missing tools: NOT CHECKED with install hint" || bad "missing tools"

@@ -1073,6 +1073,8 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       else rm -f "$sb"; skip syft "unparseable output"; fi
       continue
     fi
+    # --soft-fail hides tfsec's exit, so an HCL parse failure can leave an empty SARIF: any non-JSON stderr line that names an error is not run (unverified wording: tfsec's real parse-error text was not fetched)
+    if [ "$hn" = tfsec ] && grep -v '^[[:space:]]*[][{},"]' "$jf" | grep -qiE 'error|fail|cannot|unable|invalid|panic'; then skip tfsec "$f: tfsec reported an error on stderr; the scan may be incomplete"; continue; fi
     [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
     # a failing exit with no row is a crash (cargo-deny exit 1 is also its advisories bit): not a finding, never clean
     if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan|retire|ansible-lint) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; sobelow) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
@@ -1093,11 +1095,15 @@ while IFS=';' read -r hn hs hm hre _ hh; do
         fi
         if [ "$hn" = tfsec ]; then # rows are relative to the scanned directory and cover its other files: keep only the changed file's; a row path that maps to nothing is dropped (ponytail: an unexpected path form loses rows, check the SARIF uri if tfsec output changes)
           d=${f%/*}; [ "$d" != "$f" ] || d=.
-          while IFS=$'\t' read -r p l r m; do p=${p#"$PWD"/}; [ "$d" = . ] || p=$d/$p; [ "$p" != "$f" ] || add tfsec "$f" "$l" "$r" "$m"; done <"$tsv"
+          # a path that is absolute outside the repo or climbs out with ../ cannot belong to the scanned directory: fail closed, never a false clean
+          unm=$(while IFS=$'\t' read -r p _; do p=${p#"$PWD"/}; p=${p#./}; case $p in (/*|..|../*|*/../*) echo x ;; esac; done <"$tsv" | wc -l | tr -d '[:space:]')
+          [ "$unm" = 0 ] || { skip tfsec "$f: $unm row(s) with a path outside the scanned directory; findings may be missing"; continue; }
+          while IFS=$'\t' read -r p l r m; do p=${p#"$PWD"/}; p=${p#./}; [ "$d" = . ] || p=$d/$p; [ "$p" != "$f" ] || add tfsec "$f" "$l" "$r" "$m"; done <"$tsv"
         else
           while IFS=$'\t' read -r _ l r m; do add "$hn" "$f" "$l" "$r" "$m"; done <"$tsv"
         fi
       fi
+    elif [ "$hn" = ansible-lint ] && [ "$rc" != 0 ]; then skip "$hn" "exit $rc with no row, or unparseable output"
     else skip "$hn" "unparseable output"; fi
     [ "$hm" != batch ] || break
   done <<<"$([ "$hm" = batch ] && echo x || printf '%s\n' "$hf")"
