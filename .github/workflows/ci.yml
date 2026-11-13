@@ -518,7 +518,7 @@ jobs:
   # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, semgrep and njsscan
   # (pinned, hash-locked where the ecosystem allows; no advisory-DB download) and checks each is RAN with its rule id on one canary. trivy, bundler-audit, kubescape and retire need a downloaded DB or rule set, and cppcheck has no pinned, hash-verifiable binary, so they stay stub-only.
   real-hub:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: the cppcheck apt version below exists only in noble
     timeout-minutes: 15
     permissions:
       contents: read
@@ -626,6 +626,45 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/zegl/kube-score/releases/download/v1.20.0/kube-score_1.20.0_linux_amd64.tar.gz
           echo "ff777b4b3f45905b2d22c69e93c57a7a170e61529a79d54e59cb95cca4bc2a55  kube-score_1.20.0_linux_amd64.tar.gz" | sha256sum -c -
           tar -xzf kube-score_1.20.0_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" kube-score
+      - name: Install tflint 0.66.0 (pinned sha256 from the release checksums.txt; the bundled terraform ruleset, no plugin download)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/terraform-linters/tflint/releases/download/v0.66.0/tflint_linux_amd64.zip
+          echo "22be11cadc25cd02401e94c0ccc91aa63467debb8485c2a755d98f4c0a9d1e2e  tflint_linux_amd64.zip" | sha256sum -c -
+          unzip -q -o tflint_linux_amd64.zip tflint -d "$RUNNER_TEMP/bin"
+      - name: Install kics 2.1.20 (pinned sha256 from the release checksums.txt; queries from the release's pinned commit)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/Checkmarx/kics/releases/download/v2.1.20/kics_2.1.20_linux_amd64.tar.gz
+          echo "8a5aa375ccfdc0ddd1114eddf1f9638ad7f6122e98d12a592207509dbe6d81f8  kics_2.1.20_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf kics_2.1.20_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" kics
+          # the release tarball ships no queries: fetch the v2.1.20 commit by its full sha (content-addressed) and check it
+          git init -q kics-src
+          git -C kics-src fetch -q --depth 1 https://github.com/Checkmarx/kics.git e1f23cad9640f55b963f22a116b04906b8c16ac6
+          test "$(git -C kics-src rev-parse FETCH_HEAD)" = e1f23cad9640f55b963f22a116b04906b8c16ac6
+          git -C kics-src checkout -q --detach FETCH_HEAD
+          echo "KICS_QUERIES_PATH=$RUNNER_TEMP/kics-src/assets/queries" >> "$GITHUB_ENV"
+          echo "KICS_LIBRARIES_PATH=$RUNNER_TEMP/kics-src/assets/libraries" >> "$GITHUB_ENV"
+      - name: Install cppcheck 2.13.0-2ubuntu3 (exact version from the signed noble archive)
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends cppcheck=2.13.0-2ubuntu3
+      - name: Install DevSkim CLI 1.0.100 (nupkg pinned sha512 = the nuget.org catalog packageHash; installed from the local file)
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+          DOTNET_NOLOGO: "1"
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/nupkg"
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/nupkg/microsoft.cst.devskim.cli.1.0.100.nupkg" https://api.nuget.org/v3-flatcontainer/microsoft.cst.devskim.cli/1.0.100/microsoft.cst.devskim.cli.1.0.100.nupkg
+          test "$(openssl dgst -sha512 -binary "$RUNNER_TEMP/nupkg/microsoft.cst.devskim.cli.1.0.100.nupkg" | base64 -w0)" = "WSAI8ReSrSF6BdM1ZWe2uupS7PrjSr9/1c0eor9kCPL6e6pt8t3OfCo8fqrWvzlutgSb7kbozg4wFPjvpqRTPA=="
+          dotnet tool install Microsoft.CST.DevSkim.CLI --version 1.0.100 --tool-path "$RUNNER_TEMP/devskim" --add-source "$RUNNER_TEMP/nupkg"
+          echo "$RUNNER_TEMP/devskim" >> "$GITHUB_PATH"
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
 
