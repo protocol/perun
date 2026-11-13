@@ -515,8 +515,8 @@ jobs:
       - name: Allowlist guard
         run: REQUIRE_GITLEAKS=1 bash scripts/test_gitleaks_allowlist.sh
 
-  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov and kube-score
-  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download) and checks each is RAN with its rule id on one canary. bundler-audit, kubescape and retire need a downloaded DB, so they stay stub-only.
+  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, semgrep and njsscan
+  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download) and checks each is RAN with its rule id on one canary. trivy, bundler-audit, kubescape and retire need a downloaded DB or rule set, and cppcheck has no pinned, hash-verifiable binary, so they stay stub-only.
   real-hub:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -552,6 +552,14 @@ jobs:
           "$RUNNER_TEMP/venv-checkov/bin/pip" install --quiet --require-hashes --only-binary=:all: -r scripts/real-hub-requirements-checkov.txt
           mkdir -p "$RUNNER_TEMP/bin"
           ln -s "$RUNNER_TEMP/venv-checkov/bin/checkov" "$RUNNER_TEMP/bin/checkov"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install semgrep and njsscan (hash-locked, own venv so their older click, jsonschema and wcmatch pins stay off the other tools)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv-semgrep"
+          "$RUNNER_TEMP/venv-semgrep/bin/pip" install --quiet --require-hashes --only-binary=:all: -r scripts/real-hub-requirements-semgrep.txt
+          mkdir -p "$RUNNER_TEMP/bin"
+          for t in semgrep pysemgrep njsscan; do ln -s "$RUNNER_TEMP/venv-semgrep/bin/$t" "$RUNNER_TEMP/bin/$t"; done
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Install rubocop 1.69.2 (pinned, private GEM_HOME)
         run: |

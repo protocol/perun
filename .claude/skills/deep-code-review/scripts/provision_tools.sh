@@ -55,7 +55,7 @@ bandit pipx bandit==1.9.4
 scorecard brew scorecard
 gosec brew gosec
 grype brew grype
-checkov pipx checkov==3.4.0
+checkov pipx checkov==3.4.5
 hadolint brew hadolint
 ruff pipx ruff
 syft brew syft
