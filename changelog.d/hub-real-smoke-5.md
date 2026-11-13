@@ -1,0 +1,4 @@
+### Changed
+- The real-hub CI job now also runs real semgrep 1.157.0 (repo rules, no registry pack) and njsscan 0.4.2 through `review_checks.sh`, each on a fictional canary file; the job fails unless the tool ran and reported its expected rule on that file with no not-run or NOT CHECKED line. Both join the hash-locked `scripts/real-hub-requirements.txt` (re-resolved with `--only-binary`, so click, jsonschema and wcmatch take semgrep's older pins). Not added: trivy (the hub reports its vuln scan NOT CHECKED without a downloaded DB, which has no pinnable hash) and cppcheck (no upstream Linux binary or checksum file).
+- The trufflehog canary assertion now matches the exact detector name `Github` instead of the prefix `^Github`.
+- `provision_tools.sh` pins checkov 3.4.5 (was 3.4.0), matching the real-hub job.
