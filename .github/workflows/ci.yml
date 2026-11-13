@@ -515,8 +515,8 @@ jobs:
       - name: Allowlist guard
         run: REQUIRE_GITLEAKS=1 bash scripts/test_gitleaks_allowlist.sh
 
-  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff and actionlint
-  # (pinned; no advisory-DB download) and checks each is RAN with its rule id on one canary. bundler-audit, kubescape and retire need a downloaded DB, so they stay stub-only.
+  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder and detect-secrets
+  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download) and checks each is RAN with its rule id on one canary. bundler-audit, kubescape and retire need a downloaded DB, so they stay stub-only.
   real-hub:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -534,11 +534,14 @@ jobs:
           echo "18e2f947a4f0ec74bf6db07245fc81f83930835ef1b5d51d2d5152a6548b5e45  $RUNNER_TEMP/bin/tfsec" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/bin/tfsec"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Install ansible-lint 26.11.0, ansible-core 2.22.0 and cfn-lint 1.20.0 (pinned, venv)
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install ansible-lint, ansible-core, cfn-lint, bandit, ruff, zizmor, flawfinder and detect-secrets (hash-locked, venv)
         run: |
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install --quiet ansible-lint==26.11.0 ansible-core==2.22.0 cfn-lint==1.20.0
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet --require-hashes --only-binary=:all: -r scripts/real-hub-requirements.txt
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
       - name: Install rubocop 1.69.2 (pinned, private GEM_HOME)
         run: |
@@ -546,17 +549,11 @@ jobs:
           gem install --no-document --install-dir "$RUNNER_TEMP/gems" --bindir "$RUNNER_TEMP/gems/bin" rubocop -v 1.69.2
           echo "GEM_HOME=$RUNNER_TEMP/gems" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gems/bin" >> "$GITHUB_PATH"
-      - name: Install bandit 1.9.4 and ruff 0.17.5 (pinned, venv)
+      - name: Install solhint 6.2.5 (package-lock integrity hashes)
         run: |
           set -euo pipefail
-          python3 -m venv "$RUNNER_TEMP/venv2"
-          "$RUNNER_TEMP/venv2/bin/pip" install --quiet bandit==1.9.4 ruff==0.17.5
-          echo "$RUNNER_TEMP/venv2/bin" >> "$GITHUB_PATH"
-      - name: Install solhint 6.2.5 (pinned npm)
-        run: |
-          set -euo pipefail
-          npm install --silent --no-audit --no-fund --prefix "$RUNNER_TEMP/npm" solhint@6.2.5
-          echo "$RUNNER_TEMP/npm/node_modules/.bin" >> "$GITHUB_PATH"
+          npm ci --ignore-scripts --silent --no-audit --no-fund --prefix scripts/real-hub-npm
+          echo "$GITHUB_WORKSPACE/scripts/real-hub-npm/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Install hadolint 2.15.1 (pinned sha256)
         run: |
           set -euo pipefail
@@ -579,6 +576,24 @@ jobs:
           echo "d27177c185b837fa57f097e482d1253468aa035379c5eb2671fa0a279109b179  pmd-dist-7.29.0-bin.zip" | sha256sum -c -
           unzip -q pmd-dist-7.29.0-bin.zip
           echo "$RUNNER_TEMP/pmd-bin-7.29.0/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.11"
+      - name: Install gosec 2.30.0, staticcheck 2026.2.2 and kube-linter 0.8.3 (pinned sha256)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_linux_amd64.tar.gz
+          echo "3fcce2c4e802ff4169217874602a7df355e9a37bcb6ffaa34b08f3d5f336cdfb  gosec_2.30.0_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf gosec_2.30.0_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" gosec
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/dominikh/go-tools/releases/download/2026.2.2/staticcheck_linux_amd64.tar.gz
+          echo "14c081e0f0d05b5a4d4c53fd3d357d4a5af9d20501465fefc9024ee828d3aa5c  staticcheck_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf staticcheck_linux_amd64.tar.gz --strip-components=1 -C "$RUNNER_TEMP/bin" staticcheck/staticcheck
+          # kube-linter sha256 = the `digest` field of release asset kube-linter-linux.tar.gz on the v0.8.3 GitHub release (GitHub API, checked 2026-11-13)
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/stackrox/kube-linter/releases/download/v0.8.3/kube-linter-linux.tar.gz
+          echo "1a6d8419b11971372971fdbc22682b684ebfb7cf1c39591662d1b6ca736c41df  kube-linter-linux.tar.gz" | sha256sum -c -
+          tar -xzf kube-linter-linux.tar.gz -C "$RUNNER_TEMP/bin" kube-linter
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
 
