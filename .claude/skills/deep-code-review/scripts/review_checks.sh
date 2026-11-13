@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, tflint, staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), detect-secrets (changed files, no baseline, no verification, values never printed), njsscan (Node.js), sobelow (Elixir Phoenix, local source, no update check), eslint-security (the project's own local eslint only), kics (IaC), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (snyk-agent-scan is unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, kubescape (NSA and CIS frameworks, local artifacts only), tflint, staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), detect-secrets (changed files, no baseline, no verification, values never printed), njsscan (Node.js), sobelow (Elixir Phoenix, local source, no update check), flawfinder, cppcheck (C/C++, no build) and devskim (multi-language), eslint-security (the project's own local eslint only), kics (IaC), retire (retire.js: vulnerable vendored JS libraries, local advisory repo only), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (snyk-agent-scan is unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -305,7 +305,19 @@ def nf(f):  # scanners echo the path they were given ("./.github/..."); rows mus
 cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package or file can be named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 # The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
-m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny", "mobsfscan", "njsscan", "detect-secrets", "sobelow") else r"^\[\s*[\{\]]" if kind == "psalm" else r"^[\[{]", t, re.M)  # cargo-audit, cargo-deny and mobsfscan, njsscan and detect-secrets: stderr log lines can start with "[", the report is an object; psalm: the report is a list, so "[" must be followed by an issue or "]" (a "[INFO] ..." log line is skipped)
+if kind == "cppcheck":  # XML, not JSON: <results version="2"><cppcheck/><errors><error id severity msg><location file line/></error></errors></results>; the tool writes it to stderr, which the runner merges. Anything else is damaged output
+    import xml.etree.ElementTree as ET
+    try: root = ET.fromstring(t[t.index("<?xml"):] if "<?xml" in t else t[t.index("<results"):])
+    except Exception: sys.exit("sjson: cppcheck output is not XML")
+    es = root.find("errors") if root.tag == "results" else None
+    if es is None or not all(e.get("id") and e.get("severity") for e in es.findall("error")): sys.exit("sjson: cppcheck output has no results/errors list")
+    for e in es.findall("error"):
+        if e.get("severity") == "information": continue  # missingInclude and similar notes, not findings
+        ls = e.findall("location")
+        if not ls or not ls[0].get("file") or not (ls[0].get("line") or "").isdigit(): sys.exit("sjson: cppcheck finding has no file and line")
+        print("\t".join((nf(ls[0].get("file")), ls[0].get("line"), cl(e.get("id")), cl(f"{e.get('severity')}: {e.get('msg', '')}")[:200])))
+    sys.exit(0)
+m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny", "mobsfscan", "njsscan", "detect-secrets", "sobelow", "flawfinder", "devskim") else r"^\[\s*[\{\]]" if kind == "psalm" else r"^[\[{]", t, re.M)  # cargo-audit, cargo-deny and mobsfscan, njsscan and detect-secrets: stderr log lines can start with "[", the report is an object; psalm: the report is a list, so "[" must be followed by an issue or "]" (a "[INFO] ..." log line is skipped)
 okl = kind == "cargo-deny" and re.search(r"^(advisories|bans|licenses|sources) ok\b", t, re.M)  # a clean cargo-deny run prints only its text summary
 if not m and not okl and not (kind == "staticcheck" and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
     sys.exit("sjson: no JSON in scanner output")
@@ -344,6 +356,12 @@ elif kind == "kube-linter":  # Reports is a list, or null when clean
 elif kind == "kube-score":  # a list of scored objects, each with a checks list, or null for an object with no checks (json_v2/api.go: a nil slice marshals to null); a bare top-level null never matches the JSON start above
     if not isinstance(d, list) or not d or not all(isinstance(x, dict) and (x.get("checks") is None or isinstance(x["checks"], list)) for x in d):
         sys.exit("sjson: kube-score output is not a non-empty list of scored objects")
+elif kind == "kubescape":  # a posture report: results (per resource, with controls) and resources (resourceID -> source path)
+    if not isinstance(d, dict) or not isinstance(d.get("results"), list) or not isinstance(d.get("resources"), list):
+        sys.exit("sjson: kubescape output has no results and resources lists")
+elif kind == "retire":  # version, start, data, messages, errors (reporters/json.ts): a non-empty errors list means files were not scanned
+    if not isinstance(d, dict) or not isinstance(d.get("data"), list) or d.get("errors") or not all(isinstance(x, dict) for x in d["data"]):
+        sys.exit("sjson: retire output has no data list or reported errors")
 elif kind == "staticcheck":  # each diagnostic: code, severity (may be absent), location{file,line,column}, message (lintcmd/format.go)
     if not all(isinstance(x, dict) and isinstance(x.get("code"), str) and isinstance(x.get("location"), dict) and "message" in x for x in d):
         sys.exit("sjson: staticcheck output is not a stream of diagnostics")
@@ -409,7 +427,7 @@ elif kind == "checkov":
         sys.exit("sjson: checkov output has no results object")
     if any(x["results"].get("parsing_errors") for x in ds):  # an unparsed file must not read as clean
         sys.exit("sjson: checkov could not parse the file")
-elif kind in ("trufflehog", "codeql"):  # SARIF: runs[].results[]; a clean scan still prints the document with "results": []
+elif kind in ("trufflehog", "codeql", "flawfinder", "devskim"):  # SARIF: runs[].results[]; a clean scan still prints the document with "results": []
     if not isinstance(d, dict) or not isinstance(d.get("runs"), list) or not d["runs"] or not all(isinstance(x, dict) and isinstance(x.get("results"), list) for x in d["runs"]):
         sys.exit(f"sjson: {kind} output has no SARIF runs[].results list")
 elif kind == "guarddog":  # results: rule -> hits; errors: rule -> why it did not run (its key stays in results, empty). A rule error costs that rule only: the other hits stay and a not-checked row names it
@@ -490,6 +508,21 @@ elif kind == "kube-linter":  # a report with no file path cannot be attributed t
     rows = [(os.path.relpath(((r.get("Object") or {}).get("Metadata") or {}).get("FilePath") or "-"), 0, r.get("Check"), cl((r.get("Diagnostic") or {}).get("Message", ""))) for r in d["Reports"] or []]
 elif kind == "kube-score":  # grade 1 critical, 5 warning (7 almost OK and 10 OK are not findings); skipped checks never count; a check with no comment still gets one row
     rows = [(os.path.relpath(o.get("file_name") or "-"), o.get("file_row") or 0, (t.get("check") or {}).get("id"), cl(f"{'CRITICAL' if t['grade'] <= 1 else 'WARNING'}: {(t.get('check') or {}).get('name')}: {c.get('summary', '')}")) for o in d for t in (o["checks"] or []) if isinstance(t, dict) and isinstance(t.get("grade"), int) and t["grade"] <= 5 and not t.get("skipped") for c in (t.get("comments") or [{}])]
+elif kind == "kubescape":  # failed controls only (passed, skipped and irrelevant are not findings); the path comes from the resource the result names ("-" when it names none); the caller (one target per run) maps it back to the scanned file or fails closed
+    src = {r.get("resourceID"): r.get("source") or {} for r in d["resources"] if isinstance(r, dict)}
+    st = lambda c: c["status"].get("status") if isinstance(c.get("status"), dict) else c.get("status")
+    rows = [(cl(os.path.relpath(src.get(o.get("resourceID"), {}).get("relativePath") or "-")), 0, cl(c.get("controlID")), cl(f"failed: {c.get('name')}")) for o in d["results"] if isinstance(o, dict) for c in o.get("controls") or [] if isinstance(c, dict) and st(c) == "failed"]
+elif kind == "retire":  # one row per vulnerability of a detected library: rule = first CVE (a list, or a bare string), else retire-js; line 0. A row path that is absolute, "-" or outside the repo cannot be attributed to a changed file: the run fails closed, never drops it
+    idn = lambda v: v["identifiers"] if isinstance(v.get("identifiers"), dict) else {}
+    rows = []
+    for x in d["data"]:
+        for r in x.get("results") or []:
+            for v in r.get("vulnerabilities") or []:
+                if not isinstance(r, dict) or not isinstance(v, dict): sys.exit("sjson: retire result is not an object")
+                f = x.get("file")
+                if not isinstance(f, str) or f in ("", "-") or os.path.isabs(f) or os.path.normpath(f).startswith(".."): sys.exit(f"sjson: retire row path {cl(f)!r} is absolute, missing or outside the repo")
+                c = idn(v).get("CVE"); c = [c] if isinstance(c, str) else c
+                rows.append((cl(os.path.normpath(f)), 0, cl((c or ["retire-js"])[0]), cl(f"{v.get('severity') or 'unknown'}: {r.get('component')} {r.get('version')}: {idn(v).get('summary', '')}")))
 elif kind == "staticcheck":  # severity is omitted when empty; the check code (SA1000, S1000, ST1000, U1000) is the rule
     rows = [(os.path.relpath(x["location"].get("file") or "-"), x["location"].get("line") or 0, x["code"], cl(f"{x.get('severity') or 'warning'}: {x['message']}")) for x in d]
 elif kind == "cargo-deny":  # only error-level diagnostics (deny.toml sets what is an error); rows land on Cargo.lock: the dependency is the fix site
@@ -568,7 +601,7 @@ elif kind == "semgrep":
     ps = sorted({pfx(f) for f in fs} - {""}, key=len, reverse=True)
     cid = lambda i: next((i[len(q):] for q in ps if isinstance(i, str) and i.startswith(q)), i)
     rows = [(r["path"], r["start"]["line"], cid(r.get("check_id")), (r.get("extra") or {}).get("message", "")) for r in d["results"]]
-elif kind == "codeql":  # SARIF: ruleId, uri, startLine and the query's message text (never source); results with no location raise: unparseable, never dropped
+elif kind in ("codeql", "flawfinder", "devskim"):  # SARIF: ruleId, uri, startLine and the query's message text (never source); results with no location raise: unparseable, never dropped
     for run in d["runs"]:
         for r in run["results"]:
             p = r["locations"][0]["physicalLocation"]
@@ -899,6 +932,8 @@ hub=(
   'syft;verified;each;(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.mod|Cargo\.lock|poetry\.lock|uv\.lock|requirements[^/]*\.txt|composer\.lock|Gemfile\.lock)$;route-only;brew install syft' # inventory: package count on stderr, SBOM kept in $TMPDIR, no finding rows
   'kube-linter;verified;batch;\.ya?ml$;route-only;brew install kube-linter' # only files with apiVersion: and kind: are passed
   'kube-score;verified;batch;\.ya?ml$;route-only;brew install kube-score' # same Kubernetes-manifest filter as kube-linter; rows for critical and warning grades only
+  'kubescape;verified;each;\.ya?ml$;route-only;brew install kubescape' # same Kubernetes-manifest filter as kube-linter; one file per run (scan reads only the first target, scaninfo.go GetInputFiles); nsa and cis frameworks from local artifacts only (nsa.json and cis-v1.23-t1.0.1.json in KUBESCAPE_ARTIFACTS); Helm templates are NOT CHECKED
+  'retire;verified;batch;\.(m?js|cjs)$;route-only;npm install -g retire' # vulnerable vendored or minified JS libraries; whole tree minus node_modules (not scoped to the changed directories), rows kept for changed files, a row path that is absolute, - or outside the repo is not run; needs REVIEW_RETIRE_JSREPO (a local jsrepository.json)
   'tflint;verified;each;\.tf$;route-only;brew install tflint' # core terraform ruleset only: no `tflint --init`, no module download, so no network
   'staticcheck;verified;batch;\.go$;route-only;brew install staticcheck' # whole module (./...), rows kept for changed files; loads packages, never runs repo code
   'cargo-deny;verified;batch;^Cargo\.lock$;route-only;cargo install cargo-deny --locked' # offline: bans, licenses, sources, plus advisories only when a local advisory DB exists; rows land on Cargo.lock; needs cargo; deny.toml decides what is an error
@@ -907,6 +942,9 @@ hub=(
   'mobsfscan;verified;batch;(^|/)(AndroidManifest\.xml|[^/]+\.(java|kt|swift|m|mm|plist))$;route-only;pipx install mobsfscan' # only in a repo with a mobile marker (AndroidManifest.xml, Info.plist, Podfile, project.pbxproj); rows for ERROR and WARNING rules; exit 1 = an ERROR rule matched
   'detect-secrets;verified;batch;.;route-only;pipx install detect-secrets' # changed files only, no baseline, --no-verify (no network); one row per potential secret, the value is never printed
   'sobelow;verified;batch;\.(exs?|eex|heex|leex)$;route-only;mix escript.install hex sobelow' # only when the root mix.exs names :phoenix and is unchanged in the diff; scans the whole app (--private: no update check), rows kept for changed files; --exit low makes exit 1 mean findings
+  'flawfinder;verified;batch;\.(c|h|cc|cpp|cxx|hpp|hh|hxx)$;route-only;pipx install flawfinder' # C/C++ source, --sarif --quiet, no --error-level: exit 0 whatever it finds, so any other exit is a crash
+  'cppcheck;verified;batch;\.(c|h|cc|cpp|cxx|hpp|hh|hxx)$;route-only;brew install cppcheck' # C/C++ source without a project build; --xml-version=2 (written to stderr) --quiet, default checks; no --error-exitcode, so any non-zero exit is a crash
+  'devskim;verified;each;\.(c|h|cc|cpp|cs|java|js|jsx|ts|tsx|py|rb|php|go|rs|swift|kt|sh|ps1|sql)$;route-only;dotnet tool install --global Microsoft.CST.DevSkim.CLI' # one file per run (-I takes one path), SARIF to stdout (--file-format sarif is the default), no -E: exit 0 whatever it finds
   'njsscan;verified;batch;\.(jsx?|mjs|cjs)$;route-only;pipx install njsscan' # Node.js source; rows for ERROR and WARNING rules in nodejs and templates; exit 1 = an ERROR rule matched or a file was not scanned
   'psalm;verified;batch;\.php$;route-only;composer global require vimeo/psalm' # taint analysis, whole project per the root psalm.xml, rows kept for changed files; psalm.xml is code: not run when the diff changes it or composer.json
   'cosign;verified;each;(^|/)[^/]+\.(sig|bundle)$|(^|/)\.sigstore(/|$);route-only;brew install cosign' # verify-blob offline, no finding rows: only a .bundle with a cosign.pub beside it or at the root and its signed blob is checked, else NOT CHECKED
@@ -934,6 +972,8 @@ hubcmd() {
     # cargo-audit: --no-fetch never touches the network, --stale accepts an old local DB; exit 1 = vulnerabilities found (also failure: the guard needs a row), 2 = error; the JSON report goes to stdout
     cargo-audit) cmd=(cargo-audit audit --no-fetch --stale --json --file Cargo.lock --db "${CARGO_HOME:-$HOME/.cargo}/advisory-db"); okrc="1" ;;
     kube-score) cmd=(kube-score score -o json "$@"); okrc="1" ;; # exit 1 = a critical check failed, but also every error: a crash prints no JSON, so sjson turns it into not-run (renderer/json_v2/api.go: top-level array)
+    kubescape) jf=$rep; : >"$rep"; cmd=(kubescape scan framework nsa,cis-v1.23-t1.0.1 "$1" --format json --output "$rep" --keep-local --logger error --use-artifacts-from "${KUBESCAPE_ARTIFACTS:-$HOME/.kubescape}") ;; # --keep-local: no report to a backend; --use-artifacts-from: offline frameworks, no download; a crash writes no JSON, so sjson turns it into not-run
+    retire) jf=$rep; : >"$rep"; cmd=(retire --path . --ignore node_modules --outputformat json --outputpath "$rep" --jsrepo "$REVIEW_RETIRE_JSREPO"); okrc="13" ;; # --jsrepo with a local file: no advisory download; exit 13 = vulnerabilities found (default --exitwith), but the guard below needs a row
     tflint) cmd=(tflint --format=json --no-color --call-module-type=none "--chdir=${1%/*}" "--filter=${1##*/}"); okrc="2" ;; # exit 2 = issues found, 1 = error (cmd/cli.go); no --init: plugins are never downloaded
     kube-linter) cmd=(kube-linter lint --format json "$@"); okrc="1" ;; # exit 1 = lint reports (command.go returns "found N lint errors")
     # the report goes to a fresh dir under $td; --disable-secrets (gitleaks owns secrets); DISABLE_CRASH_REPORT=false stops the only documented phone-home; exit 20-60 = results by severity (docs.kics.io/latest/results)
@@ -943,6 +983,9 @@ hubcmd() {
     licensee) cmd=(licensee detect --json "$1") ;;
     mobsfscan) cmd=(mobsfscan --json "$@"); okrc="1" ;; # JSON to stdout without -o; exit 1 = an ERROR-severity rule matched (-w would add WARNING; not used)
     detect-secrets) cmd=(detect-secrets scan --no-verify "$@") ;; # explicit files, no baseline; --no-verify turns off the network verification; scan exits 0 whatever it finds, so any other exit is a crash
+    flawfinder) cmd=(flawfinder --sarif --quiet "$@") ;;
+    cppcheck) cmd=(cppcheck --xml-version=2 --quiet "$@") ;;
+    devskim) cmd=(devskim analyze --source-code "$@" --file-format sarif) ;;
     njsscan) cmd=(njsscan --json "$@"); okrc="1" ;; # JSON to stdout without -o; exit 1 = an ERROR rule matched or errors (-w would add WARNING; not used)
     sobelow) cmd=(sobelow --format json --private --exit low); okrc="1" ;; # JSON to stdout; exit 1 = at least one finding (Sobelow.exit_with_status), not-Phoenix text exits 0 with no JSON
     psalm) cmd=(psalm --taint-analysis --output-format=json --no-cache --no-progress); okrc="2" ;; # exit 0 clean, 2 issues found, 1 problem running (psalm docs)
@@ -951,8 +994,10 @@ hubcmd() {
 }
 while IFS=';' read -r hn hs hm hre _ hh; do
   hf=$(changed "$hre"); [ -n "$hf" ] || continue
+  # Helm chart templates are not plain manifests and the hub does not render charts: named as unchecked surface, never dropped silently
+  if [ "$hn" = kubescape ] && printf '%s\n' "$hf" | grep -qE '(^|/)templates/'; then echo "NOT CHECKED: kubescape (Helm chart templates are not rendered by the hub)" >&2; add kubescape "" 0 not-checked "Helm chart templates are not rendered by the hub"; fi
   case $hn in
-    kube-linter|kube-score) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do [[ $f == templates/* || $f == */templates/* || $f == kustomization.y*ml || $f == */kustomization.y*ml ]] && continue; grep -qE '^apiVersion:' -- "$f" && grep -qE '^kind:' -- "$f" && printf '%s\n' "$f"; done || true) ;; # Kubernetes manifests only (Helm templates and kustomization files are not plain manifests)
+    kube-linter|kube-score|kubescape) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do [[ $f == templates/* || $f == */templates/* || $f == kustomization.y*ml || $f == */kustomization.y*ml ]] && continue; grep -qE '^apiVersion:' -- "$f" && grep -qE '^kind:' -- "$f" && printf '%s\n' "$f"; done || true) ;; # Kubernetes manifests only (Helm templates and kustomization files are not plain manifests)
     eslint-security) { compgen -G 'eslint.config.*' || compgen -G '.eslintrc*' || grep -qs '"eslintConfig"' package.json; } >/dev/null 2>&1 || hf= # no config of its own: not routed
       # a config that names no security plugin cannot produce security rows: not checked, never a run with 0 rows
       if [ -n "$hf" ] && ! { cf=$(ls -d eslint.config.* .eslintrc* 2>/dev/null) || true; [ -n "$cf" ] || cf=package.json; cat -- $cf 2>/dev/null; } | grep -qiE 'security|no-unsanitized'; then echo "NOT CHECKED: eslint-security (the eslint config names no security plugin)" >&2; add "$hn" "" 0 not-checked "the eslint config names no security plugin"; hf=; fi
@@ -967,18 +1012,22 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     brakeman) grep -qiE "^[[:space:]]*gem[[:space:]]+['\"]rails['\"]" Gemfile 2>/dev/null || hf= ;;
   esac
   [ -n "$hf" ] || continue
-  [ "$hs" != verified ] || case $hn in syft|licensee|detect-secrets|njsscan|sobelow) ;; *) wired+=" $hn" ;; esac # syft and licensee are inventories, not scanners: never wired or ran; detect-secrets (matches every file) and njsscan are wired only once installed (below), as provision_tools.sh does not install them, so a missing one is NOT CHECKED, never "fixable"
+  [ "$hs" != verified ] || case $hn in syft|licensee|detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim|kubescape|retire) ;; *) wired+=" $hn" ;; esac # syft and licensee are inventories, not scanners: never wired or ran; detect-secrets (matches every file) and njsscan are wired only once installed (below), as provision_tools.sh does not install them, so a missing one is NOT CHECKED, never "fixable"
   nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
   if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
   hb=$hn; [ "$hn" != ruff-security ] || hb=ruff; [ "$hn" != eslint-security ] || hb=./node_modules/.bin/eslint
   command -v "$hb" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
   hubtool=$hn
-  case $hn in detect-secrets|njsscan|sobelow) wired+=" $hn" ;; esac
+  case $hn in detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim) wired+=" $hn" ;; esac
   if [ "$hn" = sobelow ] && [ "$full" = 0 ] && [ -n "$(changed '(^|/)(mix\.exs|\.sobelow-conf)$')" ]; then nc "mix.exs or .sobelow-conf changed in this diff: its config is code, not run"; continue; fi
   # zizmor, actionlint, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
   case $hn in grype|checkov|gosec|govulncheck|staticcheck|kics) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
   case $hn in gosec|govulncheck|staticcheck) [ -f go.mod ] || { nc "no go.mod at repo root"; continue; } ;; esac
   case $hn in govulncheck|staticcheck) command -v go >/dev/null || { nc "go toolchain missing"; continue; } ;; esac
+  ka=${KUBESCAPE_ARTIFACTS:-$HOME/.kubescape}
+  [ "$hn" != kubescape ] || { [ -f "$ka/nsa.json" ] && [ -f "$ka/cis-v1.23-t1.0.1.json" ]; } || { nc "no local nsa.json and cis-v1.23-t1.0.1.json in ${KUBESCAPE_ARTIFACTS:-~/.kubescape} (kubescape download artifacts; never fetched)"; continue; }
+  [ "$hn" != retire ] || [ -f "${REVIEW_RETIRE_JSREPO:-}" ] || { nc "REVIEW_RETIRE_JSREPO names no local jsrepository.json (never fetched)"; continue; }
+  case $hn in kubescape|retire) wired+=" $hn" ;; esac # wired only once every gate above passed
   case $hn in cargo-deny) command -v cargo >/dev/null || { nc "cargo toolchain missing"; continue; } ;; cargo-audit) [ -d "${CARGO_HOME:-$HOME/.cargo}/advisory-db" ] || { nc "no local advisory DB at ${CARGO_HOME:-~/.cargo}/advisory-db (never fetched)"; continue; } ;; esac
   if [ "$hn" = psalm ]; then
     [ -f psalm.xml ] || [ -f psalm.xml.dist ] || { nc "no psalm.xml at repo root"; continue; }
@@ -1020,7 +1069,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     fi
     [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
     # a failing exit with no row is a crash (cargo-deny exit 1 is also its advisories bit): not a finding, never clean
-    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; sobelow) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
+    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan|retire) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; sobelow) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
         printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0
@@ -1030,8 +1079,14 @@ while IFS=';' read -r hn hs hm hre _ hh; do
         done <"$tsv"
         # A tool given explicit files reports only those, so a row for any other file means the paths do not line up and findings may be lost:
         # name it instead of reading as clean. gosec and brakeman scan the whole project and legitimately report files outside the changed list.
-        case $hn in gosec|brakeman|staticcheck|psalm|sobelow) ;; *) [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing" ;; esac
-      else while IFS=$'\t' read -r _ l r m; do add "$hn" "$f" "$l" "$r" "$m"; done <"$tsv"; fi
+        case $hn in gosec|brakeman|staticcheck|psalm|sobelow|retire) ;; *) [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing" ;; esac
+      else
+        if [ "$hn" = kubescape ]; then # one target per run: every row path (relative to the scan root, or to the repo) must map back to it
+          bad=$(while IFS=$'\t' read -r p _; do p=${p#./}; [ "$p" = "$f" ] || [ "$p" = "${f##*/}" ] || echo x; done <"$tsv")
+          [ -z "$bad" ] || { skip kubescape "$f: a row path does not map back to the scanned file"; continue; }
+        fi
+        while IFS=$'\t' read -r _ l r m; do add "$hn" "$f" "$l" "$r" "$m"; done <"$tsv"
+      fi
     else skip "$hn" "unparseable output"; fi
     [ "$hm" != batch ] || break
   done <<<"$([ "$hm" = batch ] && echo x || printf '%s\n' "$hf")"
