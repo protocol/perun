@@ -8,7 +8,7 @@ RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.
 T=$(mktemp -d "${TMPDIR:-/tmp}/hubsn.XXXXXX") && [ -n "$T" ] && [ -d "$T" ] || { echo "no temp dir" >&2; exit 1; }
 trap 'cd /; rm -r -- "$T"' EXIT; fail=0
 ok() { echo "ok - $1"; }; bad() { echo "FAIL - $1"; fail=1; }
-export PERUN_HEAVY_DIR="$T/heavy" HUB_LOG="$T/hub.log" DCR_CACHE_ROOT="$T/nocache" DCR_USER_BIN= TMPDIR="$T/tmp"
+export REAL_HOME="$HOME" PERUN_HEAVY_DIR="$T/heavy" HUB_LOG="$T/hub.log" DCR_CACHE_ROOT="$T/nocache" DCR_USER_BIN= TMPDIR="$T/tmp"
 mkdir -p "$T/repo" "$T/bin" "$T/base" "$T/sys" "$T/tmp" && cd "$T/repo"
 git init -q . && case "$(git rev-parse --show-toplevel)" in "$(cd "$T" && pwd -P)"/*) ;; *) echo "refusing: repo not under temp dir" >&2; exit 1 ;; esac
 G() { git -c user.email=t@example.com -c user.name=t "$@"; }
@@ -24,6 +24,7 @@ S
 cat >"$T/bin/njsscan" <<'S'
 #!/usr/bin/env bash
 echo "njsscan $*" >>"$HUB_LOG"
+echo "njsscan-env metrics=${SEMGREP_SEND_METRICS:-} home=$([ "$HOME" != "${REAL_HOME:-}" ] && echo sandboxed)" >>"$HUB_LOG"
 [ "${HUB_MODE:-}" != crash ] || exit 9
 printf '%s' "$J_njs"
 exit "${NJS_RC:-1}"
@@ -67,6 +68,7 @@ row detect-secrets a.js "Secret Keyword" && ok "detect-secrets: one row per pote
 row njsscan a.js node_eval && row njsscan a.js node_log && ! row njsscan a.js node_info && ok "njsscan: ERROR and WARNING rows, INFO dropped, trailing log line skipped" || bad "njs rows: $(jq -c '[.[]|select(.tool=="njsscan")|.rule]' "$T/out")"
 grep -qE '^detect-secrets scan --no-verify \./a\.js' "$HUB_LOG" && ! grep -q -- '--baseline' "$HUB_LOG" && grep -qx 'njsscan --json ./a.js' "$HUB_LOG" && ok "argv: detect-secrets scan --no-verify on changed files, no baseline; njsscan --json" || bad "argv: $(cat "$HUB_LOG")"
 ran detect-secrets && ran njsscan && ok "both ran" || bad "ran list"
+grep -qx 'njsscan-env metrics=off home=sandboxed' "$HUB_LOG" && ok "njsscan runs with SEMGREP_SEND_METRICS=off and a sandboxed HOME" || bad "njsscan env: $(grep njsscan-env "$HUB_LOG" | head -1)"
 # never clean: empty, whitespace, exit mismatch, wrong shape, text, errors, a crash
 DS_RC=0 J_ds= NJS_RC=0 J_njs= run
 notrun detect-secrets && notrun njsscan && ok "empty output: not run" || bad "empty"
