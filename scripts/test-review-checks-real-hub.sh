@@ -60,8 +60,8 @@ case " $tools " in *" trivy "*) printf '{"name":"acme-canary","lockfileVersion":
 G add . && G commit -q -m canaries
 # osv-scanner scans the lockfile above (lodash 4.17.15) against the offline DB the CI step seeds into REVIEW_OSV_DB_DIR (the hub's own warm command). guarddog scans the package dir the lock newly adds, so the lock's one package is installed here (untracked, after the commit) with a fictional mining-pool payload: threat-process-cryptomining
 case " $tools " in *" guarddog "*) mkdir -p node_modules/lodash && printf '{"name":"lodash","version":"4.17.15"}\n' >node_modules/lodash/package.json && printf '// fictional canary\nvar pool = "stratum+tcp://pool.example.com:3333"; // xmrig\n' >node_modules/lodash/index.js ;; esac
-# govulncheck (vuln.go.dev) and grype are online: a transient fetch error reads as not run, so retry the hub run up to 3 times while either is not run
-for i in 1 2 3; do rc=0; bash "$RC" --base base >"$T/out" 2>"$T/err" || rc=$?; grep -qE 'not run:.*\b(govulncheck|grype|trivy)\b' "$T/err" && [ "$i" -lt 3 ] || break; sleep $((i * 10)); done
+# govulncheck (vuln.go.dev), grype, trivy, osv-scanner (DB seed) and guarddog are online or DB-backed: a transient fetch error reads as not run, so retry the hub run up to 3 times while any is not run
+for i in 1 2 3; do rc=0; bash "$RC" --base base >"$T/out" 2>"$T/err" || rc=$?; grep -qE 'not run:.*\b(govulncheck|grype|trivy|osv-scanner|guarddog)\b' "$T/err" && [ "$i" -lt 3 ] || break; sleep $((i * 10)); done
 echo "review_checks exit $rc; stderr tail:"; tail -n 15 "$T/err"
 # tool -> rule id regex (rubocop and ansible-lint ids are exact; tfsec and cfn-lint match the rule family, unpinned ids)
 want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-when' ;; rubocop) echo '^Security/Eval$' ;; cfn-lint) echo '^E3' ;;
