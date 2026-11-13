@@ -15,3 +15,12 @@ else
   grep '^FAIL' "$T/out" || tail -5 "$T/out"
   echo "FAILED: the scan-summary test depends on the host's semgrep cache"; exit 1
 fi
+# Same for the checkout path: lanes run from .claude/worktrees/<name>, so "worktrees" sits in every absolute path the tool logs.
+mkdir -p "$T/.claude/worktrees/w"; ln -s "$ROOT/scripts" "$T/.claude/worktrees/w/scripts"
+mkdir "$T/.claude/worktrees/w/.claude"; ln -s "$ROOT/.claude/skills" "$T/.claude/worktrees/w/.claude/skills"
+if bash "$T/.claude/worktrees/w/scripts/test-review-checks-scan-summary.sh" >"$T/out2" 2>&1; then
+  echo "ok: the scan-summary test passes from a checkout path containing 'worktrees'"
+else
+  grep '^FAIL' "$T/out2" || tail -5 "$T/out2"
+  echo "FAILED: the scan-summary test depends on the checkout path"; exit 1
+fi
