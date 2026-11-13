@@ -87,7 +87,7 @@ raw() { case $1 in tfsec) (cd infra && tfsec . --format sarif --no-colour --soft
   tflint) tflint --format=json --no-color --call-module-type=none --chdir=./tfl --filter=main.tf ;; kics) kics scan -p ./docker/Dockerfile --no-progress --disable-secrets --report-formats json -o "$T/kics-raw"; cat "$T/kics-raw/results.json" ;;
   cppcheck) cppcheck --xml-version=2 --quiet ./app/cpp_canary.c ;; devskim) devskim analyze --source-code ./app/ds_canary.py --file-format sarif ;;
   govulncheck) GOPROXY=off GOTOOLCHAIN=local govulncheck -format json ./... ;; grype) GRYPE_DB_AUTO_UPDATE=false GRYPE_CHECK_FOR_APP_UPDATE=false grype sbom:./sbom/bom.json -o json ;;
-  trivy) trivy fs --quiet --format json --skip-version-check --skip-db-update --offline-scan --scanners vuln,misconfig . ;; esac; }
+  trivy) trivy ${REVIEW_TRIVY_CACHE:+--cache-dir "$REVIEW_TRIVY_CACHE"} fs --quiet --format json --skip-version-check --skip-db-update --offline-scan --scanners vuln,misconfig . ;; esac; }
 for t in $tools; do
   re=$(want "$t"); cf=$(cany "$t")
   if grep -qE "analyzers ran:.*\b$t\b" "$T/err" && ! grep -q "not run: $t" "$T/err" && ! grep -q "NOT CHECKED: $t" "$T/err" \
@@ -101,6 +101,7 @@ done
 # trivy: the full scan ran (not the secret-only fallback) and its vuln scan reported the lockfile canary
 case " $tools " in *" trivy "*)
   grep -q 'secret-only' "$T/err" && { echo "FAIL - trivy fell back to secret-only"; fail=1; }
+  for id in DS-0001 DS-0002; do jq -e --arg id "$id" 'any(.[]; .tool=="trivy" and .rule==$id and (.file|tostring|endswith("docker/Dockerfile")))' "$T/out" >/dev/null || { echo "FAIL - trivy: no $id row on docker/Dockerfile"; fail=1; }; done
   jq -e 'any(.[]; .tool=="trivy" and (.rule|test("^(CVE-2020-8203|CVE-2021-23337|CVE-2020-28500|GHSA-(35jh-r3h4-6jhm|29mw-wpgm-hmr9|p6mc-m468-83gw))$")) and (.file|tostring|endswith("package-lock.json")))' "$T/out" >/dev/null || { echo "FAIL - trivy: no lodash vuln row on package-lock.json"; fail=1; } ;; esac
 # the govulncheck canary package must not feed the other Go canaries (its go.mod has to stay at the repo root: the hub runs govulncheck only there)
 jq -e 'any(.[]; (.tool=="gosec" or .tool=="staticcheck") and (.file|tostring|test("vulncanary")))' "$T/out" >/dev/null && { echo "FAIL - gosec/staticcheck reported a row on vulncanary"; fail=1; }

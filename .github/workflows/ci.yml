@@ -697,14 +697,26 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           cd "$RUNNER_TEMP"
           curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_checksums.txt
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_checksums.txt.sigstore.json
           curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
-          test "$(grep -cF ' trivy_0.76.2_Linux-64bit.tar.gz' trivy_0.76.2_checksums.txt)" = 1
+          # cosign 3.1.4 pinned by sha256 (the release asset digest); it verifies the checksums file's sigstore bundle against the trivy release workflow identity
+          curl --proto '=https' --tlsv1.2 -fsSL -o cosign https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64
+          echo "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa  cosign" | sha256sum -c -
+          chmod +x cosign
+          ./cosign verify-blob --bundle trivy_0.76.2_checksums.txt.sigstore.json \
+            --certificate-identity "https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.2" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" trivy_0.76.2_checksums.txt
           grep -F ' trivy_0.76.2_Linux-64bit.tar.gz' trivy_0.76.2_checksums.txt | sha256sum -c -
           echo "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  trivy_0.76.2_Linux-64bit.tar.gz" | sha256sum -c -
           tar -xzf trivy_0.76.2_Linux-64bit.tar.gz -C "$RUNNER_TEMP/bin" trivy
           # vuln DB: the ghcr trivy-db:2 manifest digest recorded 2026-11-13 (the tag moves daily; a digest the registry later garbage-collects fails this step loudly, bump it then). The hub run itself is offline.
           export TRIVY_DISABLE_TELEMETRY=true
-          for i in 1 2 3; do if "$RUNNER_TEMP/bin/trivy" --cache-dir "$RUNNER_TEMP/trivy-cache" image --download-db-only --db-repository ghcr.io/aquasecurity/trivy-db@sha256:f3fc0ea9b0d550c458eff73a503f206a861256dff2a2e4e0513419a3d79fbe7c; then break; fi; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
+          dg=ghcr.io/aquasecurity/trivy-db@sha256:f3fc0ea9b0d550c458eff73a503f206a861256dff2a2e4e0513419a3d79fbe7c
+          for i in 1 2 3; do if "$RUNNER_TEMP/bin/trivy" --cache-dir "$RUNNER_TEMP/trivy-cache" image --download-db-only --db-repository "$dg" >"$RUNNER_TEMP/dbdl.log" 2>&1; then break; fi; cat "$RUNNER_TEMP/dbdl.log"; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
+          cat "$RUNNER_TEMP/dbdl.log"
+          # the cache stores no digest, so assert trivy fetched the pinned digest reference (a digest form it ignored would log the default tag) and wrote a DB
+          grep -qF "repo=\"$dg\"" "$RUNNER_TEMP/dbdl.log"
+          test -s "$RUNNER_TEMP/trivy-cache/db/trivy.db"
           echo "REVIEW_TRIVY_CACHE=$RUNNER_TEMP/trivy-cache" >> "$GITHUB_ENV"
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
