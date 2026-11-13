@@ -24,7 +24,7 @@ G init -q . && printf 'x\n' >README.md && G add . && G commit -q -m base && G br
 mkdir -p infra playbooks app
 printf 'resource "aws_s3_bucket" "acme" {\n  bucket = "acme-canary"\n}\n' >infra/main.tf
 printf -- '---\n- hosts: all\n  tasks:\n    - ansible.builtin.shell: echo hello\n' >playbooks/site.yml
-printf 'eval("1 + 1")\n' >app/canary.rb
+printf 'eval(params)\n' >app/canary.rb  # Security/Eval skips a plain string literal argument (cop source: pattern $!str), so the argument must not be one
 printf 'AWSTemplateFormatVersion: "2010-09-09"\nResources:\n  Acme:\n    Type: AWS::S3::Bucket\n    Properties:\n      NoSuchProperty: 1\n' >infra/stack.yaml
 G add . && G commit -q -m canaries
 rc=0; bash "$RC" --base base >"$T/out" 2>"$T/err" || rc=$?
@@ -33,6 +33,9 @@ echo "review_checks exit $rc; stderr tail:"; tail -n 15 "$T/err"
 want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-when' ;; rubocop) echo '^Security/Eval$' ;; cfn-lint) echo '^E3' ;; esac; }
 # tool -> its canary path (a row must be on this file, not just carry the rule id)
 cany() { case $1 in tfsec) echo infra/main.tf ;; ansible-lint) echo playbooks/site.yml ;; rubocop) echo app/canary.rb ;; cfn-lint) echo infra/stack.yaml ;; esac; }
+# the hub's own capture is private to its run: on a failure, rerun the tool's hub argv here and show its raw output head
+raw() { case $1 in tfsec) (cd infra && tfsec . --format sarif --no-colour --soft-fail --no-module-downloads) ;; ansible-lint) ansible-lint --offline --nocolor -q -f sarif ./playbooks/site.yml ;;
+  rubocop) rubocop --force-default-config --fail-level fatal --format json --cache false -- ./app/canary.rb ;; cfn-lint) cfn-lint --format json -- ./infra/stack.yaml ;; esac; }
 for t in $tools; do
   re=$(want "$t"); cf=$(cany "$t")
   if grep -qE "analyzers ran:.*\b$t\b" "$T/err" && ! grep -q "not run: $t" "$T/err" && ! grep -q "NOT CHECKED: $t" "$T/err" \
@@ -40,6 +43,7 @@ for t in $tools; do
     echo "ok - $t: RAN, rule matching $re reported"
   else
     echo "FAIL - $t: not RAN or no rule matching $re; its rows: $(jq -c --arg t "$t" '[.[]|select(.tool==$t)|{file,rule}]' "$T/out" 2>&1 | head -c 400)"; fail=1
+    echo "--- raw $t output (first 40 lines, exit via rerun) ---"; { raw "$t" 2>&1 || echo "[exit $?]"; } | head -n 40 || true; echo "--- end raw $t ---"
   fi
 done
 [ "$fail" = 0 ] && echo "PASS: test-review-checks-real-hub"
