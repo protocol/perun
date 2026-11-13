@@ -3,7 +3,7 @@
 # release version, and point at paths that exist. Their stamping by land-release.sh is covered by the version gate.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 ver=$(cat .claude/skills/deep-code-review/VERSION)
 python3 - "$ver" <<'PY'
 import json, os, sys
