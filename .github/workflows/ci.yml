@@ -515,7 +515,7 @@ jobs:
       - name: Allowlist guard
         run: REQUIRE_GITLEAKS=1 bash scripts/test_gitleaks_allowlist.sh
 
-  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop and cfn-lint
+  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff and actionlint
   # (pinned; no advisory-DB download) and checks each is RAN with its rule id on one canary. bundler-audit, kubescape and retire need a downloaded DB, so they stay stub-only.
   real-hub:
     runs-on: ubuntu-latest
@@ -546,6 +546,39 @@ jobs:
           gem install --no-document --install-dir "$RUNNER_TEMP/gems" --bindir "$RUNNER_TEMP/gems/bin" rubocop -v 1.69.2
           echo "GEM_HOME=$RUNNER_TEMP/gems" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gems/bin" >> "$GITHUB_PATH"
+      - name: Install bandit 1.9.4 and ruff 0.17.5 (pinned, venv)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv2"
+          "$RUNNER_TEMP/venv2/bin/pip" install --quiet bandit==1.9.4 ruff==0.17.5
+          echo "$RUNNER_TEMP/venv2/bin" >> "$GITHUB_PATH"
+      - name: Install solhint 6.2.5 (pinned npm)
+        run: |
+          set -euo pipefail
+          npm install --silent --no-audit --no-fund --prefix "$RUNNER_TEMP/npm" solhint@6.2.5
+          echo "$RUNNER_TEMP/npm/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Install hadolint 2.15.1 (pinned sha256)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/bin/hadolint" https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64
+          echo "c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507  $RUNNER_TEMP/bin/hadolint" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/hadolint"
+      - name: Install actionlint 1.7.12 (pinned sha256)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint_1.7.12_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf actionlint_1.7.12_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" actionlint
+      - name: Install PMD 7.29.0 (pinned sha256; the runner's preinstalled Java)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/pmd/pmd/releases/download/pmd_releases%2F7.29.0/pmd-dist-7.29.0-bin.zip
+          echo "d27177c185b837fa57f097e482d1253468aa035379c5eb2671fa0a279109b179  pmd-dist-7.29.0-bin.zip" | sha256sum -c -
+          unzip -q pmd-dist-7.29.0-bin.zip
+          echo "$RUNNER_TEMP/pmd-bin-7.29.0/bin" >> "$GITHUB_PATH"
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
 
