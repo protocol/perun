@@ -6,7 +6,7 @@
 # network-fetched advisory DB or rule set (they are NOT CHECKED without one), so a real run would need a download.
 # A tool absent from PATH is skipped (exit 0) unless REQUIRE_REAL_HUB=1 (the ci.yml real-hub job sets it), then it FAILs.
 # Read-only on the repo; writes only under a temp dir. Fixtures are fictional canaries.
-set -uo pipefail
+set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh}
 fail=0; tools=
@@ -27,14 +27,16 @@ printf -- '---\n- hosts: all\n  tasks:\n    - ansible.builtin.shell: echo hello\
 printf 'eval("1 + 1")\n' >app/canary.rb
 printf 'AWSTemplateFormatVersion: "2010-09-09"\nResources:\n  Acme:\n    Type: AWS::S3::Bucket\n    Properties:\n      NoSuchProperty: 1\n' >infra/stack.yaml
 G add . && G commit -q -m canaries
-bash "$RC" --base base >"$T/out" 2>"$T/err"; rc=$?
+rc=0; bash "$RC" --base base >"$T/out" 2>"$T/err" || rc=$?
 echo "review_checks exit $rc; stderr tail:"; tail -n 15 "$T/err"
 # tool -> rule id regex (rubocop and ansible-lint ids are exact; tfsec and cfn-lint match the rule family, unpinned ids)
 want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-when' ;; rubocop) echo '^Security/Eval$' ;; cfn-lint) echo '^E3' ;; esac; }
+# tool -> its canary path (a row must be on this file, not just carry the rule id)
+cany() { case $1 in tfsec) echo infra/main.tf ;; ansible-lint) echo playbooks/site.yml ;; rubocop) echo app/canary.rb ;; cfn-lint) echo infra/stack.yaml ;; esac; }
 for t in $tools; do
-  re=$(want "$t")
+  re=$(want "$t"); cf=$(cany "$t")
   if grep -qE "analyzers ran:.*\b$t\b" "$T/err" && ! grep -q "not run: $t" "$T/err" && ! grep -q "NOT CHECKED: $t" "$T/err" \
-     && jq -e --arg t "$t" --arg re "$re" 'any(.[]; .tool==$t and (.rule|test($re)))' "$T/out" >/dev/null; then
+     && jq -e --arg t "$t" --arg re "$re" --arg cf "$cf" 'any(.[]; .tool==$t and (.rule|test($re)) and (.file|tostring|endswith($cf)))' "$T/out" >/dev/null; then
     echo "ok - $t: RAN, rule matching $re reported"
   else
     echo "FAIL - $t: not RAN or no rule matching $re; its rows: $(jq -c --arg t "$t" '[.[]|select(.tool==$t)|{file,rule}]' "$T/out" 2>&1 | head -c 400)"; fail=1
