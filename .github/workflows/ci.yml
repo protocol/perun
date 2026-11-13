@@ -515,9 +515,43 @@ jobs:
       - name: Allowlist guard
         run: REQUIRE_GITLEAKS=1 bash scripts/test_gitleaks_allowlist.sh
 
+  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop and cfn-lint
+  # (pinned; no advisory-DB download) and checks each is RAN with its rule id on one canary. bundler-audit, kubescape and retire need a downloaded DB, so they stay stub-only.
+  real-hub:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install tfsec 1.28.11 (pinned sha256)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/bin/tfsec" https://github.com/aquasecurity/tfsec/releases/download/v1.28.11/tfsec-linux-amd64
+          echo "18e2f947a4f0ec74bf6db07245fc81f83930835ef1b5d51d2d5152a6548b5e45  $RUNNER_TEMP/bin/tfsec" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/tfsec"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install ansible-lint 26.11.0, ansible-core 2.22.0 and cfn-lint 1.20.0 (pinned, venv)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet ansible-lint==26.11.0 ansible-core==2.22.0 cfn-lint==1.20.0
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      - name: Install rubocop 1.69.2 (pinned, private GEM_HOME)
+        run: |
+          set -euo pipefail
+          gem install --no-document --install-dir "$RUNNER_TEMP/gems" --bindir "$RUNNER_TEMP/gems/bin" rubocop -v 1.69.2
+          echo "GEM_HOME=$RUNNER_TEMP/gems" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gems/bin" >> "$GITHUB_PATH"
+      - name: Real-tool canaries
+        run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
+
   # Branch protection requires a check named exactly `gates`: it passes only when every shard job succeeded.
   gates:
-    needs: [selftests, enforce, perpr, evals, cheap, gitleaks]
+    needs: [selftests, enforce, perpr, evals, cheap, gitleaks, real-hub]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
