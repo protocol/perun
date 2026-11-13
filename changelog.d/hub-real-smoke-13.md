@@ -1,0 +1,2 @@
+### Changed
+- The real-hub CI job now runs the real nuclei (3.11.1, sha256 from the upstream checksums file) with nuclei-templates v10.5.2 (tag archive, sha256-pinned) through the hub's DAST route (REVIEW_DAST_URL) against a local python http.server canary, and asserts it ran and reported the exact rule id tech-detect with no "not run" or "NOT CHECKED" line. zap-baseline is deliberately not covered: its only route is the ghcr.io/zaproxy/zaproxy image, about 1.2 GB of compressed layers, too heavy for the per-push job.
