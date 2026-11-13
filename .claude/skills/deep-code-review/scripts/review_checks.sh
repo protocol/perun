@@ -381,6 +381,12 @@ elif kind == "tflint":  # {issues, errors}: any error leaves the module unlinted
         sys.exit("sjson: tflint output has no issues and errors lists")
     if d["errors"]:
         sys.exit("sjson: tflint reported errors")
+elif kind == "bundler-audit":  # {version, created_at, results: [{type: unpatched_gem, gem: {name, version}, advisory: {id, title, criticality}} | {type: insecure_source, source}]} (Report#to_h, Results::*#to_h)
+    if not isinstance(d, dict) or not isinstance(d.get("results"), list) or not all(isinstance(x, dict) and (x.get("type") == "insecure_source" and x.get("source") or x.get("type") == "unpatched_gem" and isinstance(x.get("gem"), dict) and isinstance(x.get("advisory"), dict) and x["advisory"].get("id")) for x in d["results"]):
+        sys.exit("sjson: bundler-audit output has no results list of known shape")
+elif kind == "cfn-lint":  # a list of matches (JsonFormatter): Rule.Id, Level, Location.Start.LineNumber, Filename, Message
+    if not isinstance(d, list) or not all(isinstance(x, dict) and isinstance(x.get("Rule"), dict) and x["Rule"].get("Id") and isinstance(x.get("Level"), str) and x.get("Filename") and isinstance(((x.get("Location") or {}).get("Start") or {}).get("LineNumber"), int) for x in d):
+        sys.exit("sjson: cfn-lint output is not a list of matches with rule, level, file and line")
 elif kind == "brakeman":
     if not isinstance(d, dict) or not isinstance(d.get("warnings"), list):
         sys.exit("sjson: brakeman output has no warnings list")
@@ -531,6 +537,12 @@ elif kind == "cargo-audit":  # advisory id, then package@version and the advisor
     rows = [("Cargo.lock", 0, cl(x["advisory"]["id"]), cl(f"{x['package'].get('name')}@{x['package'].get('version')}: {x['advisory'].get('title', '')}")) for x in d["vulnerabilities"]["list"]]
 elif kind == "tflint":  # message plus rule severity; callers and the rule link are not read
     rows = [(os.path.relpath((i.get("range") or {}).get("filename") or "-"), ((i.get("range") or {}).get("start") or {}).get("line") or 0, (i.get("rule") or {}).get("name"), cl(f"{(i.get('rule') or {}).get('severity')}: {i.get('message', '')}")) for i in d["issues"]]
+elif kind == "bundler-audit":  # file is the caller's lockfile ("-" placeholder as for grype); advisory id, gem@version, title and criticality; the advisory description is never read
+    for x in d["results"]:
+        if x["type"] == "insecure_source": rows.append(("-", 0, "insecure-source", f"insecure gem source: {x['source']}"))
+        else: rows.append(("-", 0, x["advisory"]["id"], f"{x['gem'].get('name')}@{x['gem'].get('version')}: {x['advisory'].get('title', '')} (criticality: {x['advisory'].get('criticality')})"))
+elif kind == "cfn-lint":  # Error and Warning levels are findings, Informational is not; the template's own message text is the only free text read
+    rows = [(os.path.relpath(x["Filename"]), x["Location"]["Start"]["LineNumber"], x["Rule"]["Id"], cl(f"{x['Level']}: {x.get('Message', '')}")) for x in d if x["Level"] in ("Error", "Warning")]
 elif kind == "brakeman":  # confirm/high/medium/weak is brakeman's own confidence, carried in the message
     rows = [(nf(r.get("file")), r.get("line") or 0, r.get("check_name"), cl(f"{r.get('warning_type')}: {r.get('message')} (confidence: {r.get('confidence')})")) for r in d["warnings"]]
 elif kind == "mobsfscan":  # severity is per rule: ERROR and WARNING are findings, INFO is not
@@ -941,6 +953,8 @@ hub=(
   'brakeman;verified;batch;(^|/)(Gemfile(\.lock)?|[^/]+\.(rb|erb))$;route-only;gem install brakeman' # only when the root Gemfile names rails; scans the app, rows kept for changed files
   'mobsfscan;verified;batch;(^|/)(AndroidManifest\.xml|[^/]+\.(java|kt|swift|m|mm|plist))$;route-only;pipx install mobsfscan' # only in a repo with a mobile marker (AndroidManifest.xml, Info.plist, Podfile, project.pbxproj); rows for ERROR and WARNING rules; exit 1 = an ERROR rule matched
   'detect-secrets;verified;batch;.;route-only;pipx install detect-secrets' # changed files only, no baseline, --no-verify (no network); one row per potential secret, the value is never printed
+  'bundler-audit;verified;each;(^|/)Gemfile\.lock$;route-only;gem install bundler-audit' # Ruby lockfile vs the LOCAL ruby-advisory-db only (no --update); without a local db the tool would download one, so it is NOT CHECKED instead
+  'cfn-lint;verified;batch;\.(ya?ml|json|template)$;route-only;pipx install cfn-lint' # CloudFormation templates only (files naming AWSTemplateFormatVersion); Error and Warning rows, Informational dropped
   'sobelow;verified;batch;\.(exs?|eex|heex|leex)$;route-only;mix escript.install hex sobelow' # only when the root mix.exs names :phoenix and is unchanged in the diff; scans the whole app (--private: no update check), rows kept for changed files; --exit low makes exit 1 mean findings
   'flawfinder;verified;batch;\.(c|h|cc|cpp|cxx|hpp|hh|hxx)$;route-only;pipx install flawfinder' # C/C++ source, --sarif --quiet, no --error-level: exit 0 whatever it finds, so any other exit is a crash
   'cppcheck;verified;batch;\.(c|h|cc|cpp|cxx|hpp|hh|hxx)$;route-only;brew install cppcheck' # C/C++ source without a project build; --xml-version=2 (written to stderr) --quiet, default checks; no --error-exitcode, so any non-zero exit is a crash
@@ -987,6 +1001,8 @@ hubcmd() {
     cppcheck) cmd=(cppcheck --xml-version=2 --quiet "$@") ;;
     devskim) cmd=(devskim analyze --source-code "$@" --file-format sarif) ;;
     njsscan) cmd=(njsscan --json "$@"); okrc="1" ;; # JSON to stdout without -o; exit 1 = an ERROR rule matched or errors (-w would add WARNING; not used)
+    bundler-audit) cmd=(bundle-audit check "${1%/*}" --gemfile-lock "${1##*/}" --format json); okrc="1" ;; # exit 1 = vulnerable (cli.rb `exit(1) if report.vulnerable?`) but also every error: a crash prints no JSON, so sjson makes it not-run
+    cfn-lint) cmd=(cfn-lint --format json -- "$@"); okrc="2 4 6 8 10 12 14" ;; # exit = bitwise OR of 2 error, 4 warning, 8 informational (documented); anything else is a crash
     sobelow) cmd=(sobelow --format json --private --exit low); okrc="1" ;; # JSON to stdout; exit 1 = at least one finding (Sobelow.exit_with_status), not-Phoenix text exits 0 with no JSON
     psalm) cmd=(psalm --taint-analysis --output-format=json --no-cache --no-progress); okrc="2" ;; # exit 0 clean, 2 issues found, 1 problem running (psalm docs)
     brakeman) cmd=(brakeman -q --no-pager -f json --no-exit-on-warn --no-exit-on-error) ;; # scans the cwd app; the flags keep findings and scan errors from changing the exit code
@@ -1007,6 +1023,8 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       # -p takes a comma list: a name with a comma cannot be passed, so it is named as unchecked surface instead of dropped
       kc=$(printf '%s\n' "$hf" | grep -c , || true)
       if [ "$kc" -gt 0 ]; then echo "NOT CHECKED: kics ($kc file name(s) with a comma not scanned)" >&2; add kics "" 0 not-checked "$kc file name(s) with a comma not scanned"; hf=$(printf '%s\n' "$hf" | grep -v , || true); fi ;;
+    cfn-lint) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do grep -qF 'AWSTemplateFormatVersion' -- "$f" && printf '%s\n' "$f"; done || true) ;; # CloudFormation templates only
+    bundler-audit) [ -n "$(ls -A "${BUNDLER_AUDIT_DB:-${HOME:-/nonexistent}/.local/share/ruby-advisory-db}" 2>/dev/null)" ] || { echo "NOT CHECKED: bundler-audit (no local ruby-advisory-db; it would download one)" >&2; add "$hn" "" 0 not-checked "no local ruby-advisory-db: bundler-audit would download one"; hf=; } ;;
     mobsfscan) git ls-files | grep -qE '(^|/)(AndroidManifest\.xml|Info\.plist|Podfile|project\.pbxproj)$' || hf= ;; # no mobile project: not routed
     sobelow) grep -qF '{:phoenix,' mix.exs 2>/dev/null || hf= ;; # no Phoenix app at the root: not routed (Sobelow prints text and exits 0 there)
     brakeman) grep -qiE "^[[:space:]]*gem[[:space:]]+['\"]rails['\"]" Gemfile 2>/dev/null || hf= ;;
@@ -1015,7 +1033,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   [ "$hs" != verified ] || case $hn in syft|licensee|detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim|kubescape|retire) ;; *) wired+=" $hn" ;; esac # syft and licensee are inventories, not scanners: never wired or ran; detect-secrets (matches every file) and njsscan are wired only once installed (below), as provision_tools.sh does not install them, so a missing one is NOT CHECKED, never "fixable"
   nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
   if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
-  hb=$hn; [ "$hn" != ruff-security ] || hb=ruff; [ "$hn" != eslint-security ] || hb=./node_modules/.bin/eslint
+  hb=$hn; [ "$hn" != ruff-security ] || hb=ruff; [ "$hn" != bundler-audit ] || hb=bundle-audit; [ "$hn" != eslint-security ] || hb=./node_modules/.bin/eslint
   command -v "$hb" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
   hubtool=$hn
   case $hn in detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim) wired+=" $hn" ;; esac
@@ -1069,7 +1087,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     fi
     [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
     # a failing exit with no row is a crash (cargo-deny exit 1 is also its advisories bit): not a finding, never clean
-    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan|retire) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; sobelow) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
+    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan|retire) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; sobelow|bundler-audit) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
         printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0
