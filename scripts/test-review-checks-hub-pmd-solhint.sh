@@ -28,6 +28,10 @@ cat >"$T/bin/solhint" <<'S'
 echo "solhint $*" >>"$HUB_LOG"
 [ "${HUB_MODE:-}" != crash ] || exit 9
 [ "$1" != --config ] || echo "cfg: $(cat "$2")" >>"$HUB_LOG"
+# without --config the real tool would read the project's .solhint.json (plugins = code): the stub flags that as a finding
+if [ "$1" != --config ] && [ -f .solhint.json ]; then printf '{"runs":[{"results":[{"ruleId":"plugin-loaded","message":{"text":"m"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"contracts/T.sol"},"region":{"startLine":1}}}]}]}]}'; exit 1; fi
+# the canary scan (a throwaway contract in the review temp dir): a rule row, or none when the config loads no rules
+case "${*: -1}" in */canary.sol) if [ "${CANARY:-ok}" = ok ]; then printf '{"runs":[{"results":[{"ruleId":"avoid-tx-origin","message":{"text":"m"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"canary.sol"},"region":{"startLine":2}}}]}]}]}'; else printf '{"runs":[{"results":[]}]}'; fi; exit 1 ;; esac
 printf '%s' "$J_sol"
 exit "${SOL_RC:-1}"
 S
@@ -48,6 +52,7 @@ row() { jq -e --arg t "$1" --arg f "$2" --arg r "$3" 'any(.[]; .tool==$t and .fi
 ran() { grep -qE "analyzers ran:.*\b$1\b" "$T/err"; }
 notrun() { grep -q "not run: $1" "$T/err" && ! ran "$1"; }
 : >"$HUB_LOG"; run
+grep -q 'solhint.*canary.sol' "$HUB_LOG" && ok "solhint: the canary contract is scanned before the changed file" || bad "no canary scan"
 row pmd src/A.java HardCodedCryptoKey && ran pmd && ok "pmd: exit 4 with a row: row kept, ran" || bad "pmd rows: $(jq -c '[.[]|select(.tool=="pmd")]' "$T/out")"
 row solhint contracts/T.sol avoid-tx-origin && ran solhint && ok "solhint: exit 1 with a row: row kept, ran" || bad "sol rows: $(jq -c '[.[]|select(.tool=="solhint")]' "$T/out")"
 grep -q 'pmd check --no-cache --no-progress -R category/java/security.xml -f sarif -d ./src/A.java' "$HUB_LOG" && ! grep -q 'notes.txt' "$HUB_LOG" && ok "pmd argv: built-in security ruleset, one file" || bad "pmd argv: $(grep '^pmd' "$HUB_LOG")"
@@ -65,6 +70,12 @@ HUB_MODE=crash run
 notrun pmd && notrun solhint && ok "crash: not run" || bad "crash"
 PMD_RC=4 SOL_RC=1 J_pmd="$(sarif "")" J_sol="$(sarif "")" run
 notrun pmd && notrun solhint && ok "violation exit (4 / 1) with an empty results list: not run, not clean (fail-open guard)" || bad "rc-with-no-row"
+CANARY=none run
+notrun solhint && grep -q 'canary: the throwaway config raised no avoid-tx-origin row' "$T/err" && ! row solhint contracts/T.sol avoid-tx-origin && ok "solhint: canary raises no row (config loaded no rules): not run, not clean" || bad "canary none"
+SOL_RC=1 J_sol="$(sarif "")" CANARY=none run
+notrun solhint && ok "solhint: canary silent and an empty real scan: not run, never clean" || bad "canary empty"
+PMD_RC=4 SOL_RC=1 J_pmd="$(sarif "")" J_sol="$(sarif "")" run
+grep -q 'pmd.*exit 4 with no row' "$T/err" && grep -q 'solhint.*exit 1 with no row' "$T/err" && ok "the skip names the exit with no row" || bad "no-row message: $(grep 'not run' "$T/err")"
 PMD_RC=5 J_pmd="$(sarif "$(res HardCodedCryptoKey src/A.java 3)")" run
 notrun pmd && ok "pmd: exit 5 (recoverable error) even with a row: not run" || bad "pmd exit5"
 PMD_RC=1 J_pmd="$(sarif "")" run
@@ -79,6 +90,6 @@ notrun pmd && ok "pmd: a result with no location: not run, never dropped" || bad
 cp "$T/keep/pmd" "$T/keep/solhint" "$T/bin/"; rm "$T/bin/pmd" "$T/bin/solhint"; run
 grep -q 'NOT CHECKED: pmd (install: brew install pmd)' "$T/err" && grep -q 'NOT CHECKED: solhint (install: npm install -g solhint)' "$T/err" && jq -e 'any(.[]; .tool=="pmd" and .rule=="not-checked")' "$T/out" >/dev/null && ok "missing tools: NOT CHECKED with install hint" || bad "missing tools"
 cp "$T/keep/pmd" "$T/keep/solhint" "$T/bin/"
-git checkout -q -b other base; mkdir docs; printf 'x\n' >docs/a.md; printf '{"plugins":["evil"]}\n' >.solhint.json; G add . && G commit -q -m docs; : >"$HUB_LOG"; run
-! grep -q '^pmd\|^solhint' "$HUB_LOG" && ok "no .java or .sol in the diff: neither tool runs (a project .solhint.json alone is never read)" || bad "unrouted"
+git checkout -q -b other base; mkdir -p contracts; printf 'pragma solidity ^0.8.0;\ncontract Z {}\n' >contracts/T.sol; printf '{"plugins":["evil"]}\n' >.solhint.json; G add . && G commit -q -m sol; : >"$HUB_LOG"; run
+grep -q '^solhint --config ' "$HUB_LOG" && ! grep -q '^solhint -f' "$HUB_LOG" && ! row solhint contracts/T.sol plugin-loaded && ! jq -e 'any(.[]; .rule=="plugin-loaded")' "$T/out" >/dev/null && ok "a .sol diff with a plugin-bearing project .solhint.json: our --config is always passed, the project config is not loaded" || bad "project config loaded: $(grep '^solhint' "$HUB_LOG")"
 [ "$fail" = 0 ]

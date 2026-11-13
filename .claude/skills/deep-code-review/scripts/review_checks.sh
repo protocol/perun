@@ -1078,6 +1078,11 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       fi
       continue
     fi
+    if [ "$hn" = solhint ]; then # canary: the config's `extends` value is unverified, so a config that loads no rules would read as clean; the throwaway tx.origin contract must raise avoid-tx-origin first
+      hubcmd solhint "$td/canary.sol"; printf 'pragma solidity ^0.8.0;\ncontract C { function f() public view returns (bool) { return tx.origin == msg.sender; } }\n' >"$td/canary.sol"
+      run_one solhint "${cmd[@]}" || continue
+      grep -qE '"ruleId"[[:space:]]*:[[:space:]]*"avoid-tx-origin"' "$out" || { skip solhint "canary: the throwaway config raised no avoid-tx-origin row, so its rules may not be loaded"; continue; }
+    fi
     if [ "$hn" = psalm ]; then hubcmd psalm; elif [ "$hm" = batch ]; then hubcmd "$hn" "${targets[@]}"; else
       hubcmd "$hn" "./$f"
     fi
