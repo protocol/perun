@@ -37,7 +37,7 @@ printf 'module example.com/canary\n\ngo 1.21\n' >go.mod  # stdlib only: gosec an
 printf 'package canary\n\nimport "crypto/md5"\n\nfunc F(a int) bool {\n\t_ = md5.New()\n\treturn a == a\n}\n' >gocanary/canary.go  # gosec G401/G501 (md5), staticcheck SA4000 (identical operands)
 printf 'apiVersion: v1\nkind: Pod\nmetadata:\n  name: acme\nspec:\n  containers:\n    - name: app\n      image: example.com/acme/app:latest\n' >k8s/pod.yaml  # kube-linter latest-tag
 printf '#include <string.h>\nvoid f(char *s) {\n  char b[8];\n  strcpy(b, s);\n}\n' >app/canary.c
-printf 'url = https://admin:Zq7xV2mK9pLw@example.com/x\n' >app/notes.txt  # Basic Auth Credentials (detect-secrets); a URL secret, not a provider-key shape the privacy grep bans
+pw=Zq7xV2mK9pLw; printf 'url = %s://admin:%s@example.com/x\n' https "$pw" >app/notes.txt  # Basic Auth Credentials (detect-secrets); a URL secret, not a provider-key shape the privacy grep bans
 G add . && G commit -q -m canaries
 rc=0; bash "$RC" --base base >"$T/out" 2>"$T/err" || rc=$?
 echo "review_checks exit $rc; stderr tail:"; tail -n 15 "$T/err"
