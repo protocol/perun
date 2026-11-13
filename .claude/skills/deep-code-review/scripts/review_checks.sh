@@ -392,6 +392,8 @@ elif kind == "rubocop":  # {metadata, files: [{path, offenses: [{severity, messa
         sys.exit("sjson: rubocop output has no files list of known shape")
     if d["summary"].get("offense_count") != sum(len(x["offenses"]) for x in d["files"]) or d["summary"].get("inspected_file_count") != len(d["files"]):
         sys.exit("sjson: rubocop summary disagrees with its files list")
+    if any(o["severity"] in ("error", "fatal") and not o["cop_name"].startswith("Security/") for x in d["files"] for o in x["offenses"]):  # Lint/Syntax (fatal) means the file did not parse: its Security cops never ran
+        sys.exit("sjson: rubocop reported an error or fatal offense (a file may not have parsed)")
 elif kind == "brakeman":
     if not isinstance(d, dict) or not isinstance(d.get("warnings"), list):
         sys.exit("sjson: brakeman output has no warnings list")
@@ -549,7 +551,7 @@ elif kind == "bundler-audit":  # file is the caller's lockfile ("-" placeholder 
 elif kind == "cfn-lint":  # Error and Warning levels are findings, Informational is not; the template's own message text is the only free text read
     rows = [(os.path.relpath(x["Filename"]), x["Location"]["Start"]["LineNumber"], x["Rule"]["Id"], cl(f"{x['Level']}: {x.get('Message', '')}")) for x in d if x["Level"] in ("Error", "Warning")]
 elif kind == "rubocop":  # Security department offenses only (--only Security): cop name is the rule, severity and message are the text read
-    rows = [(os.path.relpath(x["path"]), o["location"]["start_line"], o["cop_name"], cl(f"{o['severity']}: {o.get('message', '')}")) for x in d["files"] for o in x["offenses"]]
+    rows = [(os.path.relpath(x["path"]), o["location"]["start_line"], o["cop_name"], cl(f"{o['severity']}: {o.get('message', '')}")) for x in d["files"] for o in x["offenses"] if o["cop_name"].startswith("Security/")]
 elif kind == "brakeman":  # confirm/high/medium/weak is brakeman's own confidence, carried in the message
     rows = [(nf(r.get("file")), r.get("line") or 0, r.get("check_name"), cl(f"{r.get('warning_type')}: {r.get('message')} (confidence: {r.get('confidence')})")) for r in d["warnings"]]
 elif kind == "mobsfscan":  # severity is per rule: ERROR and WARNING are findings, INFO is not
@@ -1011,7 +1013,7 @@ hubcmd() {
     njsscan) cmd=(njsscan --json "$@"); okrc="1" ;; # JSON to stdout without -o; exit 1 = an ERROR rule matched or errors (-w would add WARNING; not used)
     bundler-audit) cmd=(bundle-audit check "${1%/*}" --gemfile-lock "${1##*/}" --format json); okrc="1" ;; # exit 1 = vulnerable (cli.rb `exit(1) if report.vulnerable?`) but also every error: a crash prints no JSON, so sjson makes it not-run
     cfn-lint) cmd=(cfn-lint --format json -- "$@"); okrc="2 4 6 8 10 12 14" ;; # exit = bitwise OR of 2 error, 4 warning, 8 informational (documented); anything else is a crash
-    rubocop) cmd=(rubocop --force-default-config --only Security --format json --cache false -- "$@"); okrc="1" ;; # exit 0 clean, 1 offenses at or above --fail-level, 2 abnormal end (CLI reference); --force-default-config, --cache false and explicit files bypassing AllCops Exclude are unverified: the inspected-count check below makes any miss not-run
+    rubocop) cmd=(rubocop --force-default-config --fail-level fatal --format json --cache false -- "$@") ;; # all cops run (a --only Security run would hide Lint/Syntax); sjson keeps Security/* rows and turns an error or fatal offense into not-run; exit 0 clean, 1 offenses at or above --fail-level (only fatal here, so 1 is never a valid run), 2 abnormal end (CLI reference); --force-default-config, --fail-level fatal, --cache false and explicit files bypassing AllCops Exclude are unverified: an unsupported flag exits 2 (not run) and the inspected-count check below makes any skipped file not-run
     sobelow) cmd=(sobelow --format json --private --exit low); okrc="1" ;; # JSON to stdout; exit 1 = at least one finding (Sobelow.exit_with_status), not-Phoenix text exits 0 with no JSON
     psalm) cmd=(psalm --taint-analysis --output-format=json --no-cache --no-progress); okrc="2" ;; # exit 0 clean, 2 issues found, 1 problem running (psalm docs)
     brakeman) cmd=(brakeman -q --no-pager -f json --no-exit-on-warn --no-exit-on-error) ;; # scans the cwd app; the flags keep findings and scan errors from changing the exit code
@@ -1046,6 +1048,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   command -v "$hb" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
   hubtool=$hn
   case $hn in detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim) wired+=" $hn" ;; esac
+  if [ "$hn" = rubocop ] && [ "$full" = 0 ] && [ -n "$(changed '(^|/)\.rubocop[^/]*\.yml$')" ]; then nc ".rubocop*.yml changed in this diff: its config can require code, not run"; continue; fi
   if [ "$hn" = sobelow ] && [ "$full" = 0 ] && [ -n "$(changed '(^|/)(mix\.exs|\.sobelow-conf)$')" ]; then nc "mix.exs or .sobelow-conf changed in this diff: its config is code, not run"; continue; fi
   # zizmor, actionlint, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
   case $hn in grype|checkov|gosec|govulncheck|staticcheck|kics) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
@@ -1098,7 +1101,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     # rubocop may skip an explicit file (excludes, unparseable): its inspected count must equal the files passed, else findings may be missing
     if [ "$hn" = rubocop ] && ! python3 -I -c 'import json,sys;sys.exit(0 if json.load(open(sys.argv[1]))["summary"]["inspected_file_count"]==int(sys.argv[2]) else 1)' "$jf" "$(printf '%s\n' "$hf" | grep -c .)" 2>/dev/null; then skip rubocop "inspected file count differs from the changed Ruby files"; break; fi
     # a failing exit with no row is a crash (cargo-deny exit 1 is also its advisories bit): not a finding, never clean
-    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan|retire) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; sobelow|bundler-audit|rubocop) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
+    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan|retire) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; rubocop) [ "$rc" = 0 ] ;; sobelow|bundler-audit) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
         printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0

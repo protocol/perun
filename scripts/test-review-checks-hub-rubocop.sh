@@ -11,7 +11,7 @@ export PERUN_HEAVY_DIR="$T/heavy" HUB_LOG="$T/hub.log" DCR_CACHE_ROOT="$T/nocach
 mkdir -p "$T/repo" "$T/bin" "$T/base" "$T/sys" "$T/tmp" "$T/home" && cd "$T/repo"
 git init -q . && case "$(git rev-parse --show-toplevel)" in "$(cd "$T" && pwd -P)"/*) ;; *) echo "refusing: repo not under temp dir" >&2; exit 1 ;; esac
 G() { git -c user.email=t@example.com -c user.name=t "$@"; }
-printf 'x\n' >README.md; G add . && G commit -q -m base && git branch base
+printf 'x\n' >README.md; printf 'require: ./evil.rb\nSecurity/Eval:\n  Enabled: false\n' >.rubocop.yml; G add . && G commit -q -m base && git branch base
 mkdir -p app
 printf 'eval(params[:x])\n' >app/a.rb
 printf 'puts 1\n' >app/b.rb
@@ -21,6 +21,8 @@ cat >"$T/bin/rubocop" <<'S'
 #!/usr/bin/env bash
 echo "rubocop $*" >>"$HUB_LOG"
 [ "${HUB_MODE:-}" != crash ] || exit 9
+# a real rubocop loads ./.rubocop.yml unless --force-default-config: the planted one disables Security/Eval, so without the flag the offense vanishes
+case " $* " in *" --force-default-config "*) ;; *) [ ! -f .rubocop.yml ] || { printf '%s' "$J_clean"; exit 0; } ;; esac
 printf '%s' "$J_rc"; exit "${RC_RC:-1}"
 S
 chmod +x "$T/bin/rubocop"
@@ -32,17 +34,21 @@ for b in bash env git grep sed head tail cat rm mkdir mktemp dirname basename py
   p=$(type -P "$b") || continue; ln -s "$p" "$T/sys/$b"
 done
 off='{"severity":"warning","message":"The use of Kernel#eval is a serious security risk.","cop_name":"Security/Eval","corrected":false,"correctable":false,"location":{"start_line":1,"start_column":1,"last_line":1,"last_column":5,"length":4,"line":1,"column":1}}'
-RB="{\"metadata\":{\"rubocop_version\":\"1.0\"},\"files\":[{\"path\":\"app/a.rb\",\"offenses\":[$off]},{\"path\":\"app/b.rb\",\"offenses\":[]}],\"summary\":{\"offense_count\":1,\"target_file_count\":2,\"inspected_file_count\":2}}"
+sty='{"severity":"convention","message":"Style noise.","cop_name":"Style/FrozenStringLiteralComment","corrected":false,"correctable":true,"location":{"start_line":1,"start_column":1,"last_line":1,"last_column":2,"length":1,"line":1,"column":1}}'
+syn='{"severity":"fatal","message":"unexpected token","cop_name":"Lint/Syntax","corrected":false,"correctable":false,"location":{"start_line":1,"start_column":1,"last_line":1,"last_column":2,"length":1,"line":1,"column":1}}'
+RB="{\"metadata\":{\"rubocop_version\":\"1.0\"},\"files\":[{\"path\":\"app/a.rb\",\"offenses\":[$off]},{\"path\":\"app/b.rb\",\"offenses\":[$sty]}],\"summary\":{\"offense_count\":2,\"target_file_count\":2,\"inspected_file_count\":2}}"
 RBC='{"metadata":{},"files":[{"path":"app/a.rb","offenses":[]},{"path":"app/b.rb","offenses":[]}],"summary":{"offense_count":0,"target_file_count":2,"inspected_file_count":2}}'
 RB1='{"metadata":{},"files":[{"path":"app/a.rb","offenses":[]}],"summary":{"offense_count":0,"target_file_count":1,"inspected_file_count":1}}'
 RBM=${RBC/\"offense_count\":0/\"offense_count\":3}
-export J_rc=$RB
+RBS="{\"metadata\":{},\"files\":[{\"path\":\"app/a.rb\",\"offenses\":[$syn]},{\"path\":\"app/b.rb\",\"offenses\":[]}],\"summary\":{\"offense_count\":1,\"target_file_count\":2,\"inspected_file_count\":2}}"
+export J_rc=$RB J_clean=$RBC
 run() { PATH="$T/bin:$T/base:$T/sys" bash "$RC" --base base 2>"$T/err" >"$T/out"; }
 row() { jq -e --arg t "$1" --arg f "$2" --arg r "$3" 'any(.[]; .tool==$t and .file==$f and .rule==$r)' "$T/out" >/dev/null; }
 ran() { grep -qE "analyzers ran:.*\b$1\b" "$T/err"; }
 notrun() { grep -q "not run: $1" "$T/err" && ! ran "$1"; }
 : >"$HUB_LOG"; run
-row rubocop app/a.rb Security/Eval && grep -q '^rubocop --force-default-config --only Security --format json --cache false -- ./app/a.rb ./app/b.rb$' "$HUB_LOG" && ! grep -q notes.txt "$HUB_LOG" && ok "rubocop: Security row, default config, only Ruby files passed" || bad "rows: $(cat "$HUB_LOG") $(grep -i rubocop "$T/err")"
+J_rc=$RB RC_RC=0 run
+row rubocop app/a.rb Security/Eval && ! row rubocop app/b.rb Style/FrozenStringLiteralComment && grep -q '^rubocop --force-default-config --fail-level fatal --format json --cache false -- ./app/a.rb ./app/b.rb$' "$HUB_LOG" && ! grep -q notes.txt "$HUB_LOG" && ok "rubocop: Security row survives a planted .rubocop.yml (flag passed), non-Security dropped, only Ruby files passed" || bad "rows: $(cat "$HUB_LOG") $(grep -i rubocop "$T/err")"
 J_rc=$RBC RC_RC=0 run
 ran rubocop && ! jq -e 'any(.[]; .tool=="rubocop")' "$T/out" >/dev/null && ok "rubocop clean: ran, no rows" || bad "clean"
 # never clean (each of these failed open before the guards)
@@ -51,9 +57,14 @@ J_rc='{"files":[{"path":"app/a.rb"}],"summary":{}}' run; notrun rubocop && ok "w
 J_rc=$RBM RC_RC=0 run; notrun rubocop && ok "summary disagrees with list: not run" || bad "summary mismatch"
 J_rc=$RB1 RC_RC=0 run; notrun rubocop && ok "one of two changed files not inspected: not run, never clean" || bad "skipped file"
 J_rc=$RBC RC_RC=1 run; notrun rubocop && ok "exit 1 with a clean report: not run" || bad "exit1 clean"
-J_rc=$RB RC_RC=0 run; notrun rubocop && ok "offenses with exit 0: not run" || bad "rc0 rows"
+J_rc=$RBS RC_RC=0 run; notrun rubocop && ok "Lint/Syntax fatal offense with exit 0 (file did not parse): not run, never clean" || bad "syntax rc0"
+J_rc=$RBS RC_RC=1 run; notrun rubocop && ok "Lint/Syntax fatal offense with exit 1: not run" || bad "syntax rc1"
 J_rc=$RB RC_RC=2 run; notrun rubocop && ok "exit 2 (abnormal end): not run" || bad "exit2"
 HUB_MODE=crash run; notrun rubocop && ok "crash: not run" || bad "crash"
-rm "$T/bin/rubocop"; run
+# a changed project config can require code: NOT CHECKED, the stub never runs
+printf 'AllCops:\n  NewCops: enable\n' >>.rubocop.yml; G add . && G commit -q -m cfg
+: >"$HUB_LOG"; J_rc=$RB RC_RC=0 run
+grep -q 'NOT CHECKED: rubocop (.rubocop\*.yml changed' "$T/err" && ! grep -q '^rubocop ' "$HUB_LOG" && ok ".rubocop.yml changed: NOT CHECKED, stub never run" || bad "cfg changed: $(cat "$HUB_LOG")"
+rm "$T/bin/rubocop"; G reset -q --hard HEAD~1; run
 grep -q 'NOT CHECKED: rubocop (install: ' "$T/err" && jq -e 'any(.[]; .tool=="rubocop" and .rule=="not-checked")' "$T/out" >/dev/null && ok "missing: NOT CHECKED with install hint" || bad "missing"
 exit $fail
