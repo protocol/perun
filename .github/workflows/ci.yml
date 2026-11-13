@@ -691,6 +691,21 @@ jobs:
           echo "e9da18cc1429e786722e32161288103600efffd8e483c90761f90485bd1bec85  grype_0.121.3_linux_amd64.tar.gz" | sha256sum -c -
           tar -xzf grype_0.121.3_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" grype
           for i in 1 2 3; do if GRYPE_CHECK_FOR_APP_UPDATE=false "$RUNNER_TEMP/bin/grype" db update; then break; fi; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
+      - name: Install trivy 0.76.2 (pinned sha256 from the release checksums file; vuln DB pulled by OCI digest; misconfig checks = the bundle embedded in the pinned binary)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_checksums.txt
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
+          test "$(grep -cF ' trivy_0.76.2_Linux-64bit.tar.gz' trivy_0.76.2_checksums.txt)" = 1
+          grep -F ' trivy_0.76.2_Linux-64bit.tar.gz' trivy_0.76.2_checksums.txt | sha256sum -c -
+          echo "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  trivy_0.76.2_Linux-64bit.tar.gz" | sha256sum -c -
+          tar -xzf trivy_0.76.2_Linux-64bit.tar.gz -C "$RUNNER_TEMP/bin" trivy
+          # vuln DB: the ghcr trivy-db:2 manifest digest recorded 2026-11-13 (the tag moves daily; a digest the registry later garbage-collects fails this step loudly, bump it then). The hub run itself is offline.
+          export TRIVY_DISABLE_TELEMETRY=true
+          for i in 1 2 3; do if "$RUNNER_TEMP/bin/trivy" --cache-dir "$RUNNER_TEMP/trivy-cache" image --download-db-only --db-repository ghcr.io/aquasecurity/trivy-db@sha256:f3fc0ea9b0d550c458eff73a503f206a861256dff2a2e4e0513419a3d79fbe7c; then break; fi; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
+          echo "REVIEW_TRIVY_CACHE=$RUNNER_TEMP/trivy-cache" >> "$GITHUB_ENV"
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
 
