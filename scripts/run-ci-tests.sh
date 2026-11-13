@@ -21,7 +21,7 @@
 # --list-affected [BASE]: the dry form of --affected: prints "affected: N of M tests" and one "selected: <suite>" line per suite it would run,
 #   then exits 0 without the privacy/trigger gates, any suite or any receipt (lkg.py affected-check re-derives the selection with it).
 set -uo pipefail
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 affected=0 list=0 base="${RUN_CI_BASE:-}" arg=
 case "${1:-}" in
   --affected) affected=1; arg="${2:-}" ;;
