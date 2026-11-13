@@ -1,3 +1,3 @@
 ### Added
 - `review_checks.sh` tool hub routes `tfsec` (Terraform, one directory per changed `.tf` file, SARIF, no module download, rows kept for the changed file only) and `ansible-lint` (Ansible-looking YAML, `--offline`, SARIF; a changed `.ansible-lint` or `ansible.cfg` is `NOT CHECKED`). Both are `NOT CHECKED` when missing and `not run` on a crash, empty or wrong-shape output; ansible-lint also treats a non-zero exit with no row as not run. Neither is in `provision_tools.sh`, so a missing one is never reported as fixable.
-- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 53056→54852 hub rows for tfsec and ansible-lint
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 54797→56593 hub rows for tfsec and ansible-lint
