@@ -174,7 +174,7 @@ e "review_checks: partial: semgrep ran but reported errors" && e "review_checks:
 rc_run SG_ERR='{"message":"boom"}' # errors and no findings: nothing usable was scanned
 e "not run: semgrep (scan errored, no findings)" && st '.not_run == ["semgrep"] and .partial == []' && ok "semgrep with errors and no findings: not run, not partial" || { bad "errored semgrep"; cat "$T/err"; }
 
-# shellcheck, ruff and the history scan count as wired, but provision_tools.sh cannot install them: not run, never fixable
+# The shellcheck, ruff and the history scan count as wired, but provision_tools.sh cannot install them: not run, never fixable
 mkrepo repo3; echo 'echo hi' >t.sh; echo 'x = 1' >t.py; commit
 SX=$(mktemp -d "$T/sx.XXXXXX"); printf '#!/bin/sh\nexit "${LINT_RC:-0}"\n' >"$SX/shellcheck"; printf '#!/bin/sh\ncase "$*" in *json*) echo "[]" ;; esac\nexit "${LINT_RC:-0}"\n' >"$SX/ruff" # ruff also backs the ruff-security hub row (JSON)
 printf '#!/bin/sh\necho %s\n' "'{\"results\":[]}'" >"$SX/bandit"; chmod +x "$SX"/* # bandit: the hub tool a .py file wires
