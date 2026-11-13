@@ -5,7 +5,7 @@ name: perun-review
 # deep-code-review skill installed and committed on the default branch, add the
 # repository secret ANTHROPIC_API_KEY, commit a non-empty `.banlist.txt` (post_review.sh
 # fails closed without it), pin CLAUDE_CODE_VERSION below, and set the spend cap.
-# Pin the `uses:` actions to full commit SHAs too (tags are mutable).
+# The `uses:` actions are already pinned to full commit SHAs; bump them deliberately (tags are mutable).
 #
 # Shape: two jobs, least privilege each.
 #  1. `review`  (contents: read) runs the review headless and read-only
@@ -63,7 +63,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -98,7 +98,7 @@ jobs:
               assert isinstance(f, dict) and all(isinstance(f.get(k), str) for k in ("id", "severity", "title")), "malformed finding row"
           json.dump(d, open("findings.json", "w"))
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: perun-findings
           path: findings.json
@@ -113,11 +113,11 @@ jobs:
       pull-requests: write
       checks: write
     steps:
-      - uses: actions/checkout@v4   # BASE commit only: never the PR head
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0   # BASE commit only: never the PR head
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: perun-findings
       - name: Ground-check, post, report
