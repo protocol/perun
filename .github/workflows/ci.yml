@@ -515,10 +515,10 @@ jobs:
       - name: Allowlist guard
         run: REQUIRE_GITLEAKS=1 bash scripts/test_gitleaks_allowlist.sh
 
-  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, semgrep and njsscan
-  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download) and checks each is RAN with its rule id on one canary. trivy, bundler-audit, kubescape and retire need a downloaded DB or rule set, and cppcheck has no pinned, hash-verifiable binary, so they stay stub-only.
+  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, semgrep, njsscan, tflint, kics, cppcheck and devskim
+  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download) and checks each is RAN with its rule id on one canary. trivy, bundler-audit, kubescape and retire need a downloaded DB or rule set, so they stay stub-only; syft is an inventory the hub never counts as ran.
   real-hub:
-    runs-on: ubuntu-24.04  # pinned: the cppcheck apt version below exists only in noble
+    runs-on: ubuntu-24.04  # pinned: the cppcheck .deb below is the noble build and its runtime deps come from noble
     timeout-minutes: 15
     permissions:
       contents: read
@@ -649,11 +649,14 @@ jobs:
           git -C kics-src checkout -q --detach FETCH_HEAD
           echo "KICS_QUERIES_PATH=$RUNNER_TEMP/kics-src/assets/queries" >> "$GITHUB_ENV"
           echo "KICS_LIBRARIES_PATH=$RUNNER_TEMP/kics-src/assets/libraries" >> "$GITHUB_ENV"
-      - name: Install cppcheck 2.13.0-2ubuntu3 (exact version from the signed noble archive)
+      - name: Install cppcheck 2.13.0-2ubuntu3 (pinned .deb sha256 from Launchpad's published-binary record; runtime deps via apt)
         run: |
           set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://launchpad.net/ubuntu/+archive/primary/+files/cppcheck_2.13.0-2ubuntu3_amd64.deb
+          echo "c84251e17148b6b4ff3698bb71ceec0f445896d97888bedad8bba471c00aeadf  cppcheck_2.13.0-2ubuntu3_amd64.deb" | sha256sum -c -
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends cppcheck=2.13.0-2ubuntu3
+          sudo apt-get install -y -qq --no-install-recommends "$RUNNER_TEMP/cppcheck_2.13.0-2ubuntu3_amd64.deb"
       - name: Install DevSkim CLI 1.0.100 (nupkg pinned sha512 = the nuget.org catalog packageHash; installed from the local file)
         env:
           DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -663,6 +666,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/nupkg"
           curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/nupkg/microsoft.cst.devskim.cli.1.0.100.nupkg" https://api.nuget.org/v3-flatcontainer/microsoft.cst.devskim.cli/1.0.100/microsoft.cst.devskim.cli.1.0.100.nupkg
           test "$(openssl dgst -sha512 -binary "$RUNNER_TEMP/nupkg/microsoft.cst.devskim.cli.1.0.100.nupkg" | base64 -w0)" = "WSAI8ReSrSF6BdM1ZWe2uupS7PrjSr9/1c0eor9kCPL6e6pt8t3OfCo8fqrWvzlutgSb7kbozg4wFPjvpqRTPA=="
+          # package signature check only where the runner's dotnet ships the verb
+          if dotnet nuget verify --help >/dev/null 2>&1; then dotnet nuget verify "$RUNNER_TEMP/nupkg/microsoft.cst.devskim.cli.1.0.100.nupkg"; fi
           dotnet tool install Microsoft.CST.DevSkim.CLI --version 1.0.100 --tool-path "$RUNNER_TEMP/devskim" --add-source "$RUNNER_TEMP/nupkg"
           echo "$RUNNER_TEMP/devskim" >> "$GITHUB_PATH"
       - name: Real-tool canaries

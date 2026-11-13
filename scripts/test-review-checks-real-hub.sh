@@ -71,7 +71,7 @@ raw() { case $1 in tfsec) (cd infra && tfsec . --format sarif --no-colour --soft
   gitleaks) gitleaks detect --no-git --no-banner --exit-code 0 -f json -r /dev/stdout -s ./app/token.cfg ;; trufflehog) trufflehog filesystem --no-verification --no-update --sarif ./app/token.cfg ;;
   checkov) CKV_SKIP_PACKAGE_UPDATE_CHECK=true checkov -f ./docker/Dockerfile -o json --quiet --skip-download --soft-fail ;; kube-score) kube-score score -o json ./k8s/pod.yaml ;;
   semgrep) HOME="$T" semgrep --config .semgrep.yml --metrics=off --disable-version-check --json --quiet ./app/sg.txt ;; njsscan) njsscan --json ./app/canary.js ;;
-  tflint) tflint --format=json --no-color --call-module-type=none --chdir=./tfl --filter=main.tf ;; kics) kics scan -p ./docker/Dockerfile --no-progress --disable-secrets --report-formats json -o "$T/kics-raw" && cat "$T/kics-raw/results.json" ;;
+  tflint) tflint --format=json --no-color --call-module-type=none --chdir=./tfl --filter=main.tf ;; kics) kics scan -p ./docker/Dockerfile --no-progress --disable-secrets --report-formats json -o "$T/kics-raw"; cat "$T/kics-raw/results.json" ;;
   cppcheck) cppcheck --xml-version=2 --quiet ./app/cpp_canary.c ;; devskim) devskim analyze --source-code ./app/ds_canary.py --file-format sarif ;; esac; }
 for t in $tools; do
   re=$(want "$t"); cf=$(cany "$t")
