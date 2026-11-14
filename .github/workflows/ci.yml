@@ -745,13 +745,15 @@ jobs:
           install -m 0755 osv-scanner_linux_amd64 "$RUNNER_TEMP/bin/osv-scanner"
           # the offline DB, pre-seeded the way the hub's own NOT CHECKED message says (the DB is the live OSV npm dump, not pinned); osv-scanner exits 1 when it finds vulnerabilities, so success is a non-empty zip
           printf '{"name":"acme-seed","lockfileVersion":3,"requires":true,"packages":{"":{"name":"acme-seed","version":"1.0.0"},"node_modules/lodash":{"version":"4.17.15"}}}\n' > osv-seed/package-lock.json
-          # a go.mod too: the govulncheck canary's go.sum is also scanned by osv-scanner, and an ecosystem with no offline DB reads as not run
+          # a Cargo.lock too: the cargo canary's lockfile is also scanned by osv-scanner, and an ecosystem with no offline DB reads as not run
+          printf 'version = 3\n\n[[package]]\nname = "acme-seed"\nversion = "1.0.0"\ndependencies = [\n "time",\n]\n\n[[package]]\nname = "time"\nversion = "0.1.45"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n' > osv-seed/Cargo.lock
+          # a go.mod too: the govulncheck canary's go.mod is also scanned by osv-scanner, and an ecosystem with no offline DB reads as not run
           printf 'module example.com/acmeseed\n\ngo 1.22\n\nrequire golang.org/x/text v0.3.7\n' > osv-seed/go.mod
           for i in 1 2 3; do
             (cd osv-seed && OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY="$RUNNER_TEMP/osv-db" "$RUNNER_TEMP/bin/osv-scanner" --offline-vulnerabilities --download-offline-databases .) || true
-            # one verified zip per seeded ecosystem (npm, Go)
-            if zs=$(find "$RUNNER_TEMP/osv-db" -type f -name '*.zip' -size +0 2>/dev/null) && [ "$(printf '%s\n' "$zs" | grep -c .)" -ge 2 ] && printf '%s\n' "$zs" | while IFS= read -r z; do unzip -tq "$z" >/dev/null || exit 1; done; then break; fi
-            [ "$i" -lt 3 ] || { echo "osv-scanner offline DB download failed (need an npm and a Go zip)"; exit 1; }
+            # one verified zip per seeded ecosystem (npm, crates.io, Go)
+            if zs=$(find "$RUNNER_TEMP/osv-db" -type f -name '*.zip' -size +0 2>/dev/null) && [ "$(printf '%s\n' "$zs" | grep -c .)" -ge 3 ] && printf '%s\n' "$zs" | while IFS= read -r z; do unzip -tq "$z" >/dev/null || exit 1; done; then break; fi
+            [ "$i" -lt 3 ] || { echo "osv-scanner offline DB download failed (need an npm, a crates.io and a Go zip)"; exit 1; }
             sleep $((i * 10))
           done
           echo "REVIEW_OSV_DB_DIR=$RUNNER_TEMP/osv-db" >> "$GITHUB_ENV"
@@ -772,6 +774,40 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           ln -s "$RUNNER_TEMP/venv-guarddog/bin/guarddog" "$RUNNER_TEMP/bin/guarddog"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install cargo-audit 0.23.0 and cargo-deny 0.20.2 (pinned sha256) and the RustSec advisory DB (pinned commit)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP"
+          cargo --version
+          # cargo-audit publishes no checksums file: the pin is the release asset digest from the release API, re-verified against a fresh download
+          curl --proto '=https' --tlsv1.2 --retry 3 --retry-delay 5 --retry-all-errors -fsSL -O https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.23.0/cargo-audit-x86_64-unknown-linux-gnu-v0.23.0.tgz
+          echo "b77993532b253fcbf550996d7716465ec3d734d4e74e7f87bfb65a19add0fb59  cargo-audit-x86_64-unknown-linux-gnu-v0.23.0.tgz" | sha256sum -c -
+          tar -xzf cargo-audit-x86_64-unknown-linux-gnu-v0.23.0.tgz --strip-components=1 -C "$RUNNER_TEMP/bin" cargo-audit-x86_64-unknown-linux-gnu-v0.23.0/cargo-audit
+          # cargo-deny publishes a .sha256 per asset: check the tarball against it and against the literal pin
+          curl --proto '=https' --tlsv1.2 --retry 3 --retry-delay 5 --retry-all-errors -fsSL -O https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+          curl --proto '=https' --tlsv1.2 --retry 3 --retry-delay 5 --retry-all-errors -fsSL -O https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz.sha256
+          echo "$(cat cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz.sha256)  cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz" | sha256sum -c -
+          echo "9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f  cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz" | sha256sum -c -
+          tar -xzf cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz --strip-components=1 -C "$RUNNER_TEMP/bin" cargo-deny-0.20.2-x86_64-unknown-linux-musl/cargo-deny
+          "$RUNNER_TEMP/bin/cargo-deny" --version | grep -qF 0.20.2
+          # advisory DB at the path the hub reads: the RustSec/advisory-db commit recorded 2026-11-13, fetched by its full sha (content-addressed, so a changed object cannot match); the hub run is --no-fetch --stale
+          db="${CARGO_HOME:-$HOME/.cargo}/advisory-db"
+          sha=4ef2df8e806a65e2f1ecc14f56f51249062b23d6
+          mkdir -p "$db"
+          git init -q "$db"
+          for i in 1 2 3; do if git -C "$db" fetch -q --depth 1 https://github.com/RustSec/advisory-db.git "$sha"; then break; fi; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
+          test "$(git -C "$db" rev-parse FETCH_HEAD)" = "$sha"
+          git -C "$db" checkout -q --detach FETCH_HEAD
+          test -f "$db/crates/time/RUSTSEC-2020-0071.md"
+      - name: Install brakeman 8.1.0 (pinned .gem sha256 from the rubygems.org versions API; private GEM_HOME; racc comes from Ruby's own default or bundled gems)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 --retry 3 --retry-delay 5 --retry-all-errors -fsSL -O https://rubygems.org/downloads/brakeman-8.1.0.gem
+          echo "cfa9e5214e4925842f4bc849a64f8a7e6c5d0425fe98eac8d7b7bc60fdc17e07  brakeman-8.1.0.gem" | sha256sum -c -
+          gem install --local --no-document --ignore-dependencies --install-dir "$RUNNER_TEMP/gems" --bindir "$RUNNER_TEMP/gems/bin" ./brakeman-8.1.0.gem
+          GEM_HOME="$RUNNER_TEMP/gems" "$RUNNER_TEMP/gems/bin/brakeman" --version | grep -qF 8.1.0
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
 

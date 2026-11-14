@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Real-tool smoke for the review_checks.sh hub: runs the REAL tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff (ruff-security), actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, kubescape (pinned local frameworks), semgrep (repo rules) and njsscan, tflint, kics, cppcheck, devskim, govulncheck, grype, trivy, osv-scanner, shellcheck and guarddog (no stubs) on one tiny
+# Real-tool smoke for the review_checks.sh hub: runs the REAL tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff (ruff-security), actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, kubescape (pinned local frameworks), semgrep (repo rules) and njsscan, tflint, kics, cppcheck, devskim, govulncheck, grype, trivy, osv-scanner, shellcheck, guarddog, cargo-audit, cargo-deny and brakeman (no stubs) on one tiny
 # known-bad canary each, in a throwaway repo, and asserts each is reported as RAN (stderr "analyzers ran:", no "not run:" line)
 # with its expected rule id in the JSON rows. The stub tests (scripts/test-review-checks-hub-*.sh) pin routing and failure
 # handling; this pins the real flags, SARIF/JSON shapes and exit codes. Not covered: syft (an inventory the hub never counts as ran), bundler-audit and retire need a
-# network-fetched advisory DB or rule set (they are NOT CHECKED without one), so a real run would need a download. codeql is dropped: its CLI bundle is a multi-hundred-MB download plus per-language database builds, too heavy for this per-push job.
+# network-fetched advisory DB or rule set (they are NOT CHECKED without one), so a real run would need a download. codeql is dropped: its CLI bundle is a multi-hundred-MB download plus per-language database builds, too heavy for this per-push job. pip-audit is dropped: the hub reaches it only as a fallback for a requirements*.txt that osv-scanner and trivy gave no result for (the seeded osv DB covers requirements.txt, so it would never run here), and it has no offline advisory DB: it queries PyPI live, so there is nothing to integrity-pin.
 # A tool absent from PATH is skipped (exit 0) unless REQUIRE_REAL_HUB=1 (the ci.yml real-hub job sets it), then it FAILs.
 # Read-only on the repo; writes only under a temp dir. Fixtures are fictional canaries.
 set -euo pipefail
@@ -11,7 +11,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh}
 fail=0; tools=
 bin() { [ "$1" = ruff-security ] && echo ruff || echo "$1"; }  # the hub tool name ruff-security runs the ruff binary
-for t in tfsec ansible-lint rubocop cfn-lint pmd solhint hadolint bandit ruff-security actionlint zizmor gosec staticcheck kube-linter flawfinder detect-secrets gitleaks trufflehog checkov kube-score kubescape semgrep njsscan tflint kics cppcheck devskim govulncheck grype trivy osv-scanner shellcheck guarddog; do
+for t in tfsec ansible-lint rubocop cfn-lint pmd solhint hadolint bandit ruff-security actionlint zizmor gosec staticcheck kube-linter flawfinder detect-secrets gitleaks trufflehog checkov kube-score kubescape semgrep njsscan tflint kics cppcheck devskim govulncheck grype trivy osv-scanner shellcheck guarddog cargo-audit cargo-deny brakeman; do
   if command -v "$(bin "$t")" >/dev/null 2>&1; then tools+=" $t"
   elif [ "${REQUIRE_REAL_HUB:-}" = 1 ]; then echo "FAIL - $t not installed (REQUIRE_REAL_HUB=1)"; fail=1
   else echo "skip - $t not installed"; fi
@@ -58,11 +58,22 @@ esac
 mkdir sbom && printf '{"bomFormat":"CycloneDX","specVersion":"1.5","version":1,"components":[{"type":"library","name":"lodash","version":"4.17.15","purl":"pkg:npm/lodash@4.17.15"}]}\n' >sbom/bom.json
 # trivy: misconfig DS-0001/DS-0002 on docker/Dockerfile (above) plus a vuln on a lockfile (lodash 4.17.15). The vuln DB comes from REVIEW_TRIVY_CACHE (the CI step pulls it by digest); TRIVY_SKIP_CHECK_UPDATE keeps the misconfig checks to the bundle embedded in the sha-pinned binary
 case " $tools " in *" trivy "*) printf '{"name":"acme-canary","lockfileVersion":3,"requires":true,"packages":{"":{"name":"acme-canary","version":"1.0.0","dependencies":{"lodash":"4.17.15"}},"node_modules/lodash":{"version":"4.17.15"}}}\n' >package-lock.json; export TRIVY_SKIP_CHECK_UPDATE=true ;; esac
+# cargo-audit and cargo-deny share one root Cargo.lock: the crate pins time 0.1.45 (RUSTSEC-2020-0071 in the CI step's pinned advisory DB) and declares license GPL-3.0-only against a deny.toml that allows only MIT and Apache-2.0 (cargo-deny: rejected). The lock is generated online and the crates fetched into the cargo cache, because the hub's cargo-deny run is --offline
+case " $tools " in *" cargo-audit "*|*" cargo-deny "*)
+  mkdir src && : >src/lib.rs
+  printf '[package]\nname = "acme-canary"\nversion = "0.1.0"\nedition = "2021"\nlicense = "GPL-3.0-only"\n\n[dependencies]\ntime = "=0.1.45"\n' >Cargo.toml
+  printf '[graph]\ntargets = ["x86_64-unknown-linux-gnu"]\n\n[licenses]\nallow = ["MIT", "Apache-2.0"]\n' >deny.toml
+  for i in 1 2 3; do cargo generate-lockfile >"$T/cargolock" 2>&1 && cargo fetch --locked >>"$T/cargolock" 2>&1 && break; [ "$i" -lt 3 ] || { cat "$T/cargolock"; echo "FAIL - cargo lock/fetch for the cargo canaries"; exit 1; }; sleep $((i * 10)); done
+  grep -qF 'name = "time"' Cargo.lock && grep -qF 'version = "0.1.45"' Cargo.lock ;; esac
+# brakeman runs only on a root Gemfile naming rails: one Rails controller with eval of a request parameter (Evaluation, Dangerous Eval)
+case " $tools " in *" brakeman "*)
+  mkdir -p app/controllers && printf 'source "https://rubygems.org"\ngem "rails", "7.1.3"\n' >Gemfile
+  printf 'class CanaryController < ApplicationController\n  def show\n    eval(params[:code])\n  end\nend\n' >app/controllers/canary_controller.rb ;; esac
 G add . && G commit -q -m canaries
 # osv-scanner scans the lockfile above (lodash 4.17.15) against the offline DB the CI step seeds into REVIEW_OSV_DB_DIR (the hub's own warm command). guarddog scans the package dir the lock newly adds, so the lock's one package is installed here (untracked, after the commit) with a fictional mining-pool payload: threat-process-cryptomining
 case " $tools " in *" guarddog "*) mkdir -p node_modules/lodash && printf '{"name":"lodash","version":"4.17.15"}\n' >node_modules/lodash/package.json && printf '// fictional canary\nvar pool = "stratum+tcp://pool.example.com:3333"; // xmrig\n' >node_modules/lodash/index.js ;; esac
-# govulncheck (vuln.go.dev), grype, trivy, osv-scanner (DB seed) and guarddog are online or DB-backed: a transient fetch error reads as not run, so retry the hub run up to 3 times while any is not run
-for i in 1 2 3; do rc=0; bash "$RC" --base base >"$T/out" 2>"$T/err" || rc=$?; grep -qE 'not run:.*\b(govulncheck|grype|trivy|osv-scanner|guarddog)\b' "$T/err" && [ "$i" -lt 3 ] || break; sleep $((i * 10)); done
+# govulncheck (vuln.go.dev), grype, trivy, osv-scanner (DB seed), guarddog, cargo-audit, cargo-deny and brakeman (a transient crash reads as not run) are online or DB-backed: retry the hub run up to 3 times while any is not run
+for i in 1 2 3; do rc=0; bash "$RC" --base base >"$T/out" 2>"$T/err" || rc=$?; grep -qE 'not run:.*\b(govulncheck|grype|trivy|osv-scanner|guarddog|cargo-audit|cargo-deny|brakeman)\b' "$T/err" && [ "$i" -lt 3 ] || break; sleep $((i * 10)); done
 echo "review_checks exit $rc; stderr tail:"; tail -n 15 "$T/err"
 # tool -> rule id regex (rubocop and ansible-lint ids are exact; tfsec and cfn-lint match the rule family, unpinned ids)
 want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-when' ;; rubocop) echo '^Security/Eval$' ;; cfn-lint) echo '^E3' ;;
@@ -71,13 +82,15 @@ want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-wh
   gitleaks) echo '^github-pat$' ;; trufflehog) echo '^Github$' ;; checkov) echo '^CKV_DOCKER_(3|7)$' ;; kube-score) echo '^container-image-tag$' ;; kubescape) echo '^C-0057$' ;; semgrep) echo '^acme-canary$' ;; njsscan) echo '^eval_nodejs$' ;;
   tflint) echo '^terraform_unused_declarations$' ;; kics) echo "^Image Version Using 'latest'\$" ;; cppcheck) echo '^arrayIndexOutOfBounds$' ;; devskim) echo '^DS126858$' ;;
   govulncheck) echo '^GO-(2020-0036|2021-0061|2022-0956)$' ;; grype) echo '^(GHSA-(35jh-r3h4-6jhm|p6mc-m468-83gw)|CVE-2021-23337|CVE-2020-8203)$' ;; trivy) echo '^DS-000[12]$' ;;
-  osv-scanner) echo '^GHSA-(35jh-r3h4-6jhm|p6mc-m468-83gw|29mw-wpgm-hmr9|r5fr-rjxr-66jc|xxjr-mmjv-4gpg)$' ;; shellcheck) echo '^SC2086$' ;; guarddog) echo '^threat-process-cryptomining$' ;; esac; }
+  osv-scanner) echo '^GHSA-(35jh-r3h4-6jhm|p6mc-m468-83gw|29mw-wpgm-hmr9|r5fr-rjxr-66jc|xxjr-mmjv-4gpg)$' ;; shellcheck) echo '^SC2086$' ;; guarddog) echo '^threat-process-cryptomining$' ;;
+  cargo-audit) echo '^RUSTSEC-2020-0071$' ;; cargo-deny) echo '^rejected$' ;; brakeman) echo '^Evaluation$' ;; esac; }
 # tool -> its canary path (a row must be on this file, not just carry the rule id)
 cany() { case $1 in tfsec) echo infra/main.tf ;; ansible-lint) echo playbooks/site.yml ;; rubocop) echo app/canary.rb ;; cfn-lint) echo infra/stack.yaml ;;
   pmd) echo app/Canary.java ;; solhint) echo contracts/Canary.sol ;; hadolint) echo docker/Dockerfile ;; bandit|ruff-security) echo app/canary.py ;; actionlint) echo .github/workflows/canary.yml ;; zizmor) echo .github/workflows/zcanary.yml ;; gosec|staticcheck) echo gocanary/canary.go ;;
   kube-linter) echo k8s/pod.yaml ;; flawfinder) echo app/canary.c ;; detect-secrets) echo app/notes.txt ;; gitleaks|trufflehog) echo app/token.cfg ;;
   checkov) echo docker/Dockerfile ;; kube-score) echo k8s/pod.yaml ;; kubescape) echo k8s/ks.yaml ;; semgrep) echo app/sg.txt ;; njsscan) echo app/canary.js ;;
-  tflint) echo tfl/main.tf ;; kics) echo docker/Dockerfile ;; cppcheck) echo app/cpp_canary.c ;; devskim) echo app/ds_canary.py ;; govulncheck) echo go.mod ;; grype) echo sbom/bom.json ;; trivy) echo docker/Dockerfile ;; osv-scanner) echo package-lock.json ;; shellcheck) echo app/canary.sh ;; guarddog) echo node_modules/lodash/index.js ;; esac; }
+  tflint) echo tfl/main.tf ;; kics) echo docker/Dockerfile ;; cppcheck) echo app/cpp_canary.c ;; devskim) echo app/ds_canary.py ;; govulncheck) echo go.mod ;; grype) echo sbom/bom.json ;; trivy) echo docker/Dockerfile ;; osv-scanner) echo package-lock.json ;; shellcheck) echo app/canary.sh ;; guarddog) echo node_modules/lodash/index.js ;;
+  cargo-audit|cargo-deny) echo Cargo.lock ;; brakeman) echo app/controllers/canary_controller.rb ;; esac; }
 # the hub's own capture is private to its run: on a failure, rerun the tool's hub argv here and show its raw output head
 raw() { case $1 in tfsec) (cd infra && tfsec . --format sarif --no-colour --soft-fail --no-module-downloads) ;; ansible-lint) ansible-lint --offline --nocolor -q -f sarif ./playbooks/site.yml ;;
   rubocop) rubocop --force-default-config --fail-level fatal --format json --cache false -- ./app/canary.rb ;; cfn-lint) cfn-lint --format json -- ./infra/stack.yaml ;;
@@ -94,6 +107,8 @@ raw() { case $1 in tfsec) (cd infra && tfsec . --format sarif --no-colour --soft
   govulncheck) GOPROXY=off GOTOOLCHAIN=local govulncheck -format json ./... ;; grype) GRYPE_DB_AUTO_UPDATE=false GRYPE_CHECK_FOR_APP_UPDATE=false grype sbom:./sbom/bom.json -o json ;;
   trivy) trivy ${REVIEW_TRIVY_CACHE:+--cache-dir "$REVIEW_TRIVY_CACHE"} fs --quiet --format json --skip-version-check --skip-db-update --offline-scan --scanners vuln,misconfig . ;;
   osv-scanner) OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY="${REVIEW_OSV_DB_DIR:-}" osv-scanner --offline-vulnerabilities --format json -L ./package-lock.json ;; shellcheck) shellcheck -f gcc ./app/canary.sh ;;
+  cargo-audit) cargo-audit audit --no-fetch --stale --json --file Cargo.lock --db "${CARGO_HOME:-$HOME/.cargo}/advisory-db" ;; cargo-deny) cargo-deny --offline --format json check bans licenses sources 2>&1 ;;
+  brakeman) brakeman -q --no-pager -f json --no-exit-on-warn --no-exit-on-error ;;
   guarddog) mkdir -p "$T/gdc"; for k in npm pypi rubygems go; do printf '{"downloaded_timestamp": %s, "packages": ["example"]}\n' "$(date +%s)" >"$T/gdc/top_${k}_packages.json"; done; GUARDDOG_TOP_PACKAGES_CACHE_LOCATION="$T/gdc" guarddog npm scan --output-format json "$PWD/node_modules/lodash" ;; esac; }
 for t in $tools; do
   re=$(want "$t"); cf=$(cany "$t")
