@@ -515,8 +515,8 @@ jobs:
       - name: Allowlist guard
         run: REQUIRE_GITLEAKS=1 bash scripts/test_gitleaks_allowlist.sh
 
-  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, semgrep, njsscan, tflint, kics, cppcheck, devskim, govulncheck, grype, trivy, osv-scanner, shellcheck and guarddog
-  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download, except govulncheck, grype, trivy and osv-scanner, which fetch their vulnerability DB online: trivy by pinned digest, the rest live) and checks each is RAN with its rule id on one canary. bundler-audit, kubescape and retire need a downloaded DB or rule set, so they stay stub-only; syft is an inventory the hub never counts as ran.
+  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, kubescape, semgrep, njsscan, tflint, kics, cppcheck, devskim, govulncheck, grype, trivy, osv-scanner, shellcheck and guarddog
+  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download, except govulncheck, grype, trivy and osv-scanner, which fetch their vulnerability DB online: trivy by pinned digest, the rest live) and checks each is RAN with its rule id on one canary. bundler-audit and retire need a downloaded DB or rule set, so they stay stub-only; syft is an inventory the hub never counts as ran.
   real-hub:
     runs-on: ubuntu-24.04  # pinned: the cppcheck .deb below is the noble build and its runtime deps come from noble
     timeout-minutes: 25
@@ -626,6 +626,20 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/zegl/kube-score/releases/download/v1.20.0/kube-score_1.20.0_linux_amd64.tar.gz
           echo "ff777b4b3f45905b2d22c69e93c57a7a170e61529a79d54e59cb95cca4bc2a55  kube-score_1.20.0_linux_amd64.tar.gz" | sha256sum -c -
           tar -xzf kube-score_1.20.0_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" kube-score
+      - name: Install kubescape 3.0.48 and its offline frameworks (pinned sha256; the frameworks are regolibrary v1.0.316 assets, which publish no checksums, so their hashes were recorded at pin time)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin" "$RUNNER_TEMP/kubescape-artifacts"
+          cd "$RUNNER_TEMP"
+          f() { curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o "$1" "$2"; }
+          f kubescape_3.0.48_linux_amd64.tar.gz https://github.com/kubescape/kubescape/releases/download/v3.0.48/kubescape_3.0.48_linux_amd64.tar.gz
+          echo "d7bb9a8faf4f943835c31573f015b0c03386fc038107a53bece9cc4750ddb401  kubescape_3.0.48_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf kubescape_3.0.48_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" kubescape
+          f kubescape-artifacts/nsa.json https://github.com/kubescape/regolibrary/releases/download/v1.0.316/nsa
+          f kubescape-artifacts/cis-v1.23-t1.0.1.json https://github.com/kubescape/regolibrary/releases/download/v1.0.316/cis-v1.23-t1.0.1
+          echo "9f927eba6d9bca745dff7cf107f0633e2c25da907e9c1d46edf92f5aa88b9986  kubescape-artifacts/nsa.json" | sha256sum -c -
+          echo "24b84094cb34e644a547e386f1aadd9af49e34bb0853c946bcfc970d30373c4b  kubescape-artifacts/cis-v1.23-t1.0.1.json" | sha256sum -c -
+          echo "KUBESCAPE_ARTIFACTS=$RUNNER_TEMP/kubescape-artifacts" >> "$GITHUB_ENV"
       - name: Install tflint 0.66.0 (pinned sha256 from the release checksums.txt; the bundled terraform ruleset, no plugin download)
         run: |
           set -euo pipefail
