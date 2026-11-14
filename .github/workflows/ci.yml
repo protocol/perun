@@ -515,8 +515,8 @@ jobs:
       - name: Allowlist guard
         run: REQUIRE_GITLEAKS=1 bash scripts/test_gitleaks_allowlist.sh
 
-  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, kubescape, semgrep, njsscan, tflint, kics, cppcheck, devskim, govulncheck and grype
-  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download, except govulncheck and grype, which fetch their vulnerability DB online) and checks each is RAN with its rule id on one canary. trivy, bundler-audit and retire need a downloaded DB or rule set, so they stay stub-only; syft is an inventory the hub never counts as ran.
+  # The review_checks.sh stub tests never run a real scanner. This job installs the real tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff, actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, kubescape, semgrep, njsscan, tflint, kics, cppcheck, devskim, govulncheck, grype and trivy
+  # (pinned, hash-locked where the ecosystem allows; no advisory-DB download, except govulncheck, grype and trivy, which fetch their vulnerability DB online) and checks each is RAN with its rule id on one canary. bundler-audit and retire need a downloaded DB or rule set, so they stay stub-only; syft is an inventory the hub never counts as ran.
   real-hub:
     runs-on: ubuntu-24.04  # pinned: the cppcheck .deb below is the noble build and its runtime deps come from noble
     timeout-minutes: 25
@@ -705,6 +705,33 @@ jobs:
           echo "e9da18cc1429e786722e32161288103600efffd8e483c90761f90485bd1bec85  grype_0.121.3_linux_amd64.tar.gz" | sha256sum -c -
           tar -xzf grype_0.121.3_linux_amd64.tar.gz -C "$RUNNER_TEMP/bin" grype
           for i in 1 2 3; do if GRYPE_CHECK_FOR_APP_UPDATE=false "$RUNNER_TEMP/bin/grype" db update; then break; fi; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
+      - name: Install trivy 0.76.2 (pinned sha256 from the release checksums file; vuln DB pulled by OCI digest; misconfig checks = the bundle embedded in the pinned binary)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP"
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_checksums.txt
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_checksums.txt.sigstore.json
+          curl --proto '=https' --tlsv1.2 -fsSL -O https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
+          # cosign 3.1.4 pinned by sha256 (the release asset digest); it verifies the checksums file's sigstore bundle against the trivy release workflow identity
+          curl --proto '=https' --tlsv1.2 -fsSL -o cosign https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64
+          echo "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa  cosign" | sha256sum -c -
+          chmod +x cosign
+          ./cosign verify-blob --bundle trivy_0.76.2_checksums.txt.sigstore.json \
+            --certificate-identity "https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.2" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" trivy_0.76.2_checksums.txt
+          grep -F ' trivy_0.76.2_Linux-64bit.tar.gz' trivy_0.76.2_checksums.txt | sha256sum -c -
+          echo "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  trivy_0.76.2_Linux-64bit.tar.gz" | sha256sum -c -
+          tar -xzf trivy_0.76.2_Linux-64bit.tar.gz -C "$RUNNER_TEMP/bin" trivy
+          # vuln DB: the ghcr trivy-db:2 manifest digest recorded 2026-11-13 (the tag moves daily; a digest the registry later garbage-collects fails this step loudly, bump it then). The hub run itself is offline.
+          export TRIVY_DISABLE_TELEMETRY=true
+          dg=ghcr.io/aquasecurity/trivy-db@sha256:f3fc0ea9b0d550c458eff73a503f206a861256dff2a2e4e0513419a3d79fbe7c
+          for i in 1 2 3; do if "$RUNNER_TEMP/bin/trivy" --cache-dir "$RUNNER_TEMP/trivy-cache" image --download-db-only --db-repository "$dg" >"$RUNNER_TEMP/dbdl.log" 2>&1; then break; fi; cat "$RUNNER_TEMP/dbdl.log"; [ "$i" -lt 3 ] || exit 1; sleep $((i * 10)); done
+          cat "$RUNNER_TEMP/dbdl.log"
+          # the cache stores no digest, so assert trivy fetched the pinned digest reference (a digest form it ignored would log the default tag) and wrote a DB
+          grep -qF "repo=\"$dg\"" "$RUNNER_TEMP/dbdl.log"
+          test -s "$RUNNER_TEMP/trivy-cache/db/trivy.db"
+          echo "REVIEW_TRIVY_CACHE=$RUNNER_TEMP/trivy-cache" >> "$GITHUB_ENV"
       - name: Real-tool canaries
         run: REQUIRE_REAL_HUB=1 bash scripts/test-review-checks-real-hub.sh
 
