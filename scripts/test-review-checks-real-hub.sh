@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Real-tool smoke for the review_checks.sh hub: runs the REAL tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff (ruff-security), actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, semgrep (repo rules) and njsscan, tflint, kics, cppcheck, devskim, govulncheck, grype, trivy, osv-scanner, shellcheck and guarddog (no stubs) on one tiny
+# Real-tool smoke for the review_checks.sh hub: runs the REAL tfsec, ansible-lint, rubocop, cfn-lint, pmd, solhint, hadolint, bandit, ruff (ruff-security), actionlint, zizmor, gosec, staticcheck, kube-linter, flawfinder, detect-secrets, gitleaks, trufflehog, checkov, kube-score, kubescape (pinned local frameworks), semgrep (repo rules) and njsscan, tflint, kics, cppcheck, devskim, govulncheck, grype, trivy, osv-scanner, shellcheck and guarddog (no stubs) on one tiny
 # known-bad canary each, in a throwaway repo, and asserts each is reported as RAN (stderr "analyzers ran:", no "not run:" line)
 # with its expected rule id in the JSON rows. The stub tests (scripts/test-review-checks-hub-*.sh) pin routing and failure
-# handling; this pins the real flags, SARIF/JSON shapes and exit codes. Not covered: syft (an inventory the hub never counts as ran), bundler-audit, kubescape and retire need a
+# handling; this pins the real flags, SARIF/JSON shapes and exit codes. Not covered: syft (an inventory the hub never counts as ran), bundler-audit and retire need a
 # network-fetched advisory DB or rule set (they are NOT CHECKED without one), so a real run would need a download. codeql is dropped: its CLI bundle is a multi-hundred-MB download plus per-language database builds, too heavy for this per-push job.
 # A tool absent from PATH is skipped (exit 0) unless REQUIRE_REAL_HUB=1 (the ci.yml real-hub job sets it), then it FAILs.
 # Read-only on the repo; writes only under a temp dir. Fixtures are fictional canaries.
@@ -11,7 +11,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh}
 fail=0; tools=
 bin() { [ "$1" = ruff-security ] && echo ruff || echo "$1"; }  # the hub tool name ruff-security runs the ruff binary
-for t in tfsec ansible-lint rubocop cfn-lint pmd solhint hadolint bandit ruff-security actionlint zizmor gosec staticcheck kube-linter flawfinder detect-secrets gitleaks trufflehog checkov kube-score semgrep njsscan tflint kics cppcheck devskim govulncheck grype trivy osv-scanner shellcheck guarddog; do
+for t in tfsec ansible-lint rubocop cfn-lint pmd solhint hadolint bandit ruff-security actionlint zizmor gosec staticcheck kube-linter flawfinder detect-secrets gitleaks trufflehog checkov kube-score kubescape semgrep njsscan tflint kics cppcheck devskim govulncheck grype trivy osv-scanner shellcheck guarddog; do
   if command -v "$(bin "$t")" >/dev/null 2>&1; then tools+=" $t"
   elif [ "${REQUIRE_REAL_HUB:-}" = 1 ]; then echo "FAIL - $t not installed (REQUIRE_REAL_HUB=1)"; fail=1
   else echo "skip - $t not installed"; fi
@@ -36,6 +36,7 @@ printf 'on: push\njobs:\n  acme:\n    runs-on: ubuntu-latest\n    steps:\n      
 printf 'module example.com/canary\n\ngo 1.21\n' >go.mod  # stdlib only: gosec and staticcheck run with GOPROXY=off
 printf 'package canary\n\nimport "crypto/md5"\n\nfunc F(a int) bool {\n\t_ = md5.New()\n\treturn a == a\n}\n' >gocanary/canary.go  # gosec G401/G501 (md5), staticcheck SA4000 (identical operands)
 printf 'apiVersion: v1\nkind: Pod\nmetadata:\n  name: acme\nspec:\n  containers:\n    - name: app\n      image: example.com/acme/app:latest\n' >k8s/pod.yaml  # kube-linter latest-tag
+printf 'apiVersion: v1\nkind: Pod\nmetadata:\n  name: acme-ks\nspec:\n  containers:\n    - name: app\n      image: example.com/acme/app:1.0\n      securityContext:\n        privileged: true\n' >k8s/ks.yaml  # kubescape C-0057 (privileged container)
 printf '#include <string.h>\nvoid f(char *s) {\n  char b[8];\n  strcpy(b, s);\n}\n' >app/canary.c
 pw=Zq7xV2mK9pLw; printf 'url = %s://admin:%s@example.com/x\n' https "$pw" >app/notes.txt  # Basic Auth Credentials (detect-secrets); a URL secret, not a provider-key shape the privacy grep bans
 tk=$(printf 'gh%s_%s' p a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8); printf 'token = %s\n' "$tk" >app/token.cfg  # GitHub-token shape (gitleaks, trufflehog), joined at runtime so no source line matches the privacy grep
@@ -67,7 +68,7 @@ echo "review_checks exit $rc; stderr tail:"; tail -n 15 "$T/err"
 want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-when' ;; rubocop) echo '^Security/Eval$' ;; cfn-lint) echo '^E3' ;;
   pmd) echo '^(HardCodedCryptoKey|InsecureCryptoIv)$' ;; solhint) echo '^avoid-tx-origin$' ;; hadolint) echo '^DL3007$' ;; bandit) echo '^B602$' ;; ruff-security) echo '^S602$' ;; actionlint) echo '^syntax-check$' ;; zizmor) echo '^unpinned-uses$' ;; gosec) echo '^G(401|501)$' ;; staticcheck) echo '^SA4000$' ;;
   kube-linter) echo '^latest-tag$' ;; flawfinder) echo '^FF1013$' ;; detect-secrets) echo '^Basic Auth Credentials$' ;;
-  gitleaks) echo '^github-pat$' ;; trufflehog) echo '^Github$' ;; checkov) echo '^CKV_DOCKER_(3|7)$' ;; kube-score) echo '^container-image-tag$' ;; semgrep) echo '^acme-canary$' ;; njsscan) echo '^eval_nodejs$' ;;
+  gitleaks) echo '^github-pat$' ;; trufflehog) echo '^Github$' ;; checkov) echo '^CKV_DOCKER_(3|7)$' ;; kube-score) echo '^container-image-tag$' ;; kubescape) echo '^C-0057$' ;; semgrep) echo '^acme-canary$' ;; njsscan) echo '^eval_nodejs$' ;;
   tflint) echo '^terraform_unused_declarations$' ;; kics) echo "^Image Version Using 'latest'\$" ;; cppcheck) echo '^arrayIndexOutOfBounds$' ;; devskim) echo '^DS126858$' ;;
   govulncheck) echo '^GO-(2020-0036|2021-0061|2022-0956)$' ;; grype) echo '^(GHSA-(35jh-r3h4-6jhm|p6mc-m468-83gw)|CVE-2021-23337|CVE-2020-8203)$' ;; trivy) echo '^DS-000[12]$' ;;
   osv-scanner) echo '^GHSA-(35jh-r3h4-6jhm|p6mc-m468-83gw|29mw-wpgm-hmr9|r5fr-rjxr-66jc|xxjr-mmjv-4gpg)$' ;; shellcheck) echo '^SC2086$' ;; guarddog) echo '^threat-process-cryptomining$' ;; esac; }
@@ -75,7 +76,7 @@ want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-wh
 cany() { case $1 in tfsec) echo infra/main.tf ;; ansible-lint) echo playbooks/site.yml ;; rubocop) echo app/canary.rb ;; cfn-lint) echo infra/stack.yaml ;;
   pmd) echo app/Canary.java ;; solhint) echo contracts/Canary.sol ;; hadolint) echo docker/Dockerfile ;; bandit|ruff-security) echo app/canary.py ;; actionlint) echo .github/workflows/canary.yml ;; zizmor) echo .github/workflows/zcanary.yml ;; gosec|staticcheck) echo gocanary/canary.go ;;
   kube-linter) echo k8s/pod.yaml ;; flawfinder) echo app/canary.c ;; detect-secrets) echo app/notes.txt ;; gitleaks|trufflehog) echo app/token.cfg ;;
-  checkov) echo docker/Dockerfile ;; kube-score) echo k8s/pod.yaml ;; semgrep) echo app/sg.txt ;; njsscan) echo app/canary.js ;;
+  checkov) echo docker/Dockerfile ;; kube-score) echo k8s/pod.yaml ;; kubescape) echo k8s/ks.yaml ;; semgrep) echo app/sg.txt ;; njsscan) echo app/canary.js ;;
   tflint) echo tfl/main.tf ;; kics) echo docker/Dockerfile ;; cppcheck) echo app/cpp_canary.c ;; devskim) echo app/ds_canary.py ;; govulncheck) echo go.mod ;; grype) echo sbom/bom.json ;; trivy) echo docker/Dockerfile ;; osv-scanner) echo package-lock.json ;; shellcheck) echo app/canary.sh ;; guarddog) echo node_modules/lodash/index.js ;; esac; }
 # the hub's own capture is private to its run: on a failure, rerun the tool's hub argv here and show its raw output head
 raw() { case $1 in tfsec) (cd infra && tfsec . --format sarif --no-colour --soft-fail --no-module-downloads) ;; ansible-lint) ansible-lint --offline --nocolor -q -f sarif ./playbooks/site.yml ;;
@@ -86,7 +87,7 @@ raw() { case $1 in tfsec) (cd infra && tfsec . --format sarif --no-colour --soft
   zizmor) zizmor --format=json --offline ./.github/workflows/zcanary.yml ;; gosec) GOPROXY=off gosec -fmt=json -no-fail ./... ;; staticcheck) GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly GOWORK=off staticcheck -f json ./... ;;
   kube-linter) kube-linter lint --format json ./k8s/pod.yaml ;; flawfinder) flawfinder --sarif --quiet ./app/canary.c ;; detect-secrets) detect-secrets scan --no-verify ./app/notes.txt ;;
   gitleaks) gitleaks detect --no-git --no-banner --exit-code 0 -f json -r /dev/stdout -s ./app/token.cfg ;; trufflehog) trufflehog filesystem --no-verification --no-update --sarif ./app/token.cfg ;;
-  checkov) CKV_SKIP_PACKAGE_UPDATE_CHECK=true checkov -f ./docker/Dockerfile -o json --quiet --skip-download --soft-fail ;; kube-score) kube-score score -o json ./k8s/pod.yaml ;;
+  checkov) CKV_SKIP_PACKAGE_UPDATE_CHECK=true checkov -f ./docker/Dockerfile -o json --quiet --skip-download --soft-fail ;; kube-score) kube-score score -o json ./k8s/pod.yaml ;; kubescape) kubescape scan framework nsa,cis-v1.23-t1.0.1 ./k8s/ks.yaml --format json --output "$T/ks-raw.json" --keep-local --logger error --use-artifacts-from "${KUBESCAPE_ARTIFACTS:-$HOME/.kubescape}" >/dev/null && cat "$T/ks-raw.json" ;;
   semgrep) HOME="$T" semgrep --config .semgrep.yml --metrics=off --disable-version-check --json --quiet ./app/sg.txt ;; njsscan) njsscan --json ./app/canary.js ;;
   tflint) tflint --format=json --no-color --call-module-type=none --chdir=./tfl --filter=main.tf ;; kics) kics scan -p ./docker/Dockerfile --no-progress --disable-secrets --report-formats json -o "$T/kics-raw"; cat "$T/kics-raw/results.json" ;;
   cppcheck) cppcheck --xml-version=2 --quiet ./app/cpp_canary.c ;; devskim) devskim analyze --source-code ./app/ds_canary.py --file-format sarif ;;
