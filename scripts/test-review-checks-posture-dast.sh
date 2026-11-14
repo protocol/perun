@@ -28,7 +28,8 @@ stub nu nuclei '[ "${HUB_MODE:-}" != crash ] || exit 9
 echo "gt=${GITHUB_TOKEN:-}" >>"$HUB_LOG"
 case " $* " in *" -tl "*) printf "%s" "${TL_OUT-tpl1}"; exit 0 ;; esac
 [ -z "${EMPTY_SCAN:-}" ] || exit 0
-printf "%s\n" "{\"template-id\":\"missing-xfo\",\"info\":{\"name\":\"X-Frame-Options missing\",\"severity\":\"low\"},\"matched-at\":\"http://localhost:3000/\"}"'
+printf "%s\n" "{\"template-id\":\"missing-xfo\",\"info\":{\"name\":\"X-Frame-Options missing\",\"severity\":\"low\"},\"matched-at\":\"http://localhost:3000/\"}"
+printf "%s\n" "{\"template-id\":\"tech-detect\",\"info\":{\"name\":\"Wappalyzer\",\"severity\":\"info\"},\"matched-at\":\"http://localhost:3000/\"}"'
 stub sg semgrep 'printf "%s\n" "{\"results\":[],\"errors\":[],\"paths\":{\"scanned\":[\"a.py\"]}}"'
 stub zap zap-baseline.py '[ "${HUB_MODE:-}" != crash ] || exit 9
 while [ $# -gt 0 ]; do [ "$1" != -J ] || j=$2; shift; done
@@ -96,7 +97,7 @@ CURL_FAIL=1 REVIEW_DAST_URL=http://localhost:3000/ run "$T/nu:$T/zap"; [ ! -s "$
 TL_OUT= EMPTY_SCAN=1 REVIEW_DAST_URL=http://localhost:3000/ run "$T/nu"; grep -q '^NOT CHECKED: nuclei (no templates matched' "$T/err" && row '.tool=="nuclei" and .rule=="not-checked"' && ! ran nuclei && ok "empty nuclei output, no template count: not-checked" || bad "empty nuclei"
 EMPTY_SCAN=1 REVIEW_DAST_URL=http://localhost:3000/ run "$T/nu"; ran nuclei && ok "templates matched, no findings: ran clean" || bad "clean nuclei"
 GITHUB_TOKEN=tok REVIEW_DAST_URL=http://localhost:3000/ run "$T/nu:$T/zap"
-row '.tool=="nuclei" and .rule=="missing-xfo" and .file=="http://localhost:3000/"' && row '.tool=="zap" and .rule=="zap-10038"' && ran nuclei && ran zap && grep -q -- '-s info,low -type http -tags tech,exposure -etags default-login,xss,ssrf,oast,fuzz,fuzzing,takeover,cve,intrusive,dos' "$HUB_LOG" && grep -q -- ' -ni ' "$HUB_LOG" && ! grep -q 'gt=tok' "$HUB_LOG" && ok "nuclei and zap findings parsed, allowlist and exclusions, no interactsh, no GitHub token" || bad "DAST findings"
+row '.tool=="nuclei" and .rule=="missing-xfo" and .file=="http://localhost:3000/"' && ! row '.tool=="nuclei" and .rule=="tech-detect"' && row '.tool=="zap" and .rule=="zap-10038"' && ran nuclei && ran zap && grep -q -- '-s info,low -type http -tags tech,exposure -etags default-login,xss,ssrf,oast,fuzz,fuzzing,takeover,cve,intrusive,dos' "$HUB_LOG" && grep -q -- ' -ni ' "$HUB_LOG" && ! grep -q 'gt=tok' "$HUB_LOG" && ok "nuclei and zap findings parsed, allowlist and exclusions, no interactsh, no GitHub token" || bad "DAST findings"
 grep -q -- "-g --noproxy \* -sf" "$T/curl.log" && ok "probe: curl -g --noproxy '*'" || bad "curl flags"
 mkdir -p "$T/dk"; stub dk docker ':'
 REVIEW_DAST_URL=http://localhost:3000/ run "$T/dk"; grep -q '^docker run --rm --pull=never ' "$HUB_LOG" && ok "ZAP docker run never auto-pulls the image" || bad "docker pull"
