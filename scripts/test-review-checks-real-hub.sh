@@ -4,7 +4,7 @@
 # with its expected rule id in the JSON rows. The stub tests (scripts/test-review-checks-hub-*.sh) pin routing and failure
 # handling; this pins the real flags, SARIF/JSON shapes and exit codes. Not covered: syft (an inventory the hub never counts as ran), bundler-audit and retire need a
 # network-fetched advisory DB or rule set (they are NOT CHECKED without one), so a real run would need a download. codeql is dropped: its CLI bundle is a multi-hundred-MB download plus per-language database builds, too heavy for this per-push job. psalm is dropped: the hub's row builder reads the is_security issue field, which psalm 6.x does not emit and psalm 7.x does, and psalm 7.x's platform check needs PHP 8.3.16 or newer while the runner ships 8.3.6, so it would need a third-party PHP setup action and cannot be run here. sobelow is dropped: it needs an Erlang/OTP and Elixir toolchain the runner does not ship, with no checksum-pinned install path. licensee is dropped: the hub reports it as an inventory line, never as a scan that ran, and its dependency set includes natively built gems (rugged) that cannot be hash-locked without a Bundler lockfile. pip-audit is dropped: the hub reaches it only as a fallback for a requirements*.txt that osv-scanner and trivy gave no result for (the seeded osv DB covers requirements.txt, so it would never run here), and it has no offline advisory DB: it queries PyPI live, so there is nothing to integrity-pin.
-# nuclei (the hub's DAST route) scans a local python http.server canary through REVIEW_DAST_URL; its rule id is tech-detect (the server header fingerprint). zap-baseline is dropped: the only route is the ghcr.io/zaproxy/zaproxy image, whose compressed layers total about 1.2 GB (registry manifest, checked 2026-11-13), over the per-push job's size budget.
+# nuclei (the hub's DAST route) scans a local python http.server canary through REVIEW_DAST_URL; its rule id is ds-store-file (a low-severity exposure: the canary serves a .DS_Store; the hub drops info-severity fingerprints such as tech-detect). zap-baseline is dropped: the only route is the ghcr.io/zaproxy/zaproxy image, whose compressed layers total about 1.2 GB (registry manifest, checked 2026-11-13), over the per-push job's size budget.
 # A tool absent from PATH is skipped (exit 0) unless REQUIRE_REAL_HUB=1 (the ci.yml real-hub job sets it), then it FAILs.
 # Read-only on the repo; writes only under a temp dir. Fixtures are fictional canaries.
 set -euo pipefail
@@ -84,7 +84,7 @@ case " $tools " in *" guarddog "*) mkdir -p node_modules/lodash && printf '{"nam
 # nuclei: a localhost python http.server canary (outside the repo) on a free port; its default template pass is rate-limited (~3 min), so the hub's per-tool --timeout is raised
 tmo=60
 case " $tools " in *" nuclei "*)
-  mkdir "$T/site" && printf '<h1>acme canary</h1>\n' >"$T/site/index.html"
+  mkdir "$T/site" && printf '<h1>acme canary</h1>\n' >"$T/site/index.html" && printf '\0\0\0\1Bud1\0' >"$T/site/.DS_Store"
   port=$(python3 -I -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
   python3 -I -m http.server "$port" --bind 127.0.0.1 --directory "$T/site" >/dev/null 2>&1 & SP=$!
   export REVIEW_DAST_URL="http://127.0.0.1:$port" && tmo=420
@@ -96,7 +96,7 @@ want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-wh
   pmd) echo '^(HardCodedCryptoKey|InsecureCryptoIv)$' ;; solhint) echo '^avoid-tx-origin$' ;; hadolint) echo '^DL3007$' ;; bandit) echo '^B602$' ;; ruff-security) echo '^S602$' ;; actionlint) echo '^syntax-check$' ;; zizmor) echo '^unpinned-uses$' ;; gosec) echo '^G(401|501)$' ;; staticcheck) echo '^SA4000$' ;;
   kube-linter) echo '^latest-tag$' ;; flawfinder) echo '^FF1013$' ;; detect-secrets) echo '^Basic Auth Credentials$' ;;
   gitleaks) echo '^github-pat$' ;; trufflehog) echo '^Github$' ;; checkov) echo '^CKV_DOCKER_(3|7)$' ;; kube-score) echo '^container-image-tag$' ;; kubescape) echo '^C-0057$' ;; semgrep) echo '^acme-canary$' ;; njsscan) echo '^eval_nodejs$' ;;
-  tflint) echo '^terraform_unused_declarations$' ;; kics) echo "^Image Version Using 'latest'\$" ;; cppcheck) echo '^arrayIndexOutOfBounds$' ;; devskim) echo '^DS126858$' ;; nuclei) echo '^tech-detect$' ;;
+  tflint) echo '^terraform_unused_declarations$' ;; kics) echo "^Image Version Using 'latest'\$" ;; cppcheck) echo '^arrayIndexOutOfBounds$' ;; devskim) echo '^DS126858$' ;; nuclei) echo '^ds-store-file$' ;;
   govulncheck) echo '^GO-(2020-0036|2021-0061|2022-0956)$' ;; grype) echo '^(GHSA-(35jh-r3h4-6jhm|p6mc-m468-83gw)|CVE-2021-23337|CVE-2020-8203)$' ;; trivy) echo '^DS-000[12]$' ;;
   osv-scanner) echo '^GHSA-(35jh-r3h4-6jhm|p6mc-m468-83gw|29mw-wpgm-hmr9|r5fr-rjxr-66jc|xxjr-mmjv-4gpg)$' ;; shellcheck) echo '^SC2086$' ;; guarddog) echo '^threat-process-cryptomining$' ;;
   cargo-audit) echo '^RUSTSEC-2020-0071$' ;; cargo-deny) echo '^rejected$' ;; brakeman) echo '^Evaluation$' ;; mobsfscan) echo '^android_manifest_debugging_enabled$' ;; eslint-security) echo '^security/detect-eval-with-expression$' ;; esac; }
