@@ -55,6 +55,11 @@ has "$T/err" "NOT CHECKED: no pre-seeded DB" && ok "non-DB file is not a seeded 
 mkdir -p "$T/db/osv-scanner/npm"; : >"$T/db/osv-scanner/npm/all.zip"; : >"$LOG"
 REVIEW_OSV_DB_DIR="$T/db" bash "$S/review_checks.sh" --base base >"$T/out" 2>"$T/err"
 grep -q "^osv --offline-vulnerabilities --format json -L ./package-lock.json DIR=$T/db" "$LOG" && ok "seeded DB -> osv-scanner --offline-vulnerabilities with cache dir env" || { bad "seeded DB"; cat "$LOG"; }
+# 2b. Go: osv-scanner 2.x reads go.mod, never go.sum (a go.sum errors as exit 127, read as not run)
+printf 'module example.com/m\n\ngo 1.22\n' >go.mod; : >go.sum; git add go.mod go.sum && git -c user.email=t@example.com -c user.name=t commit -q -m go; : >"$LOG"
+REVIEW_OSV_DB_DIR="$T/db" bash "$S/review_checks.sh" --base base >"$T/out" 2>"$T/err"
+grep -q '^osv .*-L ./go.mod ' "$LOG" && ! grep -q -- '-L ./go.sum' "$LOG" && ok "go.mod (not go.sum) handed to osv-scanner" || { bad "go lockfile"; cat "$LOG"; }
+git rm -q go.mod go.sum && git -c user.email=t@example.com -c user.name=t commit -q -m nogo
 # 3. trivy: DB failure stays not-run (never clean), prints the warm command; REVIEW_TRIVY_CACHE -> --cache-dir
 : >"$LOG"
 REVIEW_TRIVY_CACHE="$T/tc" bash "$S/review_checks.sh" --base base >"$T/out" 2>"$T/err"
