@@ -792,7 +792,8 @@ if have trufflehog; then
   done
 elif [ -n "$files" ]; then add trufflehog "" 0 not-checked "not installed or heavy lease full; secrets were not scanned"; fi
 
-lock_files=$(changed '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.sum|Cargo\.lock|poetry\.lock|requirements[^/]*\.txt|composer\.lock)$')
+# go.mod, not go.sum: osv-scanner 2.x reads Go deps from go.mod only (a go.sum errors, exit 127, and reads as not run)
+lock_files=$(changed '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.mod|Cargo\.lock|poetry\.lock|requirements[^/]*\.txt|composer\.lock)$')
 [ -z "$lock_files" ] || wired+=" osv-scanner"
 # osvdb: REVIEW_OSV_DB_DIR, else (unless REVIEW_OSV=1 picked the online API) the provisioned osv-scanner cache once it holds a DB (provision_tools.sh --cache osv also honours an exported OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY). A cache without a DB is never used: osv-scanner then prints empty results, not an error, which would read as clean. Only this block reads it, so the registry-audit fallback below stays opt-in.
 osvdb=${REVIEW_OSV_DB_DIR:-} osvcold=

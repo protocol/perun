@@ -747,11 +747,13 @@ jobs:
           printf '{"name":"acme-seed","lockfileVersion":3,"requires":true,"packages":{"":{"name":"acme-seed","version":"1.0.0"},"node_modules/lodash":{"version":"4.17.15"}}}\n' > osv-seed/package-lock.json
           # a Cargo.lock too: the cargo canary's lockfile is also scanned by osv-scanner, and an ecosystem with no offline DB reads as not run
           printf 'version = 3\n\n[[package]]\nname = "acme-seed"\nversion = "1.0.0"\ndependencies = [\n "time",\n]\n\n[[package]]\nname = "time"\nversion = "0.1.45"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n' > osv-seed/Cargo.lock
+          # a go.mod too: the govulncheck canary's go.mod is also scanned by osv-scanner, and an ecosystem with no offline DB reads as not run
+          printf 'module example.com/acmeseed\n\ngo 1.22\n\nrequire golang.org/x/text v0.3.7\n' > osv-seed/go.mod
           for i in 1 2 3; do
             (cd osv-seed && OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY="$RUNNER_TEMP/osv-db" "$RUNNER_TEMP/bin/osv-scanner" --offline-vulnerabilities --download-offline-databases .) || true
-            # one verified zip per seeded ecosystem (npm, crates.io)
-            if zs=$(find "$RUNNER_TEMP/osv-db" -type f -name '*.zip' -size +0 2>/dev/null) && [ "$(printf '%s\n' "$zs" | grep -c .)" -ge 2 ] && printf '%s\n' "$zs" | while IFS= read -r z; do unzip -tq "$z" >/dev/null || exit 1; done; then break; fi
-            [ "$i" -lt 3 ] || { echo "osv-scanner offline DB download failed (need an npm and a crates.io zip)"; exit 1; }
+            # one verified zip per seeded ecosystem (npm, crates.io, Go)
+            if zs=$(find "$RUNNER_TEMP/osv-db" -type f -name '*.zip' -size +0 2>/dev/null) && [ "$(printf '%s\n' "$zs" | grep -c .)" -ge 3 ] && printf '%s\n' "$zs" | while IFS= read -r z; do unzip -tq "$z" >/dev/null || exit 1; done; then break; fi
+            [ "$i" -lt 3 ] || { echo "osv-scanner offline DB download failed (need an npm, a crates.io and a Go zip)"; exit 1; }
             sleep $((i * 10))
           done
           echo "REVIEW_OSV_DB_DIR=$RUNNER_TEMP/osv-db" >> "$GITHUB_ENV"
