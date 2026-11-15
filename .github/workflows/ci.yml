@@ -561,6 +561,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           for t in semgrep pysemgrep njsscan; do ln -s "$RUNNER_TEMP/venv-semgrep/bin/$t" "$RUNNER_TEMP/bin/$t"; done
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Run insecure-defaults semgrep fixtures (fail on SKIP, so the live check cannot silently skip)
+        run: |
+          set -euo pipefail
+          PATH="$RUNNER_TEMP/venv-semgrep/bin:$PATH" python3 scripts/test_semgrep_defaults.py | tee "$RUNNER_TEMP/semgrep-defaults.log"
+          if grep -q SKIP "$RUNNER_TEMP/semgrep-defaults.log"; then echo "semgrep fixture check skipped; failing"; exit 1; fi
       - name: Install rubocop 1.69.2 (pinned, private GEM_HOME)
         run: |
           set -euo pipefail
