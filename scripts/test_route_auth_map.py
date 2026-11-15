@@ -2180,7 +2180,7 @@ class RouteAuthMap(unittest.TestCase):
             r = subprocess.run(["bash", str(RC), "--full", "--repo", str(repo("g", FX))], capture_output=True, text=True, env=env)
             rows = [x for x in json.loads(r.stdout) if x["tool"] == "route-auth"]
             want = {g.split(": HIGH: ")[0] + "|" + g.split(": HIGH: ")[1] for g in self.gold if ": HIGH: " in g}
-            got = {"%s:%d|%s" % (x["file"], x["line"], x["message"]) for x in rows}
+            got = {"%s:%d|%s" % (x["file"], x["line"], re.sub(r" \[corroborated by: [^\]]*\]$", "", x["message"])) for x in rows}
             self.assertEqual(got, want)
             self.assertEqual({x["rule"] for x in rows}, {"missing-auth"})
             self.assertIn("route-auth: heuristic; scanned %d handlers; silence is not proof of authentication" % len(self.gold), r.stderr)
