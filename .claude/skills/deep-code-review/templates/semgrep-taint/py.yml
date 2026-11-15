@@ -335,9 +335,18 @@ rules:
                 abort(...)
               ...
               <... $F($G, ...) ...>
+        # Not a guard when $G is rebound between the check and the call.
+        - pattern-not: |
+            if $G not in $A:
+              ...
+            ...
+            $G = ...
+            ...
+            <... $F($G, ...) ...>
+        # Container must be an ALL_CAPS constant or a request-free collection literal (never a request-derived value or string literal). ponytail: an ALL_CAPS constant holding a str is still read as a collection.
         - metavariable-regex:
             metavariable: $A
-            regex: ^(?![rbfRBF]{0,2}["'])
+            regex: ^(?:[A-Z][A-Z0-9_]*|(?![^\n]*request)[\[({][^\n]*)$
         - metavariable-regex:
             metavariable: $F
             regex: ^(?:requests\.\w+|httpx\.\w+|urllib\.request\.urlopen|urlopen)$
@@ -865,9 +874,18 @@ rules:
                 abort(...)
               ...
               <... $F($S, ...) ...>
+        # Not a guard when $S is rebound between the check and the call.
+        - pattern-not: |
+            if $S not in $A:
+              ...
+            ...
+            $S = ...
+            ...
+            <... $F($S, ...) ...>
+        # Container must be an ALL_CAPS constant or a request-free collection literal (never a request-derived value or string literal). ponytail: an ALL_CAPS constant holding a str is still read as a collection.
         - metavariable-regex:
             metavariable: $A
-            regex: ^(?![rbfRBF]{0,2}["'])
+            regex: ^(?:[A-Z][A-Z0-9_]*|(?![^\n]*request)[\[({][^\n]*)$
         - metavariable-regex:
             metavariable: $F
             regex: ^(?:requests\.\w+|httpx\.\w+|urllib\.request\.urlopen|urlopen)$

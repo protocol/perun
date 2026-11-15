@@ -42,6 +42,21 @@ def ssrf_fstring(ALLOWED):
     # ruleid: perun.py.ssrf
     return requests.get(f"https://{url}/x").text
 
+def ssrf_rebound(ALLOWED):
+    url = request.args["url"]
+    if url not in ALLOWED:
+        abort(400)
+    url = request.args["u"]
+    # ruleid: perun.py.ssrf
+    return requests.get(url).text
+
+def ssrf_request_container():
+    url = request.args["url"]
+    if url not in request.args.getlist("allow"):
+        abort(400)
+    # ruleid: perun.py.ssrf
+    return requests.get(url).text
+
 def redirect_open():
     # ruleid: perun.py.open-redirect
     return redirect(request.args.get("next", "/"))
@@ -132,6 +147,28 @@ def uac_substring():
         abort(400)
     # ruleid: perun.py.unsafe-api-consumption
     return requests.get(url).text
+
+def uac_rebound(ALLOWED):
+    url = request.args["url"]
+    if url not in ALLOWED:
+        abort(400)
+    url = request.args["u"]
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(url).text
+
+def uac_request_container():
+    url = request.args["url"]
+    if url not in request.args.getlist("allow"):
+        abort(400)
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(url).text
+
+def uac_literal_container():
+    url = request.args["url"]
+    if url not in {"https://api.example.com/status"}:
+        abort(400)
+    # ok: perun.py.unsafe-api-consumption
+    return requests.get(url).text
 '''
 UAC = "perun.py.unsafe-api-consumption"
 IDS = ("perun.py.ssrf", "perun.py.open-redirect", "perun.py.xxe-lxml")
@@ -148,7 +185,7 @@ def annotated(body, kind):
 
 
 want, ok = annotated(PY, "ruleid"), annotated(PY, "ok")
-assert {i for i, _ in want | ok} == set(IDS) and len(want) == 11 and len(ok) == 6, (len(want), len(ok))
+assert {i for i, _ in want | ok} == set(IDS) and len(want) == 13 and len(ok) == 6, (len(want), len(ok))
 
 rule = open(os.path.join(RULES, "py.yml")).read()
 assert "- id: perun.py.xxe-lxml" in rule and "resolve_entities=True" in rule and "no_network=False" in rule
