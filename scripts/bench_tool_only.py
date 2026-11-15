@@ -18,7 +18,7 @@ HUB = ROOT / ".claude/skills/deep-code-review/scripts/review_checks.sh"
 CORE = ("semgrep", "gitleaks", "trivy", "bandit", "ruff", "git", "jq")
 FLOOR_RECALL = 0.909  # frozen: 10/11 measured locally with semgrep, gitleaks, trivy, bandit, ruff; CWE-22 is caught only by a rule that also fires on its clean twin, so it no longer counts
 DEP_FILE = "vuln/requirements.txt"  # only fixture where a file-level (line 0) row counts
-MAX_FALSE_POSITIVES = 8  # frozen: 8 noise rows on the clean twins (bandit B404/B603/B607, ruff S603/S607, trivy AWS-0090/0132, semgrep path-traversal)
+MAX_FALSE_POSITIVES = 27  # frozen: 27 noise rows on the clean twins measured in the CI real-hub job (full hub: bandit, ruff, trivy, checkov, devskim, semgrep); a local run with fewer tools sees fewer
 
 
 def run(truth_path=ROOT / "bench/tool-only/answer.json", fixtures=ROOT / "bench/tool-only"):
