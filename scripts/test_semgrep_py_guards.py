@@ -111,6 +111,29 @@ def xxe_safe():
     # ok: perun.py.xxe-lxml
     return etree.XMLParser(resolve_entities=False, no_network=True)
 '''
+PY2 = '''
+import requests
+from flask import abort, request
+
+def uac_open():
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(request.args["url"]).text
+
+def uac_guarded(ALLOWED):
+    url = request.args["url"]
+    if url not in ALLOWED:
+        abort(400)
+    # ok: perun.py.unsafe-api-consumption
+    return requests.get(url, timeout=5).text
+
+def uac_substring():
+    url = request.args["url"]
+    if url not in "https://api.example.com/status":
+        abort(400)
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(url).text
+'''
+UAC = "perun.py.unsafe-api-consumption"
 IDS = ("perun.py.ssrf", "perun.py.open-redirect", "perun.py.xxe-lxml")
 
 
@@ -136,13 +159,16 @@ for s_ in ("if $G not in $A:", "abort(...)", "<... $F($G, ...) ...>", "$A", "url
 if shutil.which("semgrep"):
     with tempfile.TemporaryDirectory() as d:
         open(os.path.join(d, "app.py"), "w").write(PY)
+        open(os.path.join(d, "app2.py"), "w").write(PY2)
         env = dict(os.environ, HOME=d, SEMGREP_USER_HOME=d)
-        run = subprocess.run(["semgrep", "--config", RULES, "--metrics=off", "--disable-version-check", "--json", "--quiet", "--", "app.py"],
+        run = subprocess.run(["semgrep", "--config", RULES, "--metrics=off", "--disable-version-check", "--json", "--quiet", "--", "app.py", "app2.py"],
                              capture_output=True, text=True, env=env, cwd=d)
         r = json.loads(run.stdout)
     assert not r["errors"], r["errors"]
-    got = {(i, x["start"]["line"]) for x in r["results"] for i in IDS if x["check_id"].endswith(i)}
+    got = {(i, x["start"]["line"]) for x in r["results"] for i in IDS if x["check_id"].endswith(i) and x["path"] == "app.py"}
     assert got == want, ("unexpected", sorted(got - want), "missed", sorted(want - got))
+    got2 = {(UAC, x["start"]["line"]) for x in r["results"] if x["path"] == "app2.py" and x["check_id"].endswith(UAC)}
+    assert got2 == annotated(PY2, "ruleid"), ("uac", sorted(got2))
     print("semgrep-py-guards: live ok")
 else:
     print("SKIP: semgrep not installed (offline pins only)")

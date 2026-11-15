@@ -846,6 +846,31 @@ rules:
         - metavariable-regex:
             metavariable: $M
             regex: ^(?:execute|executemany|raw)$
+    # Allowlist guard, same shape as perun.py.ssrf: an abort/raise/return when the URL is not in a non-literal container.
+    - pattern-not-inside:
+        patterns:
+        - pattern-either:
+          - pattern: |
+              if $S not in $A:
+                raise ...
+              ...
+              <... $F($S, ...) ...>
+          - pattern: |
+              if $S not in $A:
+                return ...
+              ...
+              <... $F($S, ...) ...>
+          - pattern: |
+              if $S not in $A:
+                abort(...)
+              ...
+              <... $F($S, ...) ...>
+        - metavariable-regex:
+            metavariable: $A
+            regex: ^(?![rbfRBF]{0,2}["'])
+        - metavariable-regex:
+            metavariable: $F
+            regex: ^(?:requests\.\w+|httpx\.\w+|urllib\.request\.urlopen|urlopen)$
     - metavariable-regex:
         metavariable: $S
         regex: ^(?!\[|f?["']https?://[^/{"']+[/"'])
