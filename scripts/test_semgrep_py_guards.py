@@ -17,11 +17,21 @@ from django.http import HttpResponseRedirect
 from django.utils.http import url_has_allowed_host_and_scheme
 from lxml import etree
 
+ALLOWED = {"https://api.example.com/status"}
+ALLOWED_STR = "https://api.example.com/status"
+
+def ssrf_str_constant():
+    url = request.args["url"]
+    if url not in ALLOWED_STR:
+        abort(400)
+    # ruleid: perun.py.ssrf
+    return requests.get(url).text
+
 def ssrf_open():
     # ruleid: perun.py.ssrf
     return requests.get(request.args["url"]).text
 
-def ssrf_guarded(ALLOWED):
+def ssrf_guarded():
     url = request.args["url"]
     if url not in ALLOWED:
         abort(400)
@@ -35,14 +45,14 @@ def ssrf_substring(url_in=None):
     # ruleid: perun.py.ssrf
     return requests.get(url).text
 
-def ssrf_fstring(ALLOWED):
+def ssrf_fstring():
     url = request.args["url"]
     if url not in ALLOWED:
         abort(400)
     # ruleid: perun.py.ssrf
     return requests.get(f"https://{url}/x").text
 
-def ssrf_rebound(ALLOWED):
+def ssrf_rebound():
     url = request.args["url"]
     if url not in ALLOWED:
         abort(400)
@@ -130,11 +140,21 @@ PY2 = '''
 import requests
 from flask import abort, request
 
+ALLOWED = {"https://api.example.com/status"}
+ALLOWED_STR = "https://api.example.com/status"
+
+def uac_str_constant():
+    url = request.args["url"]
+    if url not in ALLOWED_STR:
+        abort(400)
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(url).text
+
 def uac_open():
     # ruleid: perun.py.unsafe-api-consumption
     return requests.get(request.args["url"]).text
 
-def uac_guarded(ALLOWED):
+def uac_guarded():
     url = request.args["url"]
     if url not in ALLOWED:
         abort(400)
@@ -148,7 +168,7 @@ def uac_substring():
     # ruleid: perun.py.unsafe-api-consumption
     return requests.get(url).text
 
-def uac_rebound(ALLOWED):
+def uac_rebound():
     url = request.args["url"]
     if url not in ALLOWED:
         abort(400)
@@ -161,13 +181,6 @@ def uac_request_container():
     if url not in request.args.getlist("allow"):
         abort(400)
     # ruleid: perun.py.unsafe-api-consumption
-    return requests.get(url).text
-
-def uac_literal_container():
-    url = request.args["url"]
-    if url not in {"https://api.example.com/status"}:
-        abort(400)
-    # ok: perun.py.unsafe-api-consumption
     return requests.get(url).text
 '''
 UAC = "perun.py.unsafe-api-consumption"
@@ -185,7 +198,7 @@ def annotated(body, kind):
 
 
 want, ok = annotated(PY, "ruleid"), annotated(PY, "ok")
-assert {i for i, _ in want | ok} == set(IDS) and len(want) == 13 and len(ok) == 6, (len(want), len(ok))
+assert {i for i, _ in want | ok} == set(IDS) and len(want) == 14 and len(ok) == 6, (len(want), len(ok))
 
 rule = open(os.path.join(RULES, "py.yml")).read()
 assert "- id: perun.py.xxe-lxml" in rule and "resolve_entities=True" in rule and "no_network=False" in rule
