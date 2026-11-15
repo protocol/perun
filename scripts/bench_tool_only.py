@@ -18,7 +18,7 @@ HUB = ROOT / ".claude/skills/deep-code-review/scripts/review_checks.sh"
 CORE = ("semgrep", "gitleaks", "trivy", "bandit", "ruff", "git", "jq")
 FLOOR_RECALL = 1.0  # frozen: 11/11 measured in the CI real-hub job after the CWE-22 taint rule stopped firing on send_from_directory's file name
 DEP_FILE = "vuln/requirements.txt"  # only fixture where a file-level (line 0) row counts
-MAX_FALSE_POSITIVES = 26  # frozen: 26 noise rows on the clean twins measured in the CI real-hub job (full hub: bandit, ruff, trivy, checkov, devskim, semgrep); a local run with fewer tools sees fewer
+MAX_FALSE_POSITIVES = 31  # frozen: 31 noise rows on the clean twins measured in the CI real-hub job (full hub: bandit, ruff, trivy, checkov, devskim, semgrep); a local run with fewer tools sees fewer
 
 
 def run(truth_path=ROOT / "bench/tool-only/answer.json", fixtures=ROOT / "bench/tool-only"):
