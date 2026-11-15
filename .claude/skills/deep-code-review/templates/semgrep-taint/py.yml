@@ -316,66 +316,31 @@ rules:
       - pattern: httpx.$M($S, ...)
       - pattern: urllib.request.urlopen($S, ...)
       - pattern: urlopen($S, ...)
-    - pattern-not-inside: |
-        if $G not in $A:
-          raise ...
-        ...
-        <... requests.$M(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          raise ...
-        ...
-        <... httpx.$M(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          raise ...
-        ...
-        <... urllib.request.urlopen(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          raise ...
-        ...
-        <... urlopen(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          return ...
-        ...
-        <... requests.$M(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          return ...
-        ...
-        <... httpx.$M(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          return ...
-        ...
-        <... urllib.request.urlopen(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          return ...
-        ...
-        <... urlopen(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          abort(...)
-        ...
-        <... requests.$M(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          abort(...)
-        ...
-        <... httpx.$M(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          abort(...)
-        ...
-        <... urllib.request.urlopen(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          abort(...)
-        ...
-        <... urlopen(<... $G ...>, ...) ...>
+    # Allowlist guard: only when $G is the URL argument itself (not inside an f-string or concat) and the container is not a string literal (substring test).
+    - pattern-not-inside:
+        patterns:
+        - pattern-either:
+          - pattern: |
+              if $G not in $A:
+                raise ...
+              ...
+              <... $F($G, ...) ...>
+          - pattern: |
+              if $G not in $A:
+                return ...
+              ...
+              <... $F($G, ...) ...>
+          - pattern: |
+              if $G not in $A:
+                abort(...)
+              ...
+              <... $F($G, ...) ...>
+        - metavariable-regex:
+            metavariable: $A
+            regex: ^(?![rbfRBF]{0,2}["'])
+        - metavariable-regex:
+            metavariable: $F
+            regex: ^(?:requests\.\w+|httpx\.\w+|urllib\.request\.urlopen|urlopen)$
     - focus-metavariable: $S
 - id: perun.py.deserialize
   mode: taint
@@ -466,12 +431,12 @@ rules:
       - pattern: HttpResponseRedirect($S, ...)
     # Relative-path guard: reassigning to a constant when the value is not a single-slash path.
     - pattern-not-inside: |
-        if not $G.startswith("/") or $G.startswith("//"):
+        if not $G.startswith("/") or $G.startswith("//") or $G.startswith("/\\"):
           $G = ...
         ...
         <... redirect(<... $G ...>, ...) ...>
     - pattern-not-inside: |
-        if not $G.startswith("/") or $G.startswith("//"):
+        if not $G.startswith("/") or $G.startswith("//") or $G.startswith("/\\"):
           $G = ...
         ...
         <... HttpResponseRedirect(<... $G ...>, ...) ...>
@@ -501,8 +466,13 @@ rules:
   severity: ERROR
   message: lxml XMLParser resolves external entities or allows network access (CWE-611, XXE). Use resolve_entities=False and no_network=True.
   pattern-either:
+  # ponytail: only explicit unsafe flags are flagged; a bare XMLParser() (lxml before 5 defaults to resolve_entities=True) is not.
   - pattern: $P.XMLParser(..., resolve_entities=True, ...)
   - pattern: XMLParser(..., resolve_entities=True, ...)
+  - pattern: $P.XMLParser(..., load_dtd=True, ...)
+  - pattern: XMLParser(..., load_dtd=True, ...)
+  - pattern: $P.XMLParser(..., huge_tree=True, ...)
+  - pattern: XMLParser(..., huge_tree=True, ...)
   - pattern: $P.XMLParser(..., no_network=False, ...)
   - pattern: XMLParser(..., no_network=False, ...)
 - id: perun.py.hardcoded-credential-compare

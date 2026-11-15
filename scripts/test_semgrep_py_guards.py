@@ -28,6 +28,20 @@ def ssrf_guarded(ALLOWED):
     # ok: perun.py.ssrf
     return requests.get(url).text
 
+def ssrf_substring(url_in=None):
+    url = request.args["url"]
+    if url not in "https://api.example.com/status":
+        abort(400)
+    # ruleid: perun.py.ssrf
+    return requests.get(url).text
+
+def ssrf_fstring(ALLOWED):
+    url = request.args["url"]
+    if url not in ALLOWED:
+        abort(400)
+    # ruleid: perun.py.ssrf
+    return requests.get(f"https://{url}/x").text
+
 def redirect_open():
     # ruleid: perun.py.open-redirect
     return redirect(request.args.get("next", "/"))
@@ -41,9 +55,16 @@ def redirect_unguarded():
 
 def redirect_guarded():
     nxt = request.args.get("next", "/")
-    if not nxt.startswith("/") or nxt.startswith("//"):
+    if not nxt.startswith("/") or nxt.startswith("//") or nxt.startswith("/\\\\"):
         nxt = "/"
     # ok: perun.py.open-redirect
+    return redirect(nxt)
+
+def redirect_backslash_unguarded():
+    nxt = request.args.get("next", "/")
+    if not nxt.startswith("/") or nxt.startswith("//"):
+        nxt = "/"
+    # ruleid: perun.py.open-redirect
     return redirect(nxt)
 
 def redirect_django_guarded():
@@ -74,6 +95,18 @@ def xxe_both(path):
     p = etree.XMLParser(resolve_entities=True, no_network=False)
     return etree.parse(path, p)
 
+def xxe_dtd():
+    # ruleid: perun.py.xxe-lxml
+    return etree.XMLParser(load_dtd=True)
+
+def xxe_huge():
+    # ruleid: perun.py.xxe-lxml
+    return etree.XMLParser(huge_tree=True)
+
+def xxe_bare():
+    # ok: perun.py.xxe-lxml
+    return etree.XMLParser()
+
 def xxe_safe():
     # ok: perun.py.xxe-lxml
     return etree.XMLParser(resolve_entities=False, no_network=True)
@@ -92,11 +125,13 @@ def annotated(body, kind):
 
 
 want, ok = annotated(PY, "ruleid"), annotated(PY, "ok")
-assert {i for i, _ in want | ok} == set(IDS) and len(want) == 6 and len(ok) == 5, (len(want), len(ok))
+assert {i for i, _ in want | ok} == set(IDS) and len(want) == 11 and len(ok) == 6, (len(want), len(ok))
 
 rule = open(os.path.join(RULES, "py.yml")).read()
 assert "- id: perun.py.xxe-lxml" in rule and "resolve_entities=True" in rule and "no_network=False" in rule
-assert "abort(...)" in rule and "url_has_allowed_host_and_scheme($G" in rule and '$G.startswith("//")' in rule
+for s_ in ("if $G not in $A:", "abort(...)", "<... $F($G, ...) ...>", "$A", "url_has_allowed_host_and_scheme($G", '$G.startswith("//")', '$G.startswith("/\\\\")',
+           "load_dtd=True", "huge_tree=True"):
+    assert s_ in rule, s_
 
 if shutil.which("semgrep"):
     with tempfile.TemporaryDirectory() as d:
@@ -106,8 +141,7 @@ if shutil.which("semgrep"):
                              capture_output=True, text=True, env=env, cwd=d)
         r = json.loads(run.stdout)
     assert not r["errors"], r["errors"]
-    got = {(x["check_id"].rsplit(".py.", 1)[-1] and "perun.py." + x["check_id"].rsplit(".py.", 1)[-1], x["start"]["line"])
-           for x in r["results"] if x["check_id"].rsplit(".py.", 1)[-1] in {i[len("perun.py."):] for i in IDS}}
+    got = {(i, x["start"]["line"]) for x in r["results"] for i in IDS if x["check_id"].endswith(i)}
     assert got == want, ("unexpected", sorted(got - want), "missed", sorted(want - got))
     print("semgrep-py-guards: live ok")
 else:

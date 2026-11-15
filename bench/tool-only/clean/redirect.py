@@ -6,6 +6,6 @@ app = Flask(__name__)
 @app.route('/login')
 def login():
     nxt = request.args.get('next', '/')
-    if not nxt.startswith('/') or nxt.startswith('//'):
+    if not nxt.startswith('/') or nxt.startswith('//') or nxt.startswith('/\\'):
         nxt = '/'
     return redirect(nxt)
