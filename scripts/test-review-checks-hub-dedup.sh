@@ -27,6 +27,11 @@ cat >"$T/bin/actionlint" <<'S'
 #!/usr/bin/env bash
 cat "$AL_JSON"; exit 1
 S
+cat >"$T/bin/gitleaks" <<'S'
+#!/usr/bin/env bash
+rep=; a=("$@"); for i in "${!a[@]}"; do [ "${a[$i]}" = -r ] && rep=${a[$((i + 1))]}; done
+cat "${GL_JSON:-/dev/null}" >"$rep"
+S
 chmod +x "$T/bin/"*
 WF=.github/workflows/ci.yml
 mkdir -p "$T/repo" && cd "$T/repo" && git init -q . && G commit -q --allow-empty -m base && git branch base
@@ -36,7 +41,7 @@ G add -A && G commit -q -m change
 sg() { local r= l; for l in "$@"; do r+="${r:+,}{\"check_id\":\"acme-rule\",\"path\":\"$WF\",\"start\":{\"line\":$l},\"extra\":{\"message\":\"low: mutable tag\"}}"; done; printf '{"results":[%s],"errors":[],"paths":{"scanned":["%s"]}}\n' "$r" "$WF"; }
 zz() { local r= l; for l in "$@"; do r+="${r:+,}{\"ident\":\"unpinned-uses\",\"desc\":\"d\",\"locations\":[{\"symbolic\":{\"kind\":\"Primary\",\"key\":{\"Local\":{\"verbatim_path\":\"$WF\"}}},\"concrete\":{\"location\":{\"start_point\":{\"row\":$l}}}}]}"; done; printf '[%s]\n' "$r"; }
 al() { local r= l; for l in "$@"; do r+="${r:+,}{\"message\":\"error: bad step\",\"filepath\":\"$WF\",\"line\":$l,\"kind\":\"expression\"}"; done; printf '[%s]\n' "$r"; }
-go() { PATH="$T/bin:$T/sys" SG_JSON="$T/sg.json" ZZ_JSON="$T/zz.json" AL_JSON="$T/al.json" bash "$RC" --base base >"$T/out" 2>"$T/err" || true; }
+go() { PATH="$T/bin:$T/sys" GL_JSON="${GL_JSON:-}" SG_JSON="$T/sg.json" ZZ_JSON="$T/zz.json" AL_JSON="$T/al.json" bash "$RC" --base base ${GO_ARGS:-} >"$T/out" 2>"$T/err" || true; }
 at() { jq -c --argjson l "$1" '[.[] | select(.line==$l and .rule!="not-checked")]' "$T/out"; }
 eq() { if [ "$1" = "$2" ]; then echo "ok - $3"; else echo "FAIL - $3 (got $1, want $2)"; fail=1; fi; }
 
@@ -49,4 +54,8 @@ sg 5 9 >"$T/sg.json"; zz 99 >"$T/zz.json"; al 99 >"$T/al.json"; go # only semgre
 eq "$(at 5 | jq length)$(at 9 | jq length)" 11 "one tool, 2 lines: 2 rows"
 eq "$(jq '[.[] | select(.tools)] | length' "$T/out")" 0 "one tool alone is not corroborated"
 eq "$(jq '[.[] | select(.tool=="semgrep")] | length' "$T/out")" 2 "no merge across lines"
+printf '[{"RuleID":"acme-key","Description":"d","File":"%s","StartLine":5,"Fingerprint":"fp1"}]\n' "$WF" >"$T/gl.json"
+sg 90 >"$T/sg.json"; zz 80 >"$T/zz.json"; al 70 >"$T/al.json"; GL_JSON="$T/gl.json" GO_ARGS=--history go # gitleaks (tree) + gitleaks-history on line 5
+eq "$(jq '[.[] | select(.tool|test("^gitleaks"))] | length' "$T/out")" 2 "gitleaks and gitleaks-history rows both present"
+eq "$(jq '[.[] | select(.tools)] | length' "$T/out")" 0 "gitleaks + gitleaks-history alone is not corroboration"
 exit $fail

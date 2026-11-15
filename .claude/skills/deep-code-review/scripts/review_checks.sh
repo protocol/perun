@@ -1592,7 +1592,7 @@ cg = {}
 for r in out:
     if r["rule"] != "not-checked" and not r["rule"].endswith("-summary") and r["line"] > 0 and r["file"] not in ("", "-") and "_lines" not in r: cg.setdefault((os.path.normpath(r["file"]), r["line"]), []).append(r)
 for g in cg.values():
-    ts = sorted({r["tool"] for r in g})
+    ts = sorted({r["tool"].removesuffix("-history") for r in g})  # gitleaks and gitleaks-history are one scanner
     if len(ts) > 1:
         for r in g: r["tools"] = ts; sfx = f" [corroborated by: {', '.join(ts)}]"; r["message"] += sfx; r["text"] += sfx
 ML = [r.pop("_lines", None) for r in out]  # per-file summary rows: every member line; popped here in every mode so the key never prints
