@@ -68,6 +68,64 @@ def move_src():
     # ruleid: perun.py.path-traversal
     shutil.move(request.form["src"], "/srv/out")
 
+def copy_dst():
+    # ruleid: perun.py.path-traversal
+    shutil.copy("/srv/in.txt", "/srv/out/" + request.args["n"])
+
+def move_dst():
+    # ruleid: perun.py.path-traversal
+    shutil.move("/srv/in.txt", request.form["dst"])
+
+def copytree_src():
+    # ruleid: perun.py.path-traversal
+    shutil.copytree(request.json["src"], "/srv/out")
+
+def copytree_dst():
+    # ruleid: perun.py.path-traversal
+    shutil.copytree("/srv/in", request.json["dst"])
+
+def rmtree_path():
+    # ruleid: perun.py.path-traversal
+    shutil.rmtree("/srv/" + request.args["n"])
+
+def path_write_text():
+    # ruleid: perun.py.path-traversal
+    Path(request.args["n"]).write_text("x")
+
+def path_write_bytes():
+    # ruleid: perun.py.path-traversal
+    pathlib.Path(request.args["n"]).write_bytes(b"x")
+
+def path_unlink():
+    # ruleid: perun.py.path-traversal
+    Path("/srv/" + request.args["n"]).unlink()
+
+def tainted_base_dir():
+    # ruleid: perun.py.path-traversal
+    return send_from_directory(request.args["d"], "report.pdf")
+
+def guarded_path_read(ALLOW):
+    n = request.args["n"]
+    if n not in ALLOW:
+        raise ValueError(n)
+    # ok: perun.py.path-traversal
+    return Path("/srv/files/" + n).read_text()
+
+def guarded_copy(ALLOW):
+    n = request.args["n"]
+    if n not in ALLOW:
+        return "no"
+    # ok: perun.py.path-traversal
+    shutil.copy("/srv/in.txt", "/srv/out/" + n)
+    return "ok"
+
+def guarded_base_dir(ALLOW):
+    d = request.args["d"]
+    if d not in ALLOW:
+        raise ValueError(d)
+    # ok: perun.py.path-traversal
+    return send_from_directory(d, "report.pdf")
+
 def safe_dir():
     # ok: perun.py.path-traversal
     return send_from_directory("/srv/files", request.args["name"])
@@ -96,7 +154,7 @@ def annotated(body, kind):
 
 
 want, ok = annotated(PY, "ruleid"), annotated(PY, "ok")
-assert len(want) >= 10 and len(ok) >= 4, (len(want), len(ok))
+assert len(want) >= 20 and len(ok) >= 7, (len(want), len(ok))
 
 # Offline pins: the rule keeps its sinks and sanitizers, and send_from_directory is never a sink.
 rule = open(os.path.join(RULES, "py.yml")).read()
@@ -104,7 +162,11 @@ blk = rule[rule.index(f"- id: {ID}"):].split("\n- id: ")[0]
 for s in ("send_file($S", "open($S", "os.path.join($B, $S)", "Path($S, ...).read_text", "Path($S, ...).open", "shutil.copy($S",
           "shutil.move($S", "secure_filename(...)", "os.path.basename(...)", "safe_join(...)"):
     assert s in blk, s
-assert "send_from_directory" not in blk
+for s in ("shutil.copy($B, $S", "shutil.move($B, $S", "shutil.copytree($S", "shutil.rmtree($S", "Path($S, ...).write_text", "Path($S, ...).unlink"):
+    assert s in blk, s
+# send_from_directory is a sink on its first (base directory) argument only, never on the file name.
+sinks = re.findall(r"- pattern: (send_from_directory\(.*\))", blk.split("pattern-sanitizers")[0].split("pattern-not-inside")[0])
+assert sinks == ["send_from_directory($S, ...)"], sinks
 
 if shutil.which("semgrep"):
     with tempfile.TemporaryDirectory() as d:

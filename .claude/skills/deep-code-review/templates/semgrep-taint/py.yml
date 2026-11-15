@@ -155,7 +155,7 @@ rules:
           raise ...
         ...
     - focus-metavariable: $E
-# send_from_directory is not a sink: it confines the name to its base directory. ponytail: the allowlist-guard skip covers open, os.path.join and send_file only.
+# send_from_directory is a sink on its base-directory argument only: it confines the file name (second argument) to that directory.
 - id: perun.py.path-traversal
   mode: taint
   languages: [python]
@@ -188,10 +188,24 @@ rules:
       - pattern: Path($S, ...).open(...)
       - pattern: Path($S, ...).read_text(...)
       - pattern: Path($S, ...).read_bytes(...)
+      - pattern: pathlib.Path($S, ...).write_text(...)
+      - pattern: pathlib.Path($S, ...).write_bytes(...)
+      - pattern: pathlib.Path($S, ...).unlink(...)
+      - pattern: Path($S, ...).write_text(...)
+      - pattern: Path($S, ...).write_bytes(...)
+      - pattern: Path($S, ...).unlink(...)
       - pattern: shutil.copy($S, ...)
+      - pattern: shutil.copy($B, $S, ...)
       - pattern: shutil.copy2($S, ...)
+      - pattern: shutil.copy2($B, $S, ...)
       - pattern: shutil.copyfile($S, ...)
+      - pattern: shutil.copyfile($B, $S, ...)
+      - pattern: shutil.copytree($S, ...)
+      - pattern: shutil.copytree($B, $S, ...)
       - pattern: shutil.move($S, ...)
+      - pattern: shutil.move($B, $S, ...)
+      - pattern: shutil.rmtree($S, ...)
+      - pattern: send_from_directory($S, ...)
     - pattern-not-inside: |
         if $G not in $A:
           raise ...
@@ -222,7 +236,48 @@ rules:
           return ...
         ...
         <... send_file(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... send_from_directory(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... shutil.$M(..., <... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... Path(<... $G ...>, ...).$M(...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          raise ...
+        ...
+        <... pathlib.Path(<... $G ...>, ...).$M(...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... send_from_directory(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... shutil.$M(..., <... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... Path(<... $G ...>, ...).$M(...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          return ...
+        ...
+        <... pathlib.Path(<... $G ...>, ...).$M(...) ...>
     - focus-metavariable: $S
+  # ponytail: sanitizers match by name, no import anchoring; a project-local naive safe_join or secure_filename would silence a finding.
   pattern-sanitizers:
   - pattern: os.path.basename(...)
   - pattern: secure_filename(...)
