@@ -1,0 +1,99 @@
+# Bundled insecure-default (fail-open config) rules. Already covered elsewhere, so not repeated here: secret-env-fallback and tls-verify-off (py.yml, js.yml), cors-credentials-any-origin (js.yml).
+# Added: py debug-enabled, py cors-credentials-wildcard, py/js jwt-unverified, py/js auth-fails-open. Test paths are skipped.
+# ponytail: auth-fails-open only sees a try/except (catch) inside a function whose name says auth, token, permission, allowed or verify, and only a literal return True / next().
+rules:
+- id: perun.py.debug-enabled
+  languages: [python]
+  severity: WARNING
+  message: Debug mode is switched on in code (DEBUG = True or app.run(debug=True)). It exposes stack traces and an interactive console in production. Read it from the environment and default it to off.
+  pattern-either:
+  - pattern: DEBUG = True
+  - pattern: $APP.run(..., debug=True, ...)
+  - pattern: $APP.debug = True
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.py.cors-credentials-wildcard
+  languages: [python]
+  severity: WARNING
+  message: CORS allows every origin and also allows credentials. Any site can then make authenticated requests as the user. List the trusted origins explicitly.
+  pattern-either:
+  - pattern: $A.add_middleware(CORSMiddleware, ..., allow_origins=["*"], ..., allow_credentials=True, ...)
+  - pattern: $A.add_middleware(CORSMiddleware, ..., allow_credentials=True, ..., allow_origins=["*"], ...)
+  - pattern: CORS($A, ..., origins="*", ..., supports_credentials=True, ...)
+  - pattern: CORS($A, ..., supports_credentials=True, ..., origins="*", ...)
+  - patterns:
+    - pattern: CORS_ALLOW_ALL_ORIGINS = True
+    - pattern-either:
+      - pattern-inside: |
+          CORS_ALLOW_CREDENTIALS = True
+          ...
+      - pattern-inside: |
+          ...
+          CORS_ALLOW_CREDENTIALS = True
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.py.jwt-unverified
+  languages: [python]
+  severity: ERROR
+  message: JWT signature checking is off or the none algorithm is allowed, so anyone can forge a token. Verify with a fixed algorithm list and the real key.
+  pattern-either:
+  - pattern: '$J.decode(..., options={..., "verify_signature": False, ...}, ...)'
+  - pattern: $J.decode(..., verify=False, ...)
+  - pattern: $J.decode(..., algorithms=[..., "none", ...], ...)
+  - pattern: $J.encode(..., algorithm="none", ...)
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.js.jwt-unverified
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: The JWT none algorithm is allowed, so anyone can forge a token. Verify with a fixed algorithm list and the real key.
+  pattern-either:
+  - pattern: '$F(..., {..., algorithms: [..., "none", ...], ...})'
+  - pattern: '$F(..., {..., algorithm: "none", ...})'
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.py.auth-fails-open
+  languages: [python]
+  severity: WARNING
+  message: An auth check returns True from its exception handler, so any error (a bad token, a down key service) grants access. Deny on error.
+  patterns:
+  - pattern-inside: |
+      def $F(...):
+        ...
+  - metavariable-regex:
+      metavariable: $F
+      regex: (?i).*(?:auth|token|permission|allowed|verify).*
+  - pattern: |
+      try:
+        ...
+      except $E:
+        ...
+        return True
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.js.auth-fails-open
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: An auth check lets the request through from its catch block (it returns true or calls next()), so any error grants access. Deny on error.
+  patterns:
+  - pattern-either:
+    - pattern-inside: |
+        function $F(...) {
+          ...
+        }
+    - pattern-inside: |
+        const $F = (...) => {
+          ...
+        }
+  - metavariable-regex:
+      metavariable: $F
+      regex: (?i).*(?:auth|token|permission|allowed|verify).*
+  - pattern-either:
+    - pattern: |
+        try { ... } catch ($E) { ... return true; }
+    - pattern: |
+        try { ... } catch ($E) { ... return next(); }
+    - pattern: |
+        try { ... } catch ($E) { ... next(); }
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
