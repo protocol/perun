@@ -1577,6 +1577,14 @@ for t in data:
     k = key(t) or fkey(t)
     if not k or len(groups[k]) <= 3: out.append(row(t))
     elif k not in done: done.add(k); out.append(summ(k, groups[k]) if key(t) else fsumm(k, groups[k]))
+# Corroboration: when different tools flag the same normalized file:line, every such row gets a "tools" list and a " [corroborated by: ...]" suffix. No row is dropped or merged. not-checked, summary, line<=0 and per-file-summary rows are skipped.
+cg = {}
+for r in out:
+    if r["rule"] != "not-checked" and not r["rule"].endswith("-summary") and r["line"] > 0 and r["file"] not in ("", "-") and "_lines" not in r: cg.setdefault((os.path.normpath(r["file"]), r["line"]), []).append(r)
+for g in cg.values():
+    ts = sorted({r["tool"] for r in g})
+    if len(ts) > 1:
+        for r in g: r["tools"] = ts; sfx = f" [corroborated by: {', '.join(ts)}]"; r["message"] += sfx; r["text"] += sfx
 ML = [r.pop("_lines", None) for r in out]  # per-file summary rows: every member line; popped here in every mode so the key never prints
 ud = sys.argv[11]  # `git diff -U0` of BASE...HEAD; "" under --full/--history or when a git read above failed (no "new" key)
 if ud:
