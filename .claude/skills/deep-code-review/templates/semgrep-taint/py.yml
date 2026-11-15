@@ -155,6 +155,7 @@ rules:
           raise ...
         ...
     - focus-metavariable: $E
+# send_from_directory is not a sink: it confines the name to its base directory. ponytail: the allowlist-guard skip covers open, os.path.join and send_file only.
 - id: perun.py.path-traversal
   mode: taint
   languages: [python]
@@ -181,7 +182,16 @@ rules:
       - pattern: open($S, ...)
       - pattern: os.path.join($B, $S)
       - pattern: send_file($S, ...)
-      - pattern: send_from_directory($B, $S, ...)
+      - pattern: pathlib.Path($S, ...).open(...)
+      - pattern: pathlib.Path($S, ...).read_text(...)
+      - pattern: pathlib.Path($S, ...).read_bytes(...)
+      - pattern: Path($S, ...).open(...)
+      - pattern: Path($S, ...).read_text(...)
+      - pattern: Path($S, ...).read_bytes(...)
+      - pattern: shutil.copy($S, ...)
+      - pattern: shutil.copy2($S, ...)
+      - pattern: shutil.copyfile($S, ...)
+      - pattern: shutil.move($S, ...)
     - pattern-not-inside: |
         if $G not in $A:
           raise ...
@@ -199,11 +209,6 @@ rules:
         <... send_file(<... $G ...>, ...) ...>
     - pattern-not-inside: |
         if $G not in $A:
-          raise ...
-        ...
-        <... send_from_directory($B, <... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
           return ...
         ...
         <... open(<... $G ...>, ...) ...>
@@ -217,15 +222,13 @@ rules:
           return ...
         ...
         <... send_file(<... $G ...>, ...) ...>
-    - pattern-not-inside: |
-        if $G not in $A:
-          return ...
-        ...
-        <... send_from_directory($B, <... $G ...>, ...) ...>
     - focus-metavariable: $S
   pattern-sanitizers:
   - pattern: os.path.basename(...)
   - pattern: secure_filename(...)
+  - pattern: werkzeug.utils.secure_filename(...)
+  - pattern: safe_join(...)
+  - pattern: werkzeug.security.safe_join(...)
   - patterns:
     - pattern: $M[...]
     - metavariable-regex:
