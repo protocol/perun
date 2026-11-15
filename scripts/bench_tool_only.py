@@ -26,6 +26,8 @@ def run(truth_path=ROOT / "bench/tool-only/answer.json", fixtures=ROOT / "bench/
     with tempfile.TemporaryDirectory() as t:
         for d in ("vuln", "clean"):
             shutil.copytree(fixtures / d, Path(t) / d)
+        # generated here so no committed text matches a secret pattern; keep on line 2 (answer.json: vuln/secret.py:2)
+        (Path(t) / "vuln/secret.py").write_text("# Fictional credential for a bench fixture; not a real account.\nAPI_KEY = \"" + "q7Zk2XvB9mWc4T" + "nRj8LpD3sHf6YgA1eU" + "\"\n")
         g = ["git", "-c", "user.name=b", "-c", "user.email=b@example.com"]
         for a in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "bench"]):
             subprocess.run(g + a, cwd=t, check=True, capture_output=True)
