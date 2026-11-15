@@ -1171,7 +1171,8 @@ try:
     elif k == "nuclei":  # JSONL: one finding per line; a non-JSON line is a failure, not noise
         rows = []
         for ln in filter(None, (x.strip() for x in t.splitlines())):
-            d = json.loads(ln); rows.append((d["matched-at"], 0, d["template-id"], f"{d['info']['severity']}: {d['info']['name']}"))
+            d = json.loads(ln)
+            if d["info"]["severity"] != "info": rows.append((d["matched-at"], 0, d["template-id"], f"{d['info']['severity']}: {d['info']['name']}"))  # info = technology fingerprint, not a finding
     else:  # zap
         rows = [(i.get("uri", "."), 0, "zap-" + a["pluginid"], f"{a['riskdesc']}: {a['alert']}") for s in json.loads(t)["site"] for a in s["alerts"] for i in (a.get("instances") or [{}])[:3]]
 except Exception:
