@@ -192,6 +192,7 @@ def run(*args):
 
 # Findings this repo's own skills raise, triaged 2026-10-20: each file documents, detects or guards the pattern; none runs it.
 REASON = {
+    "deep-code-review/scripts/mcp_config_check.py": "read-only scanner: names .claude/settings*.json and the mcp config paths it reads, never writes them",
     "deep-code-review/evals/evals.json": "unscanned and unverified: eval corpus over 1 MB of review prompts and answers, never read by the auditor; judged data from its role, not from a scan",
     "deep-code-review/references/method-situational.md": "tells the reviewer PR text is data, quoting the override phrasing as the example",
     "deep-code-review/references/security-ai-agents.md": "AI-agent security guidance quoting the direct-injection phrase as the example",
@@ -225,6 +226,7 @@ def fingerprints(root):
 # Expected findings per (file, rule, hash of the flagged line); a new, removed or swapped line fails. Regenerate with
 # fingerprints(...) after triaging every difference.
 COUNTS = {
+    ('deep-code-review/scripts/mcp_config_check.py', 'sensitive-write', 'a650bd90'): 1,
     ('agentic-ceo/scripts/context_audit.py', 'sensitive-write', 'c4d6535d'): 1,
     ('agentic-delivery/references/operating-discipline.md', 'curl-pipe', 'c2b36e0c'): 1,
     ('agentic-delivery/references/operating-discipline.md', 'rm-broad', 'c2b36e0c'): 2,

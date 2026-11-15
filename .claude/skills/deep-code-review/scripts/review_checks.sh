@@ -1438,6 +1438,16 @@ if [ -n "$wf" ]; then
   fi
 fi
 
+# Built-in, no tool to install: risky agent and MCP config in changed .mcp.json, .cursor/mcp.json, .vscode/mcp.json, .claude/settings*.json (mcp_config_check.py). Rows: tool mcp-config, rules mcp-unpinned|mcp-insecure-url|mcp-literal-secret|agent-broad-allow|hook-pipe-shell|not-checked. Cheap, so unleased; leads.
+mc=$(changed '(^|/)(\.mcp\.json|\.cursor/mcp\.json|\.vscode/mcp\.json|\.claude/settings[^/]*\.json)$')
+if [ -n "$mc" ]; then
+  if [ ! -f "$here/mcp_config_check.py" ]; then skip mcp-config "mcp_config_check.py missing"
+  else
+    mcok=0; run_one mcp-config python3 -I "$here/mcp_config_check.py" <<<"$mc" && scan_ok mcp-config && mcok=1
+    if [ "$mcok" = 1 ] || [ "$rc" = 124 ] || [ "$rc" = 142 ]; then while IFS=$'\t' read -r f l r m; do add mcp-config "$f" "$l" "$r" "$m"; done <"$out"; fi
+  fi
+fi
+
 # Built-in, no tool to install: distinct non-reserved email addresses per changed file, binary data files included (committed_personal_data.py), over the same $cf as invisible-chars (vendored paths skipped). Cheap, so
 # unleased: it reads each file's bytes once (capped at 32 MiB). Rows: tool committed-data, rule email-addresses|not-checked (the row with path `.` is the repository total over files below the file threshold); the message has counts or the container format, never a value. No likely-fixture hint or tag (a real address in a fixture is still a leak); only the message leads `likely fixture:`, from the path and the share of placeholder-style or reserved-domain addresses.
 pd="$here/committed_personal_data.py"
