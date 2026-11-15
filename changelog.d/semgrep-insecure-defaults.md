@@ -1,0 +1,2 @@
+### Added
+- Bundled semgrep rules for fail-open defaults (templates/semgrep-taint/defaults.yml): `perun.py.debug-enabled`, `perun.py.cors-credentials-wildcard`, `perun.py.jwt-unverified`, `perun.js.jwt-unverified`, `perun.py.auth-fails-open`, `perun.js.auth-fails-open`. Secret-env-fallback, TLS-verify-off and JS CORS-with-credentials were already covered and are not repeated. Tested by scripts/test_semgrep_defaults.py with seeded bad fixtures and clean twins.
