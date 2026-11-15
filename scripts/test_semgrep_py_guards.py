@@ -35,7 +35,48 @@ def ssrf_guarded():
     url = request.args["url"]
     if url not in ALLOWED:
         abort(400)
-    # ok: perun.py.ssrf
+    # ruleid: perun.py.ssrf
+    return requests.get(url).text
+
+def ssrf_set_request():
+    url = request.args["url"]
+    allow = set(request.args.getlist("a"))
+    if url not in allow:
+        abort(400)
+    # ruleid: perun.py.ssrf
+    return requests.get(url).text
+
+def ssrf_list_request():
+    url = request.args["url"]
+    allow = [request.args["a"]]
+    if url not in allow:
+        abort(400)
+    # ruleid: perun.py.ssrf
+    return requests.get(url).text
+
+def ssrf_mutated():
+    url = request.args["url"]
+    ALLOWED.append(request.args["a"])
+    if url not in ALLOWED:
+        abort(400)
+    # ruleid: perun.py.ssrf
+    return requests.get(url).text
+
+def ssrf_for_rebind():
+    url = request.args["url"]
+    if url not in ALLOWED:
+        abort(400)
+    for url in [request.args["u"]]:
+        pass
+    # ruleid: perun.py.ssrf
+    return requests.get(url).text
+
+def ssrf_aug_rebind():
+    url = request.args["url"]
+    if url not in ALLOWED:
+        abort(400)
+    url += request.args["x"]
+    # ruleid: perun.py.ssrf
     return requests.get(url).text
 
 def ssrf_substring(url_in=None):
@@ -158,8 +199,58 @@ def uac_guarded():
     url = request.args["url"]
     if url not in ALLOWED:
         abort(400)
-    # ok: perun.py.unsafe-api-consumption
+    # ruleid: perun.py.unsafe-api-consumption
     return requests.get(url, timeout=5).text
+
+def uac_set_request():
+    url = request.args["url"]
+    allow = set(request.args.getlist("a"))
+    if url not in allow:
+        abort(400)
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(url).text
+
+def uac_list_request():
+    url = request.args["url"]
+    allow = [request.args["a"]]
+    if url not in allow:
+        abort(400)
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(url).text
+
+def uac_mutated():
+    url = request.args["url"]
+    ALLOWED.append(request.args["a"])
+    if url not in ALLOWED:
+        abort(400)
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(url).text
+
+def uac_for_rebind():
+    url = request.args["url"]
+    if url not in ALLOWED:
+        abort(400)
+    for url in [request.args["u"]]:
+        pass
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(url).text
+
+def uac_aug_rebind():
+    url = request.args["url"]
+    if url not in ALLOWED:
+        abort(400)
+    url += request.args["x"]
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(url).text
+
+def uac_response_container():
+    r = requests.get("https://api.example.com/cfg")
+    allow = [r.json()["allowed"]]
+    nxt = r.json()["next"]
+    if nxt not in allow:
+        abort(400)
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(nxt).text
 
 def uac_substring():
     url = request.args["url"]
@@ -198,11 +289,11 @@ def annotated(body, kind):
 
 
 want, ok = annotated(PY, "ruleid"), annotated(PY, "ok")
-assert {i for i, _ in want | ok} == set(IDS) and len(want) == 14 and len(ok) == 6, (len(want), len(ok))
+assert {i for i, _ in want | ok} == set(IDS) and len(want) == 20 and len(ok) == 5, (len(want), len(ok))
 
 rule = open(os.path.join(RULES, "py.yml")).read()
 assert "- id: perun.py.xxe-lxml" in rule and "resolve_entities=True" in rule and "no_network=False" in rule
-for s_ in ("if $G not in $A:", "abort(...)", "<... $F($G, ...) ...>", "$A", "url_has_allowed_host_and_scheme($G", '$G.startswith("//")', '$G.startswith("/\\\\")',
+for s_ in ("url_has_allowed_host_and_scheme($G", '$G.startswith("//")', '$G.startswith("/\\\\")',
            "load_dtd=True", "huge_tree=True"):
     assert s_ in rule, s_
 
