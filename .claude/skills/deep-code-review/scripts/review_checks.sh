@@ -1574,6 +1574,23 @@ for t in data:
     k = key(t) or fkey(t)
     if not k or len(groups[k]) <= 3: out.append(row(t))
     elif k not in done: done.add(k); out.append(summ(k, groups[k]) if key(t) else fsumm(k, groups[k]))
+# Corroboration: several tools on the same file:line fold into one row (the highest severity named in the message prefix wins, the first row on a tie) that names every tool. Rows carry no category field, so the key is file:line; one tool's other rules on that line stay their own rows, and not-checked, line-0 and summary rows never fold.
+SEV = {s: i for i, s in enumerate(("info", "low", "warning", "medium", "error", "high", "critical"))}
+sv = lambda r: SEV.get((re.match(r"(\w+):", r["message"].lower()) or [0, ""])[1], -1)
+fold, out2 = {}, []
+for r in out:
+    k = (os.path.normpath(r["file"]), r["line"])
+    if r["rule"] == "not-checked" or r["rule"].endswith("-summary") or r["line"] <= 0 or r["file"] in ("", "-") or "_lines" in r: out2.append(r); continue
+    g = fold.get(k)
+    if g is None: fold[k] = g = {"best": r, "tools": [r["tool"]]}; out2.append(r)
+    elif r["tool"] in g["tools"]: out2.append(r)
+    else:
+        g["tools"].append(r["tool"])
+        if sv(r) > sv(g["best"]): out2[out2.index(g["best"])] = r; g["best"] = r
+out = out2
+for g in fold.values():
+    if len(g["tools"]) > 1:
+        b = g["best"]; b["tools"] = g["tools"]; t = f" [corroborated by: {', '.join(g['tools'])}]"; b["message"] += t; b["text"] += t
 ML = [r.pop("_lines", None) for r in out]  # per-file summary rows: every member line; popped here in every mode so the key never prints
 ud = sys.argv[11]  # `git diff -U0` of BASE...HEAD; "" under --full/--history or when a git read above failed (no "new" key)
 if ud:
