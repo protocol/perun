@@ -356,6 +356,26 @@ rules:
           return ...
         ...
         <... urlopen(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          abort(...)
+        ...
+        <... requests.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          abort(...)
+        ...
+        <... httpx.$M(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          abort(...)
+        ...
+        <... urllib.request.urlopen(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if $G not in $A:
+          abort(...)
+        ...
+        <... urlopen(<... $G ...>, ...) ...>
     - focus-metavariable: $S
 - id: perun.py.deserialize
   mode: taint
@@ -444,7 +464,47 @@ rules:
     - pattern-either:
       - pattern: redirect($S, ...)
       - pattern: HttpResponseRedirect($S, ...)
+    # Relative-path guard: reassigning to a constant when the value is not a single-slash path.
+    - pattern-not-inside: |
+        if not $G.startswith("/") or $G.startswith("//"):
+          $G = ...
+        ...
+        <... redirect(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if not $G.startswith("/") or $G.startswith("//"):
+          $G = ...
+        ...
+        <... HttpResponseRedirect(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if not url_has_allowed_host_and_scheme($G, ...):
+          $G = ...
+        ...
+        <... redirect(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if not url_has_allowed_host_and_scheme($G, ...):
+          $G = ...
+        ...
+        <... HttpResponseRedirect(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if not url_has_allowed_host_and_scheme($G, ...):
+          return ...
+        ...
+        <... redirect(<... $G ...>, ...) ...>
+    - pattern-not-inside: |
+        if not url_has_allowed_host_and_scheme($G, ...):
+          return ...
+        ...
+        <... HttpResponseRedirect(<... $G ...>, ...) ...>
     - focus-metavariable: $S
+- id: perun.py.xxe-lxml
+  languages: [python]
+  severity: ERROR
+  message: lxml XMLParser resolves external entities or allows network access (CWE-611, XXE). Use resolve_entities=False and no_network=True.
+  pattern-either:
+  - pattern: $P.XMLParser(..., resolve_entities=True, ...)
+  - pattern: XMLParser(..., resolve_entities=True, ...)
+  - pattern: $P.XMLParser(..., no_network=False, ...)
+  - pattern: XMLParser(..., no_network=False, ...)
 - id: perun.py.hardcoded-credential-compare
   languages: [python]
   severity: WARNING
