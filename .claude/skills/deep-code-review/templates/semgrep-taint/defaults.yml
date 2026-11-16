@@ -52,6 +52,34 @@ rules:
   - pattern: '$F(..., {..., algorithm: "none", ...})'
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.jwt-decode-unverified
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: jwt.decode reads the claims without checking the signature, so a forged token is accepted when the result drives an auth decision. Use jwt.verify with the real key and a fixed algorithm list.
+  patterns:
+  - pattern: $J.decode(...)
+  - metavariable-regex:
+      metavariable: $J
+      regex: ^(?i:jwt|jsonwebtoken)$
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.py.cors-reflected-origin
+  languages: [python]
+  severity: WARNING
+  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist.
+  patterns:
+  - pattern-inside: |
+      def $F(...):
+        ...
+        $C["Access-Control-Allow-Credentials"] = "true"
+        ...
+  - pattern-either:
+    - pattern: $H["Access-Control-Allow-Origin"] = request.headers.get("Origin")
+    - pattern: $H["Access-Control-Allow-Origin"] = request.headers["Origin"]
+    - pattern: $H["Access-Control-Allow-Origin"] = request.META.get("HTTP_ORIGIN")
+    - pattern: $H["Access-Control-Allow-Origin"] = request.META["HTTP_ORIGIN"]
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
 - id: perun.py.auth-fails-open
   languages: [python]
   severity: WARNING

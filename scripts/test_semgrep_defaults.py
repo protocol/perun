@@ -9,7 +9,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG = os.path.join(ROOT, ".claude", "skills", "deep-code-review", "templates", "semgrep-taint", "defaults.yml")
 src = open(CFG).read()
 IDS = [l.split("id: ")[1] for l in src.splitlines() if l.startswith("- id: ")]
-assert len(IDS) == 6 and src.count("  severity: ") == 6, IDS
+assert len(IDS) == 8 and src.count("  severity: ") == 8, IDS
 
 BAD_PY = '''import jwt
 from flask_cors import CORS
@@ -27,6 +27,16 @@ jwt.decode(tok, options={"verify_signature": False})
 jwt.decode(tok, key, algorithms=["HS256", "none"])
 # ruleid: perun.py.jwt-unverified
 jwt.encode(claims, None, algorithm="none")
+def add_cors(resp):
+    # ruleid: perun.py.cors-reflected-origin
+    resp.headers["Access-Control-Allow-Origin"] = request.headers.get("Origin")
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    return resp
+def add_cors_django(resp):
+    resp["Access-Control-Allow-Credentials"] = "true"
+    # ruleid: perun.py.cors-reflected-origin
+    resp["Access-Control-Allow-Origin"] = request.META["HTTP_ORIGIN"]
+    return resp
 def is_authenticated(tok):
     # ruleid: perun.py.auth-fails-open
     try:
@@ -46,6 +56,15 @@ CORS(app, origins="https://app.example.com", supports_credentials=True)
 jwt.decode(tok, key, algorithms=["HS256"])
 jwt.decode(tok, options={"verify_signature": True})
 jwt.encode(claims, key, algorithm="HS256")
+def add_cors(resp):
+    origin = request.headers.get("Origin")
+    if origin in ALLOWED_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+    return resp
+def add_public_cors(resp):
+    resp.headers["Access-Control-Allow-Origin"] = request.headers.get("Origin")
+    return resp
 def is_authenticated(tok):
     try:
         check(tok)
@@ -65,7 +84,9 @@ CORS_ALLOW_CREDENTIALS = True
 CLEAN_CORS_DJANGO = '''CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = False
 '''
-BAD_JS = '''// ruleid: perun.js.jwt-unverified
+BAD_JS = '''// ruleid: perun.js.jwt-decode-unverified
+const claims = jwt.decode(tok);
+// ruleid: perun.js.jwt-unverified
 jwt.verify(tok, key, { algorithms: ["HS256", "none"] });
 // ruleid: perun.js.jwt-unverified
 jwt.sign(claims, "", { algorithm: "none" });
