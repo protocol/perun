@@ -325,8 +325,10 @@ def lf(rule, f, n, sec=""):
     try: ln = open(f, errors="replace").read().split("\n")[n - 1] if n >= 1 else ""
     except (OSError, IndexError, TypeError): ln = ""
     ln += " " + sec  # gitleaks: its matched value joins the line, so a rule judges the value even where the file moved
-    if re.search(r"jdbc|postgres|mongo|uri", r):  # every password on the line must be a literal placeholder; the host never decides
+    if re.search(r"jdbc|postgres|mongo|uri|basic auth", r):  # (detect-secrets "Basic Auth Credentials" too) every password on the line must be a literal placeholder; the host never decides
         ps = re.findall(r"//[^:/@\s\"']+:([^@\s\"']*)@", ln) or re.findall(r"password=([^&\s\"']+)", ln, re.I)
+        if "basic auth" in r:  # detect-secrets flags the line, not the value: any other credential-shaped token (Basic/Bearer value, token=, Authorization:, password=) must be a placeholder too
+            ps += [g for m in re.finditer(r"(?i)\b(?:basic|bearer)\s+([\w+/=.~-]+)|(?:token|api[_-]?key|secret|passw(?:or)?d)[\"']?\s*[=:]\s*[\"']?([^\s\"'&@,;]+)|authorization[\"']?\s*[=:]\s*[\"']?(?:\w+\s+)?([^\s\"',;]+)", ln) for g in m.groups() if g]
         if ps and all(re.fullmatch(r"pass(word|wd)?|example|changeme|secret|x{3,}|<[^>]*>|\$\{[^}]*\}", p, re.I) for p in ps): return "placeholder password"
     elif "circle" in r or "generic" in r:
         if LOCK.search(f) and re.search(r"integrity|checksum|hash|sha\d+|[0-9a-f]{40,}", ln, re.I): return "content hash in a lockfile or manifest"
@@ -604,7 +606,12 @@ elif kind == "njsscan":  # same per-rule severity as mobsfscan, over both the no
 elif kind == "sobelow":  # rows for every finding, the confidence tier in the message; the scan covers the whole app, the shell keeps changed files
     rows = [(os.path.relpath(x["file"]), x["line"] if isinstance(x.get("line"), int) else 0, cl(x["type"]), cl(f"{t} confidence")) for t in ("high", "medium", "low") for x in d["findings"][t + "_confidence"]]
 elif kind == "detect-secrets":  # one row per potential secret; the message never carries the hashed or plain value
-    rows = [(os.path.relpath(fn), x["line_number"] if isinstance(x.get("line_number"), int) else 0, cl(x["type"]), "potential secret (value not printed)") for fn, v in d["results"].items() for x in v]
+    rows = []
+    for fn, v in d["results"].items():
+        for x in v:
+            n = x["line_number"] if isinstance(x.get("line_number"), int) else 0
+            w = lf(x["type"], os.path.relpath(fn), n) if x["type"] == "Basic Auth Credentials" else ""  # strict URI placeholder rule, as trufflehog
+            rows.append((os.path.relpath(fn), n, cl(x["type"]), "potential secret (value not printed)" + (f" [likely-fixture: {w}]" if w else "")))
 elif kind == "psalm":  # taint findings only (is_security); psalm exits 2 on any issue
     rows = [(nf(x["file_name"]), x["line_from"], cl(x.get("type")), cl(f"{x.get('severity')}: {x.get('message')}")) for x in d if x.get("is_security")]
 elif kind == "gosec":
@@ -1589,7 +1596,7 @@ def fx(p): return FXD.search(p) or FXB.search(p.rsplit("/", 1)[-1])
 def row(t):
     d = {"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "rule": t[3], "message": t[4], "text": f"{t[3]}: {t[4]}", "tool": t[0]}
     lft = "[likely-fixture:" in t[4]  # a scanner-side demotion (lf in sjson): the message already says why
-    if t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "invisible-chars") and (lft or fx(t[1])):
+    if lft or (t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "invisible-chars") and fx(t[1])):  # detect-secrets is hinted only by lf, never by path alone
         d["hint"] = "likely-fixture"; d["text"] += "" if lft else " [likely-fixture]"
     return d
 # Low-confidence buckets: generic-api-key (the low-signal rule) hits from gitleaks or gitleaks-history collapse when they are more than 3 in one group:
