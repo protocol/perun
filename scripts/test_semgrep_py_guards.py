@@ -53,6 +53,10 @@ def ssrf_mapping_user_built():
     # ruleid: perun.py.ssrf
     return requests.get(url).text
 
+def ssrf_getlist():
+    # ruleid: perun.py.ssrf
+    return requests.get(request.args.getlist("u")[0]).text
+
 def ssrf_set_request():
     url = request.args["url"]
     allow = set(request.args.getlist("a"))
@@ -232,6 +236,18 @@ def uac_mapping_user_built():
     # ruleid: perun.py.unsafe-api-consumption
     return requests.get(url).text
 
+API_URL = "https://api.example.com/status"
+
+def uac_const_chained():
+    # ok: perun.py.unsafe-api-consumption
+    return requests.get(API_URL, timeout=5).text
+
+def uac_response_chained():
+    r = requests.get("https://api.example.com/cfg")
+    nxt = r.json()["next"]
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(nxt).text
+
 def uac_set_request():
     url = request.args["url"]
     allow = set(request.args.getlist("a"))
@@ -319,7 +335,7 @@ def annotated(body, kind):
 
 
 want, ok = annotated(PY, "ruleid"), annotated(PY, "ok")
-assert {i for i, _ in want | ok} == set(IDS) and len(want) == 21 and len(ok) == 6, (len(want), len(ok))
+assert {i for i, _ in want | ok} == set(IDS) and len(want) == 22 and len(ok) == 6, (len(want), len(ok))
 
 rule = open(os.path.join(RULES, "py.yml")).read()
 assert "- id: perun.py.xxe-lxml" in rule and "resolve_entities=True" in rule and "no_network=False" in rule
