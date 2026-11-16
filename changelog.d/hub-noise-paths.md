@@ -1,3 +1,4 @@
 ### Changed
 - In a whole-repo `--full` audit, `review_checks.sh` keeps semgrep, bandit and ruff-security off whole files under `mocks/`, `fixtures/`, `e2e/`, `__mocks__/` and `testdata/`. A diff review never skips a file, so a vuln added there is still flagged. Each skipped file is a `not-checked` row in the report and a count on stderr. `REVIEW_NOISE_RE` replaces the pattern; an empty value scans those paths too. Secret scanners still read them.
 - bandit runs with `-s B404` and ruff-security with `--ignore S404` (an `import subprocess` carries no data flow); B603/S603, shell use and the semgrep command-injection taint rule are unchanged. `MAX_FALSE_POSITIVES` stays 25 until CI measures the real count.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 61681→62695 noise-path scan rule and rule-id skips documented
