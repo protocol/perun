@@ -83,6 +83,13 @@ sgh=$(mktemp -d "$td/review-sg.XXXXXX") # semgrep HOME: the macOS agent sandbox 
 XRE='(^|/)(node_modules|\.claude/worktrees|vendor|dist|build|\.git|\.venv|venv|target|__pycache__)/'
 if [ "$wr" = 1 ]; then all=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$base" HEAD); else all=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$base"...HEAD); fi
 files=$(printf '%s\n' "$all" | grep -Ev "$XRE" || true)
+# Whole-file noise paths for the code scanners only (semgrep, bandit, ruff-security): test doubles and sample data hold deliberately unsafe code. Secret scanners still read them.
+# Whole-repo audits (--full) only: a file in a PR diff is never skipped (a change could hide a vuln there). REVIEW_NOISE_RE replaces the ERE; set it empty to scan these paths too.
+# noise F: true when F is excluded. Every skipped file becomes a not-checked row and a stderr count, never silent.
+NRE=${REVIEW_NOISE_RE-'(^|/)(mocks|fixtures|e2e|__mocks__|testdata)/'}
+noise() { [ "$wr" = 1 ] && [ -n "$NRE" ] && [[ $1 =~ $NRE ]]; }
+# nskip TOOL FILES: report skipped noise files (one per line) as not-checked rows plus a stderr count.
+nskip() { echo "review_checks: $1 skipped $(printf '%s\n' "$2" | grep -c .) file(s) under mocks/, fixtures/, e2e/, __mocks__/ or testdata/ in the --full audit (REVIEW_NOISE_RE): NOT CHECKED" >&2; while IFS= read -r f; do add "$1" "$f" 0 not-checked "noise path excluded by REVIEW_NOISE_RE, not scanned"; done <<<"$2"; }
 # One-per-line copy of $files for exact-line membership tests: grep reads this file, never a pipe (a `printf | grep -q` that matches early
 # SIGPIPEs the writer, and pipefail then drops the match once the list outgrows the pipe buffer).
 printf '%s\n' "$files" >"$td/files"
@@ -832,7 +839,8 @@ if [ ! -e "$sgc" ]; then
   else skip semgrep "REVIEW_SEMGREP_CONFIG must be an existing local path"; fi
 elif have "$sgbin"; then
   sg=() sgwas=$ran sgok=0 sgerr=0 sgzero=0 sgj=() sgb=0 sgrx=0 sgbun=(--config "$sgc"); [ "$lease" != degraded ] || { sgj=(--jobs 1); w1+=" semgrep"; }
-  while IFS= read -r f; do [ -f "$f" ] && sg+=("$f"); done <<<"$files"
+  sgn=; while IFS= read -r f; do [ -f "$f" ] || continue; if noise "$f"; then sgn+=$f$'\n'; else sg+=("$f"); fi; done <<<"$files"
+  [ -z "$sgn" ] || nskip semgrep "${sgn%$'\n'}"
   # sgrun CONFIG...: scan one chunk. sgreg=1 (seen by run_one) while the p/default pack (registry or snapshot) is in CONFIG (4 args, not 2), so its timeout is soft: the loop reruns with the bundled rules.
   sgrun() { local sgreg=0; [ $# -le 2 ] || sgreg=1; run_one semgrep env HOME="$sgh" XDG_CACHE_HOME="$sgh" SEMGREP_USER_HOME="$sgh" SEMGREP_SEND_METRICS=off "$sgbin" ${sgsub[@]+"${sgsub[@]}"} "$@" ${sgj[@]+"${sgj[@]}"} --json --quiet ${sgx[@]+"${sgx[@]}"} -- "${sg[@]:i:200}"; }
   # One call per 200 files: typically a single run, but bounded argv and a timeout that is not shared by everything.
@@ -986,7 +994,7 @@ hubcmd() {
   case $t in
     zizmor) cmd=(zizmor --format=json --offline "$@"); okrc="11 12 13 14" ;; # 11-14 = findings (docs.zizmor.sh/usage)
     actionlint) cmd=(actionlint -format '{{json .}}' "$@"); okrc="1" ;; # exit 1 = findings, 2 = bad flag, 3 = fatal (actionlint -h; checked against a real run)
-    bandit) cmd=(bandit -q -f json --exit-zero "$@") ;;
+    bandit) cmd=(bandit -q -f json --exit-zero -s B404 "$@") ;; # -s B404 (import subprocess) flags no data flow; B603, B602, B605 and B607 stay on, and semgrep's taint rule reports untrusted input reaching a command
     gosec) jf=$rep; : >"$rep"; cmd=(env GOPROXY=off gosec -fmt=json -no-fail -out "$rep" ./...) ;;
     # GRYPE_CHECK_FOR_APP_UPDATE=false: grype's own-version check calls toolbox-data.anchore.io even with the DB update off (env var, not a flag: an older grype crashes on an unknown flag)
     govulncheck) cmd=(env GOPROXY=off GOTOOLCHAIN=local govulncheck -format json ./...) ;; # -format json exits 0 even with findings; the vuln DB (vuln.go.dev) is fetched, so an offline run crashes and reads as not run
@@ -994,7 +1002,7 @@ hubcmd() {
     # CKV_SKIP_PACKAGE_UPDATE_CHECK=true: --skip-download leaves checkov's own-version lookup (pypi.org) on; env var, not a flag, so an older checkov ignores it
     checkov) cmd=(env CKV_SKIP_PACKAGE_UPDATE_CHECK=true checkov -f "$1" -o json --quiet --skip-download --soft-fail) ;;
     hadolint) cmd=(hadolint -f json --no-fail "$1") ;;
-    ruff-security) cmd=(ruff check --select S --output-format json --no-cache --exit-zero "$@") ;;
+    ruff-security) cmd=(ruff check --select S --ignore S404 --output-format json --no-cache --exit-zero "$@") ;; # same rule id as bandit's B404 above
     syft) sb=$(mktemp "${TMPDIR:-/tmp}/review_sbom.XXXXXX"); cmd=(env SYFT_CHECK_FOR_APP_UPDATE=false syft "$1" -o "syft-json=$sb") ;; # the update check phones home; the SBOM outlives the run
     staticcheck) cmd=(env GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly GOWORK=off staticcheck -f json ./...); okrc="1" ;; # exit 1 = a problem found, but also a setup failure (lintcmd/cmd.go): empty output with exit 1 is not run, and a missing module cache fails offline; one JSON object per line
     # cargo-deny: --offline is global (docs: no network for cargo or cargo-deny; fetch policy Disallow); --format json prints one JSON object per line on stderr (merged into $out); exit is a bitset of failed checks (advisories 1, bans 2, licenses 4, sources 8), so 1-15 are findings, but 1 is also a plain crash: sjson and the guard below need an error diagnostic
@@ -1032,6 +1040,13 @@ hubcmd() {
 }
 while IFS=';' read -r hn hs hm hre _ hh; do
   hf=$(changed "$hre"); [ -n "$hf" ] || continue
+  case $hn in bandit|ruff-security)
+    hfn=$(printf '%s\n' "$hf" | while IFS= read -r f; do noise "$f" && printf '%s\n' "$f"; done || true)
+    if [ -n "$hfn" ]; then
+      nskip "$hn" "$hfn"
+      hf=$(printf '%s\n' "$hf" | grep -vxFf <(printf '%s\n' "$hfn") || true); [ -n "$hf" ] || continue
+    fi ;;
+  esac
   # Helm chart templates are not plain manifests and the hub does not render charts: named as unchecked surface, never dropped silently
   if [ "$hn" = kubescape ] && printf '%s\n' "$hf" | grep -qE '(^|/)templates/'; then echo "NOT CHECKED: kubescape (Helm chart templates are not rendered by the hub)" >&2; add kubescape "" 0 not-checked "Helm chart templates are not rendered by the hub"; fi
   case $hn in
@@ -1621,7 +1636,7 @@ def lab(t):
     b = t.split("(")[0]
     return t + (f" (degraded: lease full{', nice 19' if sys.argv[7] == '1' else ''}{', 1 worker' if b in w1 else ''})" if b in dg else "")
 print(f"review_checks: {n - nc} findings; {sys.argv[4]} files excluded; analyzers ran: {', '.join(lab(t) for t in sys.argv[2].split()) or 'none'}; skipped (not installed): {', '.join(sys.argv[3].split()) or 'none'}", file=sys.stderr)
-if nc: print(f"review_checks: {nc} not-checked row(s) (surface a tool did not cover, not findings)", file=sys.stderr)
+if nc: print(f"review_checks: {nc} not-checked row(s) (surface a tool did not cover, not findings; those files were not read, so no verdict covers them)", file=sys.stderr)
 if ud:
     k = sum(r["new"] is None for r in out)
     print(f"review_checks: {sum(r['new'] is True for r in out)} of {n} rows are on lines this diff adds" + (f", {k} unknown (file differs from HEAD)" if k else ""), file=sys.stderr)
