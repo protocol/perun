@@ -48,7 +48,7 @@ row() { jq -e --arg t "$1" --arg f "$2" --arg r "$3" 'any(.[]; .tool==$t and .fi
 nck() { jq -e --arg t "$1" 'any(.[]; .tool==$t and .rule=="not-checked" and .file=="")' "$T/out" >/dev/null; }
 : >"$HUB_LOG"; run "$T/bin"
 row ruff-security app.py S105 && ok "ruff-security: S105 row on app.py" || bad "ruff-security row"
-grep -q 'ruff check --select S --output-format json' "$HUB_LOG" && ok "ruff-security: runs --select S as JSON" || bad "ruff args"
+grep -q 'ruff check --select S --ignore S404 --output-format json' "$HUB_LOG" && ok "ruff-security: runs --select S (S404 ignored) as JSON" || bad "ruff args"
 row kube-linter deploy.yaml latest-tag && ok "kube-linter: row on the manifest" || bad "kube-linter row"
 grep -q 'kube-linter lint --format json ./deploy.yaml$' "$HUB_LOG" && ok "kube-linter: only the manifest, not plain.yaml, a Helm template or kustomization.yaml" || bad "kube-linter args"
 row brakeman app/models/u.rb SQL && ok "brakeman: row on the changed file" || bad "brakeman row"
