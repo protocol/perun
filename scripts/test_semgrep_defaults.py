@@ -51,6 +51,20 @@ def decode_opts(tok, key):
     opts = {"verify_signature": False}
     # ruleid: perun.py.jwt-unverified
     return jwt.decode(tok, key, options=opts)
+def decode_dict_call(tok, key):
+    # ruleid: perun.py.jwt-unverified
+    return jwt.decode(tok, key, options=dict(verify_signature=False))
+def decode_complete(tok, key):
+    # ruleid: perun.py.jwt-unverified
+    return jwt.decode_complete(tok, key, options={"verify_signature": False})
+def decode_complete_var(tok, key):
+    opts = dict(verify_signature=False)
+    # ruleid: perun.py.jwt-unverified
+    return jwt.decode_complete(tok, key, options=opts)
+def cors_update(resp):
+    # ruleid: perun.py.cors-reflected-origin
+    resp.headers.update({"Access-Control-Allow-Origin": request.headers.get("Origin"), "Access-Control-Allow-Credentials": "true"})
+    return resp
 def is_authenticated(tok):
     # ruleid: perun.py.auth-fails-open
     try:
@@ -83,6 +97,11 @@ def add_const_cors(resp):
 def decode_opts_verified(tok, key):
     opts = {"verify_signature": True}
     return jwt.decode(tok, key, algorithms=["HS256"], options=opts)
+def decode_dict_verified(tok, key):
+    return jwt.decode(tok, key, algorithms=["HS256"], options=dict(verify_signature=True))
+def update_const_cors(resp):
+    resp.headers.update({"Access-Control-Allow-Origin": "https://app.example.com", "Access-Control-Allow-Credentials": "true"})
+    return resp
 def add_public_cors(resp):
     resp.headers["Access-Control-Allow-Origin"] = request.headers.get("Origin")
     return resp
@@ -109,6 +128,42 @@ BAD_JS = '''// ruleid: perun.js.jwt-decode-unverified
 const claims = jwt.decode(tok);
 // ruleid: perun.js.jwt-decode-unverified
 const claims2 = require("jsonwebtoken").decode(tok);
+// accepted noise: decode then verify the same token (a kid lookup) is still reported
+function kidThenVerify(tok, keys) {
+  // ruleid: perun.js.jwt-decode-unverified
+  const kid = jwt.decode(tok, { complete: true }).header.kid;
+  return jwt.verify(tok, keys[kid], { algorithms: ["HS256"] });
+}
+function verifyOtherToken(a, b) {
+  // ruleid: perun.js.jwt-decode-unverified
+  const c = jwt.decode(a);
+  return jwt.verify(b, key);
+}
+function decodeBeforeVerify(t, other) {
+  // ruleid: perun.js.jwt-decode-unverified
+  const c = jwt.decode(t);
+  jwt.verify(other, key);
+  return c;
+}
+function verifyDead(t) {
+  if (false) { jwt.verify(t, key); }
+  // ruleid: perun.js.jwt-decode-unverified
+  return jwt.decode(t);
+}
+function unrelatedVerify(t, v) {
+  v.verify(x);
+  // ruleid: perun.js.jwt-decode-unverified
+  return jwt.decode(t);
+}
+function koaCors(ctx) {
+  ctx.set("Access-Control-Allow-Credentials", "true");
+  // ruleid: perun.js.cors-reflected-origin
+  ctx.set("Access-Control-Allow-Origin", ctx.request.headers.origin);
+}
+function objectCors(req, res) {
+  // ruleid: perun.js.cors-reflected-origin
+  res.set({ "Access-Control-Allow-Origin": req.headers.origin, "Access-Control-Allow-Credentials": "true" });
+}
 class Session {
   check(t) {
     // ruleid: perun.js.jwt-decode-unverified
@@ -151,13 +206,12 @@ const isAuthorized = (req) => {
 CLEAN_JS = '''jwt.verify(tok, key, { algorithms: ["HS256"] });
 j.decode(tok);
 jwt2.decode(tok);
-function kidThenVerify(tok, keys) {
-  const kid = jwt.decode(tok, { complete: true }).header.kid;
-  return jwt.verify(tok, keys[kid], { algorithms: ["HS256"] });
-}
 function constOrigin(req, res) {
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Origin", "https://app.example.com");
+}
+function constObject(res) {
+  res.set({ "Access-Control-Allow-Origin": "https://app.example.com", "Access-Control-Allow-Credentials": "true" });
 }
 jwt.sign(claims, key, { algorithm: "HS256" });
 async function verifyToken(req, res, next) {

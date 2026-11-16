@@ -35,15 +35,24 @@ rules:
 - id: perun.py.jwt-unverified
   languages: [python]
   severity: ERROR
-  message: JWT signature checking is off or the none algorithm is allowed, so anyone can forge a token. Verify with a fixed algorithm list and the real key.
+  message: JWT signature checking is off or the none algorithm is allowed, so anyone can forge a token. Verify with a fixed algorithm list and the real key. Known limit - an options dict whose verification is turned back on before use is still reported.
   pattern-either:
   - pattern: '$J.decode(..., options={..., "verify_signature": False, ...}, ...)'
   - pattern: $J.decode(..., verify=False, ...)
+  - pattern: '$J.decode_complete(..., options={..., "verify_signature": False, ...}, ...)'
+  - pattern: $J.decode(..., options=dict(..., verify_signature=False, ...), ...)
+  - pattern: $J.decode_complete(..., options=dict(..., verify_signature=False, ...), ...)
   - patterns:
-    - pattern-inside: |
-        $O = {..., "verify_signature": False, ...}
-        ...
-    - pattern: $J.decode(..., options=$O, ...)
+    - pattern-either:
+      - pattern-inside: |
+          $O = {..., "verify_signature": False, ...}
+          ...
+      - pattern-inside: |
+          $O = dict(..., verify_signature=False, ...)
+          ...
+    - pattern-either:
+      - pattern: $J.decode(..., options=$O, ...)
+      - pattern: $J.decode_complete(..., options=$O, ...)
   - pattern: $J.decode(..., algorithms=[..., "none", ...], ...)
   - pattern: $J.encode(..., algorithm="none", ...)
   paths:
@@ -60,109 +69,120 @@ rules:
 - id: perun.js.jwt-decode-unverified
   languages: [javascript, typescript]
   severity: WARNING
-  message: jwt.decode reads the claims without checking the signature, so a forged token is accepted when the result drives an auth decision. Use jwt.verify with the real key and a fixed algorithm list. Not reported when the same function also calls verify (a kid lookup before verification). Known limits - an aliased decode (const d = jwt.decode) and jwt['decode'](t) are not matched.
-  patterns:
-  - pattern-either:
-    - pattern: jwt.decode(...)
-    - pattern: jsonwebtoken.decode(...)
-    - pattern: require("jsonwebtoken").decode(...)
-    - pattern: $X.jwt.decode(...)
-  - pattern-not-inside:
-      pattern-either:
-      - pattern: |
-          function $F(...) {
-            ...
-            <... $V.verify(...) ...>
-            ...
-          }
-      - pattern: |
-          (...) => {
-            ...
-            <... $V.verify(...) ...>
-            ...
-          }
-      - pattern: |
-          class $C {
-            $F(...) {
-              ...
-              <... $V.verify(...) ...>
-              ...
-            }
-          }
+  message: jwt.decode reads the claims without checking the signature, so a forged token is accepted when the result drives an auth decision. Use jwt.verify with the real key and a fixed algorithm list. Accepted noise - a decode before verify in the same function (a kid lookup) is also reported, because a verify call elsewhere in the function proves nothing about this token. Known limits - an aliased decode (const d = jwt.decode) and jwt['decode'](t) are not matched.
+  pattern-either:
+  - pattern: jwt.decode(...)
+  - pattern: jsonwebtoken.decode(...)
+  - pattern: require("jsonwebtoken").decode(...)
+  - pattern: $X.jwt.decode(...)
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
 - id: perun.js.cors-reflected-origin
   languages: [javascript, typescript]
   severity: WARNING
-  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. Known limits - an Origin read into a local variable first is not followed, and a guard such as an early return for an unlisted origin does not silence the finding.
-  patterns:
-  - pattern-inside:
-      pattern-either:
-      - pattern: |
-          function $F(...) {
-            ...
-            $C.$M2($K2, $V2);
-            ...
-          }
-      - pattern: |
-          (...) => {
-            ...
-            $C.$M2($K2, $V2);
-            ...
-          }
-  - pattern: $R.$M($K, $O)
-  - metavariable-regex:
-      metavariable: $M
-      regex: ^(?:setHeader|header|set|append)$
-  - metavariable-regex:
-      metavariable: $M2
-      regex: ^(?:setHeader|header|set|append)$
-  - metavariable-regex:
-      metavariable: $K
-      regex: (?i)^["']access-control-allow-origin["']$
-  - metavariable-regex:
-      metavariable: $K2
-      regex: (?i)^["']access-control-allow-credentials["']$
-  - metavariable-regex:
-      metavariable: $V2
-      regex: (?i)^(?:["']true["']|true)$
-  - metavariable-regex:
-      metavariable: $O
-      regex: (?i)^\w+\.(?:headers\.origin|headers\[["']origin["']\]|(?:get|header)\(["']origin["']\))$
+  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. Known limits - an Origin read into a local variable first is not followed, credentials and reflection split across functions are not matched, and a guard such as an early return for an unlisted origin does not silence the finding.
+  pattern-either:
+  - patterns:
+    - pattern-inside:
+        pattern-either:
+        - pattern: |
+            function $F(...) {
+              ...
+              $C.$M2($K2, $V2);
+              ...
+            }
+        - pattern: |
+            (...) => {
+              ...
+              $C.$M2($K2, $V2);
+              ...
+            }
+    - pattern: $R.$M($K, $O)
+    - metavariable-regex:
+        metavariable: $M
+        regex: ^(?:setHeader|header|set|append)$
+    - metavariable-regex:
+        metavariable: $M2
+        regex: ^(?:setHeader|header|set|append)$
+    - metavariable-regex:
+        metavariable: $K
+        regex: (?i)^["']access-control-allow-origin["']$
+    - metavariable-regex:
+        metavariable: $K2
+        regex: (?i)^["']access-control-allow-credentials["']$
+    - metavariable-regex:
+        metavariable: $V2
+        regex: (?i)^(?:["']true["']|true)$
+    - metavariable-regex:
+        metavariable: $O
+        regex: (?i)^[\w.]+\.(?:headers\.origin|headers\[["']origin["']\]|(?:get|header)\(["']origin["']\))$
+  - patterns:
+    - pattern-either:
+      - pattern: '$R.set({..., "$K": $O, ..., "$K2": $V2, ...})'
+      - pattern: '$R.set({..., "$K2": $V2, ..., "$K": $O, ...})'
+    - metavariable-regex:
+        metavariable: $K
+        regex: (?i)^access-control-allow-origin$
+    - metavariable-regex:
+        metavariable: $K2
+        regex: (?i)^access-control-allow-credentials$
+    - metavariable-regex:
+        metavariable: $V2
+        regex: (?i)^(?:["']true["']|true)$
+    - metavariable-regex:
+        metavariable: $O
+        regex: (?i)^[\w.]+\.(?:headers\.origin|headers\[["']origin["']\]|(?:get|header)\(["']origin["']\))$
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
 - id: perun.py.cors-reflected-origin
   languages: [python]
   severity: WARNING
-  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. Known limits - an Origin read into a local variable first is not followed, and a guard such as an early return for an unlisted origin does not silence the finding.
-  patterns:
-  - pattern-inside:
-      pattern-either:
-      - pattern: |
-          def $F(...):
-            ...
-            $C[$K2] = $V2
-            ...
-      - pattern: |
-          def $F(...):
-            ...
-            $C.$M2($K2, $V2)
-            ...
-  - pattern-either:
-    - pattern: $H[$K] = $O
-    - pattern: $H.$M($K, $O)
-  - metavariable-regex:
-      metavariable: $K
-      regex: (?i)^["']access-control-allow-origin["']$
-  - metavariable-regex:
-      metavariable: $K2
-      regex: (?i)^["']access-control-allow-credentials["']$
-  - metavariable-regex:
-      metavariable: $V2
-      regex: (?i)^(?:["']true["']|true)$
-  - metavariable-regex:
-      metavariable: $O
-      regex: (?i)^request\.(?:headers\.get\(["']origin["']\)|headers\[["']origin["']\]|META\.get\(["']http_origin["']\)|META\[["']http_origin["']\])$
+  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. Known limits - an Origin read into a local variable first is not followed, credentials and reflection split across functions are not matched, and a guard such as an early return for an unlisted origin does not silence the finding.
+  pattern-either:
+  - patterns:
+    - pattern-inside:
+        pattern-either:
+        - pattern: |
+            def $F(...):
+              ...
+              $C[$K2] = $V2
+              ...
+        - pattern: |
+            def $F(...):
+              ...
+              $C.$M2($K2, $V2)
+              ...
+    - pattern-either:
+      - pattern: $H[$K] = $O
+      - pattern: $H.$M($K, $O)
+    - metavariable-regex:
+        metavariable: $K
+        regex: (?i)^["']access-control-allow-origin["']$
+    - metavariable-regex:
+        metavariable: $K2
+        regex: (?i)^["']access-control-allow-credentials["']$
+    - metavariable-regex:
+        metavariable: $V2
+        regex: (?i)^(?:["']true["']|true)$
+    - metavariable-regex:
+        metavariable: $O
+        regex: (?i)^request\.(?:headers\.get\(["']origin["']\)|headers\[["']origin["']\]|META\.get\(["']http_origin["']\)|META\[["']http_origin["']\])$
+  - patterns:
+    - pattern-either:
+      - pattern: '$H.update({..., $K: $O, ..., $K2: $V2, ...})'
+      - pattern: '$H.update({..., $K2: $V2, ..., $K: $O, ...})'
+    - metavariable-regex:
+        metavariable: $K
+        regex: (?i)^["']access-control-allow-origin["']$
+    - metavariable-regex:
+        metavariable: $K2
+        regex: (?i)^["']access-control-allow-credentials["']$
+    - metavariable-regex:
+        metavariable: $V2
+        regex: (?i)^(?:["']true["']|true)$
+    - metavariable-regex:
+        metavariable: $O
+        regex: (?i)^request\.(?:headers\.get\(["']origin["']\)|headers\[["']origin["']\]|META\.get\(["']http_origin["']\)|META\[["']http_origin["']\])$
   paths:
     exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
 - id: perun.py.auth-fails-open
