@@ -19,6 +19,7 @@ from lxml import etree
 
 ALLOWED = {"https://api.example.com/status"}
 ALLOWED_STR = "https://api.example.com/status"
+ALLOWED_MAP = {"status": "https://api.example.com/status"}
 
 def ssrf_str_constant():
     url = request.args["url"]
@@ -35,6 +36,20 @@ def ssrf_guarded():
     url = request.args["url"]
     if url not in ALLOWED:
         abort(400)
+    # ruleid: perun.py.ssrf
+    return requests.get(url).text
+
+def ssrf_mapping_ok():
+    url = ALLOWED_MAP.get(request.args.get("t", ""))
+    if url is None:
+        abort(400)
+    resp = requests.get(url)
+    # ok: perun.py.ssrf
+    return resp.text
+
+def ssrf_mapping_user_built():
+    targets = {"a": request.args["a"]}
+    url = targets.get("a")
     # ruleid: perun.py.ssrf
     return requests.get(url).text
 
@@ -183,6 +198,7 @@ from flask import abort, request
 
 ALLOWED = {"https://api.example.com/status"}
 ALLOWED_STR = "https://api.example.com/status"
+ALLOWED_MAP = {"status": "https://api.example.com/status"}
 
 def uac_str_constant():
     url = request.args["url"]
@@ -201,6 +217,20 @@ def uac_guarded():
         abort(400)
     # ruleid: perun.py.unsafe-api-consumption
     return requests.get(url, timeout=5).text
+
+def uac_mapping_ok():
+    url = ALLOWED_MAP.get(request.args.get("t", ""))
+    if url is None:
+        abort(400)
+    resp = requests.get(url)
+    # ok: perun.py.unsafe-api-consumption
+    return resp.text
+
+def uac_mapping_user_built():
+    targets = {"a": request.args["a"]}
+    url = targets.get("a")
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(url).text
 
 def uac_set_request():
     url = request.args["url"]
@@ -289,7 +319,7 @@ def annotated(body, kind):
 
 
 want, ok = annotated(PY, "ruleid"), annotated(PY, "ok")
-assert {i for i, _ in want | ok} == set(IDS) and len(want) == 20 and len(ok) == 5, (len(want), len(ok))
+assert {i for i, _ in want | ok} == set(IDS) and len(want) == 21 and len(ok) == 6, (len(want), len(ok))
 
 rule = open(os.path.join(RULES, "py.yml")).read()
 assert "- id: perun.py.xxe-lxml" in rule and "resolve_entities=True" in rule and "no_network=False" in rule

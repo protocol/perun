@@ -2,12 +2,13 @@ import requests
 from flask import Flask, abort, request
 
 app = Flask(__name__)
-ALLOWED = {'https://api.example.com/status'}
+TARGETS = {'status': 'https://api.example.com/status'}
 
 
 @app.route('/fetch')
 def fetch():
-    url = request.args['url']
-    if url not in ALLOWED:
+    url = TARGETS.get(request.args.get('t', ''))
+    if url is None:
         abort(400)
-    return requests.get(url, timeout=5).text
+    resp = requests.get(url, timeout=5)
+    return resp.text

@@ -316,8 +316,17 @@ rules:
       - pattern: httpx.$M($S, ...)
       - pattern: urllib.request.urlopen($S, ...)
       - pattern: urlopen($S, ...)
-    # ponytail: no allowlist-guard suppression. Semgrep cannot prove a container is a never-mutated all-literal constant or that the URL is not rebound, so a guarded call still reports.
+    # ponytail: no `in`-allowlist suppression. Semgrep cannot prove a container is a never-mutated all-literal constant or that the URL is not rebound, so such a guarded call still reports.
     - focus-metavariable: $S
+  pattern-sanitizers:
+  # A key lookup into an ALL_CAPS mapping returns one of its constants (the OWASP mapping allowlist). ponytail: an ALL_CAPS mapping filled from request data is not detected.
+  - patterns:
+    - pattern-either:
+      - pattern: $D.get(...)
+      - pattern: $D[...]
+    - metavariable-regex:
+        metavariable: $D
+        regex: ^[A-Z][A-Z0-9_]*$
 - id: perun.py.deserialize
   mode: taint
   languages: [python]
