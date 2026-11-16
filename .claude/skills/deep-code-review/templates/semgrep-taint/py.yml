@@ -369,6 +369,42 @@ rules:
       - pattern: yaml.unsafe_load($S, ...)
       - pattern: jsonpickle.decode($S, ...)
     - focus-metavariable: $S
+- id: perun.py.ssti
+  mode: taint
+  languages: [python]
+  severity: ERROR
+  message: Untrusted data is compiled as a template (CWE-1336, SSTI). Render a literal template and pass the data as context.
+  pattern-sources:
+  - patterns:
+    - pattern: $X
+    - pattern-either:
+      - pattern-inside: |
+          def $F(..., $X, ...):
+            ...
+      - pattern: request.$A.get(...)
+      - pattern: request.$A.getlist(...)
+      - pattern: request.$A[...]
+      - pattern: flask.request.$A.get(...)
+      - pattern: flask.request.$A.getlist(...)
+      - pattern: flask.request.$A[...]
+      - pattern: request.get_json(...)[...]
+      - pattern: request.get_json(...).get(...)
+      - pattern: flask.request.get_json(...)[...]
+      - pattern: flask.request.get_json(...).get(...)
+      - pattern: input(...)
+    - metavariable-regex:
+        metavariable: $X
+        regex: ^(?!self$|cls$)
+    - focus-metavariable: $X
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: jinja2.Template($S, ...)
+      - pattern: Template($S, ...)
+      - pattern: $E.from_string($S, ...)
+      - pattern: render_template_string($S, ...)
+      - pattern: flask.render_template_string($S, ...)
+    - focus-metavariable: $S
 - id: perun.py.xss
   mode: taint
   languages: [python]
