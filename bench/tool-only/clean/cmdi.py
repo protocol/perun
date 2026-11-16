@@ -2,4 +2,4 @@ import subprocess
 
 
 def ping(host: str):
-    return subprocess.call(["ping", "-c", "1", host])
+    return subprocess.call(["/sbin/ping", "-c", "1", host])

@@ -1,0 +1,2 @@
+### Changed
+- bench/tool-only: Go twins for CWE-89, 78 and 918 (the registry semgrep go rules already catch all three, so no perun Go rule). Clean twins for open redirect, SSRF, XSS and Terraform are now idiomatic-safe instead of tripping registry, bandit and checkov noise (local false positives 11 to 3); the frozen false-positive ceiling drops from 31 to 24. The scorer writes a root go.mod so gosec and staticcheck can load the Go twins.
