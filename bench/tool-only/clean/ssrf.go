@@ -16,5 +16,7 @@ func Fetch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	io.Copy(w, resp.Body)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		http.Error(w, "bad gateway", http.StatusBadGateway)
+	}
 }

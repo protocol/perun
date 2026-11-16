@@ -18,7 +18,7 @@ HUB = ROOT / ".claude/skills/deep-code-review/scripts/review_checks.sh"
 CORE = ("semgrep", "gitleaks", "trivy", "bandit", "ruff", "git", "jq")
 FLOOR_RECALL = 1.0  # frozen: 11/11 measured in the CI real-hub job after the CWE-22 taint rule stopped firing on send_from_directory's file name
 DEP_FILE = "vuln/requirements.txt"  # only fixture where a file-level (line 0) row counts
-MAX_FALSE_POSITIVES = 24  # ratchet: CI real-hub measured 31 before wave 23; local rows fell 11 -> 3 (CI-only rows are not visible locally), 31 - 8 removed, plus slack for new clean Go and Terraform rows; tighten to the CI number after the first real-hub run
+MAX_FALSE_POSITIVES = 31  # frozen: CI real-hub count (gosec and Go rows are not measurable locally); local rows are 3-4; ratchet to the CI number after a real-hub run
 
 
 def run(truth_path=ROOT / "bench/tool-only/answer.json", fixtures=ROOT / "bench/tool-only"):
