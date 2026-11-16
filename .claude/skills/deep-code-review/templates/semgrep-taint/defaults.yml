@@ -99,6 +99,7 @@ rules:
     - pattern-either:
       - pattern: $T.decode(...)
       - pattern: $T["decode"](...)
+      - pattern: $T.decode.$M(...)
     - focus-metavariable: $T
   - patterns:
     - pattern-either:
@@ -126,7 +127,7 @@ rules:
 - id: perun.js.cors-reflected-origin
   languages: [javascript, typescript]
   severity: WARNING
-  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. Taint rule - an Origin read (any case, any default or fallback, through aliases, locals and string methods) that reaches the header value is reported; a single-argument map lookup (ALLOWED[origin], ALLOWED.get(origin)) is treated as the allowlist. Known limits - credentials and reflection split across functions are not matched, and a membership guard (if origin in ALLOWED) does not silence the finding.
+  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. Taint rule - an Origin read (any case, any default or fallback, through aliases, locals and string methods) that reaches the header value is reported; a lookup in a module-level literal dict (ALLOWED[origin], ALLOWED.get(origin) where ALLOWED is a dict literal of strings) is treated as the allowlist, and any other lookup (a list index, a cache) is not. Known limits - credentials and reflection split across functions are not matched, an Origin read inside a helper function is not followed (cross-function taint needs Semgrep Pro), and a membership guard (if origin in ALLOWED) does not silence the finding.
   mode: taint
   pattern-sources:
   - pattern: $R.headers.origin
@@ -150,6 +151,9 @@ rules:
       - pattern: $MAP.get($X)
     - pattern-not: $MAP["..."]
     - pattern-not: $MAP.get("...")
+    - pattern-inside: |
+        var $MAP = {"$K": "...", ...};
+        ...
   pattern-sinks:
   - patterns:
     - pattern-inside:
@@ -186,9 +190,44 @@ rules:
         - pattern: "true"
     - focus-metavariable: $O
   - patterns:
+    - pattern-inside:
+        pattern-either:
+        - pattern: |
+            function $F(...) {
+              ...
+              $C.$M2($K2, $V2);
+              ...
+            }
+        - pattern: |
+            (...) => {
+              ...
+              $C.$M2($K2, $V2);
+              ...
+            }
+    - pattern: $H[$K] = $O
+    - metavariable-regex:
+        metavariable: $M2
+        regex: ^(?:setHeader|header|set|append)$
+    - metavariable-regex:
+        metavariable: $K
+        regex: (?i)^["']access-control-allow-origin["']$
+    - metavariable-regex:
+        metavariable: $K2
+        regex: (?i)^["']access-control-allow-credentials["']$
+    - metavariable-pattern:
+        metavariable: $V2
+        pattern-either:
+        - pattern: '"true"'
+        - pattern: "true"
+    - focus-metavariable: $O
+  - patterns:
     - pattern-either:
       - pattern: '$R.set({..., "$K": $O, ..., "$K2": $V2, ...})'
       - pattern: '$R.set({..., "$K2": $V2, ..., "$K": $O, ...})'
+      - pattern: '$R.writeHead($S, {..., "$K": $O, ..., "$K2": $V2, ...})'
+      - pattern: '$R.writeHead($S, {..., "$K2": $V2, ..., "$K": $O, ...})'
+      - pattern: 'Object.assign($R, {..., "$K": $O, ..., "$K2": $V2, ...})'
+      - pattern: 'Object.assign($R, {..., "$K2": $V2, ..., "$K": $O, ...})'
     - metavariable-regex:
         metavariable: $K
         regex: (?i)^access-control-allow-origin$
@@ -204,7 +243,7 @@ rules:
 - id: perun.py.cors-reflected-origin
   languages: [python]
   severity: WARNING
-  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. Taint rule - an Origin read (any case, any default or fallback, through aliases, locals and string methods) that reaches the header value is reported; a single-argument map lookup (ALLOWED[origin], ALLOWED.get(origin)) is treated as the allowlist. Known limits - credentials and reflection split across functions are not matched, and a membership guard (if origin in ALLOWED) does not silence the finding.
+  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. Taint rule - an Origin read (any case, any default or fallback, through aliases, locals and string methods) that reaches the header value is reported; a lookup in a module-level literal dict (ALLOWED[origin], ALLOWED.get(origin) where ALLOWED is a dict literal of strings) is treated as the allowlist, and any other lookup (a list index, a cache) is not. Known limits - credentials and reflection split across functions are not matched, an Origin read inside a helper function is not followed (cross-function taint needs Semgrep Pro), and a membership guard (if origin in ALLOWED) does not silence the finding.
   mode: taint
   pattern-sources:
   - patterns:
@@ -221,6 +260,9 @@ rules:
       - pattern: $MAP.get($X)
     - pattern-not: $MAP["..."]
     - pattern-not: $MAP.get("...")
+    - pattern-inside: |
+        $MAP = {"...": "...", ...}
+        ...
   pattern-sinks:
   - patterns:
     - pattern-inside:

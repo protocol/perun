@@ -137,6 +137,25 @@ def cors_nested(resp):
         # ruleid: perun.py.cors-reflected-origin
         resp.headers["Access-Control-Allow-Origin"] = o
     return resp
+def cors_memo_cache(resp):
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    o = request.headers.get("Origin")
+    MEMO[o] = o
+    # ruleid: perun.py.cors-reflected-origin
+    resp.headers["Access-Control-Allow-Origin"] = MEMO.get(o)
+    return resp
+def cors_unknown_map(resp):
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    o = LOOKUP.get(request.headers.get("Origin"), request.headers.get("Origin"))
+    # ruleid: perun.py.cors-reflected-origin
+    resp.headers["Access-Control-Allow-Origin"] = o
+    return resp
+def cors_fstring(resp):
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    o = request.headers.get("Origin")
+    # ruleid: perun.py.cors-reflected-origin
+    resp.headers["Access-Control-Allow-Origin"] = f"{o}"
+    return resp
 def is_authenticated(tok):
     # ruleid: perun.py.auth-fails-open
     try:
@@ -149,6 +168,8 @@ def is_authenticated(tok):
 CLEAN_PY = '''import os, jwt
 from flask_cors import CORS
 DEBUG = os.environ.get("ACME_DEBUG") == "1"
+ALLOWED_ORIGINS = {"https://app.example.com": "app"}
+ALLOWED = {"https://app.example.com": "https://app.example.com"}
 app.run(host="127.0.0.1", debug=False)
 app.add_middleware(CORSMiddleware, allow_origins=["https://app.example.com"], allow_credentials=True)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False)
@@ -365,6 +386,45 @@ function corsLowered(req, res) {
   // ruleid: perun.js.cors-reflected-origin
   res.setHeader("Access-Control-Allow-Origin", o.toLowerCase());
 }
+function corsObjectAssign(req, res) {
+  const o = req.headers.origin;
+  // ruleid: perun.js.cors-reflected-origin
+  Object.assign(res.headers, { "Access-Control-Allow-Origin": o, "Access-Control-Allow-Credentials": "true" });
+}
+function corsWriteHead(req, res) {
+  const o = req.headers.origin;
+  // ruleid: perun.js.cors-reflected-origin
+  res.writeHead(200, { "Access-Control-Allow-Origin": o, "Access-Control-Allow-Credentials": "true" });
+}
+function corsHeaderMap(req, res) {
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  const h = {};
+  // ruleid: perun.js.cors-reflected-origin
+  h["Access-Control-Allow-Origin"] = req.headers.origin;
+  res.set(h);
+}
+function corsArrayIndex(req, res) {
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  const o = [req.headers.origin][0];
+  // ruleid: perun.js.cors-reflected-origin
+  res.setHeader("Access-Control-Allow-Origin", o);
+}
+function corsMemoCache(req, res) {
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  const o = MEMO[req.headers.origin];
+  // ruleid: perun.js.cors-reflected-origin
+  res.setHeader("Access-Control-Allow-Origin", o);
+}
+function corsTemplate(req, res) {
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  const o = req.headers.origin;
+  // ruleid: perun.js.cors-reflected-origin
+  res.setHeader("Access-Control-Allow-Origin", `${o}`);
+}
+// ruleid: perun.js.jwt-decode-unverified
+const viaCall = jwt.decode.call(null, tok);
+// ruleid: perun.js.jwt-decode-unverified
+const viaApply = jwt.decode.apply(null, [tok]);
 class Session {
   check(t) {
     // ruleid: perun.js.jwt-decode-unverified
@@ -404,7 +464,14 @@ const isAuthorized = (req) => {
   }
 };
 '''
-CLEAN_JS = '''jwt.verify(tok, key, { algorithms: ["HS256"] });
+CLEAN_JS = '''const ALLOWED = { "https://app.example.com": "https://app.example.com" };
+jwt.verify(tok, key, { algorithms: ["HS256"] });
+// known limit, not a detection: an Origin read inside a helper needs cross-function taint (Semgrep Pro)
+function corsHelperRead(req, res) {
+  const h = (k) => req.headers[k];
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Origin", h("origin"));
+}
 function verifyDestructured(t) {
   const { verify } = require("jsonwebtoken");
   return verify(t, key, { algorithms: ["HS256"] });
