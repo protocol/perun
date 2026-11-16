@@ -2,22 +2,23 @@ package bench
 
 import (
 	"io"
+	"log"
 	"net/http"
-	"os"
 )
 
 func Download(w http.ResponseWriter, r *http.Request) {
-	root, err := os.OpenRoot("/srv/files")
-	if err != nil {
-		http.Error(w, "unavailable", http.StatusInternalServerError)
-		return
-	}
-	defer root.Close()
-	f, err := root.Open(r.URL.Query().Get("f"))
+	// http.Dir cleans the name and cannot escape its root directory.
+	f, err := http.Dir("/srv/files").Open(r.URL.Query().Get("f"))
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	defer f.Close()
-	io.Copy(w, f)
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Println(err)
+		}
+	}()
+	if _, err := io.Copy(w, f); err != nil {
+		log.Println(err)
+	}
 }
