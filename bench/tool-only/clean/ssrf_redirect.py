@@ -17,6 +17,8 @@ def proxy():
     if not allowed(url):
         abort(400)
     resp = requests.get(url, timeout=5, allow_redirects=False)
-    if resp.is_redirect and not allowed(urljoin(url, resp.headers.get('Location', ''))):
-        abort(400)
+    if resp.is_redirect:
+        if not allowed(urljoin(url, resp.headers.get('Location', ''))):
+            abort(400)
+        abort(502)
     return resp.text
