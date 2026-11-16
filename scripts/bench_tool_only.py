@@ -18,7 +18,7 @@ HUB = ROOT / ".claude/skills/deep-code-review/scripts/review_checks.sh"
 CORE = ("semgrep", "gitleaks", "trivy", "bandit", "ruff", "git", "jq")
 FLOOR_RECALL = 1.0  # frozen: 11/11 measured in the CI real-hub job after the CWE-22 taint rule stopped firing on send_from_directory's file name
 DEP_FILE = "vuln/requirements.txt"  # only fixture where a file-level (line 0) row counts
-MAX_FALSE_POSITIVES = 31  # frozen: 31 noise rows on the clean twins measured in the CI real-hub job (full hub: bandit, ruff, trivy, checkov, devskim, semgrep); a local run with fewer tools sees fewer
+MAX_FALSE_POSITIVES = 25  # frozen: 22 noise rows measured in the CI real-hub job on #2390 (gosec and Go rows are not measurable locally) + 3 from the ssrf_redirect twin (registry django and flask rules, perun.py.ssrf)
 
 
 def run(truth_path=ROOT / "bench/tool-only/answer.json", fixtures=ROOT / "bench/tool-only"):
@@ -28,6 +28,7 @@ def run(truth_path=ROOT / "bench/tool-only/answer.json", fixtures=ROOT / "bench/
             shutil.copytree(fixtures / d, Path(t) / d)
         # generated here so no committed text matches a secret pattern; keep on line 2 (answer.json: vuln/secret.py:2)
         (Path(t) / "vuln/secret.py").write_text("# Fictional credential for a bench fixture; not a real account.\nAPI_KEY = \"" + "q7Zk2XvB9mWc4T" + "nRj8LpD3sHf6YgA1eU" + "\"\n")
+        (Path(t) / "go.mod").write_text("module bench\n\ngo 1.21\n")  # gosec/staticcheck need a root module for the .go twins
         g = ["git", "-c", "user.name=b", "-c", "user.email=b@example.com"]
         for a in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "bench"]):
             subprocess.run(g + a, cwd=t, check=True, capture_output=True)
