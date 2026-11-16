@@ -88,7 +88,7 @@ router.get("/ok", async (ctx) => { exec("convert logo.png"); });
     r = json.loads(p.stdout)
     assert not r["errors"], r["errors"]
     hits = sorted((x["path"][-4:], x["start"]["line"]) for x in r["results"])
-    want = sorted([("v.py", 3), ("v.py", 4), ("v.py", 5), ("v.py", 6), ("v.py", 7), ("v.py", 16), ("v.py", 21), ("v.js", 1), ("v.js", 2), ("v.js", 3), ("v.js", 11), ("k.js", 1), ("k.js", 2), ("n.ts", 2), ("n.ts", 3), ("n.ts", 4)])
+    want = sorted([("v.py", 3), ("v.py", 4), ("v.py", 5), ("v.py", 6), ("v.py", 7), ("v.py", 13), ("v.py", 16), ("v.py", 21), ("v.js", 1), ("v.js", 2), ("v.js", 3), ("v.js", 11), ("k.js", 1), ("k.js", 2), ("n.ts", 2), ("n.ts", 3), ("n.ts", 4)])
     assert hits == want, hits
     shutil.rmtree(d)
 print("ok")

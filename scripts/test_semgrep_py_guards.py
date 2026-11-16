@@ -11,6 +11,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RULES = os.environ.get("RULES") or os.path.join(ROOT, ".claude", "skills", "deep-code-review", "templates", "semgrep-taint")
 
 PY = '''
+import flask
 import requests
 from flask import abort, redirect, request
 from django.http import HttpResponseRedirect
@@ -52,6 +53,14 @@ def ssrf_mapping_user_built():
     url = targets.get("a")
     # ruleid: perun.py.ssrf
     return requests.get(url).text
+
+def ssrf_getlist():
+    # ruleid: perun.py.ssrf
+    return requests.get(request.args.getlist("u")[0]).text
+
+def ssrf_flask_getlist():
+    # ruleid: perun.py.ssrf
+    return requests.get(flask.request.args.getlist("u")[0]).text
 
 def ssrf_set_request():
     url = request.args["url"]
@@ -232,6 +241,38 @@ def uac_mapping_user_built():
     # ruleid: perun.py.unsafe-api-consumption
     return requests.get(url).text
 
+API_URL = "https://api.example.com/status"
+
+def uac_const_chained():
+    # known limit: a constant-variable URL in the chained form still fires; skipping ALL_CAPS names was bypassable
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(API_URL, timeout=5).text
+
+def uac_caps_response_url():
+    # ruleid: perun.py.unsafe-api-consumption
+    CB = requests.get(API_URL).json()["cb"]
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(CB).text
+
+def uac_caps_response_sql(cur):
+    # ruleid: perun.py.unsafe-api-consumption
+    QUERY = requests.get(API_URL).json()["q"]
+    # ruleid: perun.py.unsafe-api-consumption
+    cur.execute(QUERY)
+
+# ruleid: perun.py.unsafe-api-consumption
+NEXT_URL = requests.get(API_URL).json()["next"]
+
+def uac_caps_global():
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(NEXT_URL).text
+
+def uac_response_chained():
+    r = requests.get("https://api.example.com/cfg")
+    nxt = r.json()["next"]
+    # ruleid: perun.py.unsafe-api-consumption
+    return requests.get(nxt).text
+
 def uac_set_request():
     url = request.args["url"]
     allow = set(request.args.getlist("a"))
@@ -319,7 +360,7 @@ def annotated(body, kind):
 
 
 want, ok = annotated(PY, "ruleid"), annotated(PY, "ok")
-assert {i for i, _ in want | ok} == set(IDS) and len(want) == 21 and len(ok) == 6, (len(want), len(ok))
+assert {i for i, _ in want | ok} == set(IDS) and len(want) == 23 and len(ok) == 6, (len(want), len(ok))
 
 rule = open(os.path.join(RULES, "py.yml")).read()
 assert "- id: perun.py.xxe-lxml" in rule and "resolve_entities=True" in rule and "no_network=False" in rule

@@ -925,7 +925,7 @@ assert "an argv array built elsewhere" in gb and "(--opt=${v}) is not reported" 
 # git-argument-injection (Python).
 yb = block(PY, PYGIT)
 srcs = yb.split("  pattern-sinks:\n")[0]
-assert re.findall(r"- pattern: (.*)", srcs) == ["request.$A.get(...)", "request.$A[...]", "flask.request.$A.get(...)", "flask.request.$A[...]", "request.get_json(...)", "flask.request.get_json(...)"], "request reads only: no plain parameters, no input()"
+assert re.findall(r"- pattern: (.*)", srcs) == ["request.$A.get(...)", "request.$A.getlist(...)", "request.$A[...]", "flask.request.$A.get(...)", "flask.request.$A.getlist(...)", "flask.request.$A[...]", "request.get_json(...)", "flask.request.get_json(...)"], "request reads only: no plain parameters, no input()"
 m, b3, e3 = rx(yb, "M")[0], rx(yb, "B")[0], rx(yb, "E")[0]
 assert all(re.match(m, s) for s in ("run", "call", "check_call", "check_output", "Popen")), m
 assert not any(re.match(m, s) for s in ("getoutput", "check", "run2", "getstatusoutput", "Popener")), m
