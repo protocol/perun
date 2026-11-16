@@ -1,0 +1,94 @@
+# Bundled generic taint rules (Go). Sources: net/http request values (r.URL.Query().Get, r.URL.Query()[...], r.FormValue, r.Form.Get, r.PostFormValue, r.PathValue, r.URL.Path), the gorilla/chi route parameters, and gin (Query, GetQuery, Param, ...) / echo context getters (only inside a function that takes a *gin.Context or an echo.Context).
+# perun.go.path-traversal: a source reaching a path sink (open, read, write, create, remove, rename, stat, list, mkdir, chmod, chown, truncate, symlink, link, walk), directly or through filepath.Join.
+# The only sanitizer is a confinement check: a filepath.IsLocal(x) guard (an early-return `if !filepath.IsLocal(x) { return }`, optionally with one call before the return, never a return nested in another statement, or use inside `if filepath.IsLocal(x) {...}`). filepath.IsLocal is lexical only (it does not follow symlinks); os.OpenRoot is the symlink-safe confinement. filepath.Base is NOT a sanitizer: Base("..") returns "..". os.Root methods are not sinks.
+# ponytail: a filepath.Clean plus strings.HasPrefix check against the base directory and an allowlist-map lookup are not recognised, so those report; a value read inside a helper function is not followed (cross-function flow needs Semgrep Pro).
+rules:
+- id: perun.go.path-traversal
+  mode: taint
+  languages: [go]
+  severity: WARNING
+  message: Untrusted request data reaches a filesystem path. Confine it first (os.OpenRoot / os.Root, or an allowlist). filepath.IsLocal is only a lexical check and does not follow symlinks, so it does not stop a symlink inside the base directory from escaping it. filepath.Base alone is not enough (Base("..") is "..").
+  pattern-sources:
+  - pattern-either:
+    - pattern: $R.URL.Query().Get(...)
+    - pattern: $R.URL.Query()[...]
+    - pattern: $R.FormValue(...)
+    - pattern: $R.Form.Get(...)
+    - pattern: $R.PostFormValue(...)
+    - pattern: $R.PathValue(...)
+    - pattern: $R.URL.Path
+    - pattern: mux.Vars($R)[...]
+    - pattern: chi.URLParam($R, ...)
+    - patterns:
+      - pattern-either:
+        - pattern: $C.Query(...)
+        - pattern: $C.GetQuery(...)
+        - pattern: $C.DefaultQuery(...)
+        - pattern: $C.Param(...)
+        - pattern: $C.PostForm(...)
+      - pattern-either:
+        - pattern-inside: |
+            func $F(..., $C *gin.Context, ...) {...}
+        - pattern-inside: |
+            func(..., $C *gin.Context, ...) {...}
+    - patterns:
+      - pattern-either:
+        - pattern: $C.QueryParam(...)
+        - pattern: $C.Param(...)
+        - pattern: $C.FormValue(...)
+      - pattern-either:
+        - pattern-inside: |
+            func $F(..., $C echo.Context, ...) {...}
+        - pattern-inside: |
+            func(..., $C echo.Context, ...) {...}
+  pattern-sanitizers:
+  - by-side-effect: true
+    patterns:
+    - pattern: $P
+    - pattern-either:
+      - pattern-inside: |
+          if !filepath.IsLocal($P) {
+            return ...
+          }
+          ...
+      - pattern-inside: |
+          if !filepath.IsLocal($P) {
+            $X(...)
+            return ...
+          }
+          ...
+  - patterns:
+    - pattern: $P
+    - pattern-inside: |
+        if filepath.IsLocal($P) {...}
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: os.Open($S)
+      - pattern: os.OpenFile($S, ...)
+      - pattern: os.ReadFile($S)
+      - pattern: ioutil.ReadFile($S)
+      - pattern: http.ServeFile($W, $R, $S)
+      - pattern: os.Create($S)
+      - pattern: os.WriteFile($S, ...)
+      - pattern: ioutil.WriteFile($S, ...)
+      - pattern: os.Remove($S)
+      - pattern: os.RemoveAll($S)
+      - pattern: os.Rename($S, ...)
+      - pattern: os.Rename($O, $S)
+      - pattern: os.Stat($S)
+      - pattern: os.Lstat($S)
+      - pattern: os.ReadDir($S)
+      - pattern: os.MkdirAll($S, ...)
+      - pattern: os.Mkdir($S, ...)
+      - pattern: os.Chmod($S, ...)
+      - pattern: os.Chown($S, ...)
+      - pattern: os.Truncate($S, ...)
+      - pattern: os.Symlink($S, ...)
+      - pattern: os.Symlink($O, $S)
+      - pattern: os.Link($S, ...)
+      - pattern: os.Link($O, $S)
+      - pattern: filepath.WalkDir($S, ...)
+      - pattern: ioutil.ReadDir($S)
+      - pattern: fs.ReadFile($FS, $S)
+    - focus-metavariable: $S
