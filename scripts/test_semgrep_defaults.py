@@ -65,6 +65,26 @@ def cors_update(resp):
     # ruleid: perun.py.cors-reflected-origin
     resp.headers.update({"Access-Control-Allow-Origin": request.headers.get("Origin"), "Access-Control-Allow-Credentials": "true"})
     return resp
+def cors_local(resp):
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    # ruleid: perun.py.cors-reflected-origin
+    o = request.headers.get("Origin")
+    resp.headers["Access-Control-Allow-Origin"] = o
+    return resp
+def cors_local_set(resp):
+    resp["Access-Control-Allow-Credentials"] = "true"
+    # ruleid: perun.py.cors-reflected-origin
+    origin = request.META["HTTP_ORIGIN"]
+    resp.headers.set("Access-Control-Allow-Origin", origin)
+    return resp
+# accepted noise: an `in` allowlist guard after the read is still reported; a mapping lookup (clean twin) is not
+def cors_guarded(resp):
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    # ruleid: perun.py.cors-reflected-origin
+    origin = request.headers.get("Origin")
+    if origin in ALLOWED_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+    return resp
 def is_authenticated(tok):
     # ruleid: perun.py.auth-fails-open
     try:
@@ -85,8 +105,8 @@ jwt.decode(tok, key, algorithms=["HS256"])
 jwt.decode(tok, options={"verify_signature": True})
 jwt.encode(claims, key, algorithm="HS256")
 def add_cors(resp):
-    origin = request.headers.get("Origin")
-    if origin in ALLOWED_ORIGINS:
+    origin = ALLOWED_ORIGINS.get(request.headers.get("Origin"))
+    if origin:
         resp.headers["Access-Control-Allow-Origin"] = origin
         resp.headers["Access-Control-Allow-Credentials"] = "true"
     return resp
@@ -104,6 +124,21 @@ def update_const_cors(resp):
     return resp
 def add_public_cors(resp):
     resp.headers["Access-Control-Allow-Origin"] = request.headers.get("Origin")
+    return resp
+def cors_local_const(resp):
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    o = request.headers.get("Origin")
+    log.info(o)
+    resp.headers["Access-Control-Allow-Origin"] = "https://app.example.com"
+    return resp
+def cors_local_mapped(resp):
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    o = ALLOWED.get(request.headers.get("Origin"))
+    resp.headers["Access-Control-Allow-Origin"] = o
+    return resp
+def cors_local_nocreds(resp):
+    o = request.headers.get("Origin")
+    resp.headers["Access-Control-Allow-Origin"] = o
     return resp
 def is_authenticated(tok):
     try:
@@ -164,6 +199,40 @@ function objectCors(req, res) {
   // ruleid: perun.js.cors-reflected-origin
   res.set({ "Access-Control-Allow-Origin": req.headers.origin, "Access-Control-Allow-Credentials": "true" });
 }
+// ruleid: perun.js.jwt-decode-unverified
+const viaBracket = jwt["decode"](tok);
+function aliasedDestructure(t) {
+  const { decode } = require("jsonwebtoken");
+  // ruleid: perun.js.jwt-decode-unverified
+  return decode(t);
+}
+function aliasedRenamed(t) {
+  const { decode: d } = require("jsonwebtoken");
+  // ruleid: perun.js.jwt-decode-unverified
+  return d(t);
+}
+function aliasedModule(t) {
+  const j = require("jsonwebtoken");
+  // ruleid: perun.js.jwt-decode-unverified
+  return j.decode(t);
+}
+function aliasedBracket(t) {
+  const j = require("jsonwebtoken");
+  // ruleid: perun.js.jwt-decode-unverified
+  return j["decode"](t);
+}
+function corsLocal(req, res) {
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  // ruleid: perun.js.cors-reflected-origin
+  const o = req.headers.origin;
+  res.setHeader("Access-Control-Allow-Origin", o);
+}
+const corsLocalArrow = (req, res) => {
+  res.set("Access-Control-Allow-Credentials", true);
+  // ruleid: perun.js.cors-reflected-origin
+  let origin = req.get("origin");
+  res.set("Access-Control-Allow-Origin", origin);
+};
 class Session {
   check(t) {
     // ruleid: perun.js.jwt-decode-unverified
@@ -204,6 +273,32 @@ const isAuthorized = (req) => {
 };
 '''
 CLEAN_JS = '''jwt.verify(tok, key, { algorithms: ["HS256"] });
+function verifyDestructured(t) {
+  const { verify } = require("jsonwebtoken");
+  return verify(t, key, { algorithms: ["HS256"] });
+}
+function decodeUnrelated(t) {
+  const { decode } = require("other-lib");
+  return decode(t);
+}
+function bracketOther(t) {
+  return codec["decode"](t);
+}
+function corsLocalConst(req, res) {
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  const o = req.headers.origin;
+  log(o);
+  res.setHeader("Access-Control-Allow-Origin", "https://app.example.com");
+}
+function corsLocalMapped(req, res) {
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  const o = ALLOWED[req.headers.origin];
+  res.setHeader("Access-Control-Allow-Origin", o);
+}
+function corsLocalNoCreds(req, res) {
+  const o = req.headers.origin;
+  res.setHeader("Access-Control-Allow-Origin", o);
+}
 j.decode(tok);
 jwt2.decode(tok);
 function constOrigin(req, res) {

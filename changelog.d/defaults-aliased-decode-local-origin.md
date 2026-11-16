@@ -1,0 +1,2 @@
+### Changed
+- `perun.js.jwt-decode-unverified` now matches `jwt["decode"](t)`, a decode destructured or imported from `jsonwebtoken`, and any alias of the module followed in the same file. `perun.py.cors-reflected-origin` and `perun.js.cors-reflected-origin` now follow an Origin read into a local variable and set later in the same function. An `in` allowlist guard after the read is still reported (accepted noise, documented in the rule); the clean bench twin now uses a mapping lookup.

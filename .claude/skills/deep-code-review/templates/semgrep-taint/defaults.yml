@@ -69,18 +69,54 @@ rules:
 - id: perun.js.jwt-decode-unverified
   languages: [javascript, typescript]
   severity: WARNING
-  message: jwt.decode reads the claims without checking the signature, so a forged token is accepted when the result drives an auth decision. Use jwt.verify with the real key and a fixed algorithm list. Accepted noise - a decode before verify in the same function (a kid lookup) is also reported, because a verify call elsewhere in the function proves nothing about this token. Known limits - an aliased decode (const d = jwt.decode) and jwt['decode'](t) are not matched.
+  message: jwt.decode reads the claims without checking the signature, so a forged token is accepted when the result drives an auth decision. Use jwt.verify with the real key and a fixed algorithm list. Accepted noise - a decode before verify in the same function (a kid lookup) is also reported, because a verify call elsewhere in the function proves nothing about this token. Also matched - jwt['decode'](t), a decode destructured or imported from jsonwebtoken (const {decode} = require(...), import {decode as d} from ...), and any alias of the jsonwebtoken module (const j = require(...); j.decode(t)), followed within the same file. Known limit - a decode stored in a variable first (const d = jwt.decode; d(t)) is not matched.
   pattern-either:
   - pattern: jwt.decode(...)
+  - pattern: jwt["decode"](...)
   - pattern: jsonwebtoken.decode(...)
   - pattern: require("jsonwebtoken").decode(...)
+  - pattern: require("jsonwebtoken")["decode"](...)
   - pattern: $X.jwt.decode(...)
+  - patterns:
+    - pattern-inside: |
+        const {..., decode, ...} = require("jsonwebtoken");
+        ...
+    - pattern: decode(...)
+  - patterns:
+    - pattern-inside: |
+        const {..., decode: $D, ...} = require("jsonwebtoken");
+        ...
+    - pattern: $D(...)
+  - patterns:
+    - pattern-inside: |
+        import {..., decode, ...} from "jsonwebtoken";
+        ...
+    - pattern: decode(...)
+  - patterns:
+    - pattern-inside: |
+        import {..., decode as $D, ...} from "jsonwebtoken";
+        ...
+    - pattern: $D(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          const $J = require("jsonwebtoken");
+          ...
+      - pattern-inside: |
+          import $J from "jsonwebtoken";
+          ...
+      - pattern-inside: |
+          import * as $J from "jsonwebtoken";
+          ...
+    - pattern-either:
+      - pattern: $J.decode(...)
+      - pattern: $J["decode"](...)
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
 - id: perun.js.cors-reflected-origin
   languages: [javascript, typescript]
   severity: WARNING
-  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. Known limits - an Origin read into a local variable first is not followed, credentials and reflection split across functions are not matched, and a guard such as an early return for an unlisted origin does not silence the finding.
+  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. An Origin read into a local variable first is followed when the header is set later in the same block. Known limits - credentials and reflection split across functions are not matched, a header set inside a nested block (an if guarding on an allowlist) after the read is not followed, and a guard such as an early return for an unlisted origin does not silence the finding.
   pattern-either:
   - patterns:
     - pattern-inside:
@@ -97,7 +133,12 @@ rules:
               $C.$M2($K2, $V2);
               ...
             }
-    - pattern: $R.$M($K, $O)
+    - pattern-either:
+      - pattern: $R.$M($K, $O)
+      - pattern: |
+          var $V = $O;
+          ...
+          $R.$M($K, $V);
     - metavariable-regex:
         metavariable: $M
         regex: ^(?:setHeader|header|set|append)$
@@ -137,7 +178,7 @@ rules:
 - id: perun.py.cors-reflected-origin
   languages: [python]
   severity: WARNING
-  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. Known limits - an Origin read into a local variable first is not followed, credentials and reflection split across functions are not matched, and a guard such as an early return for an unlisted origin does not silence the finding.
+  message: The handler copies the request Origin header into Access-Control-Allow-Origin and also sends Access-Control-Allow-Credentials true, so any site can read credentialed responses. Reflect the origin only after checking it against a fixed allowlist. An Origin read into a local variable first is followed when the header is set later in the same block. Known limits - credentials and reflection split across functions are not matched, a header set inside a nested block (an if guarding on an allowlist) after the read is not followed, and a guard such as an early return for an unlisted origin does not silence the finding.
   pattern-either:
   - patterns:
     - pattern-inside:
@@ -155,6 +196,14 @@ rules:
     - pattern-either:
       - pattern: $H[$K] = $O
       - pattern: $H.$M($K, $O)
+      - pattern: |
+          $V = $O
+          ...
+          $H[$K] = $V
+      - pattern: |
+          $V = $O
+          ...
+          $H.$M($K, $V)
     - metavariable-regex:
         metavariable: $K
         regex: (?i)^["']access-control-allow-origin["']$
