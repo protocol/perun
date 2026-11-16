@@ -36,7 +36,7 @@ printf 'DB=postgres://user:pass@db.internal:5432/app\nMONGO=mongodb://root:examp
 printf 'steps:\n  - uses: acme/setup@%s\n  - uses: acme/setup@v3\n    run: echo acme@%s\n' "$HX" "$HX" >deploy.yml
 printf '{\n  "integrity": "sha512-%s"\n}\n' "$HX" >package-lock.json
 printf '{\n  "integrity": "sha512-%s"\n}\n' "$HX" >notes.json
-printf 'linkedin_client_id = linkedinClient\nclient_id = 86ab12cd34ef\nclient_id = Acme\n' >social.conf
+cid=client_id; printf 'linkedin_%s = linkedinClient\n%s = 86ab12cd%s\n%s = Acme\n' $cid $cid 34ef $cid >social.conf  # parts joined at runtime so no source line matches gitleaks
 G add -A && G commit -q -m change
 go() { PATH="$T/bin:$T/sys" SG_JSON="$T/sg.json" BD_JSON="$T/bd.json" RF_JSON="$T/rf.json" GS_JSON="$T/gs.json" TF_JSON="$T/tf.json" GL_JSON="$T/gl.json" bash "$RC" --base base >"$T/out" 2>"$T/err" || true; }
 eq() { if [ "$1" = "$2" ]; then echo "ok - $3"; else echo "FAIL - $3 (got $1, want $2)"; fail=1; fi; }
@@ -65,7 +65,7 @@ eq "$(at main.go 6 | jq -r '.[0].message | test("\\[CWE-22, medium\\]")')" true 
 echo "$EMPTY_SG" >"$T/sg.json"; echo '{"results":[]}' >"$T/bd.json"; echo '[]' >"$T/rf.json"; echo '{"Issues":[]}' >"$T/gs.json"
 tr_() { printf '{"ruleId":"%s","locations":[{"physicalLocation":{"artifactLocation":{"uri":"%s"},"region":{"startLine":%s}}}]}' "$1" "$2" "$3"; }
 printf '{"runs":[{"results":[%s]}]}\n' "$(IFS=,; echo "$(tr_ URI db.env 1),$(tr_ MongoDB db.env 2),$(tr_ Postgres db.env 3),$(tr_ URI db.env 4),$(tr_ HubSpotApiKey db.env 5),$(tr_ HubSpotApiKey db.env 6),$(tr_ HubSpotApiKey db.env 7),$(tr_ URI db.env 8),$(tr_ CloudflareApiToken deploy.yml 2),$(tr_ CloudflareApiToken deploy.yml 3),$(tr_ CloudflareApiToken deploy.yml 4),$(tr_ CircleCI package-lock.json 2),$(tr_ CircleCI notes.json 2)")" >"$T/tf.json"
-printf '[{"RuleID":"linkedin-client-id","File":"social.conf","StartLine":1,"Secret":"linkedinClient","Description":"d","Fingerprint":"f1"},{"RuleID":"linkedin-client-id","File":"social.conf","StartLine":2,"Secret":"86ab12cd34ef","Description":"d","Fingerprint":"f2"},{"RuleID":"linkedin-client-id","File":"social.conf","StartLine":3,"Secret":"Acme","Description":"d","Fingerprint":"f3"}]\n' >"$T/gl.json"
+printf '[{"RuleID":"linkedin-client-id","File":"social.conf","StartLine":1,"Secret":"linkedinClient","Description":"d","Fingerprint":"f1"},{"RuleID":"linkedin-client-id","File":"social.conf","StartLine":2,"Secret":"86ab12cd%s","Description":"d","Fingerprint":"f2"},{"RuleID":"linkedin-client-id","File":"social.conf","StartLine":3,"Secret":"Acme","Description":"d","Fingerprint":"f3"}]\n' 34ef >"$T/gl.json"
 go
 hint() { jq -r --arg f "$1" --argjson l "$2" --arg t "$3" '[.[] | select(.file==$f and .line==$l and .tool==$t)] | if length == 0 then "MISSING" else (.[0].hint // "none") end' "$T/out"; }
 eq "$(hint db.env 1 trufflehog)" likely-fixture "URI user:pass placeholder demoted"

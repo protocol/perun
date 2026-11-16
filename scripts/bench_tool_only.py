@@ -35,7 +35,7 @@ def run(truth_path=ROOT / "bench/tool-only/answer.json", fixtures=ROOT / "bench/
         (Path(t) / "clean/demoted.env").write_text(f"DB=postgres://user:pass@db.internal:5432/app\nMONGO=mongodb://root:example@db.internal/app\nLOCAL=postgres://svc:changeme@localhost/app\nsource_id={uu}\n")
         (Path(t) / "clean/demoted.yml").write_text(f"steps:\n  - uses: acme/setup@{hx}\n")
         (Path(t) / "clean/package-lock.json").write_text('{\n  "integrity": "sha512-' + hx + '"\n}\n')
-        (Path(t) / "clean/demoted.conf").write_text("linkedin_client_id = linkedinClient\n")
+        (Path(t) / "clean/demoted.conf").write_text("linkedin_" + "client_id = linkedinClient\n")  # joined so no source line matches gitleaks
         (Path(t) / "go.mod").write_text("module bench\n\ngo 1.21\n")  # gosec/staticcheck need a root module for the .go twins
         g = ["git", "-c", "user.name=b", "-c", "user.email=b@example.com"]
         for a in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "bench"]):

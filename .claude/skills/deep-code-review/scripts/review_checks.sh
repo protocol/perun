@@ -1629,7 +1629,7 @@ for t in data:
     k = key(t) or fkey(t)
     if not k or len(groups[k]) <= 3: out.append(row(t))
     elif k not in done: done.add(k); out.append(summ(k, groups[k]) if key(t) else fsumm(k, groups[k]))
-# Cross-tool duplicate: bandit, ruff-security (the S rules are bandit's B rules, same number), semgrep and gosec rows on the same file:line with the same CWE (the "[CWE-n]" tag their own metadata gave the row) are one defect: one row is kept (the first tool in DUPT order), its tools list names every tool and its message the others' rules. A ruff-security row takes the CWE of a bandit row on that line with the matching id. A row with no tag never merges.
+# Cross-tool duplicate: bandit, ruff-security (the S rules are bandit's B rules, same number), semgrep and gosec rows on the same file:line with the same CWE (the "[CWE-n]" tag their own metadata gave the row) are one defect: one row is kept (the first tool in DUPT order), its tools list names every tool, its also list holds each merged row's tool and rule (so per-tool attribution survives), and its message the others' rules. A ruff-security row takes the CWE of a bandit row on that line with the matching id. A row with no tag never merges.
 DUPT = ("semgrep", "bandit", "ruff-security", "gosec")
 dk = lambda r: (os.path.normpath(r["file"]), r["line"])
 bcwe = {(*dk(r), r["rule"]): m[1] for r in out if r["tool"] == "bandit" and r["line"] > 0 and (m := re.search(r"\[CWE-(\d+)[],]", r["message"]))}
@@ -1644,7 +1644,7 @@ for g in dg.values():
         if len(sv) > 1:  # keep the highest severity any merged row carried
             hi = max((x[1] for x in sv), key=lambda v: RK.get(v, 0)); lo = g[0]["message"]
             g[0]["message"] = re.sub(r"(\[CWE-\d+), \w+\]", lambda m: f"{m[1]}, {hi}]", lo, 1); g[0]["text"] = g[0]["text"].replace(lo, g[0]["message"])
-        g[0]["tools"] = sorted({r["tool"] for r in g}); sfx = " [also reported by: " + ", ".join(f"{r['tool']} {r['rule']}" for r in g[1:]) + "]"
+        g[0]["tools"] = sorted({r["tool"] for r in g}); g[0]["also"] = [{"tool": r["tool"], "rule": r["rule"]} for r in g[1:]]; sfx = " [also reported by: " + ", ".join(f"{r['tool']} {r['rule']}" for r in g[1:]) + "]"
         g[0]["message"] += sfx; g[0]["text"] += sfx; dcut |= {id(r) for r in g[1:]}
 out = [r for r in out if id(r) not in dcut]
 # Corroboration: when different tools flag the same normalized file:line, every such row gets a "tools" list and a " [corroborated by: ...]" suffix. No row is dropped or merged. not-checked, summary, line<=0 and per-file-summary rows are skipped.
