@@ -9,6 +9,7 @@ import json, os, subprocess, sys, tempfile
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".claude", "skills", "deep-code-review", "scripts", "org_audit_driver.py")
 FAST = "#!/usr/bin/env bash\necho '[]'\n"
 NOPROG = """#!/usr/bin/env bash
+[ "$1" = --list-tools ] && { printf 'semgrep\\ngitleaks\\nbandit\\n'; exit 0; }
 td=$(mktemp -d "$TMPDIR/review.XXXXXX")
 printf 'semgrep\\ta.py\\t3\\tr1\\tmsg\\n' >"$td/raw"
 sleep 60
@@ -16,7 +17,7 @@ sleep 60
 SLOW = """#!/usr/bin/env bash
 td=$(mktemp -d "$TMPDIR/review.XXXXXX")
 printf 'semgrep\\ta.py\\t3\\tr1\\tmsg\\n' >"$td/raw"
-printf 'start semgrep\\ndone semgrep\\nstart bandit\\n' >"$td/progress"
+printf 'start semgrep 100\\ndone semgrep 105\\nstart bandit 106\\n' >"$td/progress"
 sleep 60
 echo '[]'
 """
@@ -68,8 +69,11 @@ def main():
 
         r, js, row = drive(t, NOPROG, ("--timeout", "5"))  # progress file missing: fail closed, the finished-looking tool counts as timed out
         nc = {x["tool"] for x in js if x["rule"] == "not-checked" and "timed out" in x["message"]}
-        assert row[1] == "PARTIAL" and nc == {"semgrep", "review_checks"}, (row, nc)
-    print("ok - 12 checks")
+        assert row[1] == "PARTIAL" and nc == {"semgrep", "gitleaks", "bandit", "review_checks"}, (row, nc)  # gitleaks and bandit come from --list-tools only
+    real = os.path.join(os.path.dirname(D), "review_checks.sh")  # the real script names its own tools, hub= array included
+    names = subprocess.run(["bash", real, "--list-tools"], capture_output=True, text=True).stdout.split()
+    assert {"semgrep", "gitleaks", "trivy", "bash-n", "ruff", "zizmor", "actionlint"} <= set(names) and not {"exit", "tests"} & set(names), names
+    print("ok - 14 checks")
 
 
 main()
