@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """org_audit_driver.py: review_checks.sh over a repo list, one result file per repo.
 
-Usage: org_audit_driver.py --repos FILE --out DIR [--timeout SECS]
+Usage: org_audit_driver.py --repos FILE --out DIR [--timeout SECS] [--allow-partial]
 
 FILE: one `owner/repo` per line ('#' and blank lines skipped). Per repo: shallow clone then `git fetch --unshallow`
 into a fresh mkdtemp dir, then `review_checks.sh --full --full-history` (never --tests, which runs repo
 code). Semgrep is forced to the bundled rules via REVIEW_SEMGREP_CONFIG, so a repo's own .semgrep.yml is ignored.
 Output in --out: `<owner>__<repo>-<YYYYMMDD>.json` (the findings array) and `summary-<YYYYMMDD>.tsv`
-(repo, status OK|FAILED, findings, NOT CHECKED tools or the failure reason). A clone or scan failure is a FAILED
-row (a review_checks failure appends its last stderr line, 200 chars max), never skipped. Exit 0 = every repo scanned; 1 = any FAILED; 2 = usage or an empty list. NOT CHECKED tools do not fail the
+(repo, status OK|PARTIAL|FAILED, findings, NOT CHECKED tools or the failure reason). A clone or scan failure is a FAILED
+row (a review_checks failure appends its last stderr line, 200 chars max), never skipped. A review_checks run killed at --timeout is a PARTIAL row: its findings so far are kept and each unfinished tool
+(plus "review_checks" for checks never started) is a not-checked row "timed out"; if its progress file is unreadable every tool seen counts as timed out. The clone uses --filter=blob:limit=5m;
+each history blob it skipped is a git-clone not-checked row in the JSON (one aggregated entry in the summary). Exit 0 = every repo scanned; 1 = any FAILED (also a failed rev-list of skipped blobs); 3 = any PARTIAL and no FAILED, unless --allow-partial (then 0); 2 = usage or an empty list. NOT CHECKED tools do not fail the
 run but are listed per repo: they are unchecked surface, not a clean result.
 Private repos: if ORG_AUDIT_TOKEN is set it reaches ONLY the git clone/fetch children, as an `http.extraHeader` Basic
 auth header appended to the parent's GIT_CONFIG_COUNT/KEY_n/VALUE_n env at index COUNT (parent entries kept) (never in the URL, argv or .git/config). Every other child
@@ -22,7 +24,7 @@ files from UNTRUSTED_CFG are stripped: nested or other-named configs and linter 
 Every tracked symlink is removed too. Children run with stdin closed, no prompts, no host git config, hooks off,
 and are killed (whole process group) on --timeout. Two repos mapping to one output name: the later is FAILED.
 """
-import argparse, base64, datetime, json, os, re, signal, subprocess, sys, tempfile
+import argparse, base64, datetime, glob, json, os, re, signal, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Repo-root config an untrusted repo could use to allowlist or silence its own findings; review_checks.sh and the
@@ -53,6 +55,33 @@ def run(cmd, timeout=None, env=None, inp=None):
     return subprocess.CompletedProcess(cmd, p.returncode, out, err)
 
 
+def timed_out(rcd, timeout):
+    """Rows for a review_checks run killed at --timeout: its raw findings so far plus a not-checked row per unfinished tool."""
+    rows, nc, seen, ok = [], set(), set(), False
+    for d in glob.glob(os.path.join(rcd, "review.*")):
+        try:
+            for l in open(os.path.join(d, "raw"), errors="replace"):
+                t = l.rstrip("\n").split("\t")
+                if len(t) == 5:
+                    seen.add(t[0])
+                    rows.append({"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "rule": t[3], "message": t[4], "text": f"{t[3]}: {t[4]}", "tool": t[0]})
+        except OSError:
+            pass
+        try:
+            st = [l.split(None, 1) for l in open(os.path.join(d, "progress")) if l.strip()]
+            nc = {x[1].strip() for x in st if x[0] == "start"} - {x[1].strip() for x in st if x[0] == "done"}
+            ok = True
+        except OSError:
+            pass
+    msg = f"timed out after {timeout}s, results are partial"
+    if not ok:  # fail closed: no readable progress, so no tool counts as finished
+        msg += ", progress unreadable so every check counts as timed out"
+        nc = seen
+    for t in sorted(nc) + ["review_checks"]:  # the last row covers checks that never started (every check when progress is unreadable)
+        rows.append({"file": ".", "line": 0, "rule": "not-checked", "message": msg, "text": f"not-checked: {msg}", "tool": t})
+    return rows
+
+
 def audit(repo, tmp, rc_script, base_url, timeout):
     """Return (findings_json_text, rows, not_checked) or raise RuntimeError(reason)."""
     dest = os.path.join(tmp, "clone")
@@ -61,7 +90,7 @@ def audit(repo, tmp, rc_script, base_url, timeout):
     n = int(ENV.get("GIT_CONFIG_COUNT") or 0)  # keep parent proxy/CA entries, append the header after them
     genv = ENV if not tok else dict(ENV, GIT_CONFIG_COUNT=str(n + 1), **{f"GIT_CONFIG_KEY_{n}": "http.extraHeader",
         f"GIT_CONFIG_VALUE_{n}": "Authorization: Basic " + base64.b64encode(f"x-access-token:{tok}".encode()).decode()})
-    for cmd in (GIT + ["clone", "--quiet", "--depth", "1", "--", url, dest], GIT + ["-C", dest, "fetch", "--quiet", "--unshallow"]):
+    for cmd in (GIT + ["clone", "--quiet", "--depth", "1", "--filter=blob:limit=5m", "--", url, dest], GIT + ["-C", dest, "fetch", "--quiet", "--unshallow"]):
         r = run(cmd, timeout=timeout, env=genv)
         if r.returncode and "--unshallow" in cmd and "does not make sense" in r.stderr:
             continue  # already complete (one-commit repo): nothing to unshallow
@@ -83,8 +112,14 @@ def audit(repo, tmp, rc_script, base_url, timeout):
         r = run(GIT + ["-C", dest, "-c", "user.name=audit", "-c", "user.email=audit@example.com", "commit", "-qm", "drop repo-local scan config"], timeout=timeout)
         if r.returncode:
             raise RuntimeError(f"config strip commit failed (exit {r.returncode})")
-    env = dict(ENV, REVIEW_SEMGREP_CONFIG=os.path.join(HERE, "..", "templates", "semgrep-taint"))
-    r = run(["bash", rc_script, "--repo", dest, "--full", "--full-history"], env=env, timeout=timeout)
+    rcd = os.path.join(tmp, "rc"); os.mkdir(rcd)  # review_checks' temp dir lands here, so a kill leaves its partial rows readable
+    env = dict(ENV, TMPDIR=rcd, REVIEW_SEMGREP_CONFIG=os.path.join(HERE, "..", "templates", "semgrep-taint"))
+    partial = False
+    try:
+        r = run(["bash", rc_script, "--repo", dest, "--full", "--full-history"], env=env, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        partial = True
+        r = subprocess.CompletedProcess([], 0, json.dumps(timed_out(rcd, timeout)), "")
     last = next((l.strip() for l in reversed(r.stderr.splitlines()) if l.strip()), "")
     why = f": {last.replace(chr(9), ' ')[:200]}" if last else ""
     try:
@@ -94,9 +129,18 @@ def audit(repo, tmp, rc_script, base_url, timeout):
         raise RuntimeError(f"review_checks gave no JSON (exit {r.returncode}){why}")
     if r.returncode:
         raise RuntimeError(f"review_checks exit {r.returncode}{why}")
+    # Blobs the clone filter skipped (listed after the scan, so lazily fetched ones are not reported) are unchecked surface.
+    rl = run(GIT + ["-C", dest, "rev-list", "--objects", "--all", "--missing=print"], timeout=timeout)
+    if rl.returncode:  # an unreadable listing must not read as "no blob skipped"
+        raise RuntimeError(f"rev-list --missing failed (exit {rl.returncode})")
+    miss = rl.stdout.split()
+    rows += [{"file": o[1:13], "line": 0, "rule": "not-checked", "message": "blob over 5m skipped by the clone filter",
+              "text": f"not-checked: blob {o[1:13]} over 5m skipped by the clone filter", "tool": "git-clone"} for o in miss if o.startswith("?")]
     nc = {m.strip() for m in re.findall(r"NOT CHECKED: ([^\n]*)", r.stderr)}
-    nc |= {f"{x.get('tool')} ({x.get('message')})" for x in rows if x.get("rule") == "not-checked"}
-    return r.stdout, rows, sorted(nc)
+    nc |= {f"{x.get('tool')} ({x.get('message')})" for x in rows if x.get("rule") == "not-checked" and x.get("tool") != "git-clone"}
+    if n := sum(x.get("tool") == "git-clone" for x in rows):
+        nc.add(f"git-clone ({n} blobs over 5m skipped)")
+    return json.dumps(rows), rows, sorted(nc), partial
 
 
 def main():
@@ -104,6 +148,7 @@ def main():
     ap.add_argument("--repos", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--timeout", type=int, default=3600)
+    ap.add_argument("--allow-partial", action="store_true", help="exit 0 even when a repo is PARTIAL (timed out)")
     a = ap.parse_args()
     try:
         names = [l.strip() for l in open(a.repos) if l.strip() and not l.lstrip().startswith("#")]
@@ -118,7 +163,7 @@ def main():
     day = datetime.date.today().strftime("%Y%m%d")
     rc_script = os.environ.get("ORG_AUDIT_REVIEW_CHECKS") or os.path.join(HERE, "review_checks.sh")
     base_url = os.environ.get("ORG_AUDIT_BASE_URL", "https://github.com").rstrip("/")
-    lines, failed, seen = [], 0, set()
+    lines, failed, partial, seen = [], 0, 0, set()
     for repo in names:
         try:
             if not NAME.match(repo):
@@ -128,10 +173,11 @@ def main():
                 raise RuntimeError("output name collision with an earlier repo")
             seen.add(fn.lower())
             with tempfile.TemporaryDirectory(prefix="org-audit-") as tmp:  # own mkdtemp dir, removed on exit
-                text, rows, nc = audit(repo, tmp, rc_script, base_url, a.timeout)
+                text, rows, nc, part = audit(repo, tmp, rc_script, base_url, a.timeout)
             with open(os.path.join(a.out, fn), "w") as f:
                 f.write(text)
-            lines.append(f"{repo}\tOK\t{len(rows)}\t" + ("; ".join(nc) or "-"))
+            partial += bool(part)
+            lines.append(f"{repo}\t{'PARTIAL' if part else 'OK'}\t{len(rows)}\t" + ("; ".join(nc) or "-"))
         except (RuntimeError, subprocess.TimeoutExpired, OSError) as e:
             failed += 1
             msg = str(e).replace(chr(9), ' ').replace(chr(10), ' ')
@@ -143,7 +189,7 @@ def main():
     with open(os.path.join(a.out, f"summary-{day}.tsv"), "w") as f:
         f.write(out)
     sys.stdout.write(out)
-    return 1 if failed else 0
+    return 1 if failed else 3 if partial and not a.allow_partial else 0
 
 
 if __name__ == "__main__":

@@ -173,7 +173,9 @@ run_one() {
   # lease full: heavy scanners run at lowest priority and are named in the summary (never take the lease while degraded)
   if [ "$lease" = degraded ]; then case $tool in gitleaks*|trufflehog|osv-scanner|semgrep|trivy|grype|checkov|gosec|govulncheck|staticcheck|codeql) [ "$nice19" != 1 ] || nz=(nice -n 19); case " $dg " in *" $tool "*) ;; *) dg+=" $tool" ;; esac ;; esac; fi
   [ -n "${hubtool:-}" ] || case " $ran " in *" $tool "*) ;; *) ran+=" $tool" ;; esac # hub tools count as ran only after a good parse
+  echo "start $tool" >>"$td/progress" # the org driver reads this after a kill to name unfinished tools
   tbox ${nz[@]+"${nz[@]}"} "$@" || rc=$?
+  echo "done $tool" >>"$td/progress"
   # degraded single-worker flag (semgrep --jobs 1, trivy --parallel 1) may be unsupported: after a crash retry once without it;
   # a good retry blames the flag, so the summary drops "1 worker" for this tool (--jobs/--parallel after a `--` are file names)
   case "$rc" in 0|124|142) ;; *) case " $w1 " in *" $tool "*)
