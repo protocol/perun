@@ -1,0 +1,18 @@
+# Bundled generic rules (Ruby). CWE-502: YAML.load / Psych.load of a request parameter builds arbitrary objects on Psych before 4 (and with unsafe_load on any version). A call that passes permitted_classes: is an allowlist and is cleared. ponytail: search-mode on the params[...] argument only, so a value copied to a local first is not matched; widen to taint when a measured miss shows up.
+rules:
+- id: perun.rb.yaml-load-params
+  languages: [ruby]
+  severity: ERROR
+  message: YAML.load / Psych.load / YAML.unsafe_load of a request parameter can instantiate arbitrary objects (CWE-502). Use YAML.safe_load with permitted_classes.
+  patterns:
+  - pattern-either:
+    - pattern: YAML.load(params[...], ...)
+    - pattern: Psych.load(params[...], ...)
+    - pattern: YAML.unsafe_load(params[...], ...)
+    - pattern: Psych.unsafe_load(params[...], ...)
+  - pattern-not: |
+      YAML.load(params[...], ..., permitted_classes: $P, ...)
+  - pattern-not: |
+      Psych.load(params[...], ..., permitted_classes: $P, ...)
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "*_test.rb", "*_spec.rb"]
