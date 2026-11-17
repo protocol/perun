@@ -531,6 +531,20 @@ if shutil.which("semgrep"):
     assert not [r for r in rows if r[0] == "clean/cli_tool.py"], rows
     assert len([r for r in rows if r[0].startswith("clean/")]) == 5, [r for r in rows if r[0].startswith("clean/")]
     print("semgrep-audit-classes: helper corpus ok (%d/%d)" % (len(ans) - len(missed), len(ans)))
+    # JS prototype-pollution corpus (answer.json = 26 real sinks, clean/ = 10 safe controls). Old rule (for-in `target[key] = v` only, no
+    # loop-source, fresh-target or constant-list filter): recall 6/21 and 3 clean hits. New rule must find all 26 and stay quiet on clean/.
+    PP = os.path.join(ROOT, "scripts", "fixtures", "js-proto-corpus")
+    pans = json.load(open(os.path.join(PP, "answer.json")))
+    with tempfile.TemporaryDirectory() as d:  # copied out: the rule skips any path containing a "fixtures" directory
+        shutil.copytree(PP, os.path.join(d, "c"))
+        env = dict(os.environ, HOME=d, SEMGREP_USER_HOME=d)
+        pr = json.loads(subprocess.run(["semgrep", "--config", RULES, "--metrics=off", "--disable-version-check", "--json", "--quiet", "--", "vuln", "clean"],
+                                       capture_output=True, text=True, env=env, cwd=os.path.join(d, "c")).stdout)
+    assert not pr["errors"], pr["errors"]
+    prow = {"%s:%d" % (x["path"], x["start"]["line"]) for x in pr["results"] if x["check_id"].endswith("perun.js.prototype-pollution")}
+    assert set(pans) <= prow, ("proto corpus missed", sorted(set(pans) - prow))
+    assert prow == set(pans), ("proto corpus extra", sorted(prow - set(pans)))
+    print("semgrep-audit-classes: js proto corpus ok (%d/%d)" % (len(set(pans) & prow), len(pans)))
     print("semgrep-audit-classes: live ok")
 else:
     print("SKIP: semgrep not installed (offline pins only)")
