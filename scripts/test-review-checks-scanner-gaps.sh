@@ -184,7 +184,7 @@ t "rows: checkov rule is the check id" row checkov Dockerfile CKV_EXAMPLE_1
 t "rows: checkov line is kept" jq -e 'any(.[]; .tool=="checkov" and .line==3)' "$T/out"
 t "rows: checkov message is the check name" jq -e 'any(.[]; .tool=="checkov" and (.message|test("example check")))' "$T/out"
 t "rows: grype rule is the vulnerability id" row grype sbom.json CVE-2000-0001
-t "rows: grype message is the package and description" jq -e 'any(.[]; .tool=="grype" and (.message|test("^pkg@1.0.0: synthetic")))' "$T/out"
+t "rows: grype message is the package and description" jq -e 'any(.[]; .tool=="grype" and (.message|test("^unrated: pkg@1.0.0: synthetic")))' "$T/out"
 
 # --- rule ids: semgrep prefixes ids with the dotted directory of the config file; that local path must not reach the report
 stub "$T/b-rid" semgrep <<'S'

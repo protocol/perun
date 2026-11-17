@@ -22,7 +22,8 @@ STUB
 chmod +x "$T/bin/gitleaks"; export PATH="$T/bin:$PATH" STUB_JSON="$T/stub.json"
 FILES=(public/data/prices.sample.json tests/a.py src/foo.test.js docs/guide.md fixtures/x.json app/__mocks__/m.js .env.example src/config.py src/latest.json lib/contest.py spec-parser/config.py sample-service/app.py test-runner/config.py example-app/main.py)
 mkdir "$T/r"; cd "$T/r"; g init -q .; g commit -q --allow-empty -m base; git branch -f base
-for f in "${FILES[@]}"; do mkdir -p "$(dirname "$f")"; echo '{}' >"$f"; done
+# .py bodies are lint-clean: a local ruff would otherwise merge a B018 row onto the gitleaks row, so its text would end in [corroborated by ...], not [likely-fixture]
+for f in "${FILES[@]}"; do mkdir -p "$(dirname "$f")"; case "$f" in *.py) echo 'x = 1' >"$f" ;; *) echo '{}' >"$f" ;; esac; done
 g add -A; g commit -q -m files
 python3 - "${FILES[@]}" >"$STUB_JSON" <<'PY'
 import json, sys

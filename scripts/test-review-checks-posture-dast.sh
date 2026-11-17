@@ -52,7 +52,7 @@ run ""; row '.rule=="not-checked" and (.message|test("not installed"))' && grep 
 HUB_MODE=crash run "$T/og"; grep -q 'not run: semgrep' "$T/err" && ! ran opengrep && ok "opengrep crash is not clean" || bad "opengrep crash"
 # scorecard
 run "$T/sc"; [ ! -s "$HUB_LOG" ] && ok "scorecard opt-in off: not run" || bad "scorecard ran without opt-in"
-REVIEW_SCORECARD=1 run "$T/sc"; grep -q 'needs GITHUB_TOKEN' "$T/err" && [ ! -s "$HUB_LOG" ] && row '.tool=="scorecard" and .rule=="not-checked"' && ok "scorecard without token: not run" || bad "scorecard token gate"
+GITHUB_TOKEN= REVIEW_SCORECARD=1 run "$T/sc"; grep -q 'needs GITHUB_TOKEN' "$T/err" && [ ! -s "$HUB_LOG" ] && row '.tool=="scorecard" and .rule=="not-checked"' && ok "scorecard without token: not run" || bad "scorecard token gate"
 REVIEW_SCORECARD=1 GITHUB_TOKEN=tok run ""; grep -q '^NOT CHECKED: scorecard (install' "$T/err" && row '.tool=="scorecard" and .rule=="not-checked"' && ok "scorecard missing: NOT CHECKED" || bad "scorecard missing"
 REVIEW_SCORECARD=1 GITHUB_TOKEN=tok run "$T/sc"
 [ "$(jq '[.[]|select(.tool=="scorecard")]|length' "$T/out")" = 1 ] && row '.tool=="scorecard" and .rule=="scorecard-Fuzzing"' && grep -q 'scorecard --repo=github.com/acme/demo --format=json' "$HUB_LOG" && grep -q 'token=tok' "$HUB_LOG" && ran scorecard && ok "scorecard: only the score<5 check is a row; stderr noise ignored" || bad "scorecard findings"

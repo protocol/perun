@@ -320,6 +320,13 @@ def cw(c, sv=None):  # " [CWE-n, severity]" from a scanner's own metadata (bandi
     c = c[0] if isinstance(c, list) and c else c
     m = re.search(r"\d+", str(c.get("id") if isinstance(c, dict) else c))
     return f" [CWE-{m[0]}{', ' + cl(sv).lower() if sv else ''}]" if m else ""
+def dsev(*xs):  # dependency-CVE severity from the tool's own field(s): the first that maps to critical|high|medium|low wins, else "unrated" (never a guess; "UNKNOWN", "info" and junk fall through). A number is a CVSS score (osv group max_severity) banded 9.0 critical / 7.0 high / 4.0 medium / 0.1 low (0 or above 10: not rated). Two remaps: "moderate" (GitHub/osv/npm name) -> medium, "negligible" (grype's lowest band) -> low
+    for x in xs:
+        try: x = float(x); x = ("critical" if x >= 9 else "high" if x >= 7 else "medium" if x >= 4 else "low") if 0 < x <= 10 else ""
+        except (TypeError, ValueError): x = str(x or "").lower()
+        x = {"moderate": "medium", "negligible": "low"}.get(x, x)
+        if x in ("critical", "high", "medium", "low"): return x
+    return "unrated"
 UU = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 LOCK = re.compile(r"(^|/)([^/]*\.lock|package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|go\.sum|[^/]*manifest[^/]*\.json)$", re.I)
 def lf(rule, f, n, sec=""):
@@ -526,7 +533,7 @@ elif kind.startswith("trivy"):
         if kind == "trivy-secret": rows += [(r["Target"], s.get("StartLine", 0), s.get("RuleID"), s.get("Title", "secret detected")) for s in r.get("Secrets") or []]
         lo = lambda x: not show_hyg and str(x.get("Severity")).upper() == "LOW"
         hidden += sum(map(lo, (r.get("Vulnerabilities") or []) + (r.get("Misconfigurations") or [])))
-        rows += [(r["Target"], 0, v.get("VulnerabilityID"), f"{v.get('PkgName')}@{v.get('InstalledVersion')}: {v.get('Title', '')}") for v in r.get("Vulnerabilities") or [] if not lo(v)]
+        rows += [(r["Target"], 0, v.get("VulnerabilityID"), f"{dsev(v.get('Severity'))}: {v.get('PkgName')}@{v.get('InstalledVersion')}: {v.get('Title', '')}") for v in r.get("Vulnerabilities") or [] if not lo(v)]
         for m in r.get("Misconfigurations") or []:
             if lo(m): continue
             if not show_hyg and (m.get("ID") in HYG or m.get("AVDID") in HYG): hidden += 1; continue
@@ -538,9 +545,9 @@ elif kind.startswith("trivy"):
             rows.append((r["Target"], keyline(r["Target"], cm.get("StartLine", 0), cm.get("EndLine", 0), words, skip, r["Target"].lower().endswith((".yaml", ".yml"))), m.get("ID"), m.get("Title", "")))
 elif kind == "audit":
     # "-" placeholders: the caller's `read` collapses empty leading TSV fields; it supplies the lockfile path itself
-    rows += [("-", 0, k, f"{v.get('severity')}: {v.get('name', k)}") for k, v in (d.get("vulnerabilities") or {}).items()]
-    rows += [("-", 0, a.get("github_advisory_id") or k, f"{a.get('severity')}: {a.get('module_name')}: {a.get('title', '')}") for k, a in (d.get("advisories") or {}).items()]
-    rows += [("-", 0, v.get("id"), f"{p.get('name')}@{p.get('version')}") for p in d.get("dependencies") or [] for v in p.get("vulns") or []]
+    rows += [("-", 0, k, f"{dsev(v.get('severity'))}: {v.get('name', k)}") for k, v in (d.get("vulnerabilities") or {}).items()]
+    rows += [("-", 0, a.get("github_advisory_id") or k, f"{dsev(a.get('severity'))}: {a.get('module_name')}: {a.get('title', '')}") for k, a in (d.get("advisories") or {}).items()]
+    rows += [("-", 0, v.get("id"), f"unrated: {p.get('name')}@{p.get('version')}") for p in d.get("dependencies") or [] for v in p.get("vulns") or []]
 elif kind == "zizmor":  # row is 0-based in json-v1; fixes and snippets are never read
     for x in d:
         ls = x.get("locations") or [{}]  # the Primary location is the offending line; ls[0] can be a Related span (the enclosing job, a line above)
@@ -581,13 +588,13 @@ elif kind == "staticcheck":  # severity is omitted when empty; the check code (S
 elif kind == "cargo-deny":  # only error-level diagnostics (deny.toml sets what is an error); rows land on Cargo.lock: the dependency is the fix site
     rows = [("Cargo.lock", 0, cl((x.get("fields") or {}).get("code") or "cargo-deny"), cl(f"error: {(x.get('fields') or {}).get('message')}")) for x in d if x.get("type") == "diagnostic" and (x.get("fields") or {}).get("severity") in ("error", "bug")]
 elif kind == "cargo-audit":  # advisory id, then package@version and the advisory title
-    rows = [("Cargo.lock", 0, cl(x["advisory"]["id"]), cl(f"{x['package'].get('name')}@{x['package'].get('version')}: {x['advisory'].get('title', '')}")) for x in d["vulnerabilities"]["list"]]
+    rows = [("Cargo.lock", 0, cl(x["advisory"]["id"]), cl(f"unrated: {x['package'].get('name')}@{x['package'].get('version')}: {x['advisory'].get('title', '')}")) for x in d["vulnerabilities"]["list"]]  # rustsec advisories carry a CVSS vector at most, no severity field: always unrated
 elif kind == "tflint":  # message plus rule severity; callers and the rule link are not read
     rows = [(os.path.relpath((i.get("range") or {}).get("filename") or "-"), ((i.get("range") or {}).get("start") or {}).get("line") or 0, (i.get("rule") or {}).get("name"), cl(f"{(i.get('rule') or {}).get('severity')}: {i.get('message', '')}")) for i in d["issues"]]
 elif kind == "bundler-audit":  # file is the caller's lockfile ("-" placeholder as for grype); advisory id, gem@version, title and criticality; the advisory description is never read
     for x in d["results"]:
         if x["type"] == "insecure_source": rows.append(("-", 0, "insecure-source", f"insecure gem source: {x['source']}"))
-        else: rows.append(("-", 0, x["advisory"]["id"], f"{x['gem'].get('name')}@{x['gem'].get('version')}: {x['advisory'].get('title', '')} (criticality: {x['advisory'].get('criticality')})"))
+        else: rows.append(("-", 0, x["advisory"]["id"], f"{dsev(x['advisory'].get('criticality'))}: {x['gem'].get('name')}@{x['gem'].get('version')}: {x['advisory'].get('title', '')} (criticality: {x['advisory'].get('criticality')})"))
 elif kind == "cfn-lint":  # Error and Warning levels are findings, Informational is not; the template's own message text is the only free text read
     rows = [(os.path.relpath(x["Filename"]), x["Location"]["Start"]["LineNumber"], x["Rule"]["Id"], cl(f"{x['Level']}: {x.get('Message', '')}")) for x in d if x["Level"] in ("Error", "Warning")]
 elif kind == "rubocop":  # Security department offenses only (--only Security): cop name is the rule, severity and message are the text read
@@ -638,7 +645,7 @@ elif kind == "govulncheck":  # only called vulnerabilities: the first trace fram
 elif kind == "grype":  # file comes from the caller (it scanned one target); "-" placeholder: the caller's `read` collapses an empty leading field
     for m in d["matches"]:
         v, a = m.get("vulnerability") or {}, m.get("artifact") or {}
-        rows.append(("-", 0, v.get("id"), f"{a.get('name')}@{a.get('version')}: {(v.get('description') or '')[:200]}"))
+        rows.append(("-", 0, v.get("id"), f"{dsev(v.get('severity'))}: {a.get('name')}@{a.get('version')}: {(v.get('description') or '')[:200]}"))
 elif kind == "checkov":  # code_block is never read; "-" placeholder as for grype
     for x in ds:
         for c in x["results"].get("failed_checks") or []:
@@ -704,7 +711,8 @@ else:
     for r in d["results"]:
         for p in r.get("packages") or []:
             pk = p.get("package") or {}
-            rows += [(r["source"]["path"], 0, v.get("id"), f"{pk.get('name')}@{pk.get('version')}: {v.get('summary', '')}")
+            ms = {i: g.get("max_severity") for g in p.get("groups") or [] for i in g.get("ids") or []}  # CVSS score of the group the advisory sits in
+            rows += [(r["source"]["path"], 0, v.get("id"), f"{dsev((v.get('database_specific') or {}).get('severity'), ms.get(v.get('id')))}: {pk.get('name')}@{pk.get('version')}: {v.get('summary', '')}")
                      for v in p.get("vulnerabilities") or []]
 err = kind in ("semgrep", "guarddog") and d.get("errors")
 rc = 3 if err else 0  # 3 = the scan was partial (rows may be empty); 4 = errors on every scanned file and no findings. Decided on the findings alone: the not-checked rows below are added after
