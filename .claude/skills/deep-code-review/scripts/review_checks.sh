@@ -64,6 +64,8 @@ while [ $# -gt 0 ]; do
     --hygiene) hyg=1; shift ;;
     --full) wr=1 full=1 hmax=${REVIEW_HISTORY_MAX:-1000}; shift ;;
     --full-history) hist=1 full=1; shift ;;
+    # --list-tools: every tool name this script can run (run_one literals, the lint choice, the hub= array), read from its own source, for the org driver's timeout report
+    --list-tools) { grep -oE 'run_one +[a-z][a-z0-9_-]*|ln=[a-z]+' "$0" | sed -E 's/^(run_one +|ln=)//'; sed -n "/^hub=(/,/^)/p" "$0" | grep -oE "^  '[a-z0-9_-]+" | tr -d " '"; } | grep -vxE 'exit|tests' | sort -u; exit 0 ;;
     *) echo "usage: review_checks.sh [--repo DIR] [--base REF] [--tests] [--history] [--full] [--hygiene] [--timeout SECS]" >&2; exit 2 ;;
   esac
 done
@@ -173,9 +175,9 @@ run_one() {
   # lease full: heavy scanners run at lowest priority and are named in the summary (never take the lease while degraded)
   if [ "$lease" = degraded ]; then case $tool in gitleaks*|trufflehog|osv-scanner|semgrep|trivy|grype|checkov|gosec|govulncheck|staticcheck|codeql) [ "$nice19" != 1 ] || nz=(nice -n 19); case " $dg " in *" $tool "*) ;; *) dg+=" $tool" ;; esac ;; esac; fi
   [ -n "${hubtool:-}" ] || case " $ran " in *" $tool "*) ;; *) ran+=" $tool" ;; esac # hub tools count as ran only after a good parse
-  echo "start $tool" >>"$td/progress" # the org driver reads this after a kill to name unfinished tools
+  echo "start $tool $(date +%s)" >>"$td/progress" # the org driver reads this after a kill to name unfinished tools
   tbox ${nz[@]+"${nz[@]}"} "$@" || rc=$?
-  echo "done $tool" >>"$td/progress"
+  echo "done $tool $(date +%s)" >>"$td/progress"
   # degraded single-worker flag (semgrep --jobs 1, trivy --parallel 1) may be unsupported: after a crash retry once without it;
   # a good retry blames the flag, so the summary drops "1 worker" for this tool (--jobs/--parallel after a `--` are file names)
   case "$rc" in 0|124|142) ;; *) case " $w1 " in *" $tool "*)
@@ -273,10 +275,12 @@ fi
 
 json_files=$(changed '\.json$')
 if [ -n "$json_files" ] && have jq; then
-  while IFS= read -r f; do
+  jn=; while IFS= read -r f; do
+    if noise "$f"; then jn+=$f$'\n'; continue; fi
     run_one jq jq empty "./$f" || continue
     [ "$rc" = 0 ] || add jq "$f" "$(sed -nE 's/.*line ([0-9]+).*/\1/p' "$out" | head -n1)" invalid-json "$(head -n1 "$out")"
   done <<<"$json_files"
+  [ -z "$jn" ] || nskip jq "${jn%$'\n'}"
 fi
 
 # Hygiene tier: low-value rows (trivy LOW, hadolint info/style, checkov ids in HYG below) leave the findings unless --hygiene; sjson counts them in $td/hyg.

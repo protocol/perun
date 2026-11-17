@@ -9,13 +9,15 @@ code). Semgrep is forced to the bundled rules via REVIEW_SEMGREP_CONFIG, so a re
 Output in --out: `<owner>__<repo>-<YYYYMMDD>.json` (the findings array) and `summary-<YYYYMMDD>.tsv`
 (repo, status OK|PARTIAL|FAILED, findings, NOT CHECKED tools or the failure reason). A clone or scan failure is a FAILED
 row (a review_checks failure appends its last stderr line, 200 chars max), never skipped. A review_checks run killed at --timeout is a PARTIAL row: its findings so far are kept and each unfinished tool
-(plus "review_checks" for checks never started) is a not-checked row "timed out"; if its progress file is unreadable every tool seen counts as timed out. The clone uses --filter=blob:limit=5m;
+(plus "review_checks" for checks never started) is a not-checked row "timed out"; if its progress file is unreadable every tool `review_checks.sh --list-tools` names counts as timed out. The clone uses --filter=blob:limit=5m;
 each history blob it skipped is a git-clone not-checked row in the JSON (one aggregated entry in the summary). Exit 0 = every repo scanned; 1 = any FAILED (also a failed rev-list of skipped blobs); 3 = any PARTIAL and no FAILED, unless --allow-partial (then 0); 2 = usage or an empty list. NOT CHECKED tools do not fail the
 run but are listed per repo: they are unchecked surface, not a clean result.
 Private repos: if ORG_AUDIT_TOKEN is set it reaches ONLY the git clone/fetch children, as an `http.extraHeader` Basic
 auth header appended to the parent's GIT_CONFIG_COUNT/KEY_n/VALUE_n env at index COUNT (parent entries kept) (never in the URL, argv or .git/config). Every other child
 (review_checks and its scanners) runs with ORG_AUDIT_TOKEN, GH_TOKEN, GITHUB_TOKEN removed and no header, and the token
 (raw and base64) is masked in any FAILED reason. --out is created (or chmod-ed) 0700.
+Self-audit of a tree you own whose bench output corpus is huge (this repo's docs/bench): add `--noise-re '(^|/)(mocks|fixtures|e2e|__mocks__|testdata)/|(^|/)docs/bench/'`
+(the default noise ERE plus docs/bench). Never set it for a third-party repo: skipped files are NOT CHECKED, not scanned.
 Env: ORG_AUDIT_BASE_URL (default https://github.com) and ORG_AUDIT_REVIEW_CHECKS (script path) exist for tests.
 Side effects: network clones; writes only under --out and its own temp dir, which is removed on exit.
 Repo-local scanner config (.gitleaks.toml, .gitleaks-allow, .gitleaksignore, .trivyignore, ...) is deleted in the temp clone
@@ -55,7 +57,7 @@ def run(cmd, timeout=None, env=None, inp=None):
     return subprocess.CompletedProcess(cmd, p.returncode, out, err)
 
 
-def timed_out(rcd, timeout):
+def timed_out(rcd, timeout, rc_script):
     """Rows for a review_checks run killed at --timeout: its raw findings so far plus a not-checked row per unfinished tool."""
     rows, nc, seen, ok = [], set(), set(), False
     for d in glob.glob(os.path.join(rcd, "review.*")):
@@ -69,14 +71,14 @@ def timed_out(rcd, timeout):
             pass
         try:
             st = [l.split(None, 1) for l in open(os.path.join(d, "progress")) if l.strip()]
-            nc = {x[1].strip() for x in st if x[0] == "start"} - {x[1].strip() for x in st if x[0] == "done"}
+            nc = {x[1].split()[0] for x in st if x[0] == "start"} - {x[1].split()[0] for x in st if x[0] == "done"}  # "<tool> <epoch>"
             ok = True
         except OSError:
             pass
     msg = f"timed out after {timeout}s, results are partial"
     if not ok:  # fail closed: no readable progress, so no tool counts as finished
         msg += ", progress unreadable so every check counts as timed out"
-        nc = seen
+        nc = seen | set(run(["bash", rc_script, "--list-tools"], timeout=60).stdout.split())  # every tool review_checks can run, from itself
     for t in sorted(nc) + ["review_checks"]:  # the last row covers checks that never started (every check when progress is unreadable)
         rows.append({"file": ".", "line": 0, "rule": "not-checked", "message": msg, "text": f"not-checked: {msg}", "tool": t})
     return rows
@@ -119,7 +121,7 @@ def audit(repo, tmp, rc_script, base_url, timeout):
         r = run(["bash", rc_script, "--repo", dest, "--full", "--full-history"], env=env, timeout=timeout)
     except subprocess.TimeoutExpired:
         partial = True
-        r = subprocess.CompletedProcess([], 0, json.dumps(timed_out(rcd, timeout)), "")
+        r = subprocess.CompletedProcess([], 0, json.dumps(timed_out(rcd, timeout, rc_script)), "")
     last = next((l.strip() for l in reversed(r.stderr.splitlines()) if l.strip()), "")
     why = f": {last.replace(chr(9), ' ')[:200]}" if last else ""
     try:
@@ -149,7 +151,10 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--timeout", type=int, default=3600)
     ap.add_argument("--allow-partial", action="store_true", help="exit 0 even when a repo is PARTIAL (timed out)")
+    ap.add_argument("--noise-re", help="ERE of paths the code scanners and the jq check skip in the --full scan (replaces REVIEW_NOISE_RE's default; skipped files are NOT CHECKED rows); set only for a tree you own, e.g. its bench output corpus")
     a = ap.parse_args()
+    if a.noise_re is not None:
+        ENV["REVIEW_NOISE_RE"] = a.noise_re
     try:
         names = [l.strip() for l in open(a.repos) if l.strip() and not l.lstrip().startswith("#")]
     except OSError as e:
@@ -172,7 +177,7 @@ def main():
             if fn.lower() in seen:
                 raise RuntimeError("output name collision with an earlier repo")
             seen.add(fn.lower())
-            with tempfile.TemporaryDirectory(prefix="org-audit-") as tmp:  # own mkdtemp dir, removed on exit
+            with tempfile.TemporaryDirectory(prefix="org-audit-", ignore_cleanup_errors=True) as tmp:  # own mkdtemp dir, removed on exit; a killed scan's stray writer must not turn PARTIAL into FAILED
                 text, rows, nc, part = audit(repo, tmp, rc_script, base_url, a.timeout)
             with open(os.path.join(a.out, fn), "w") as f:
                 f.write(text)
