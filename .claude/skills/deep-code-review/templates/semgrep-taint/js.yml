@@ -2160,21 +2160,327 @@ rules:
   - pattern: process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
-# CWE-1321 prototype pollution: a for-in loop that copies keys onto a target with `target[key] = value`, the unguarded merge/extend shape (JSON.parse makes "__proto__" an own key, so hasOwnProperty is no guard). Cleared inside the loop by a comparison of the key with "__proto__" or a blocklist `.includes(key)`. The for pattern also matches for-of. ponytail: search-mode, so a lodash-style helper or Object.keys().forEach merge is not matched; add when a measured miss shows up.
+# CWE-1321 prototype pollution (search mode, so request input is matched by shape, not tracked). Reports (1) a copy `target[key] = source[key]` / `target[key] = f(target[key], ...)` / `target[key] = value` inside a for-in, Object.keys().forEach or Object.entries() for-of loop, where target is a parameter of the enclosing function (the merge/extend shape); (2) a nested write `t[k1][k2] = v` where k1 is a key-loop variable or comes from req/request body, query or params (inline, or a const/let/var local or destructured); (3) lodash `_.merge/mergeWith/defaultsDeep/set/setWith` with any argument is req/request body, query or params, or a JSON.parse(...) result; (4) `cur[keys[i]] = v` where keys comes from `x.split(...)`, or `k = x.split(...)[n]; o[k] = v`. The copy also counts when the value is derived from `source[key]` (`const v = source[key]`, `f(source[key])`). Left alone: a loop over a literal array or an UPPER_SNAKE constant, a single-level copy into a target that is not a function parameter (a local `{}` or `Object.create(null)`, typed or not, cannot reach Object.prototype with one write; the nested form is still reported), a sink that follows, in the same block, an `if` whose condition names the same key and whose body exits (`if (... key === "__proto__" ...) continue|return|throw`, `if (!ALLOW.has(key))`, `if (!ALLOW.includes(key))`, `if (BLOCK.has(key))`, `if (BLOCK.includes(key))`, `if (!Object.hasOwn(target, key))`, `if (!target.hasOwnProperty(key))`), a write inside `if (key !== "__proto__")` (exactly that test, no `||`) and a write inside a positive hasOwn check on the target. A guard on another variable, in a sibling branch or in another function does not count, nor does a guard whose body does not exit. hasOwnProperty on the SOURCE is no guard (JSON.parse makes "__proto__" an own key). ponytail: the lodash version is not checked, so a patched lodash adds a hit; a regex allowlist (`/^[a-z]+$/.test(key)`) or a `switch` that skips `__proto__` is still reported; a guard on `keys[i]` of a split path (array scan) is not recognised; a merge helper that reads keys through a callback or Reflect is not matched.
 - id: perun.js.prototype-pollution
   languages: [javascript, typescript]
   severity: ERROR
-  message: A for-in loop assigns `target[key] = ...` with no guard on the key, so a "__proto__" key from untrusted JSON pollutes Object.prototype (CWE-1321). Skip "__proto__", "constructor" and "prototype", or merge into Object.create(null).
+  message: A key from untrusted input is used to write into an existing object (key-loop copy, nested `t[k1][k2] = v`, lodash deep merge or set, or a split path walk), so a "__proto__" or "constructor" key can pollute Object.prototype (CWE-1321). Skip "__proto__", "constructor" and "prototype" keys, copy into Object.create(null) or a Map, or upgrade the lodash version.
   patterns:
-  - pattern: $T[$K] = $V
-  - pattern-inside: |
-      for ($K in $S) { ... }
+  - pattern-either:
+    # copy shape in a key loop
+    - patterns:
+      - pattern-either:
+        - pattern: $T[$K] = $X[$K]
+        - pattern: $T[$K] = $F(<... $T[$K] ...>, ...)
+        - pattern: $T[$K] = <... $S[$K] ...>
+      - pattern-either:
+        - pattern-inside: |
+            for ($K in $S) { ... }
+        - pattern-inside: |
+            Object.keys($S).forEach(($K) => { ... })
+        - pattern-inside: |
+            Object.keys($S).forEach(function ($K) { ... })
+      - pattern-either:
+        - pattern-inside: |
+            function $F(..., $T, ...) { ... }
+        - pattern-inside: |
+            function $F(..., $T: $TY, ...) { ... }
+        - pattern-inside: |
+            (..., $T, ...) => { ... }
+        - pattern-inside: |
+            (..., $T: $TY, ...) => { ... }
+      - metavariable-regex:
+          metavariable: $S
+          regex: '^(?!\[)(?!(?:this\.)?[A-Z][A-Z0-9_]*$)'
+    - patterns:
+      - pattern: $T[$K] = $V
+      - pattern-either:
+        - pattern-inside: |
+            for ($K in $S) { ... }
+        - pattern-inside: |
+            Object.keys($S).forEach(($K) => { ... })
+        - pattern-inside: |
+            Object.keys($S).forEach(function ($K) { ... })
+      - pattern-either:
+        - pattern-inside: |
+            const $V = $S[$K];
+            ...
+        - pattern-inside: |
+            let $V = $S[$K];
+            ...
+        - pattern-inside: |
+            var $V = $S[$K];
+            ...
+      - pattern-either:
+        - pattern-inside: |
+            function $F(..., $T, ...) { ... }
+        - pattern-inside: |
+            function $F(..., $T: $TY, ...) { ... }
+        - pattern-inside: |
+            (..., $T, ...) => { ... }
+        - pattern-inside: |
+            (..., $T: $TY, ...) => { ... }
+      - metavariable-regex:
+          metavariable: $S
+          regex: '^(?!\[)(?!(?:this\.)?[A-Z][A-Z0-9_]*$)'
+    - patterns:
+      - pattern: $T[$K] = $W
+      - pattern-inside: |
+          for (const [$K, $W] of $S) { ... }
+      - pattern-either:
+        - pattern-inside: |
+            function $F(..., $T, ...) { ... }
+        - pattern-inside: |
+            function $F(..., $T: $TY, ...) { ... }
+        - pattern-inside: |
+            (..., $T, ...) => { ... }
+        - pattern-inside: |
+            (..., $T: $TY, ...) => { ... }
+    # nested write on a key taken from request input
+    - patterns:
+      - pattern: $T[$K][$J] = $V
+      - pattern-either:
+        - pattern-inside: |
+            const {..., $K, ...} = $R.$P;
+            ...
+        - pattern-inside: |
+            const $K = $R.$P.$Q;
+            ...
+        - pattern-inside: |
+            let {..., $K, ...} = $R.$P;
+            ...
+        - pattern-inside: |
+            let $K = $R.$P.$Q;
+            ...
+        - pattern-inside: |
+            var {..., $K, ...} = $R.$P;
+            ...
+        - pattern-inside: |
+            var $K = $R.$P.$Q;
+            ...
+      - metavariable-regex:
+          metavariable: $R
+          regex: '^(req|request|ctx\.request)$'
+    - patterns:
+      - pattern: $T[$K][$J] = $V
+      - metavariable-regex:
+          metavariable: $K
+          regex: '^(req|request|ctx\.request)\.(body|query|params)\b'
+    # nested write on a key-loop variable
+    - patterns:
+      - pattern: $T[$K][$J] = $V
+      - pattern-inside: |
+          for ($K in $S) { ... }
+      - metavariable-regex:
+          metavariable: $S
+          regex: '^(?!\[)(?!(?:this\.)?[A-Z][A-Z0-9_]*$)'
+    # lodash-style deep merge/set fed by request or parsed JSON
+    - patterns:
+      - pattern: $L.$M(..., $B, ...)
+      - metavariable-regex:
+          metavariable: $L
+          regex: '^(_|lodash)$'
+      - metavariable-regex:
+          metavariable: $M
+          regex: '^(merge|mergeWith|defaultsDeep|set|setWith)$'
+      - metavariable-regex:
+          metavariable: $B
+          regex: '^((req|request)\.(body|query|params)\b|JSON\.parse\()'
+    # path walk: key list from path.split(...) used as a write key
+    - patterns:
+      - pattern: $C[$KS[$E]] = $V
+      - pattern-either:
+        - pattern-inside: |
+            const $KS = $P.split(...);
+            ...
+        - pattern-inside: |
+            let $KS = $P.split(...);
+            ...
+    - patterns:
+      - pattern: $C[$K] = $V
+      - pattern-either:
+        - pattern-inside: |
+            const $K = $P.split(...)[$E];
+            ...
+        - pattern-inside: |
+            let $K = $P.split(...)[$E];
+            ...
   - pattern-not-inside: |
-      for ($K in $S) { ... if (<... $K === "__proto__" ...>) { ... } ... }
+      if ($K !== "__proto__") { ... }
   - pattern-not-inside: |
-      for ($K in $S) { ... if (<... $K !== "__proto__" ...>) { ... } ... }
+      if (<... $K === "__proto__" ...>) continue;
+      ...
   - pattern-not-inside: |
-      for ($K in $S) { ... if ($A.includes($K)) { ... } ... }
+      if (<... $K === "__proto__" ...>) { continue; }
+      ...
+  - pattern-not-inside: |
+      if (<... $K === "__proto__" ...>) return;
+      ...
+  - pattern-not-inside: |
+      if (<... $K === "__proto__" ...>) { return; }
+      ...
+  - pattern-not-inside: |
+      if (<... $K === "__proto__" ...>) return $RV;
+      ...
+  - pattern-not-inside: |
+      if (<... $K === "__proto__" ...>) { return $RV; }
+      ...
+  - pattern-not-inside: |
+      if (<... $K === "__proto__" ...>) throw $EXC;
+      ...
+  - pattern-not-inside: |
+      if (<... $K === "__proto__" ...>) { throw $EXC; }
+      ...
+  - pattern-not-inside: |
+      if (!$A.has($K)) continue;
+      ...
+  - pattern-not-inside: |
+      if (!$A.has($K)) { continue; }
+      ...
+  - pattern-not-inside: |
+      if (!$A.has($K)) return;
+      ...
+  - pattern-not-inside: |
+      if (!$A.has($K)) { return; }
+      ...
+  - pattern-not-inside: |
+      if (!$A.has($K)) return $RV;
+      ...
+  - pattern-not-inside: |
+      if (!$A.has($K)) { return $RV; }
+      ...
+  - pattern-not-inside: |
+      if (!$A.has($K)) throw $EXC;
+      ...
+  - pattern-not-inside: |
+      if (!$A.has($K)) { throw $EXC; }
+      ...
+  - pattern-not-inside: |
+      if (!$A.includes($K)) continue;
+      ...
+  - pattern-not-inside: |
+      if (!$A.includes($K)) { continue; }
+      ...
+  - pattern-not-inside: |
+      if (!$A.includes($K)) return;
+      ...
+  - pattern-not-inside: |
+      if (!$A.includes($K)) { return; }
+      ...
+  - pattern-not-inside: |
+      if (!$A.includes($K)) return $RV;
+      ...
+  - pattern-not-inside: |
+      if (!$A.includes($K)) { return $RV; }
+      ...
+  - pattern-not-inside: |
+      if (!$A.includes($K)) throw $EXC;
+      ...
+  - pattern-not-inside: |
+      if (!$A.includes($K)) { throw $EXC; }
+      ...
+  - pattern-not-inside: |
+      if ($A.has($K)) continue;
+      ...
+  - pattern-not-inside: |
+      if ($A.has($K)) { continue; }
+      ...
+  - pattern-not-inside: |
+      if ($A.has($K)) return;
+      ...
+  - pattern-not-inside: |
+      if ($A.has($K)) { return; }
+      ...
+  - pattern-not-inside: |
+      if ($A.has($K)) return $RV;
+      ...
+  - pattern-not-inside: |
+      if ($A.has($K)) { return $RV; }
+      ...
+  - pattern-not-inside: |
+      if ($A.has($K)) throw $EXC;
+      ...
+  - pattern-not-inside: |
+      if ($A.has($K)) { throw $EXC; }
+      ...
+  - pattern-not-inside: |
+      if ($A.includes($K)) continue;
+      ...
+  - pattern-not-inside: |
+      if ($A.includes($K)) { continue; }
+      ...
+  - pattern-not-inside: |
+      if ($A.includes($K)) return;
+      ...
+  - pattern-not-inside: |
+      if ($A.includes($K)) { return; }
+      ...
+  - pattern-not-inside: |
+      if ($A.includes($K)) return $RV;
+      ...
+  - pattern-not-inside: |
+      if ($A.includes($K)) { return $RV; }
+      ...
+  - pattern-not-inside: |
+      if ($A.includes($K)) throw $EXC;
+      ...
+  - pattern-not-inside: |
+      if ($A.includes($K)) { throw $EXC; }
+      ...
+  - pattern-not-inside: |
+      if (!Object.hasOwn($T, $K)) continue;
+      ...
+  - pattern-not-inside: |
+      if (!Object.hasOwn($T, $K)) { continue; }
+      ...
+  - pattern-not-inside: |
+      if (!Object.hasOwn($T, $K)) return;
+      ...
+  - pattern-not-inside: |
+      if (!Object.hasOwn($T, $K)) { return; }
+      ...
+  - pattern-not-inside: |
+      if (!Object.hasOwn($T, $K)) return $RV;
+      ...
+  - pattern-not-inside: |
+      if (!Object.hasOwn($T, $K)) { return $RV; }
+      ...
+  - pattern-not-inside: |
+      if (!Object.hasOwn($T, $K)) throw $EXC;
+      ...
+  - pattern-not-inside: |
+      if (!Object.hasOwn($T, $K)) { throw $EXC; }
+      ...
+  - pattern-not-inside: |
+      if (!$T.hasOwnProperty($K)) continue;
+      ...
+  - pattern-not-inside: |
+      if (!$T.hasOwnProperty($K)) { continue; }
+      ...
+  - pattern-not-inside: |
+      if (!$T.hasOwnProperty($K)) return;
+      ...
+  - pattern-not-inside: |
+      if (!$T.hasOwnProperty($K)) { return; }
+      ...
+  - pattern-not-inside: |
+      if (!$T.hasOwnProperty($K)) return $RV;
+      ...
+  - pattern-not-inside: |
+      if (!$T.hasOwnProperty($K)) { return $RV; }
+      ...
+  - pattern-not-inside: |
+      if (!$T.hasOwnProperty($K)) throw $EXC;
+      ...
+  - pattern-not-inside: |
+      if (!$T.hasOwnProperty($K)) { throw $EXC; }
+      ...
+  - pattern-not-inside: |
+      if (Object.hasOwn($T, $K)) { ... }
+  - pattern-not-inside: |
+      if ($T.hasOwnProperty($K)) { ... }
+  - pattern-not-inside: |
+      if (Object.prototype.hasOwnProperty.call($T, $K)) { ... }
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
 - id: perun.js.raw-sql-concat
