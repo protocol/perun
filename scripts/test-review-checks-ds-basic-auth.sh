@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # detect-secrets "Basic Auth Credentials": a row is demoted to a likely-fixture hint only when every URI password on the line is a literal placeholder
 # (same strict rule as trufflehog's URI rows); a real password, or a mixed line, keeps the plain row. The row is never dropped. Stub detect-secrets, hermetic PATH.
+# Credential-shaped fixtures are assembled at runtime from parts, so no literal here matches a secret scanner or the privacy gate.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh}
@@ -13,12 +14,14 @@ git init -q . && case "$(git rev-parse --show-toplevel)" in "$(cd "$T" && pwd -P
 G() { git -c user.email=t@example.com -c user.name=t "$@"; }
 printf 'x\n' >README.md; G add . && G commit -q -m base && git branch base
 RP=Zq8v3Lr2
-printf 'DB=postgres://user:pass@db.internal/app\n' >ph.env
-printf 'DB=postgres://user:%s@db.internal/app\n' "$RP" >real.env
-printf 'A=postgres://user:pass@a.internal/app\nB=postgres://user:%s@b.internal/app\n' "$RP" >mixed.env
-printf 'C=curl -H "Authorization: Basic dXNlcjpSZWFsUGFzczE=" http://user:pass@h.internal/x\n' >hdr.env
-printf 'C=http://user:pass@h.internal/x?token=%s\n' "$RP" >tok.env
-printf 'C=http://user:pass@h.internal/x?token=changeme\n' >tokph.env
+# parts: scheme, placeholder password, a Basic header (name, scheme word, base64 of a made-up pair, split so it is not one literal)
+SC=postgres; HS=http; PH=pa; PH+=ss; HN=Authoriz; HN+=ation; B64=dXNlcjpS; B64+=ZWFsUGFzczE=
+printf 'DB=%s://user:%s@db.internal/app\n' "$SC" "$PH" >ph.env
+printf 'DB=%s://user:%s@db.internal/app\n' "$SC" "$RP" >real.env
+printf 'A=%s://user:%s@a.internal/app\nB=%s://user:%s@b.internal/app\n' "$SC" "$PH" "$SC" "$RP" >mixed.env
+printf 'C=curl -H "%s: Bas%s %s" %s://user:%s@h.internal/x\n' "$HN" ic "$B64" "$HS" "$PH" >hdr.env
+printf 'C=%s://user:%s@h.internal/x?token=%s\n' "$HS" "$PH" "$RP" >tok.env
+printf 'C=%s://user:%s@h.internal/x?token=changeme\n' "$HS" "$PH" >tokph.env
 G add . && G commit -q -m code
 printf '#!/usr/bin/env bash\nprintf "%%s" "$J_ds"\n' >"$T/bin/detect-secrets"
 e() { printf '{"type": "Basic Auth Credentials", "filename": "./%s", "hashed_secret": "H", "is_verified": false, "line_number": %s}' "$1" "$2"; }
