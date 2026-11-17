@@ -1,0 +1,2 @@
+### Changed
+- review_checks.sh tags an osv-scanner or trivy dependency row (line 0) with "(scope: dev)" when its pkg@version is reachable only via devDependencies in the npm lockfile (package-lock v2/v3, yarn v1, pnpm v9); prod, shared prod+dev, devOptional, unknown and unparseable lockfiles stay untagged, and severity and row count never change. The lockfile parsers live in the new scripts/dep_scope.py, which supply_chain_check.sh now reuses for its package-lock dev reach.

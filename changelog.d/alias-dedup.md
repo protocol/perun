@@ -1,0 +1,2 @@
+### Changed
+- review_checks.sh folds the same dependency advisory reported by osv-scanner (id plus aliases) and trivy (id plus VendorIDs) into one row per file and pkg@version: the highest severity wins (a tie goes to osv-scanner) and the row names the other scanner in "also" and an "[also reported by: ...]" suffix. Rows that differ in file, package or version, or share no advisory id, stay separate.

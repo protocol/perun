@@ -110,7 +110,7 @@ else
     echo "FAIL osv-scanner: NOT CHECKED, no pre-seeded DB; warm it once: OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$REVIEW_OSV_DB_DIR osv-scanner --offline-vulnerabilities --download-offline-databases ."; rc=1
   elif [ "$osv_rc" -gt 1 ]; then echo "FAIL osv-scanner: exit $osv_rc"; rc=1
   else
-    printf '%s' "$out" | python3 -I -c '
+    printf '%s' "$out" | DCR_SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" python3 -I -c '
 import json, os, re, sys
 order = ["low", "moderate", "high", "critical"]
 # Reach tag per row: imported (npm name in a JS/TS import, require or dynamic import outside node_modules/.git, and outside
@@ -120,6 +120,10 @@ order = ["low", "moderate", "high", "critical"]
 # map, non-npm ecosystem, no ecosystem field) is imported = gated. PyPI dist names differ from module names, so PyPI is
 # downgraded only by a dev group. ponytail: regex scan misses computed require(x) and config-string use; symlinks not followed.
 devs, prods, imp, scan_ok = set(), set(), set(), True
+import importlib.util
+_s = importlib.util.spec_from_file_location("dep_scope", os.path.join(os.environ["DCR_SCRIPTS"], "dep_scope.py")); dep_scope = importlib.util.module_from_spec(_s)
+try: _s.loader.exec_module(dep_scope)
+except Exception: dep_scope = None; scan_ok = False
 JS = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["\x27\x60]([^"\x27\x60]+)["\x27\x60]""")
 for d, ds, fs in os.walk(sys.argv[2], onerror=lambda e: globals().update(scan_ok=False)):
     ds[:] = [x for x in ds if x not in (".git", "node_modules") and not (d == sys.argv[2] and x in (".venv", "venv", "vendor"))]
@@ -129,11 +133,10 @@ for d, ds, fs in os.walk(sys.argv[2], onerror=lambda e: globals().update(scan_ok
             except OSError: scan_ok = False; continue
             for m in JS.findall(txt):
                 if m[0] not in ".#/" and ":" not in m: imp.add("/".join(m.split("/")[:2 if m[0] == "@" else 1]))
-    if "package-lock.json" in fs:
-        try:
-            for k, v in json.load(open(os.path.join(d, "package-lock.json")))["packages"].items():  # v1 has no "packages": fail closed
-                if "node_modules/" in k: (devs if v.get("dev") else prods).add(k.rsplit("node_modules/", 1)[1] + "@" + str(v.get("version")))
-        except (OSError, ValueError, AttributeError, KeyError): scan_ok = False
+    if "package-lock.json" in fs and dep_scope:
+        s = dep_scope.scope_sets(os.path.join(d, "package-lock.json"))  # None (v1 has no "packages", unreadable): fail closed
+        if s is None: scan_ok = False
+        else: prods |= s[0]; devs |= s[1]
 def devonly(p):
     k = p["package"]["name"] + "@" + str(p["package"]["version"])
     if p["package"].get("ecosystem") == "npm" and (k in devs or k in prods): return k not in prods  # the lock is authoritative: dev only if every occurrence is dev

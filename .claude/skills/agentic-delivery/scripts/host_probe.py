@@ -246,7 +246,7 @@ def run_canary(cmd: str, baseline_file: str) -> tuple:
         return None, None
     start = time.monotonic()
     try:
-        subprocess.run(cmd, shell=True, capture_output=True, timeout=120)
+        subprocess.run(cmd, shell=True, capture_output=True, timeout=120)  # nosec B602 - by design: runs the operator's own --canary command
     except (OSError, subprocess.SubprocessError):
         return None, None
     elapsed = time.monotonic() - start

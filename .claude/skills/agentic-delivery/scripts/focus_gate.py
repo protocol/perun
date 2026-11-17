@@ -198,7 +198,7 @@ def real_cmd(command: str, cwd: str, timeout: float) -> tuple:
     TRUSTED record. Raises subprocess.TimeoutExpired / OSError, which the caller maps
     to OPEN (a command that could not finish never proves DONE).
     """
-    proc = subprocess.run(command, shell=True, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run(command, shell=True, cwd=cwd, capture_output=True, text=True, timeout=timeout)  # nosec B602 - by design: runs the owner's own acceptance command from a TRUSTED record
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 

@@ -116,6 +116,13 @@ class Limits(unittest.TestCase):
             out = cli("big.txt\nok.txt\n", td)
         self.assertEqual(out, ["big.txt\t0\tnot-checked\tpartially scanned: file over 2 MB, only the first 2 MB were read"])
 
+    def test_big_binary_extension_gets_no_partial_row_but_big_text_still_does(self):
+        with tempfile.TemporaryDirectory() as td:
+            Path(td, "pic.png").write_bytes(b"a" * (3 << 20))
+            Path(td, "app.js").write_bytes(b"a" * (3 << 20))
+            out = cli("pic.png\napp.js\n", td)
+        self.assertEqual(out, ["app.js\t0\tnot-checked\tpartially scanned: file over 2 MB, only the first 2 MB were read"])
+
     def test_row_cap_prints_200_then_one_summary_row_and_stops(self):
         with tempfile.TemporaryDirectory() as td:
             for i in range(30):

@@ -92,3 +92,18 @@ rules:
       - pattern: ioutil.ReadDir($S)
       - pattern: fs.ReadFile($FS, $S)
     - focus-metavariable: $S
+- id: perun.go.raw-sql-sprintf
+  languages: [go]
+  severity: ERROR
+  message: A SQL string built with fmt.Sprintf or concatenation is passed to a database call (CWE-89). Use placeholders ($1 / ?) and pass the values as arguments. ponytail, search mode - any formatted value is reported, user-controlled or not.
+  patterns:
+  - pattern-either:
+    - pattern: $DB.$M(fmt.Sprintf(...), ...)
+    - pattern: $DB.$M($CTX, fmt.Sprintf(...), ...)
+    - pattern: $DB.$M($X + $Y, ...)
+    - pattern: $DB.$M($CTX, $X + $Y, ...)
+  - metavariable-regex:
+      metavariable: $M
+      regex: ^(Query|QueryRow|Exec|QueryContext|QueryRowContext|ExecContext|Queryx|NamedExec|Raw|Where)$
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "*_test.go"]
