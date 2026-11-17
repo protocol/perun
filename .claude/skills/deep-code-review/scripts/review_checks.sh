@@ -1597,6 +1597,13 @@ data = [t for t in rows if len(t) == 5]
 SUPERSEDES = {("semgrep", "github-actions-mutable-action-tag"): ("zizmor", "unpinned-uses")}
 kept = {(os.path.normpath(t[1]), t[2], t[0], t[3]) for t in data}
 data = [t for t in data if not any(t[0] == dt and t[3].endswith(dr) and (os.path.normpath(t[1]), t[2], kt, kr) in kept for (dt, dr), (kt, kr) in SUPERSEDES.items())]
+# bandit Bnnn and ruff-security Snnn share the number (ruff's flake8-bandit port): on the same file:line the ruff twin is dropped and the bandit row is tagged. A B101-summary row is never tagged.
+tw = lambda t, p: (os.path.normpath(t[1]), t[2], t[3][1:]) if t[0] == p[0] and re.fullmatch(p[1] + r"\d+", t[3]) else None
+bk = {k for k in (tw(t, ("bandit", "B")) for t in data) if k}
+rk = {}  # twin key -> the ruff rows to be dropped; their rule and message ride on the kept bandit row as "also" (rows carry no severity or CWE field, so there is nothing else to carry)
+for t in data:
+    if tw(t, ("ruff-security", "S")): rk.setdefault(tw(t, ("ruff-security", "S")), []).append(f"ruff-security {t[3]}: {t[4]}")
+data = [t for t in data if tw(t, ("ruff-security", "S")) not in bk]
 key = lambda t: not opt and t[0] in ("gitleaks", "gitleaks-history") and t[3] in LOW and FXD.search(t[1]) and (t[0], top(t[1]))
 fkey = lambda t: not opt and (t[0], t[3]) in FILE and (t[0], t[1], "", t[3])
 groups = {}
@@ -1608,6 +1615,9 @@ for t in data:
     k = key(t) or fkey(t)
     if not k or len(groups[k]) <= 3: out.append(row(t))
     elif k not in done: done.add(k); out.append(summ(k, groups[k]) if key(t) else fsumm(k, groups[k]))
+for r in out:
+    a = rk.get(tw((r["tool"], r["file"], str(r["line"]), r["rule"]), ("bandit", "B")))
+    if a: r["also"] = a; r["message"] += " [corroborated: bandit+ruff]"; r["text"] += " [corroborated: bandit+ruff]"
 # Corroboration: when different tools flag the same normalized file:line, every such row gets a "tools" list and a " [corroborated by: ...]" suffix. No row is dropped or merged. not-checked, summary, line<=0 and per-file-summary rows are skipped.
 cg = {}
 for r in out:
