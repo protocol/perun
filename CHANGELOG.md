@@ -3,6 +3,341 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.655.0] — 2026-11-17
+
+### Added
+- review_checks.sh runs agent_workflow_injection.py on changed workflows: outsider-written issue, PR, comment or branch text reaching an AI-agent step, a pull-request head checked out beside an agent under pull_request_target, issue_comment or workflow_run, and agent steps with sandbox or approval off or an unrestricted Bash tool (tool `agent-injection`, leads for review).
+
+size-budget-raise: .claude/skills/deep-code-review/references/appsec-supply.md 10495→11005 AI agent step injection leads paragraph
+size-budget-raise: .claude/skills/INDEX.md 18224→18362 agent_workflow_injection row
+size-budget-raise: .claude/skills/deep-code-review/INDEX-scripts.md 9383→9605 agent_workflow_injection row
+size-budget-raise: .claude/skills/deep-code-review/references/review-config.md 6472→6888 resync the budget row to the size already on main
+
+### Changed
+- review_checks.sh folds the same dependency advisory reported by osv-scanner (id plus aliases) and trivy (id plus VendorIDs) into one row per file and pkg@version: the highest severity wins (a tie goes to osv-scanner) and the row names the other scanner in "also" and an "[also reported by: ...]" suffix. Rows that differ in file, package or version, or share no advisory id, stay separate.
+
+### Added
+- semgrep-taint: six rules for three audit bug classes. perun.js.raw-sql-concat, perun.py.raw-sql-format and perun.go.raw-sql-sprintf flag SQL built by interpolation or concatenation and passed to a raw query API (Prisma $queryRawUnsafe/$executeRawUnsafe, knex.raw, pg .query, Python execute, Go db.Query with fmt.Sprintf). perun.js.orm-where-unchecked-input flags a Prisma where-filter fed from req.body or req.query with no presence check. perun.js.guard-allows-missing-token and perun.py.guard-allows-missing-token flag an auth guard that returns true when no token is present. Test: scripts/test_semgrep_audit_classes.py.
+
+### Security
+- Auto-update now waits a cooldown (policy key auto_update_delay_h, default 72 hours, 0 applies at once) after it first sees a release tag, and it re-checks the tag still points at the commit it saw. A malformed policy value falls back to 72.
+- Auto-update refuses a tag that is not annotated or whose own name header differs from the tag name, which blocks re-pushing an old release under a newer name. If the installed copy ships a release-signers file, the tag must also pass git verify-tag against it.
+- An empty or comment-only SHA256SUMS now fails the update, and SECURITY.md records the status as mitigated by the cooldown, not closed until release tags are signed.
+- The dependency scope check now counts a production pnpm git+ssh dependency whose version string contains "@" as production instead of leaving it unknown.
+
+### Changed
+- bench/tool-only: Go twins for CWE-89, 78 and 918 (the registry semgrep go rules already catch all three, so no perun Go rule). Clean twins for open redirect, SSRF and Terraform are now idiomatic-safe instead of tripping registry and checkov noise (local false positives 11 to 3-4); the false-positive ceiling stays at 31 until it is ratcheted to the CI real-hub count. The scorer writes a root go.mod so gosec and staticcheck can load the Go twins.
+
+### Added
+- bench/tool-only: six vuln/clean-twin pairs for Go and JavaScript, in CWE classes the bench lacked there: path traversal in Go and in JavaScript (CWE-22), open redirect in Go and in JavaScript (CWE-601), command injection through child_process.exec (CWE-78) and unsafe deserialization through node-serialize behind express.text() (CWE-502). The clean twins confine the Go path with filepath.IsLocal, switch on literal redirect targets, validate the host with an allowlist regex and pass `--` to execFile, and parse with JSON.parse; they add no false-positive rows. Existing registry and perun rules already catch five pairs (bench run without go.yml: 29 of 30 hit, only the Go path-traversal pair missed).
+- semgrep-taint/js.yml: the message of perun.js.path-traversal now states that a resolve or normalize plus startsWith check and an allowlist-map lookup are not recognised and still report (accepted false positives: a pattern cannot prove either sound; both were tried as sanitizers and dropped because the prefix or the map values can come from request data). A switch or if-chain that assigns string-literal paths only keeps the request value away from the sink. Test: scripts/test_semgrep_js_pathconfine.py pins the bypasses (request-derived prefix, reassignment, spread, shorthand, parameter-fed and post-literal-write maps) as findings, run live with REQUIRE_SEMGREP=1 in the real-hub job. The JavaScript clean twin is a switch on the key that assigns string-literal paths and rejects by default.
+- semgrep-taint/go.yml: new taint rule perun.go.path-traversal, because no existing tool caught the Go path-traversal pair. Sources: net/http (r.URL.Query().Get and index access, FormValue, PostFormValue, PathValue, URL.Path), gorilla and chi route parameters, and gin and echo context getters inside functions that take the context. Sinks: open, read, write, create, remove, rename, stat, list and mkdir calls. The only sanitizer is a filepath.IsLocal confinement guard; filepath.Base is not one because Base("..") returns "..". Limits (pinned in the test): an allowlist-map lookup and a Clean plus HasPrefix check still report, and a value read inside a helper function is not followed. More sinks: chmod, chown, truncate, symlink, link, filepath.WalkDir, ioutil.ReadDir, fs.ReadFile; more sources: r.Form.Get, gin c.GetQuery. filepath.IsLocal is lexical and does not follow symlinks (stated in the rule message); the Go clean twin confines with http.Dir. An inverted guard, a guard on another variable and a guard whose only return is nested still report (pinned). Test: scripts/test_semgrep_go_pathtrav.py; the real-hub CI job runs it with REQUIRE_SEMGREP=1 so a missing semgrep fails instead of skipping (the perpr job has no semgrep and runs the offline pins).
+
+### Added
+- bench/tool-only: first PHP, Ruby and C# pairs: PHP `unserialize` of a cookie, Ruby `YAML.load` of a request parameter (CWE-502) and C# `SqlCommand` string-concatenated SQL (CWE-89). The clean twins use `json_decode`, `YAML.safe_load` and a parameterized `SqlCommand` and add no false-positive rows.
+- semgrep-taint/rb.yml: new rule perun.rb.yaml-load-params for `YAML.load`, `Psych.load` and the `unsafe_load` forms on a `params[...]` value. Test: scripts/test_semgrep_rb_yaml_load.py.
+
+### Added
+- bench/tool-only: JS prototype pollution (CWE-1321) and the first Java pairs, XXE via `DocumentBuilderFactory` (CWE-611) and `ObjectInputStream` deserialization (CWE-502). Each clean twin stays quiet, so the false-positive ceiling is unchanged.
+- semgrep-taint/js.yml: new rule perun.js.prototype-pollution for a for-in loop that assigns `target[key] = ...` with no `__proto__` guard. Test: scripts/test_semgrep_js_proto_pollution.py.
+
+### Added
+- bench/tool-only: Python request-data deserialization (pickle, yaml), lxml XXE and server-side template injection pairs (CWE-502, CWE-611, CWE-1336). The SSTI twin compiles request data with jinja2 `Template`; the clean twin renders a literal template with the data as context and adds no false-positive rows.
+- semgrep-taint/py.yml: new taint rule perun.py.ssti for request data or a parameter reaching `jinja2.Template`, `Template`, `.from_string` or `render_template_string`. Test: scripts/test_semgrep_py_ssti.py.
+
+### Added
+- bench/tool-only: Python SSRF redirect pair (CWE-918). The vuln file checks the host allowlist on the original URL but requests follows redirects to any host; the clean twin sets allow_redirects=False and re-checks the Location. Existing rules (perun.py.ssrf and registry) already catch it, so no new rule. The twin still trips them because semgrep cannot prove the re-check; that is a documented limit, accepted as noise.
+
+### Added
+- bench/tool-only: 17 seeded fictional CWE fixtures (wave 19 adds CWE-79, 918, 611, 601, 295, 347) with clean twins and an answer key, scored by scripts/bench_tool_only.py (per-CWE and overall recall, false positives on the clean twins; fails below the frozen recall floor or above the frozen false-positive ceiling; SKIPs when semgrep, gitleaks or trivy is absent). Runs in the real-hub CI job after the tools install.
+
+### Changed
+- `perun.js.cors-reflected-origin` and `perun.py.cors-reflected-origin` are now taint rules: an Origin read (any case, any default or fallback such as `or`, `||` or `.get(h, h)`, through aliases, local variables and string methods) that reaches the Access-Control-Allow-Origin value is reported when credentials are sent in the same function, including a credentials value held in a variable. The JS sink also covers `Object.assign(res.headers, {...})`, `res.writeHead(200, {...})` and a header map assigned by key. The sanitizer is a lookup in a module-level literal dict only (`ALLOWED[origin]`, `ALLOWED.get(origin)`); a list index, a cache or an undeclared map is still reported. An `in` allowlist guard is accepted noise and is covered as a flagged fixture in `test_semgrep_defaults.py`. It is not a bench clean twin, because the bench scorer discards any rule that fires on a clean twin, which would unscore the CWE-942 hit. Known limit, stated in the rule message: an Origin read inside a helper function is not followed (cross-function taint needs Semgrep Pro).
+- `perun.js.jwt-decode-unverified` is now a taint rule: any value derived from `jwt`, `jsonwebtoken`, `require("jsonwebtoken")` or an import of it (aliases of any depth, `.default`, `jwt["decode"](t)`, `jwt.decode.call(...)`, `jwt.decode.apply(...)`, a decode destructured from an alias) is followed.
+
+### Fixed
+- dep_scope.py keeps prod a superset of the real production tree, so a prod package is never tagged "(scope: dev)": a yarn v1 or pnpm v9 edge that is missing from the lockfile (resolutions, aliases) now counts every locked copy of that name as reached, pnpm leaf snapshots written as "pkg@1.0.0: {}" are read, and workspaces globs like "packages/**" match nested members (matches outside the lockfile directory are ignored). review_checks.sh leaves rows untagged and supply_chain_check.sh marks the scan incomplete when dep_scope.py fails to load or run.
+
+### Changed
+- review_checks.sh tags an osv-scanner or trivy dependency row (line 0) with "(scope: dev)" when its pkg@version is reachable only via devDependencies in the npm lockfile (package-lock v2/v3, yarn v1, pnpm v9); prod, shared prod+dev, devOptional, unknown and unparseable lockfiles stay untagged, and severity and row count never change. The lockfile parsers live in the new scripts/dep_scope.py, which supply_chain_check.sh now reuses for its package-lock dev reach.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 62810→63131 hub row for the dev-only dependency scope tag and scripts/dep_scope.py
+
+### Fixed
+- dependabot.yml sets a 7-day cooldown so new releases are not proposed the day they ship (clears the dependabot-missing-cooldown finding). A comment in test-provision-tools.sh no longer parses as a shellcheck directive. run-ci-tests.sh and test-host-manifests.sh now exit when their initial cd fails, so they fail closed if path resolution fails.
+
+### Changed
+- review_checks.sh precision: under `--full`, rows with the same tool, rule, line, message, file name and file content hash in byte-identical copies of a file (a vendored directory copied several times) collapse to the first path, with hint `also: <other paths>`; a fixture-path copy and a non-fixture copy stay separate rows. A semgrep path-traversal or path-join row in a file that reads `sys.argv`, `argparse` or `process.argv` and imports no HTTP framework or request object gets hint `cli-operator-input` (severity and CWE tag unchanged). A row a scanner emits twice (same tool, rule, file, line and message) is one row. No unique row is dropped.
+- invisible_chars.py: a file over 2 MB with a known binary extension (`.png`, `.jpg`, `.pdf`, ...) is no longer read and no longer gets a "partially scanned" not-checked row; a large text file still does.
+
+### Fixed
+- A root .gitleaks.toml extends the default gitleaks rules and allowlists only the synthetic secret-detector fixtures (the secrets-heldout bench dirs, the g1-matrix heldout result.json files and two secret test scripts), each by an anchored path regex, so a history scan no longer reports 91 fictional-credential hits while a real key anywhere else is still caught. scripts/test_gitleaks_allowlist.sh guards that: with gitleaks installed it requires a fake key outside the allowlist to be detected and the fixture paths to scan clean, and it skips when gitleaks is absent.
+
+### Added
+- CI now runs scripts/test_gitleaks_allowlist.sh in a `gitleaks` job (full-history checkout, gitleaks 8.30.1 installed from its release tarball verified against a hardcoded sha256, REQUIRE_GITLEAKS=1), and the `gates` aggregate requires it. Before this no workflow called the script.
+- The guard is strict (missing gitleaks or shallow history FAILs) only when REQUIRE_GITLEAKS=1 is set, so the per-PR test legs, which do not install gitleaks, SKIP it.
+
+### Fixed
+- .gitleaks.toml no longer allowlists the whole of scripts/test_secret_extra_rules_w5.py and scripts/test_secret_precision.py by path. A second allowlist exempts only their three fictional fixture values by regex on the match, so a real key added to either file is detected. A path inside an AND allowlist is applied on its own by gitleaks 8.30.1 (it blinds the whole file), so the exemption is by value only. scripts/test_gitleaks_allowlist.sh now appends a fresh probe key to a temp copy of each file at its real relative path and requires detection, while the unmodified copies stay clean.
+- A .gitleaksignore lists the fingerprints of the 19 remaining history hits, all triaged as fictional (YOUR_* placeholders, sha256 hashes, LLM bench outputs naming made-up APIs), so a full history scan reports 0 findings. scripts/test_gitleaks_allowlist.sh now asserts that when run in a git checkout.
+
+### Added
+- `review_checks.sh` tool hub routes `govulncheck` for Go repos when the root `go.mod` changes: only vulnerabilities the code actually calls become rows (on `go.mod`, with the call site in the message); imported-only ones are dropped. No `govulncheck` or no `go` toolchain is `NOT CHECKED`; output with no config message, a stray line in the stream or a crash is `not run`, never clean.
+- `repo_settings_audit.py --scorecard` adds one row per repository: the OpenSSF Scorecard aggregate score for a public repo (an `info` row, so it is stored in the `--json` rows), `not checked` for a private repo, a missing `scorecard` binary or a failed run.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 16646→17473 govulncheck and Scorecard route rows
+
+### Fixed
+- CI pins `pyyaml==6.0.3` next to hypothesis: the `scripts/test_workflow_persist_credentials.py` guard fails closed without it, so the runner no longer depends on whatever PyYAML the image ships.
+
+### Changed
+- review_checks.sh: the bandit row kept by the bandit/ruff-security twin collapse now carries the dropped ruff row as `also` (`ruff-security S603: message`). Rows hold no severity or CWE field, so nothing else is lost. A new table test checks that every Snnn/Bnnn number ruff and bandit both ship names the same check (no differing pair found, none excluded).
+
+### Changed
+- review_checks.sh: a ruff-security Snnn row is dropped when bandit reports Bnnn (same number, ruff's flake8-bandit port) on the same file:line; the kept bandit row is tagged "[corroborated: bandit+ruff]". Different lines, non-twin rules and the B101-summary row are untouched.
+
+### Added
+- review_checks.sh routes bundler-audit (a changed `Gemfile.lock` against the local ruby-advisory-db only: with no local db it is NOT CHECKED because the tool would otherwise download one) and cfn-lint (changed CloudFormation templates, JSON, Error and Warning rows) through the tool hub. Each is NOT CHECKED with an install hint when missing, counts as wired only once installed, and is not run on a crash, empty output, wrong-shape output or an unexpected exit. Flags, exit codes and the JSON shape were read from the upstream README, CLI and formatter source fetched 2026-11-13; stub-tested only, no real tool output was run.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 53056→54797 two hub rows with their verification evidence
+
+### Added
+- review_checks.sh routes flawfinder (C/C++, SARIF), cppcheck (C/C++ without a project build, XML read from its stderr, primary location first) and devskim (multi-language, one file per run, SARIF) through the tool hub. Each is NOT CHECKED with an install hint when missing, counts as wired only once installed, and is not run on a crash, empty output, wrong-shape output or a non-zero exit. Changed files only. Flags, exit codes and licenses (GPLv2+, GPLv3, MIT) were checked against man pages, manuals and cloned source fetched 2026-11-12; no network code was found in any of the three (DevSkim's NuGet dependencies were not audited, marked unverified in tool-hub.md).
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 43180→46217 three hub rows with their verification and egress evidence
+
+### Changed
+- review_checks.sh marks findings that several tools report on the same file and line: every such row gets a `tools` list and a "[corroborated by: ...]" message suffix. No row is dropped or merged, so per-tool row consumers are unaffected. scripts/test-review-checks-hub-dedup.sh covers it.
+
+### Fixed
+
+- The cross-tool duplicate merge keeps each merged row's tool and rule in an `also` list, so per-tool attribution (bandit B602, ruff-security S602) survives; the real-hub test reads it. Test fixtures that matched gitleaks are built at runtime, and the three triaged fictional history hits are in `.gitleaksignore`.
+
+- review_checks.sh: bandit, ruff-security, semgrep and gosec rows on the same file:line with the same CWE now collapse to one row. The row's `tools` list names every tool and its message ends `[also reported by: <tool> <rule>, ...]`. The CWE and severity come from each scanner's own metadata (bandit `issue_cwe` and `issue_severity`, gosec `cwe` and `severity`, semgrep `metadata.cwe` and `severity`), shown as a `[CWE-n, severity]` tag on the row message; the merged row keeps the highest severity any member carried. ruff-security carries no CWE, so its S-rule joins the bandit B-rule with the same number on that line. A row with no CWE tag, or a different CWE on the line, stays separate. Extends the existing corroboration step; no new module. Test: scripts/test-review-checks-hub-crosstool.sh.
+- review_checks.sh: secret rows that are probably not credentials now carry `hint: likely-fixture` and a `[likely-fixture: reason]` message suffix (kept, never dropped; the value is read only to classify and is never printed). Trufflehog URI/JDBC/Postgres/Mongo only when every password on the line is a literal placeholder (`pass`, `password`, `example`, `changeme`, `secret`, `xxx`, `<...>`, `${...}`), the host never decides; trufflehog Circle/generic on a hash in a lockfile or manifest; HubSpot only when the UUID is the value of an `*_id` field; Cloudflare only when the line is a `uses:` pin and the value is its 40-hex SHA after `@`; gitleaks `linkedin-client-id` and `linkedin-client-secret` only when the value is an identifier name (camelCase or snake_case containing linkedin).
+- bench_tool_only.py: the false-positive ceiling is a ratchet. A run above it fails; a run below it prints a NOTE to lower `MAX_FALSE_POSITIVES` (never raise it), and scripts/test-bench-ceiling-ratchet.sh fails CI when a ceiling is higher than on origin/main. Style-linter rows (ruff, pyflakes, such as PIE810) are reported as `lint_rows` and do not count as security false positives. Secret rows demoted to likely-fixture are reported as `demoted_rows` under their own ceiling `MAX_DEMOTED_ROWS`, so demotion cannot hide a false positive. The bench writes fictional look-alike secrets for each demotion at run time. Measured here without gosec: recall 30/30, false positives 5, demoted rows 3 (FP ceiling stays 25, set from the CI real-hub job).
+
+- review_checks.sh: a detect-secrets `Basic Auth Credentials` row now carries `hint: likely-fixture` and a `[likely-fixture: placeholder password]` suffix under the same strict rule as the trufflehog URI rows: only when every credential-shaped token on the line is a literal placeholder (URL `user:pass@`, `Basic`/`Bearer` values, `token=`, `api_key=`, `secret=`, `password=`, `Authorization:`). A real value anywhere on the line, or a mixed line, keeps the plain row, and the row is never dropped. A detect-secrets row is hinted only by this rule, never by its path. bench_tool_only.py: `MAX_DEMOTED_ROWS` is new in the PR that introduced the demotion and stays a row count; it is 6 because each placeholder line in `clean/demoted.env` is hit by both trufflehog and detect-secrets (`MAX_FALSE_POSITIVES` unchanged at 25). The ceiling ratchet passes when the key is absent on origin/main and fails on a raise once it exists there. Test: scripts/test-review-checks-ds-basic-auth.sh.
+
+### Fixed
+- scripts/test-review-checks-ds-basic-auth.sh: build the credential-shaped URL and Basic-header fixtures at runtime from parts, so no literal in the test matches the gitleaks curl-auth-header rule or the privacy gate. The history scan still sees the earlier literal, so its single fingerprint is added to .gitleaksignore.
+
+### Added
+- Tool hub: detekt (Kotlin, Apache-2.0) and security-code-scan (.NET Roslyn analyzer, LGPL-3.0) get explicit not-routed rows in tool-hub.md with their evidence, and a test shows stub binaries of both are never run. detekt's CLI source shows no network code but the analysis core was not read; security-code-scan runs inside a project build, not on changed files. Sources and license checks fetched 2026-11-12 are logged in docs/standards-index.md.
+
+### Changed
+- tool-hub.md: the devskim row now says its SARIF shape is stub-tested only, not verified.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 45343→49707 flawfinder, cppcheck, devskim, detekt and security-code-scan rows with evidence, merged over the sobelow row
+
+### Added
+- `review_checks.sh` tool hub routes `kubescape` (Kubernetes manifests, NSA and CIS frameworks, JSON output, local framework artifacts only; Helm templates are named `NOT CHECKED`) and `retire` (retire.js: vulnerable vendored or minified JavaScript libraries that manifest-based SCA misses; local `REVIEW_RETIRE_JSREPO` only). kubescape runs one file per run and both fail closed on a path that does not map to a changed file. Each is `NOT CHECKED` when missing or when its local data is missing, and `not run` on a crash or wrong-shape output. Neither is in `provision_tools.sh` (retire is an npm install), so a missing one is never reported as fixable.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 49707→53056 hub rows for kubescape and retire
+
+### Added
+- review_checks.sh routes two more installed tools, each NOT CHECKED when missing and not run on a crash, empty output, wrong-shape output or an exit that disagrees with the report, never a silent clean: mobsfscan (Android and iOS source, only in a repo with a mobile marker) and psalm (PHP taint analysis, only with a root psalm.xml that the diff did not change). Non-JSON log lines around the report are skipped. tool-hub.md and standards-index.md document the rows and log the sources fetched 2026-11-12.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 37939→40570 hub rows for mobsfscan and psalm
+
+### Added
+- `review_checks.sh` tool hub routes four more installed tools, each `NOT CHECKED` when missing and `not run` on a crash or wrong-shape output: `ruff-security` (`ruff check --select S`, its own row beside `bandit`), `syft` (an SBOM inventory line with the package count on stderr and the SBOM kept in `$TMPDIR`; never counted as ran or wired, no finding row), `kube-linter` (only YAML with `apiVersion:` and `kind:`, never Helm `templates/` or `kustomization.yaml`; exit 2 is not run) and `brakeman` (only when the root `Gemfile` names rails). `cargo-audit` is not routed: `osv-scanner` already reads `Cargo.lock` and OSV carries the RustSec advisories.
+- `provision_tools.sh` lists ruff (pipx), syft and kube-linter (brew) and brakeman (gem) in its install line.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 21431→24131 hub rows for ruff-security, syft, kube-linter, brakeman and the cargo-audit decision
+
+### Changed
+- In a whole-repo `--full` audit, `review_checks.sh` keeps semgrep, bandit and ruff-security off whole files under `mocks/`, `fixtures/`, `e2e/`, `__mocks__/` and `testdata/`. A diff review never skips a file, so a vuln added there is still flagged. Each skipped file is a `not-checked` row in the report and a count on stderr. `REVIEW_NOISE_RE` replaces the pattern; an empty value scans those paths too. Secret scanners still read them.
+- bandit runs with `-s B404` and ruff-security with `--ignore S404` (an `import subprocess` carries no data flow); B603/S603, shell use and the semgrep command-injection taint rule are unchanged. `MAX_FALSE_POSITIVES` stays 25 until CI measures the real count.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 61681→62695 noise-path scan rule and rule-id skips documented
+
+### Added
+- `review_checks.sh` tool hub routes `pmd` (Java, one file per run, PMD's built-in security ruleset only, SARIF) and `solhint` (Solidity, one file per run, a throwaway `solhint:recommended` config so a project `.solhint.json` that can load plugins is never read, SARIF). Both are `NOT CHECKED` when missing and `not run` on a crash, empty or wrong-shape output or a non-zero exit with no row; neither is in `provision_tools.sh`. Flags are from the fetched upstream docs; solhint exit codes, the SARIF shapes and the PMD `sarif` format name are marked unverified in `tool-hub.md`.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 58341→59805 hub rows for pmd and solhint
+
+### Changed
+- The real-hub CI job now also runs real osv-scanner 2.7.1, shellcheck 0.11.0 and guarddog 3.2.0 through `review_checks.sh` on fictional canaries, and fails unless each ran (no `not run`, no `NOT CHECKED`) and reported its rule on its canary file. osv-scanner reads the lockfile pinning lodash 4.17.15 and reports a `GHSA-*` advisory; shellcheck reports `SC2086` on an unquoted expansion; guarddog scans the one newly added lock package, installed under `node_modules` with a fictional mining-pool string, and reports `threat-process-cryptomining`, and the test also asserts the scan was full, not `guarddog(scanned-N-of-M)`. Pins: osv-scanner by sha256 from the release `SHA256SUMS` (also pinned literally); shellcheck by the release asset digest (the release publishes no checksums file), re-verified against a fresh download; guarddog hash-locked in its own venv (`scripts/real-hub-requirements-guarddog.txt`, since it pulls boto3, cryptography, pygit2, pydantic and yara-python). Fetches retry up to 3 times. osv-scanner's offline DB is pre-seeded with the command the hub's own NOT CHECKED message names and exported as `REVIEW_OSV_DB_DIR`; that DB is the live OSV npm dump, not pinned (the advisory assertion accepts any of five lodash 4.17.15 ids).
+
+### Changed
+- The real-hub CI job now also runs real cargo-audit 0.23.0, cargo-deny 0.20.2 and brakeman 8.1.0 through `review_checks.sh` on fictional canaries, and fails unless each ran (no `not run`, no `NOT CHECKED`) and reported its rule on its canary file. cargo-audit reads a `Cargo.lock` pinning time 0.1.45 and reports `RUSTSEC-2020-0071`; cargo-deny (offline, with a `deny.toml` that allows only MIT and Apache-2.0) rejects the canary crate's GPL-3.0-only license (`rejected`); brakeman scans a one-controller Rails canary under a root `Gemfile` naming rails and reports the `Evaluation` check (Dangerous Eval). Pins: cargo-audit by the release asset digest (the release publishes no checksums file), re-verified against a fresh download; cargo-deny by sha256, checked against both the release's own `.sha256` asset and a literal pin; brakeman by the `.gem` sha256 from the rubygems.org versions API (its one dependency, racc, comes from Ruby's own default or bundled gems and is not separately pinned). The advisory DB integrity check: RustSec/advisory-db is fetched by one full commit sha (content-addressed, then `rev-parse FETCH_HEAD` must equal it) into the path the hub reads. The osv-scanner offline DB seed now also seeds a crates.io DB (the cargo canary's lockfile is scanned by osv-scanner too) and verifies every seeded zip. The three new tools join the bounded hub-run retry loop. The canary `Cargo.lock` is generated online and the crates fetched, because the hub's cargo-deny run is offline.
+- pip-audit is not added: the hub reaches it only as a fallback for a requirements file that osv-scanner and trivy gave no result for (never the case with the seeded osv DB), and it has no offline advisory DB (it queries PyPI live), so there is nothing to integrity-pin.
+
+### Changed
+- The real-hub CI job now also runs real mobsfscan 1.1.0 and the project's own local eslint 9.39.5 with eslint-plugin-security 4.2.1 through `review_checks.sh` on fictional canaries, and fails unless each ran (no `not run`, no `NOT CHECKED`) and reported its rule on its canary file. mobsfscan scans a debuggable Android manifest and reports `android_manifest_debugging_enabled`; eslint-security runs `./node_modules/.bin/eslint` under an `eslint.config.mjs` that loads the security plugin (committed in the base, because the hub does not run a config the diff changes) and reports `security/detect-eval-with-expression` on a Node canary. Pins: mobsfscan from a hash-locked requirements file in its own venv (it pins semgrep 1.172.0, so a wrapper puts that venv first on PATH instead of the njsscan venv's semgrep); eslint and the plugin in the existing `scripts/real-hub-npm` package-lock (integrity hashes, `npm ci --ignore-scripts`). Both join the bounded hub-run retry loop.
+- psalm, sobelow and licensee are not added. psalm: the hub keeps only rows with an `is_security` field, which psalm 6.20.11 does not emit (7.x does), and psalm 7.4.0's platform check needs PHP 8.3.16 or newer while the runner ships 8.3.6, so it would need a third-party PHP setup action. sobelow needs an Erlang/OTP and Elixir toolchain the runner does not ship, with no checksum-pinned install path. licensee is an inventory line the hub never counts as a scan that ran, and its dependency set includes natively built gems (rugged) that cannot be hash-locked without a Bundler lockfile.
+
+### Changed
+- The real-hub CI job now runs the real nuclei (3.11.1, sha256 from the upstream checksums file) with nuclei-templates v10.5.2 (tag archive, sha256-pinned) through the hub's DAST route (REVIEW_DAST_URL) against a local python http.server canary, and asserts it ran and reported the exact rule id tech-detect with no "not run" or "NOT CHECKED" line. zap-baseline is deliberately not covered: its only route is the ghcr.io/zaproxy/zaproxy image, about 1.2 GB of compressed layers, too heavy for the per-push job.
+
+### Changed
+- The real-hub CI job now also installs pinned, checksum-verified real pmd, solhint, hadolint, bandit, ruff and actionlint and asserts each is reported as ran with its expected rule id on a fictional canary file, extending the tfsec, ansible-lint, rubocop and cfn-lint smoke so a changed flag or report shape in these six scanners fails CI instead of passing on stubs alone.
+
+### Changed
+- The real-hub CI job now also installs pinned, checksum-verified real zizmor, gosec, staticcheck, kube-linter, flawfinder and detect-secrets (all offline, no advisory database) and asserts each is reported as ran with its expected rule id on a fictional canary file, so a changed flag or report shape in these six scanners fails CI instead of passing on stubs alone.
+- Hardened the real-hub supply chain: all pip tools now install from the committed `scripts/real-hub-requirements.txt` (full transitive pins plus sha256 hashes for Linux x86_64 CPython 3.13, `pip install --require-hashes --only-binary=:all:`), solhint installs with `npm ci` from a committed lockfile (`scripts/real-hub-npm`), Python and Go are pinned via SHA-pinned `setup-python` 3.13 and `setup-go` 1.26.11 so a runner toolchain bump cannot break the canaries, and the kube-linter checksum is documented as the GitHub release-asset digest. rubocop stays version-pinned only: the available Bundler cannot write gem checksums, so a hashed lockfile was not generated.
+
+### Changed
+- The real-hub CI job now also runs real gitleaks 8.30.1, trufflehog 3.99.9 (offline, no verification), checkov 3.4.5 and kube-score 1.20.0 through `review_checks.sh` and asserts each is reported as ran with its expected rule id on a fictional canary file. The GitHub-token-shaped canary is joined at runtime so no source line matches the privacy gate. Binaries are pinned by sha256 from each upstream checksums file; checkov installs from its own hash-locked `scripts/real-hub-requirements-checkov.txt` in a separate venv, because its bc-detect-secrets dependency ships the same `detect_secrets` module as upstream detect-secrets; the main file is unchanged and CI asserts `detect-secrets --version` is 1.5.0. cppcheck and njsscan stay stub-only: neither ships a hash-pinnable Linux binary or a resolvable wheel set, and semgrep and trivy need a rule or DB download.
+
+### Changed
+- The real-hub CI job now also runs real semgrep 1.182.1 (the provision_tools.sh pin) (repo rules, no registry pack) and njsscan 0.4.2 through `review_checks.sh`, each on a fictional canary file; the job fails unless the tool ran and reported its expected rule on that file with no not-run or NOT CHECKED line. Both install from their own hash-locked `scripts/real-hub-requirements-semgrep.txt` venv, because semgrep pins click 8.4.2, jsonschema 4.25.1 and wcmatch 8.5.2, older than the versions the other tools resolve to. Not added: trivy (the hub reports its vuln scan NOT CHECKED without a downloaded DB, which has no pinnable hash) and cppcheck (no upstream Linux binary or checksum file).
+- The trufflehog canary assertion now matches the exact detector name `Github` instead of the prefix `^Github`.
+- `provision_tools.sh` pins checkov 3.4.5 (was 3.4.0), matching the real-hub job.
+- `review_checks.sh` now runs njsscan with the same sandboxed `HOME`, cache dirs and `SEMGREP_SEND_METRICS=off` as its semgrep call (njsscan drives semgrep, which otherwise writes under the real home and may send metrics); the hub stub test asserts it.
+
+### Changed
+- The real-hub CI job now also runs real tflint 0.66.0, kics 2.1.20, cppcheck 2.13.0-2ubuntu3 and DevSkim CLI 1.0.100 through `review_checks.sh`, each on a fictional canary file; the job fails unless the tool ran and reported its expected rule on that file with no not-run or NOT CHECKED line. Pins: tflint and kics by sha256 from each release `checksums.txt` (tflint uses its bundled terraform ruleset, no `--init`; the kics release tarball ships no queries, so the queries come from the release commit fetched by its full sha and verified); cppcheck as the noble `.deb` fetched from its stable Launchpad URL and checked by sha256, runtime deps from apt (the job now runs on `ubuntu-24.04` instead of `ubuntu-latest` to match); DevSkim's package signature is also checked with `dotnet nuget verify` where the runner's dotnet has it; DevSkim by the nupkg sha512 from the nuget.org catalog `packageHash`, installed from the downloaded file.
+- Not added: syft, an inventory the hub never counts as ran, so a canary could not assert a run.
+
+### Changed
+- The real-hub CI job now also runs real govulncheck 1.9.0 and grype 0.121.3 through `review_checks.sh`, each on a fictional canary; the job fails unless the tool ran and reported its expected rule on that file with no not-run or NOT CHECKED line. grype is pinned by sha256 from the release `grype_0.121.3_checksums.txt` (the linux_amd64 archive is also checked against a literal hash). govulncheck ships no release binaries, so it is built from source with `go install` on the pinned Go 1.26.11 (`GOTOOLCHAIN=local`), the module hash `h1:` is asserted from `go version -m`, and the Go checksum database verifies the source. The canaries: govulncheck calls `yaml.Unmarshal` of the real module gopkg.in/yaml.v2 2.2.2 (GO-2020-0036, GO-2021-0061, GO-2022-0956; `go mod tidy` fills `go.sum` and the module cache, then the hub runs with `GOPROXY=off`); grype scans a one-component CycloneDX SBOM (lodash 4.17.15, GHSA-35jh-r3h4-6jhm), because the hub points grype at SBOM files only, never at a lockfile.
+- Both vulnerability databases are fetched online and are not pinned: govulncheck's `-db` flag has no env override, so it reads vuln.go.dev at run time (no offline pin is possible without changing the hub command), and the CI step runs `grype db update` (grype verifies the archive against the listing checksum; a dated archive pin would rot when upstream rotates it out). The canary advisories are old, so a DB refresh does not remove them.
+- Follow-up: the real-hub job timeout is 25 minutes, the govulncheck install, `grype db update`, `go mod tidy` and the hub run (while govulncheck or grype is not run) each retry up to 3 times with backoff, and the grype canary also accepts the CVE aliases of its advisories. The canary `go.mod` stays at the repo root because the hub runs govulncheck only from a root `go.mod`; the test asserts gosec and staticcheck report nothing on the govulncheck canary package.
+
+### Fixed
+- `review_checks.sh` now writes the kubescape report to a path ending in `.json` and reads that same path. Real kubescape appends `.json` to an `--output` path that lacks it, so the hub read an empty file and reported kubescape as not run ("unparseable output") on every real run. The stub in `scripts/test-review-checks-hub-k8s-js.sh` now mimics that suffix rule, so the test fails on the old code.
+
+### Changed
+- The real-hub CI job now also runs real kubescape 3.0.48 through `review_checks.sh` on a fictional privileged-pod canary, and fails unless kubescape ran and reported `C-0057` on that file with no not-run or NOT CHECKED line. The binary is pinned by sha256 from the release `checksums.sha256`. The offline `nsa` and `cis-v1.23-t1.0.1` frameworks are regolibrary v1.0.316 release assets, pinned by sha256 recorded at pin time because that release publishes no checksums; the fetches retry up to 3 times. The frameworks are a fixed release, not the latest rules, so rule drift is only picked up when the pin is bumped.
+
+### Changed
+- The real-hub CI job now also runs real trivy 0.76.2 through `review_checks.sh` on two fictional canaries: a Dockerfile (`FROM ubuntu:latest`, misconfig `DS-0001`/`DS-0002`) and an npm lockfile pinning lodash 4.17.15 (a vulnerability row). The job fails unless trivy ran as a full scan (no `not run`, no `NOT CHECKED`, no secret-only fallback) and reported both. Pins: the binary by sha256 from the release checksums file, which is itself verified with `cosign verify-blob` (cosign 3.1.4 pinned by sha256) against its sigstore bundle, the trivy release workflow identity and the GitHub Actions OIDC issuer; the vulnerability DB by OCI digest (`ghcr.io/aquasecurity/trivy-db@sha256:...`, bounded retries); the misconfig checks are the bundle embedded in the pinned binary (`TRIVY_SKIP_CHECK_UPDATE=true`), so no check download happens at run time. A pinned DB digest that the registry later garbage-collects fails the install step loudly and needs a bump.
+- Not added: codeql. Its CLI bundle is a multi-hundred-MB download plus a database build per language, too heavy for a per-push job.
+
+### Added
+- CI now runs a `real-hub` job: it installs the real tfsec 1.28.11 (sha256-checked), ansible-lint 26.11.0 with ansible-core 2.22.0, cfn-lint 1.20.0 and rubocop 1.69.2, then scripts/test-review-checks-real-hub.sh runs review_checks.sh on one known-bad canary per tool and asserts each is reported as RAN with its expected rule id, so the real flags, output shapes and exit codes are checked and not only the stub behaviour. bundler-audit, kubescape and retire need a downloaded advisory DB or rule set and stay stub-tested. The script skips absent tools unless REQUIRE_REAL_HUB=1.
+
+### Added
+- Regression test: a diff with .tf, .py and a Dockerfile and only bandit installed makes review_checks.sh name checkov and hadolint as not installed, with no clean verdict.
+
+### Added
+- review_checks.sh routes rubocop (changed Ruby files, Security department cops only, the built-in default config so a project `.rubocop.yml` that can `require` code is never loaded) through the tool hub. It is NOT CHECKED with an install hint when missing, counts as wired only once installed, and is not run on a crash, empty output, wrong-shape output, a summary that disagrees with its files list, an unexpected exit, an error or fatal non-Security offense such as `Lint/Syntax` (a file that did not parse), or an inspected-file count that differs from the files passed; a diff that changes a `.rubocop*.yml` is NOT CHECKED. All cops run and only `Security/*` rows are kept. terrascan is documented as not routed: its repository is archived and its first scan downloads policies. Exit codes, the JSON shape and cop names were read from the upstream docs fetched 2026-11-13; `--force-default-config` and `--cache false` are marked `unverified`; stub-tested only, no real tool output was run.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 56593→58341 rubocop row and terrascan not-routed row with verification evidence
+
+### Changed
+- review_checks.sh: the secret `[shape: ...]` hint reads `env-default` instead of `env-ref` when an env read (`os.environ`, `getenv`, `process.env`, `${...}`) shares its line with a quoted literal of 6+ characters other than the variable name, since a fallback default can be a real secret.
+
+### Added
+- review_checks.sh: gitleaks, gitleaks-history, trufflehog and detect-secrets rows now end in a value-free hint, one of `[shape: env-ref]`, `[shape: marker-word]`, `[shape: localhost]` or `[shape: real-looking]`, read from the flagged source line (a line holding a real-looking token, 12+ characters mixing 3+ character classes, or a 32+ character hex run, is always real-looking whatever words sit nearby; paths never change the class; an unreadable line gets no tag). Only the class is emitted, never any part of the value, so triage no longer needs a reclone to tell a template from a live key.
+
+### Added
+- review_checks.sh routes detect-secrets (changed files, no baseline, `--no-verify` so no network, secret values and hashes never printed) and njsscan (Node.js source) through the tool hub. Each is NOT CHECKED with an install hint when missing and not run on a crash, empty or whitespace output, wrong-shape output, or an exit code that disagrees with the report (detect-secrets: any nonzero exit; njsscan: exit 0 with an ERROR row, exit 1 without one). Non-JSON log lines are skipped. bearer is not routed: its Elastic License 2.0 is not on the OSI approved-licenses list (tool-hub.md records why). Sources fetched 2026-11-12 are logged in standards-index.md.
+- Both tools count as wired scanners only once installed: a missing one is NOT CHECKED, never "not run, fixable", because provision_tools.sh does not install them. test-mode-coverage.sh now counts only the gitleaks not-checked row.
+- test-review-checks-hub-lang.sh covers the review nits from the mobsfscan and psalm row: a mobsfscan row for an unscanned file, mobsfscan exit 0 and exit 1 with only WARNING rows, and a psalm report whose rows are all in unchanged files.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 40570→43180 hub rows for detect-secrets and njsscan, bearer not routed
+size-budget-raise: .claude/skills/deep-code-review/INDEX.md 20703→20704 regenerated for the larger tool-hub.md size
+
+### Added
+- `review_checks.sh` tool hub routes one more installed tool, `NOT CHECKED` when missing and `not run` on a crash or empty or whitespace output: `cosign` (`verify-blob --insecure-ignore-tlog=true` offline, only for a `.bundle` with a `cosign.pub` and its signed file; raw signatures and attestations are `NOT CHECKED`). `provision_tools.sh` lists cosign; `tool-hub.md` documents it and `standards-index.md` logs the sources fetched 2026-11-12.
+- `review_checks.sh` tool hub routes two Rust tools on a changed root `Cargo.lock`, each `NOT CHECKED` when missing and `not run` on a crash, empty or whitespace output, or wrong-shape JSON, with no network: `cargo-deny` (`--offline check bans licenses sources`, plus `advisories` only when `$CARGO_HOME/advisory-dbs` exists; needs `cargo`; error-level diagnostics become rows on `Cargo.lock`) and `cargo-audit` (`audit --no-fetch --stale --json` on a local `$CARGO_HOME/advisory-db` only, else `NOT CHECKED`). `references/tool-hub.md` replaces the two "not routed" decisions with these rows; sources are logged in `docs/standards-index.md`.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 35282→37939 hub rows for cosign, cargo-deny and cargo-audit, the clean-scan markers, and the not-routed list updated
+
+### Fixed
+- `cargo-deny` rows skip text lines (the trailing `advisories ok, bans ok, ...` summary, log lines) and parse only `{` lines, so a clean run reads clean instead of `not run`; `cargo-audit` ignores bracketed stderr lines before its JSON and reads `not run` when `vulnerabilities.found` or `count` disagrees with the list.
+- `cosign verify-blob` also passes `--offline=true`.
+
+Tool hub: route NVIDIA SkillSpector through review_checks.sh
+
+Adds skillspector (changed SKILL.md files, one per run, `--no-llm` static analysis, SARIF to a file). It is NOT CHECKED when missing, and not run on a crash, empty or wrong-shape output, or a non-zero exit with no row. Cisco mcp-scanner is documented as not routed: its raw output schema and the offline behavior of config scans are not documented, so no row was added.
+
+The SARIF location shape and single-file SARIF output of skillspector are unverified against a real binary and marked so in tool-hub.md; the new test uses a stub binary.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 59805→61157 hub rows for skillspector and mcp-scanner with verification evidence
+
+Tool hub: verify snyk-agent-scan and keep it route-only
+
+Upstream (PyPI and GitHub, fetched 2026-11-15) shows Apache-2.0, version 0.6.11, a required SNYK_TOKEN and calls to the Agent Scan API, with no documented offline mode. The hub therefore never runs it; tool-hub.md states the verified reason and a new offline test asserts it is not invoked and emits no finding rows even with SNYK_TOKEN set.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 59805→59884 snyk-agent-scan row states the verified key and network requirement
+
+### Added
+- review_checks.sh routes sobelow (Elixir Phoenix apps, local source, `--private` so no update check) through the tool hub. It is NOT CHECKED with an install hint when missing, NOT CHECKED when `mix.exs` or `.sobelow-conf` changed in the diff (config is code), and not run on a crash, empty or whitespace output, wrong-shape output, or an exit that disagrees with the report. Non-JSON log lines are skipped. pmd (license not confirmed OSI-approved), SpotBugs with find-sec-bugs (needs compiled classes) and semgrep Secrets (needs a platform login and license) are not routed; tool-hub.md records why. Sources fetched 2026-11-12 are logged in standards-index.md.
+
+### Added
+- `review_checks.sh` tool hub routes `tfsec` (Terraform, one directory per changed `.tf` file, SARIF, no module download, rows kept for the changed file only) and `ansible-lint` (Ansible-looking YAML, `--offline`, SARIF; a changed `.ansible-lint` or `ansible.cfg` is `NOT CHECKED`). Both are `NOT CHECKED` when missing and `not run` on a crash, empty or wrong-shape output; ansible-lint also treats a non-zero exit with no row as not run. Neither is in `provision_tools.sh`, so a missing one is never reported as fixable.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 54797→56593 hub rows for tfsec and ansible-lint
+
+### Added
+- `review_checks.sh` tool hub routes `eslint-security` (only the project's own `node_modules/.bin/eslint` with its own config, never `npx`; security rules only; `NOT CHECKED` when its config names no security plugin, a result says `File ignored`, or the diff changes the eslint config or `package.json`), `kics` (Dockerfile, Terraform, Kubernetes and CloudFormation YAML; `--no-progress --disable-secrets`, JSON report in `$TMPDIR`, crash report disabled via `DISABLE_CRASH_REPORT=false`; a comma-named file is a not-checked row), `kube-score` and `tflint` (Terraform core ruleset, no `--init`, no module download) and `staticcheck` (Go, whole module with `GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly GOWORK=off`; exit 1 with no output is `not run`, exit 0 with no output is the only clean case). Each is `NOT CHECKED` when missing and `not run` on a crash or wrong-shape output. `licensee` adds a license inventory line on stderr for changed `LICENSE`, `COPYING` and `NOTICE` files (never a row). `provision_tools.sh` lists kics, kube-score, tflint and staticcheck (brew) and licensee (gem); `docs/standards-index.md` logs the sources fetched 2026-11-12; `tool-hub.md` records why scancode-toolkit, cosign, dockle, trufflehog filesystem and verified mode, prowler, cargo-deny, polaris, semgrep `p/secrets`, poutine and oxlint are not routed.
+- `review_checks.sh` runs `opengrep` as the SAST fallback when `semgrep` is absent (same rules, never the registry pack). New opt-in routes: `REVIEW_SCORECARD=1` (needs `GITHUB_TOKEN` and network) turns OpenSSF Scorecard checks scoring below 5 into rows; `REVIEW_DAST_URL` runs `nuclei` (conservative http info/low allowlist, no interactsh) and the ZAP baseline against a localhost target, refusing any target but an exact localhost origin unless `REVIEW_DAST_ALLOW_REMOTE=1`. `provision_tools.sh` lists `opengrep` and `nuclei`.
+
+### Fixed
+- DAST hardening: Scorecard with no concluded check is `not run`, the ZAP docker run uses `--pull=never` (no silent image pull), and the target probe uses `curl -g --noproxy '*'`.
+- Whitespace guard: staticcheck and the ZAP report treat whitespace-only output as empty (not run, never clean), and a staticcheck `compile` diagnostic is `not run`.
+- kube-score objects with `checks: null` no longer turn the whole run into `not run`.
+- Tests: the tflint stub derives its filename from `--chdir` and `--filter`, and empty stdout with exit 0, 1 and 2 is `not run` for kube-score and tflint.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 24131→35282 hub rows for opengrep, scorecard, nuclei, ZAP baseline, eslint-security, kics, kube-score, tflint and staticcheck plus the not-routed decisions
+
+### Added
+- `insecure_defaults.py` (wired into `review_checks.sh --full` as tool `insecure-defaults`) finds literal insecure defaults and fail-open paths: a security flag that defaults off, a broad exception in an auth check that returns allow, TLS or JWT verification disabled, debug on by default, and a wildcard CORS origin with credentials. Test files and fail-closed variants stay silent; tests in `scripts/test_insecure_defaults.py`. Whole-app security mode routes the rows to a shipped-config check.
+
+### Added
+- review_checks.sh runs mcp_config_check.py over changed `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json` and `.claude/settings*.json`: unpinned `npx`/`uvx` servers, plain-http non-local server urls, literal secrets in env or headers, `Bash(*)` allow rules and hooks that pipe curl or wget into a shell become `mcp-config` leads.
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 59805→60250 mcp-config hub row
+
+### Changed
+
+- `org_audit_driver.py --noise-re ERE` passes the ERE to `review_checks.sh` as `REVIEW_NOISE_RE`, and the jq JSON check now honors the noise paths like semgrep, bandit and ruff-security (skipped files are NOT CHECKED rows). The default noise paths are unchanged, so a target repo's own `docs/bench/` stays scanned; a tree you own can opt out. Self-audit command: `org_audit_driver.py --repos FILE --out DIR --noise-re '(^|/)(mocks|fixtures|e2e|__mocks__|testdata)/|(^|/)docs/bench/'` (the default ERE plus `docs/bench`). On this repo's own tree about 68,000 bench output files made semgrep (344 chunked runs) and jq (one process per file) exceed an 1800s audit.
+- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 62695→62810 noise-path paragraph names the jq check and --noise-re
+
+### Added
+- org_audit_driver.py runs review_checks.sh (full history, empty-tree base, never --tests, bundled semgrep rules) over an owner/repo list, one dated result per repo plus a summary of every NOT CHECKED tool; a clone or scan failure is a FAILED row and a nonzero exit.
+
+### Changed
+- org_audit_driver: when a timed-out review_checks run left no readable progress file, every tool named by the new `review_checks.sh --list-tools` (run_one literals, the lint choice and the hub array, read from the script's own source, not a hardcoded list) is reported as timed out, not only the tools seen in raw rows. The progress lines now carry an epoch time so a run can be timed per tool.
+
+### Changed
+- org_audit_driver: the clone uses `--filter=blob:limit=5m`, and every history blob the filter skipped is a `git-clone` not-checked row (one aggregated entry in the summary). A review_checks run that outlives `--timeout` is now a PARTIAL row instead of FAILED: findings gathered so far are kept and each unfinished tool is a "timed out" not-checked row. review_checks.sh writes a `progress` file in its temp dir for this.
+
+### Added
+- Org audit tool route rows (org_settings_audit.py, org_audit_driver.py, org_inventory.py) in references/tool-hub.md.
+
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 17473→19414 org settings audit, org audit driver and org inventory route rows
+
+### Added
+- org_inventory.py writes a dated TSV inventory of every repo in one or more orgs from the read-only API, reconciles added and removed repos against a previous run, and marks any repo without a fresh result file as NOT CHECKED; an API or scope error exits 2 and never yields zero repos.
+
+### Added
+- org_leak_sweep.py sweeps every public repo of an org for secrets (gitleaks, redacted) and banlist terms across full history; writes a redacted TSV to a private dir.
+
+### Added
+- org_settings_audit.py audits a GitHub organization (2FA requirement, Actions token defaults, installed apps, outside collaborators, self-hosted runners) and every repo via repo_settings_audit; read-only GETs, and a 403 or missing field is a NOT CHECKED row naming the scope needed.
+
+### Added
+- scripts/path_hermetic_lint.py flags a negative grep (`! grep ... worktrees ...`) in scripts/test-*.sh whose pattern is a path-segment word that also appears in the checkout path, unless the line or the one before it strips $ROOT/$PWD. Such a test passes in CI and fails in a lane worktree. Existing offenders are frozen in scripts/path-hermetic-baseline.tsv (one row today, fixed by an open PR); the regression test is registered through ci-tests.d.
+
+### Fixed
+- Every actions/checkout step in ci.yml and release.yml now sets `persist-credentials: false` (zizmor artipacked): no later step pushes or fetches a private ref, and gh uses GH_TOKEN from env. scripts/test_workflow_persist_credentials.py, registered in scripts/ci-tests.d, parses each workflow and composite action (.github/actions/**/action.y*ml) with a strict `yaml.BaseLoader` (duplicate and merge keys fail the file) and fails any checkout step (any case, quoted or flow-style, or an expression `uses`) whose `with.persist-credentials` is not the literal false/False/FALSE. There is no ignore comment. It exits 2 when PyYAML, the directory or the workflow files are missing, so it never passes unparsed.
+- The test also takes a directory argument and can scan the shipped workflow templates; the dcr-gates.yml template checkout still lacks `persist-credentials: false` (follow-up, needs a skills-tree edit).
+
+### Changed
+- review_checks.sh: three false-positive classes are tagged or downranked, never dropped. A secret-scanner aws-access-token hit inside a presigned URL query (`X-Amz-Credential=`) gets hint `non-secret-lead` (low). shell=True and command-injection rows from semgrep, bandit and ruff-security on a line with a justified `# noqa: S602` or `# nosec` plus reason collapse to one `suppressed-with-reason` (low) row. A zizmor `template-injection` row whose every `${{ }}` is a non-attacker context (matrix, strategy, runner, event_name, sha, event.before) gets hint `low-risk-context` (low); step outputs keep the row unchanged, and so does `matrix.*` when the matrix comes from `fromJSON` or holds any `${{ }}`. A semgrep taint (injection) row is downranked only by `# nosemgrep: <rule-id>` plus a reason, never by a bare `# nosec` or a bare `# nosemgrep`.
+- agentic-delivery: the two by-design operator-command calls (`focus_gate.py` `real_cmd`, `host_probe.py` `run_canary`) carry a justified `# nosec B602 - reason` annotation (no `noqa`: the repo's ruff run does not enable S, so a `noqa: S602` would trip RUF100).
+
+### Changed
+- review_checks.sh: dependency-CVE rows now lead with the scanning tool's own severity (`critical: `, `high: `, `medium: ` or `low: `), or `unrated: ` when the tool gives none, so reports can rank them. Sources: npm audit `severity`, bundler-audit `criticality`, grype `severity`, osv-scanner `database_specific.severity`, then the group `max_severity` CVSS score (banded at 9.0 / 7.0 / 4.0 / 0.1). `moderate` maps to medium and grype `negligible` to low; `UNKNOWN`, `info` and unparseable values stay unrated. pip-audit and cargo-audit rows are always `unrated` because neither carries a severity field. No severity is guessed.
+
+### Fixed
+- The scan-summary tests no longer fail when the checkout lives under a `.claude/worktrees/` path (every lane worktree): the "default excludes" check matched `worktrees` in the absolute `--config` path the tool logs, not in a scanned file. The check now strips the checkout path, and the hermetic suite runs the test from a worktrees-style path so the regression stays caught. The failure was blamed on the host semgrep cache; it was not.
+
+### Added
+- templates/secret-scan.yml: opt-in free secret-scan workflow (pinned gitleaks with sha256, SHA-pinned checkout, PR base..head scan, full-history on push/weekly/dispatch, `.gitleaksignore` for false positives), routed from references/review-config.md and pinned by scripts/test-secret-scan-template.sh (with seeded mutations). PR scans reset the ignore config to the base commit first.
+
+size-budget-raise: .claude/skills/deep-code-review/references/review-config.md 6472→6888 secret-scan template route
+
+### Added
+- Bundled semgrep rules for fail-open defaults (templates/semgrep-taint/defaults.yml): `perun.py.debug-enabled`, `perun.py.cors-credentials-wildcard`, `perun.py.jwt-unverified`, `perun.js.jwt-unverified`, `perun.py.auth-fails-open`, `perun.js.auth-fails-open`, `perun.js.jwt-decode-unverified` (jsonwebtoken `jwt.decode`), `perun.js.cors-reflected-origin`, `perun.py.cors-reflected-origin` (request Origin copied into Access-Control-Allow-Origin next to credentials true). Secret-env-fallback, TLS-verify-off and JS CORS-with-credentials were already covered and are not repeated. Tested by scripts/test_semgrep_defaults.py with seeded bad fixtures and clean twins.
+
+### Fixed
+- scripts/ci-tests.d/low-context-index.sh now stops at its first failing test (`set -e`), so a bare `bash` run no longer reports only the last command's status and hides a failing size gate; scripts/test-ci-tests-d-masking.sh is the regression. security-review-mode.md is trimmed back under its size budget with no rule removed.
+
+### Fixed
+- The review hub's solhint canary now runs from its throwaway directory. solhint 6.x aborts with a RangeError (exit 255, no output) on a file outside its working directory, so the canary never raised avoid-tx-origin and solhint was reported as not run. The fail-closed guard is unchanged.
+- test-review-checks-real-hub.sh no longer prints "Broken pipe" when it shows a tool's raw output after a failure.
+
+### Added
+- Offline dependency-risk check (`dep_risk.py`, wired into `review_checks.sh`): typosquat-near names, git/URL and floating specs, and install scripts in new or changed dependencies.
+- CodeQL route in `review_checks.sh` for Python and JavaScript/TypeScript (only when installed; `NOT CHECKED` otherwise); semgrep routing documented in `references/tool-hub.md`.
+- Supply-chain follow-ups: `dep_risk.py` reads untracked or new manifests whole, covers `peerDependencies`, `overrides`, `resolutions` and bundled names, flags Poetry/PDM dependency tables as `not-checked`, and keeps a tab or newline in a spec from splitting its row; codeql now counts as a degraded-lease heavy tool; an `--allowedTools Bash` after `--disallowedTools X` is flagged by `agent_workflow_injection.py`; duplicate semgrep row removed from `references/tool-hub.md`; CodeQL CLI manual cited in `docs/standards-index.md`.
+
 ## [1.654.0] — 2026-11-09
 
 ### Changed
