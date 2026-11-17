@@ -1028,16 +1028,53 @@ rules:
 - id: perun.py.raw-sql-format
   languages: [python]
   severity: ERROR
-  message: A SQL string built with an f-string, % formatting, .format() or concatenation is passed to execute() (CWE-89). Pass the values as the second argument (cursor.execute("... WHERE id = %s", (x,))). ponytail, search mode - any interpolated value is reported, user-controlled or not.
-  pattern-either:
-  - pattern: $C.execute(f"...{$X}...", ...)
-  - pattern: $C.executemany(f"...{$X}...", ...)
-  - pattern: $C.execute("..." % $X, ...)
-  - pattern: $C.execute("...".format(...), ...)
-  - pattern: $C.execute("..." + $X, ...)
-  - pattern: $C.execute($X + "...", ...)
+  message: A SQL string built with an f-string, % formatting, .format() or concatenation is passed to execute(), directly or through a variable assigned earlier in the same function (CWE-89). Pass the values as the second argument (cursor.execute("... WHERE id = %s", (x,))). ponytail, search mode - any interpolated value is reported, user-controlled or not, except UPPER_SNAKE constants in an f-string ({TABLE}; the skip is name-based, so a tainted value held in an UPPER_SNAKE name is left to perun.py.sqli); migration files (migrations/<digit>* and alembic/versions/) are skipped, other files under a migrations/ directory are still checked. Remaining limits - the variable form follows one assignment or += in the same function, not a value built in a helper or across files, and % / .format() / concatenation operands are not checked for constants.
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern: $C.execute(f"...{$X}...", ...)
+        - pattern: $C.executemany(f"...{$X}...", ...)
+      - metavariable-regex:
+          metavariable: $X
+          regex: ^(?!\s*[A-Z][A-Z0-9_]*\s*$)
+    - pattern: $C.execute("..." % $X, ...)
+    - pattern: $C.execute("...".format(...), ...)
+    - pattern: $C.execute("..." + $X, ...)
+    - pattern: $C.execute($X + "...", ...)
+    - patterns:
+      - pattern-either:
+        - pattern: $C.execute($V, ...)
+        - pattern: $C.executemany($V, ...)
+      - pattern-either:
+        - pattern-inside: |
+            $V = f"...{$X}..."
+            ...
+        - pattern-inside: |
+            $V += f"...{$X}..."
+            ...
+      - metavariable-regex:
+          metavariable: $X
+          regex: ^(?!\s*[A-Z][A-Z0-9_]*\s*$)
+    - patterns:
+      - pattern-either:
+        - pattern: $C.execute($V, ...)
+        - pattern: $C.executemany($V, ...)
+      - pattern-either:
+        - pattern-inside: |
+            $V = "..." % $X
+            ...
+        - pattern-inside: |
+            $V = "...".format(...)
+            ...
+        - pattern-inside: |
+            $V = "..." + $X
+            ...
+        - pattern-inside: |
+            $V += $X
+            ...
   paths:
-    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "migrations/[0-9]*.py", "alembic/versions", "test_*", "*_test.py", "conftest.py"]
 - id: perun.py.guard-allows-missing-token
   languages: [python]
   severity: ERROR
@@ -1049,6 +1086,10 @@ rules:
             return True
     - pattern: |
         if not $T and $R:
+            return True
+    - pattern: |
+        if not $T:
+            ...
             return True
   - metavariable-regex:
       metavariable: $T

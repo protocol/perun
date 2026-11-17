@@ -28,6 +28,22 @@ jobs:
         with:
           persist-credentials: false # only gh release create runs later, via GH_TOKEN env
 
+      # Limit: a tag-push workflow runs the workflow file from the tagged commit, so this step cannot defend against a hostile tagger
+      # (they can edit it away); it catches accidental unsigned tags. The control is consumer-side verify-tag against the installed
+      # release-signers (perun_auto_update) plus a v* tag ruleset limited to admins.
+      # Signed-tags policy: when the signers file exists, the pushed tag object must verify against it (fail closed).
+      - name: Tag signature (when signers file exists)
+        run: |
+          set -euo pipefail
+          p=.claude/skills/agentic-delivery/release-signers
+          # signers come from the default branch, never the tagged tree (the tagged commit could delete/edit the file)
+          git fetch --no-tags origin main
+          git cat-file -e "origin/main:$p" 2>/dev/null || { echo "no $p on origin/main; signature check skipped"; exit 0; }
+          f="$RUNNER_TEMP/release-signers"
+          git show "origin/main:$p" >"$f"
+          git fetch --force origin "+refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git -c gpg.format=ssh -c "gpg.ssh.allowedSignersFile=$f" verify-tag "$GITHUB_REF_NAME"
+
       # The tag must match the shipped VERSION and the top CHANGELOG heading, or
       # the release would advertise a version the tree does not contain. This is
       # the same provenance contract scripts/ci-gates.sh version enforces on PRs.

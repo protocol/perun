@@ -24,6 +24,7 @@
 # zstd, xz, 7z, lz4, bzip2, avro, pdf, zlib; the list and its ceilings are in committed_personal_data.py). gitleaks looks for secrets, not for exported personal data.
 # Built-in too, base mode only (a --full scan has no diff): sibling_sweep.py lists the unchanged call sites, in non-test code, of a function whose call arguments the diff changed elsewhere (tool `sibling-sweep`,
 # rule `unchanged-sibling-call`, message starts "lead:"): the sibling route a fix may have missed. Leads to open, never findings; a name with more than 25 call sites is skipped; scope and ceilings are in its docstring.
+# gitleaks and the JSON check run once per changed file in diff mode, but as one batched scan/process under --full or when the diff exceeds REVIEW_BATCH_MIN files (default 200; findings are identical, filtered to the changed files).
 # `--full` scans every tracked file (base = git's empty tree) instead of a diff; it also runs tenant_scope_check.py (SKIPPED without a *.prisma) and route_auth_map.py (tool `route-auth`, rule `missing-auth`: a state-changing HTTP handler, raw node:http or fetch-handler pathname-and-method dispatch included, with no authentication evidence; a state-changing route in a language it does not judge (Go, Spring, PHP, Django urlconf) is a not-checked row, SKIPPED only without handlers or such routes), header_config.py (tool `header-config`: a security header the repo config never names, a lead to confirm with dynamic_probe.py; SKIPPED without a supported web app; a package.json, .conf file or directory it could not read gives not-checked rows instead) and attempt_limit_map.py (tool `attempt-limit`, rule `missing-attempt-limit`: a password, one-time-code or reset-code check with no attempt-limit evidence in its file or package, a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without a credential check or sign-in route) and insecure_defaults.py (tool `insecure-defaults`, rules `default-on-security-flag`, `fail-open-exception`, `tls-verify-off`, `jwt-unverified`, `debug-on-default`, `cors-wildcard-credentials`: a literal insecure default or fail-open path, a lead; SKIPPED without source files) and cost_limit_map.py (tool `cost-limit`, rules `missing-cost-limit` and `unbounded-body`: an LLM or paid-API proxy, email or SMS send, upload, search, export or client-sized-page handler with no rate or quota limit evidence in its file or package, or a handler that reads the whole request body, or a body-parser limit of 10 MB or more, with no byte cap; a lead to confirm with dynamic_probe.py --rate-endpoint; SKIPPED without an HTTP handler) and csrf_cookie_map.py (tool `csrf-cookie`, rules `missing-csrf-protection` and `missing-cookie-flags`: a cookie-session state-changing handler with no anti-forgery token, Origin check or CSRF layer, or a session cookie set without Secure, HttpOnly or SameSite; a lead to confirm by reading the handler; SKIPPED without an HTTP handler or cookie) and ownership_sibling_check.py (tool `ownership`, rule `ownership-sibling`: a handler that loads a record by a client-sent id where a sibling handler of the same file checks ownership, a lead to confirm by reading the handler; a file it could not read is a not-checked row) and route_auth_map.py --privileged (tool `privileged-route`, rule `privileged-route`: an admin or role-changing route guarded by authentication alone, with no role or permission check; a lead to confirm by reading the handler). gitleaks runs once over the working tree, then (tool `gitleaks-history`) over the last REVIEW_HISTORY_MAX commits of HEAD (default 1000; 0 = skip, listed as "history not scanned"), so a secret removed from the tree but still in history is reported. gitleaks drops
 # fingerprints listed in the repo's .gitleaksignore (as of BASE, HEAD under --full); history reads .gitleaks.toml as of BASE. Airtable object IDs (rec/app/tbl/fld/viw + 14 alnum) are allowlisted for airtable-api-key on gitleaks >= 8.25.1.
 # gitleaks generic-api-key hits tagged likely-fixture collapse to one summary row when a group has >3: per top fixture dir (tagged likely-fixture) for hits under a fixture dir, else per file (rule `generic-api-key-summary`, first hit as line) for any other file; bandit B101 (assert) and ruff F821 (undefined name) hits collapse per file the same way when a file has >3 (rules `B101-summary`, `F821-summary`; the F821 message names the undefined names); a semgrep `github-actions-mutable-action-tag` row is dropped when zizmor flagged the same file:line as `unpinned-uses` (one defect, two tools); every other rule, and name-only matches, stay rows; REVIEW_FIXTURE_ROWS=all lists every hit.
@@ -95,6 +96,8 @@ nskip() { echo "review_checks: $1 skipped $(printf '%s\n' "$2" | grep -c .) file
 # One-per-line copy of $files for exact-line membership tests: grep reads this file, never a pipe (a `printf | grep -q` that matches early
 # SIGPIPEs the writer, and pipefail then drops the match once the list outgrows the pipe buffer).
 printf '%s\n' "$files" >"$td/files"
+# bt=1: batch the per-file scanners (one gitleaks scan, one JSON-validating process) under --full or when the diff exceeds REVIEW_BATCH_MIN files (default 200): per-file gitleaks/jq took 3,875 s/528 s on a 95.7k-file diff.
+bt=$wr; [ "$(grep -c . "$td/files" || true)" -le "${REVIEW_BATCH_MIN:-200}" ] || bt=1
 nex=$(( $(printf '%s\n' "$all" | grep -c . || true) - $(printf '%s\n' "$files" | grep -c . || true) )) # grep -c exits 1 at a count of 0, which set -e would turn into a silent exit
 [ -n "$files" ] || echo "review_checks: 0 files in diff (empty, or only excluded paths); nothing to scan" >&2
 rc=0
@@ -275,11 +278,25 @@ fi
 
 json_files=$(changed '\.json$')
 if [ -n "$json_files" ] && have jq; then
+  jl=$json_files
+  if [ "$bt" = 1 ] && [ "$wr" = 0 ] && command -v python3 >/dev/null; then # batch: python flags the files that may be invalid; jq stays the judge (same rows and messages) and runs only on those
+    case " $ran " in *" jq "*) ;; *) ran+=" jq" ;; esac
+    jl=$(printf '%s\n' "$json_files" | python3 -I -c '
+import sys, json
+def strict(c): raise ValueError(c)  # NaN/Infinity: jq may accept them, so be stricter than jq and let jq judge
+for f in filter(None, sys.stdin.read().split("\n")):
+    try:
+        d = open("./" + f, "rb").read()
+        if d.startswith(b"\xef\xbb\xbf"): print(f); continue  # BOM: strict parsers differ, jq judges
+        if d.strip(): json.loads(d, parse_constant=strict)
+    except Exception: print(f)') || jl=$json_files
+  fi
   jn=; while IFS= read -r f; do
+    [ -n "$f" ] || continue
     if noise "$f"; then jn+=$f$'\n'; continue; fi
     run_one jq jq empty "./$f" || continue
     [ "$rc" = 0 ] || add jq "$f" "$(sed -nE 's/.*line ([0-9]+).*/\1/p' "$out" | head -n1)" invalid-json "$(head -n1 "$out")"
-  done <<<"$json_files"
+  done <<<"$jl"
   [ -z "$jn" ] || nskip jq "${jn%$'\n'}"
 fi
 
@@ -769,19 +786,30 @@ EOT
     skipped=$(printf '%s\n' "$files" | grep -cE "$tplre" || true)
     [ "${skipped:-0}" -eq 0 ] || echo "review_checks: gitleaks template skipped $skipped changed file(s) $tplwhat" >&2
   fi
-  if [ "$wr" = 1 ]; then # one batched scan of the working tree; only tracked, non-vendored files are reported
+  # One BASE-derived config for the batch and per-file paths: BASE's .gitleaks.toml (else the template, else defaults), never the working tree's, so a change cannot allowlist its own secret.
+  glx=$td/glx.toml; gb=$td/batch-base.toml; git show "$ref:.gitleaks.toml" >"$gb" 2>/dev/null || gb=
+  if [ -n "$gb" ]; then printf '[extend]\npath = "%s"\n' "$gb" >"$glx"; elif [ -n "${glcfg[1]:-}" ]; then printf '[extend]\npath = "%s"\n' "${glcfg[1]}" >"$glx"; else printf '[extend]\nuseDefault = true\n' >"$glx"; fi
+  if [ "$bt" = 1 ]; then # one batched scan of the working tree; only tracked, non-vendored files are reported
     : >"$rep"; glw=$td/glw # extend the config; skip vendored trees at scan time
     vk='[allowlist]'; [ -z "$glal" ] || vk='[[allowlists]]' # the global table cannot sit beside the deprecated [allowlist]
-    printf '[extend]\npath = "%s"\n%s\npaths = [\x27\x27\x27(^|/)(node_modules|vendor|\\.claude/worktrees)/\x27\x27\x27]\n' "${glcfg[1]:-$PWD/.gitleaks.toml}" "$vk" >"$glw"
+    cp "$glx" "$glw"
+    printf '%s\npaths = [\x27\x27\x27(^|/)(node_modules|vendor|\\.claude/worktrees)/\x27\x27\x27]\n' "$vk" >>"$glw"
     [ -z "$glal" ] || cat "$glal" >>"$glw"
-    if run_one gitleaks gitleaks detect --config "$glw" --gitleaks-ignore-path "$gli" --no-git --no-banner --exit-code 0 -f json -r "$rep" -s . && scan_ok gitleaks; then
+    gcd=$PWD; gsub=$td/gl-src # diff mode: scan a temp copy of only the changed files (a whole-tree scan is a perf cliff just past the threshold); --full keeps the whole tree
+    if [ "$full" = 0 ]; then
+      mkdir -p "$gsub"; while IFS= read -r f; do [ ! -f "$f" ] || printf '%s\n' "$f"; done <<<"$files" >"$td/gl-list"
+      tar -cf - -T "$td/gl-list" 2>/dev/null | tar -xf - -C "$gsub"; cd "$gsub"
+    fi
+    gok=0; run_one gitleaks gitleaks detect --config "$glw" --gitleaks-ignore-path "$gli" --no-git --no-banner --exit-code 0 -f json -r "$rep" -s . || gok=1
+    cd "$gcd"
+    if [ "$gok" = 0 ] && scan_ok gitleaks; then
       [ -s "$rep" ] || echo '[]' >"$rep"
       if sjson gitleaks "$rep" >"$tsv"; then
         while IFS=$'\t' read -r f l r m; do f=${f#./}; grep -qxF -- "$f" "$td/files" && add gitleaks "$f" "$l" "$r" "$m"; done <"$tsv"
       else skip gitleaks "unparseable report; secrets were not scanned"; fi
     fi
   else
-    pcfg=(); if [ -n "$glal" ]; then pcfg=(--config "$td/glc.toml"); { if [ -n "${glcfg[1]:-}" ]; then printf '[extend]\npath = "%s"\n' "${glcfg[1]}"; else printf '[extend]\nuseDefault = true\n'; fi; cat "$glal"; } >"$td/glc.toml"; else pcfg=(${glcfg[@]+"${glcfg[@]}"}); fi
+    cp "$glx" "$td/glc.toml"; [ -z "$glal" ] || cat "$glal" >>"$td/glc.toml"; pcfg=(--config "$td/glc.toml")
     while IFS= read -r f; do
       [ -f "$f" ] || continue
       : >"$rep" # a stale report from the previous file must never be read for this one

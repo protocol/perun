@@ -37,6 +37,7 @@ npx skills add protocol/perun#vX.Y.Z --skill deep-code-review
 Prefer `--copy` over a symlink that auto-updates. `npx skills update`
 without a re-review is AST07. Default-on auto-update runs remote code from release tags: that high risk is MITIGATED by the
 `auto_update_delay_h` cooldown (default 72h), not closed; it closes only once tags are signed and a `release-signers` file ships.
+Signed releases: if `.claude/skills/agentic-delivery/release-signers` (ssh allowed_signers) exists, `land-release.sh` and `release.yml` refuse any release tag that does not verify against it; absent file = unchanged. The signers file is read from the base branch, not the tagged tree. The `release.yml` step only catches accidental unsigned tags: a tag-push workflow runs from the tagged commit, so a hostile tagger can edit it away. The real control is consumer-side `perun_auto_update` running `verify-tag` against the installed `release-signers`; also restrict `v*` tag creation to admins with a tag ruleset. The first `release-signers` file reaches an install through an update that could not yet be verified (trust on first use); installs made after it ships verify every later tag.
 
 ## Reporting a vulnerability
 

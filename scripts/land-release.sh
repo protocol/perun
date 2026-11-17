@@ -44,24 +44,43 @@ if [ "$mode" = tag ] || [ "$mode" = publish ]; then
   fi
   [ "$ver" = "$(tr -d '[:space:]' <.claude/skills/deep-code-review/VERSION)" ] \
     || { echo "land-release tag: $REMOTE/$BASE_BRANCH is at $ver, this checkout is not; merge the release first, then run tag" >&2; exit 1; }
+  # signers come from the base branch, never the working tree (a tag commit could delete/edit the file)
+  signers=
+  sf=$(mktemp "${TMPDIR:-/tmp}/land-signers.XXXXXX"); trap 'rm -f "$sf"' EXIT
+  if git cat-file -e "$REMOTE/$BASE_BRANCH:.claude/skills/agentic-delivery/release-signers" 2>/dev/null; then
+    git show "$REMOTE/$BASE_BRANCH:.claude/skills/agentic-delivery/release-signers" >"$sf"; signers=$sf
+  fi
   sha=$(git log -1 --format=%H "$REMOTE/$BASE_BRANCH" -S"$ver" -- .claude/skills/deep-code-review/VERSION)
   [ -n "$sha" ] || { echo "land-release tag: release commit for $ver not found on $REMOTE/$BASE_BRANCH" >&2; exit 1; }
   if git rev-parse -q --verify "refs/tags/v$ver" >/dev/null; then
     echo "land-release tag: v$ver already exists locally; skipping creation"
     [ "$(git rev-parse "v$ver^{commit}")" = "$sha" ] || { echo "land-release tag: local v$ver points elsewhere than $sha" >&2; exit 1; }
   else
-    git tag -a "v$ver" -m "release $ver" "$sha"
+    if [ -n "$signers" ]; then
+      git tag -s "v$ver" -m "release $ver" "$sha" || { echo "land-release tag: signing v$ver failed (signers file on $REMOTE/$BASE_BRANCH, unsigned tags are refused)" >&2; git tag -d "v$ver" >/dev/null 2>&1; exit 1; }
+    else
+      git tag -a "v$ver" -m "release $ver" "$sha"
+    fi
+  fi
+  # signed-tags policy: when the signers file exists, the tag (new or pre-existing) must verify before any push
+  if [ -n "$signers" ]; then
+    git -c gpg.format=ssh -c "gpg.ssh.allowedSignersFile=$signers" verify-tag "v$ver" >/dev/null 2>&1 \
+      || { echo "land-release tag: v$ver is not signed by a key in $REMOTE/$BASE_BRANCH release-signers; refusing to push" >&2; exit 1; }
   fi
   rtag=$(git ls-remote "$REMOTE" "refs/tags/v$ver" "refs/tags/v$ver^{}" | tail -1 | cut -f1)
   if [ -z "$rtag" ]; then
     git push -q "$REMOTE" "refs/tags/v$ver"; echo "land-release tag: pushed v$ver"
   elif [ "$rtag" = "$sha" ]; then
+    # with a signers file, the remote tag object must be the verified local one (an unsigned remote tag on the same commit is refused)
+    if [ -n "$signers" ] && [ "$(git ls-remote "$REMOTE" "refs/tags/v$ver" | cut -f1)" != "$(git rev-parse "refs/tags/v$ver")" ]; then
+      echo "land-release tag: $REMOTE v$ver is a different tag object than the verified local one; refusing (signers file present)" >&2; exit 1
+    fi
     echo "land-release tag: v$ver already on $REMOTE"
   else
     echo "land-release tag: $REMOTE v$ver points at $rtag, not $sha; never moved" >&2; exit 1
   fi
   [ "$mode" = publish ] || exit 0
-  notes=$(mktemp "${TMPDIR:-/tmp}/land-notes.XXXXXX"); trap 'rm -f "$notes"' EXIT
+  notes=$(mktemp "${TMPDIR:-/tmp}/land-notes.XXXXXX"); trap 'rm -f "$notes" "$sf"' EXIT
   # awk-v-ok: $ver is a validated single-line VERSION scalar
   git show "$REMOTE/$BASE_BRANCH:CHANGELOG.md" | awk -v h="## [$ver]" 'index($0,h)==1{p=1;next} p&&/^## /{p=0} p' >"$notes"
   grep -q '[^[:space:]]' "$notes" || { echo "land-release publish: no CHANGELOG section for $ver" >&2; exit 2; }

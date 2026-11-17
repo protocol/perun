@@ -95,13 +95,30 @@ rules:
 - id: perun.go.raw-sql-sprintf
   languages: [go]
   severity: ERROR
-  message: A SQL string built with fmt.Sprintf or concatenation is passed to a database call (CWE-89). Use placeholders ($1 / ?) and pass the values as arguments. ponytail, search mode - any formatted value is reported, user-controlled or not.
+  message: A SQL string built with fmt.Sprintf or concatenation is passed to a database call, directly or through a variable assigned earlier in the same function (CWE-89). Use placeholders ($1 / ?) and pass the values as arguments. ponytail, search mode - any formatted value is reported, user-controlled or not. Remaining limits - the variable form follows one := / = / += in the same function, not a value built in a helper or across files, and constant operands are not skipped.
   patterns:
   - pattern-either:
     - pattern: $DB.$M(fmt.Sprintf(...), ...)
     - pattern: $DB.$M($CTX, fmt.Sprintf(...), ...)
     - pattern: $DB.$M($X + $Y, ...)
     - pattern: $DB.$M($CTX, $X + $Y, ...)
+    - patterns:
+      - pattern-either:
+        - pattern: $DB.$M($V, ...)
+        - pattern: $DB.$M($CTX, $V, ...)
+      - pattern-either:
+        - pattern-inside: |
+            $V := fmt.Sprintf(...)
+            ...
+        - pattern-inside: |
+            $V = fmt.Sprintf(...)
+            ...
+        - pattern-inside: |
+            $V := $X + $Y
+            ...
+        - pattern-inside: |
+            $V += $X
+            ...
   - metavariable-regex:
       metavariable: $M
       regex: ^(Query|QueryRow|Exec|QueryContext|QueryRowContext|ExecContext|Queryx|NamedExec|Raw|Where)$
