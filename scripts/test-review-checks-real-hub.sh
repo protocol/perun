@@ -140,7 +140,7 @@ done
 case " $tools " in *" trivy "*)
   grep -q 'secret-only' "$T/err" && { echo "FAIL - trivy fell back to secret-only"; fail=1; }
   for id in DS-0001 DS-0002; do jq -e --arg id "$id" 'any(.[]; .tool=="trivy" and .rule==$id and (.file|tostring|endswith("docker/Dockerfile")))' "$T/out" >/dev/null || { echo "FAIL - trivy: no $id row on docker/Dockerfile"; fail=1; }; done
-  jq -e 'any(.[]; .tool=="trivy" and (.rule|test("^(CVE-2020-8203|CVE-2021-23337|CVE-2020-28500|GHSA-(35jh-r3h4-6jhm|29mw-wpgm-hmr9|p6mc-m468-83gw))$")) and (.file|tostring|endswith("package-lock.json")))' "$T/out" >/dev/null || { echo "FAIL - trivy: no lodash vuln row on package-lock.json"; fail=1; } ;; esac
+  jq -e 'any(.[]; ((.tool=="trivy" and (.rule|test("^(CVE-2020-8203|CVE-2021-23337|CVE-2020-28500|GHSA-(35jh-r3h4-6jhm|29mw-wpgm-hmr9|p6mc-m468-83gw))$"))) or any(.also[]?; .tool=="trivy" and (.rule|test("^(CVE-2020-8203|CVE-2021-23337|CVE-2020-28500|GHSA-(35jh-r3h4-6jhm|29mw-wpgm-hmr9|p6mc-m468-83gw))$")))) and (.file|tostring|endswith("package-lock.json")))' "$T/out" >/dev/null || { echo "FAIL - trivy: no lodash vuln row on package-lock.json"; fail=1; } ;; esac
 # guarddog scanned its one newly added package in full (a partial scan prints "guarddog(scanned-N-of-M)", which the loop's word match would also accept)
 case " $tools " in *" guarddog "*) grep -qE 'analyzers ran:[^;]* guarddog[,;]' "$T/err" || { echo "FAIL - guarddog did not scan the newly added package in full"; fail=1; } ;; esac
 # the govulncheck canary package must not feed the other Go canaries (its go.mod has to stay at the repo root: the hub runs govulncheck only there)
