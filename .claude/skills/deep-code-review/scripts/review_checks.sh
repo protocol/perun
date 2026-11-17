@@ -1597,8 +1597,27 @@ rows = [t for i, t in enumerate(rows) if t[3:4] != ["not-checked"] or t not in r
 FXD = re.compile(r"(^|/)(fixtures?|samples?|examples?|tests?|__tests__|testdata|mocks?|__mocks__|docs?)/", re.I)  # whole directory segment
 FXB = re.compile(r"(^|[._-])(fixture|sample|example|mock|test)s?([._-]|$)", re.I)  # file name only, so test-runner/ or sample-service/ stay untagged
 def fx(p): return FXD.search(p) or FXB.search(p.rsplit("/", 1)[-1])
+# Value-free shape of a secret hit, read from the flagged source line (the scanners redact their own value): one of env-ref, env-default (an env read with a quoted fallback literal), marker-word (names what was seen, not that the value is safe), localhost, real-looking,
+# appended as " [shape: X]". Only the class is emitted, never a byte of the line; an unreadable line gets no tag. A path never changes the class (the likely-fixture hint covers paths).
+# A line holding a real-looking token (a 12+ run of [A-Za-z0-9+/_=-] mixing 3+ of lower, upper, digit, other, or a 32+ run of hex digits) is always real-looking, whatever words sit nearby.
+# ponytail: heuristic, not proof. A real secret shorter than 12 chars, or mixing only 1-2 classes without being a 32+ hex run (e.g. a long lowercase-only word), still reads as marker-word/env-ref/localhost when a marker word is on its line; an identifier such as MY_LONG_SETTING_NAME_2 reads real-looking.
+SHP = (("env-ref", re.compile(r"\$\{[^}\n]*\}|\bos\.environ\b|\bprocess\.env\b|\bgetenv\(")),
+       ("marker-word", re.compile(r"(?i)[=:(\"']\s*<[^<>\s]{1,40}>|(?<![a-z0-9])x{3,}|changeme|\bexamples?\b|\buser(name)?:pass(word)?\b")),
+       ("localhost", re.compile(r"(?i)\blocalhost\b|\b127\.0\.0\.1\b")))
+def shape(p, n):
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            ln = next((x for i, x in enumerate(f, 1) if i == n), "")[:4000]
+    except OSError: ln = ""
+    if re.search(r"[0-9a-fA-F]{32,}", ln) or any(sum(bool(re.search(c, m)) for c in ("[a-z]", "[A-Z]", "[0-9]", "[+/_=-]")) >= 3 for m in re.findall(r"[A-Za-z0-9+/_=-]{12,}", ln)): return "real-looking"
+    c = next((k for k, r in SHP if r.search(ln)), None)
+    # env-default: an env line with a quoted literal of 6+ chars left once the env var name and any ${...} are removed (os.environ.get("K", "fallback")); a fallback can be a real secret.
+    if c == "env-ref" and re.search(r"([\"'])[^\"'\n]{6,}\1", re.sub(r"(?:getenv\(|environ(?:\.get\(|\[)|process\.env\[)\s*([\"'])[^\"'\n]*\1|\$\{[^}\n]*\}", "", ln)): return "env-default"
+    return c or ("real-looking" if ln.strip() else None)
 def row(t):
     d = {"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "rule": t[3], "message": t[4], "text": f"{t[3]}: {t[4]}", "tool": t[0]}
+    if t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "detect-secrets") and d["line"] > 0 and (s := shape(t[1], d["line"])):
+        d["message"] += f" [shape: {s}]"; d["text"] += f" [shape: {s}]"
     lft = "[likely-fixture:" in t[4]  # a scanner-side demotion (lf in sjson): the message already says why
     if lft or (t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "invisible-chars") and fx(t[1])):  # detect-secrets is hinted only by lf, never by path alone
         d["hint"] = "likely-fixture"; d["text"] += "" if lft else " [likely-fixture]"
