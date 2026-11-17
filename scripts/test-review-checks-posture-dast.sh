@@ -5,6 +5,7 @@
 # findings parsed, crash = not run (never clean).
 # REVIEW_CHECKS=<path> runs another copy of the script (used to prove the cases fail before the change).
 set -euo pipefail
+unset GITHUB_TOKEN GH_TOKEN GITHUB_AUTH_TOKEN # hermetic: an ambient token made the no-token scorecard case fail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh}
 T=$(mktemp -d "${TMPDIR:-/tmp}/posture.XXXXXX") && [ -n "$T" ] && [ -d "$T" ] || { echo "no temp dir" >&2; exit 1; }

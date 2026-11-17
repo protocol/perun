@@ -168,7 +168,7 @@ have() {
   case "$1" in gitleaks|trufflehog|osv-scanner|semgrep|trivy) lease_take || { skip "$1" "heavy lease full"; return 1; } ;; esac
 }
 # add TOOL FILE LINE RULE MSG -> one TSV row.
-add() { printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" >>"$raw"; }
+add() { printf '%s\t%s\t%s\t%s\t%s%s\n' "$1" "$2" "$3" "$4" "$5" "${6:+$'\t'$6}" >>"$raw"; } # optional $6: comma-joined advisory ids (osv-scanner, trivy), a hidden column the closing step reads and strips
 # run_one TOOL CMD... : sets rc; returns 1 on timeout, with a not-run line unless it is semgrep with the p/default pack in its config (sgreg=1: the caller reruns with the bundled rules and reports that).
 run_one() {
   local tool=$1 nz=(); shift; rc=0
@@ -533,7 +533,7 @@ elif kind.startswith("trivy"):
         if kind == "trivy-secret": rows += [(r["Target"], s.get("StartLine", 0), s.get("RuleID"), s.get("Title", "secret detected")) for s in r.get("Secrets") or []]
         lo = lambda x: not show_hyg and str(x.get("Severity")).upper() == "LOW"
         hidden += sum(map(lo, (r.get("Vulnerabilities") or []) + (r.get("Misconfigurations") or [])))
-        rows += [(r["Target"], 0, v.get("VulnerabilityID"), f"{dsev(v.get('Severity'))}: {v.get('PkgName')}@{v.get('InstalledVersion')}: {v.get('Title', '')}") for v in r.get("Vulnerabilities") or [] if not lo(v)]
+        rows += [(r["Target"], 0, v.get("VulnerabilityID"), f"{dsev(v.get('Severity'))}: {v.get('PkgName')}@{v.get('InstalledVersion')}: {v.get('Title', '')}", ",".join(filter(None, [v.get("VulnerabilityID"), *(v.get("VendorIDs") or [])]))) for v in r.get("Vulnerabilities") or [] if not lo(v)]
         for m in r.get("Misconfigurations") or []:
             if lo(m): continue
             if not show_hyg and (m.get("ID") in HYG or m.get("AVDID") in HYG): hidden += 1; continue
@@ -712,7 +712,7 @@ else:
         for p in r.get("packages") or []:
             pk = p.get("package") or {}
             ms = {i: g.get("max_severity") for g in p.get("groups") or [] for i in g.get("ids") or []}  # CVSS score of the group the advisory sits in
-            rows += [(r["source"]["path"], 0, v.get("id"), f"{dsev((v.get('database_specific') or {}).get('severity'), ms.get(v.get('id')))}: {pk.get('name')}@{pk.get('version')}: {v.get('summary', '')}")
+            rows += [(r["source"]["path"], 0, v.get("id"), f"{dsev((v.get('database_specific') or {}).get('severity'), ms.get(v.get('id')))}: {pk.get('name')}@{pk.get('version')}: {v.get('summary', '')}", ",".join(filter(None, [v.get("id"), *(v.get("aliases") or [])])))
                      for v in p.get("vulnerabilities") or []]
 err = kind in ("semgrep", "guarddog") and d.get("errors")
 rc = 3 if err else 0  # 3 = the scan was partial (rows may be empty); 4 = errors on every scanned file and no findings. Decided on the findings alone: the not-checked rows below are added after
@@ -866,7 +866,7 @@ elif have osv-scanner; then
     if [ "$rc" = 127 ] && grep -q 'no offline version' "$out"; then case "$gap" in *"osv-scanner ("*) ;; *) miss osv-scanner "no offline DB for the ecosystem of $f: run bash $here/provision_tools.sh --print $PWD" ;; esac; fi
     scan_ok osv-scanner 1 || continue # exit 1 = vulnerabilities found
     sjson osv "$out" >"$tsv" || { skip osv-scanner "unparseable output for $f"; continue; }
-    cov+="$f"$'\n'; while IFS=$'\t' read -r _ l r m; do add osv-scanner "$f" "$l" "$r" "$m"; done <"$tsv"
+    cov+="$f"$'\n'; while IFS=$'\t' read -r _ l r m i; do add osv-scanner "$f" "$l" "$r" "$m" "$i"; done <"$tsv"
   done <<<"$lock_files"
 fi
 
@@ -954,7 +954,7 @@ if [ -n "$files" ] && have trivy; then
       if [ "$tk" = trivy ]; then # covered = lockfiles trivy reported a Target for (a secret-only run covers none)
         while IFS= read -r f; do grep -Fq "\"Target\":\"$f\"" "$out" || grep -Fq "\"Target\": \"$f\"" "$out" && cov+="$f"$'\n'; done <<<"$lock_files"
       fi
-      while IFS=$'\t' read -r f l r m; do grep -qxF -- "$f" "$td/files" && add trivy "$f" "$l" "$r" "$m"; done <"$tsv"
+      while IFS=$'\t' read -r f l r m i; do grep -qxF -- "$f" "$td/files" && add trivy "$f" "$l" "$r" "$m" "$i"; done <"$tsv"
     else skip trivy "unparseable output"; fi
   fi
 fi
@@ -1597,9 +1597,10 @@ r=; for t in $ran; do case " $failed " in *" ${t%%(*} "*) ;; *) r+=" $t" ;; esac
 # Most rows read the working tree but the diff reads commits (sibling-sweep reads HEAD, so for it null is only cautious), so a row in a file whose working copy differs from HEAD (edited, staged or not, or untracked) is flagged null, not a guessed true/false: $td/dirty is `git status --porcelain -z` (an "XY path" entry per file; --no-renames lists both sides of a rename, -uall every untracked file). --no-optional-locks keeps it a pure read: `git diff HEAD` rewrote .git/index for a file that only changed its mtime even with that flag (git 2.50.1). If a git read here fails, "new" is omitted from every row and stderr says so.
 # ponytail: ignored untracked files and assume-unchanged/skip-worktree edits are not listed (add --ignored if a row ever needs the first); a file staged different from HEAD but reverted in the working tree is listed too, where null is only cautious.
 ud=; if [ "$wr" = 0 ] && [ "$hist" = 0 ]; then ud=$td/udiff; { git -c core.quotePath=false diff -U0 --inter-hunk-context=0 -M -a --no-color --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/ "$base"...HEAD >"$ud" && git --no-optional-locks status --porcelain -z --no-renames -uall >"$td/dirty"; } || { ud=; echo 'review_checks: could not list files that differ from HEAD; "new" omitted' >&2; }; fi
-REVIEW_STATE="$(git rev-parse --git-common-dir)/review-checks-last.json" HERE="$here" python3 - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" "$wired" "$gap" "$wiredx" "$ud" "$td/dirty" <<'PY'
-import json, os, re, shlex, sys, time
+REVIEW_WR="$wr" REVIEW_STATE="$(git rev-parse --git-common-dir)/review-checks-last.json" HERE="$here" python3 - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" "$wired" "$gap" "$wiredx" "$ud" "$td/dirty" <<'PY'
+import functools, json, os, re, shlex, sys, time
 rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1], encoding="utf-8", errors="replace")]
+IDS = {(t[0], t[1], t[3], t[4]): set(t.pop().split(",")) for t in rows if len(t) == 6}  # advisory ids of osv-scanner and trivy rows (hidden 6th column), stripped here
 rows = [t for i, t in enumerate(rows) if t[3:4] != ["not-checked"] or t not in rows[:i]]  # a tool failing on N files is one not-checked row
 # Triage hint, not a verdict (only big generic-api-key groups collapse, below): a secret or hidden-character finding under a sample/fixture/test/mock/docs path is usually dummy data.
 FXD = re.compile(r"(^|/)(fixtures?|samples?|examples?|tests?|__tests__|testdata|mocks?|__mocks__|docs?)/", re.I)  # whole directory segment
@@ -1612,11 +1613,18 @@ def fx(p): return FXD.search(p) or FXB.search(p.rsplit("/", 1)[-1])
 SHP = (("env-ref", re.compile(r"\$\{[^}\n]*\}|\bos\.environ\b|\bprocess\.env\b|\bgetenv\(")),
        ("marker-word", re.compile(r"(?i)[=:(\"']\s*<[^<>\s]{1,40}>|(?<![a-z0-9])x{3,}|changeme|\bexamples?\b|\buser(name)?:pass(word)?\b")),
        ("localhost", re.compile(r"(?i)\blocalhost\b|\b127\.0\.0\.1\b")))
-def shape(p, n):
+@functools.lru_cache(maxsize=None)
+def srcf(p):  # every line of file p, read once per path; () when unreadable
     try:
-        with open(p, encoding="utf-8", errors="replace") as f:
-            ln = next((x for i, x in enumerate(f, 1) if i == n), "")[:4000]
-    except OSError: ln = ""
+        with open(p, encoding="utf-8", errors="replace") as f: return tuple(f.readlines())
+    except OSError: return ()
+def srcl(p, n):  # source line n of file p (first 4000 chars); "" when unreadable
+    ls = srcf(p); return ls[n - 1][:4000] if 0 < n <= len(ls) else ""
+AKID = r"(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}"
+def presigned_only(ln):  # True when every access-key ID on the line is the X-Amz-Credential value of a presigned URL (a key ID with no secret); any other key ID, or a second copy, keeps the row as it was
+    ids = re.findall(r"\b" + AKID + r"\b", ln); return bool(ids) and ids == re.findall(r"(?i)X-Amz-Credential=(" + AKID + r")\b", ln)
+def shape(p, n):
+    ln = srcl(p, n)
     if re.search(r"[0-9a-fA-F]{32,}", ln) or any(sum(bool(re.search(c, m)) for c in ("[a-z]", "[A-Z]", "[0-9]", "[+/_=-]")) >= 3 for m in re.findall(r"[A-Za-z0-9+/_=-]{12,}", ln)): return "real-looking"
     c = next((k for k, r in SHP if r.search(ln)), None)
     # env-default: an env line with a quoted literal of 6+ chars left once the env var name and any ${...} are removed (os.environ.get("K", "fallback")); a fallback can be a real secret.
@@ -1626,9 +1634,24 @@ def row(t):
     d = {"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "rule": t[3], "message": t[4], "text": f"{t[3]}: {t[4]}", "tool": t[0]}
     if t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "detect-secrets") and d["line"] > 0 and (s := shape(t[1], d["line"])):
         d["message"] += f" [shape: {s}]"; d["text"] += f" [shape: {s}]"
+    # FP class 1: a secret-scanner aws-access-token hit inside a presigned URL query (X-Amz-Credential=) is a key ID with no secret: kept, tagged a low non-secret lead.
+    if t[0] in ("gitleaks", "gitleaks-history", "trufflehog") and d["line"] > 0 and re.search(r"(?i)^aws|aws-access", t[3] or "") and presigned_only(srcl(t[1], d["line"])):
+        d["hint"] = "non-secret-lead"; d["message"] += " [non-secret-lead: presigned-URL key id, no secret; low]"; d["text"] += " [non-secret-lead: presigned-URL key id, no secret; low]"
+    # FP class 3: zizmor template-injection where every ${{ }} on the line is a non-attacker context (matrix, strategy, runner, event_name, sha, event.before) is downranked, never dropped. Step outputs and anything else keep the row as is.
+    if t[0] == "zizmor" and t[3] == "template-injection" and d["line"] > 0:
+        ex = re.findall(r"\$\{\{\s*(.*?)\s*\}\}", srcl(t[1], d["line"]))
+        sl = srcf(t[1]); mx = re.search(r"(?i)fromjson", "".join(sl))  # a matrix built from fromJSON, or any ${{ }} inside the matrix: block, can carry attacker text: matrix.* is then not safe
+        for i, l in enumerate(sl):
+            if re.match(r"\s*matrix:", l):
+                ind = len(l) - len(l.lstrip()); mx = mx or "${{" in l
+                for l2 in sl[i + 1:]:
+                    if l2.strip() and len(l2) - len(l2.lstrip()) <= ind: break
+                    mx = mx or "${{" in l2
+        if ex and all(re.fullmatch(r"(?:strategy|runner)\.[\w.-]+|github\.(?:event_name|sha|event\.before|event\.pull_request\.(?:head|base)\.sha)", e) or (not mx and re.fullmatch(r"matrix\.[\w.-]+", e)) for e in ex):
+            d["hint"] = "low-risk-context"; d["message"] += " [downranked: low, every expression is a non-attacker context]"; d["text"] += " [downranked: low, every expression is a non-attacker context]"
     lft = "[likely-fixture:" in t[4]  # a scanner-side demotion (lf in sjson): the message already says why
     if lft or (t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "invisible-chars") and fx(t[1])):  # detect-secrets is hinted only by lf, never by path alone
-        d["hint"] = "likely-fixture"; d["text"] += "" if lft else " [likely-fixture]"
+        d.setdefault("hint", "likely-fixture"); d["text"] += "" if lft else " [likely-fixture]"
     return d
 # Low-confidence buckets: generic-api-key (the low-signal rule) hits from gitleaks or gitleaks-history collapse when they are more than 3 in one group:
 # under a fixture DIRECTORY per (tool, top fixture dir), tagged likely-fixture; elsewhere per (tool, file), rule generic-api-key-summary, untagged unless the file is name-only fixture-like.
@@ -1654,6 +1677,7 @@ def fsumm(k, g):  # k = (tool, file, "", rule): the rule names the message and t
     if k[0] in ("gitleaks", "gitleaks-history") and fx(k[1]): d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
     return d
 data = [t for t in rows if len(t) == 5]
+data = list(dict.fromkeys(map(tuple, data)))  # a scanner emitting the same (tool, file, line, rule, message) twice is one row
 # Same defect, two tools: (dup tool, dup rule suffix): (keep tool, keep rule). A dup row goes only when the keep row sits on the same file:line.
 SUPERSEDES = {("semgrep", "github-actions-mutable-action-tag"): ("zizmor", "unpinned-uses")}
 kept = {(os.path.normpath(t[1]), t[2], t[0], t[3]) for t in data}
@@ -1677,6 +1701,19 @@ for t in data:
     k = key(t) or fkey(t)
     if not k or len(groups[k]) <= 3: out.append(row(t))
     elif k not in done: done.add(k); out.append(summ(k, groups[k]) if key(t) else fsumm(k, groups[k]))
+# CLI operator input: a semgrep path-traversal / path-join row in a file that reads sys.argv, argparse or process.argv, uses no request object and imports no HTTP framework is the operator typing a path, not an attacker: hint cli-operator-input, hint only, severity untouched.
+HTTPF = re.compile(r"(?m)^\s*(?:import|from)\s+(?:flask|django|fastapi|starlette|aiohttp|bottle|tornado|sanic|falcon|pyramid|cherrypy|http\.server)\b|(?:require\(|from\s+|import\s+)['\"](?:express|koa|fastify|hapi|@hapi/hapi|http|https|node:http|node:https)['\"]|^\s*\"net/http\"")
+CLIIN = re.compile(r"\bsys\.argv\b|\bargparse\b|\bprocess\.argv\b"); REQIN = re.compile(r"\b(?:request|req)\.(?:args|form|json|query|params|body|GET|POST|files|headers|cookies)\b")
+def addhint(r, h): r["hint"] = f"{r['hint']}; {h}" if r.get("hint") else h
+cli = {}
+for r in out:
+    if r["tool"] == "semgrep" and re.search(r"path[-_]?(?:traversal|join)", r["rule"], re.I):
+        if r["file"] not in cli:
+            try: src = open(r["file"], encoding="utf-8", errors="replace").read()
+            except OSError: src = ""
+            cli[r["file"]] = bool(CLIIN.search(src)) and not HTTPF.search(src) and not REQIN.search(src)
+        if cli[r["file"]]:
+            addhint(r, "cli-operator-input")  # hint only: the file-wide read can misfire (a handler with an argparse __main__, a helper called from web code), so severity and the CWE tag stay the scanner's
 # Cross-tool duplicate: bandit, ruff-security (the S rules are bandit's B rules, same number), semgrep and gosec rows on the same file:line with the same CWE (the "[CWE-n]" tag their own metadata gave the row) are one defect: one row is kept (the first tool in DUPT order), its tools list names every tool, its also list holds each merged row's tool and rule (so per-tool attribution survives), and its message the others' rules. A ruff-security row takes the CWE of a bandit row on that line with the matching id. A row with no tag never merges.
 DUPT = ("semgrep", "bandit", "ruff-security", "gosec")
 dk = lambda r: (os.path.normpath(r["file"]), r["line"])
@@ -1699,6 +1736,74 @@ out = [r for r in out if id(r) not in dcut]
 for r in out:
     a = rk.get(tw((r["tool"], r["file"], str(r["line"]), r["rule"]), ("bandit", "B")))
     if a: r["also"] = r.get("also", []) + a; r["message"] += " [corroborated: bandit+ruff]"; r["text"] += " [corroborated: bandit+ruff]"
+# FP class 2: a shell=True / command-injection row (bandit B602-B607, ruff-security S602-S607, semgrep shell-true/command-injection rules) on a line carrying a justified suppression
+# (# noqa: S602 or # nosec, then reason text) collapses across the semgrep, bandit and ruff twins to one low "suppressed-with-reason" row: the first tool in DUPT order keeps the row, the rest ride in "also".
+CMDI = re.compile(r"B60[2-7]|S60[2-7]|shell-true|command-injection|dangerous-(?:subprocess|system-call)|os-system|subprocess-injection")
+def supp(r, ln):  # does the line's own suppression cover THIS row's tool and rule, with reason text after it? ruff: noqa naming the S code (or a prefix); bandit: nosec bare or naming the B code; semgrep: nosemgrep bare or naming the rule id, or a nosec covering B602-B607. Any other code covers nothing.
+    rs = lambda s: bool(re.match(r"[-:;#\s]*[A-Za-z][^\n]{7,}", s)); ru = r["rule"]; cs = lambda s: re.split(r"[,\s]+", s.strip())
+    if r["tool"] in ("ruff-security", "bandit"):  # a bandit row stands for its ruff twin (Bnnn = Snnn) once the twin collapse has run, so a noqa naming the S code covers it too
+        m = re.search(r"#\s*noqa:\s*((?:[A-Z]+\d+[,\s]+)*[A-Z]+\d+)(.*)", ln); sc = "S" + ru[1:] if r["tool"] == "bandit" else ru
+        if m and any(sc.startswith(c) for c in cs(m[1])) and rs(m[2]): return True
+        if r["tool"] == "ruff-security": return False
+    tn = r["tool"] == "semgrep" and re.search(r"injection|taint", ru)  # a taint-mode row (untrusted data reaches the command) is not what a bare nosec reason vouches for: only nosemgrep naming the rule id covers it
+    m = not tn and re.search(r"#\s*nosec\b(?:[ \t]+((?:B\d+[,\s]*)+))?(.*)", ln)
+    if m and rs(m[2]) and (not m[1] or any((c == ru) if r["tool"] == "bandit" else re.fullmatch(r"B60[2-7]", c) for c in cs(m[1]))): return True
+    m = r["tool"] == "semgrep" and re.search(r"nosemgrep\b(?::[ \t]*([\w.,-]+))?(.*)", ln)
+    return bool(m) and rs(m[2]) and (not m[1] and not tn or any(ru.endswith(i) or i.endswith(ru) for i in (m[1] or "").split(",") if i))
+sg = {}
+for r in sorted((r for r in out if r["tool"] in DUPT and r["line"] > 0 and CMDI.search(r["rule"]) and "_lines" not in r), key=lambda r: DUPT.index(r["tool"])):
+    if supp(r, srcl(r["file"], r["line"])): sg.setdefault(dk(r), []).append(r)
+scut = set()
+for g in sg.values():
+    k = g[0]; k["hint"] = "suppressed-with-reason"; sfx = " [suppressed-with-reason: low]"
+    if len(g) > 1: k["also"] = k.get("also", []) + [x for r in g[1:] for x in [{"tool": r["tool"], "rule": r["rule"]}] + r.get("also", [])]; k["tools"] = sorted({r["tool"] for r in g}); sfx = " [suppressed-with-reason: low; also reported by: " + ", ".join(f"{r['tool']} {r['rule']}" for r in g[1:]) + "]"
+    k["message"] += sfx; k["text"] += sfx; scut |= {id(r) for r in g[1:]}
+out = [r for r in out if id(r) not in scut]
+# Byte-identical copies (--full only): rows with the same (tool, rule, line, file content hash, message, file name) in different directories (the same file name keeps unrelated empty or stub files apart) are one row on the first path; its hint names the others ("also: a, b").
+if os.environ.get("REVIEW_WR") == "1":
+    import hashlib
+    hs, cg0, dcut = {}, {}, set()
+    for r in out:
+        if r["rule"] == "not-checked" or "_lines" in r or r["line"] <= 0 or r["file"] in ("", "-"): continue  # file-level rows (line 0) name their own file, so each copy keeps one
+        if r["file"] not in hs:
+            try: hs[r["file"]] = hashlib.sha256(open(r["file"], "rb").read()).hexdigest()
+            except OSError: hs[r["file"]] = None
+        if hs[r["file"]]: cg0.setdefault((r["tool"], r["rule"], r["line"], hs[r["file"]], r["message"], os.path.basename(r["file"]), bool(fx(r["file"]))), []).append(r)  # a fixture copy and a src copy are never one row.
+    for g in cg0.values():
+        o = [r for r in g[1:] if os.path.normpath(r["file"]) != os.path.normpath(g[0]["file"])]
+        if o:
+            ps = list(dict.fromkeys(os.path.normpath(r["file"]) for r in o)); h = "also: " + ", ".join(ps); addhint(g[0], h); g[0]["text"] += f" [{h}]"; dcut |= {id(r) for r in o}
+    out = [r for r in out if id(r) not in dcut]
+# Same advisory, two scanners: osv-scanner (GHSA id + aliases) and trivy (CVE id + VendorIDs) dependency rows (line 0) with the same file, pkg@version and intersecting advisory ids are one row: the highest severity wins (tie: osv-scanner), "also" and the suffix name the others.
+SR = {"unrated": -1, "low": 0, "medium": 1, "high": 2, "critical": 3}
+dp = {}
+for r in out:
+    m = re.match(r"(\w+): (\S+@\S*): ", r["message"]); k = (r["tool"], r["file"], r["rule"], r["message"])
+    if r["line"] == 0 and m and k in IDS: dp.setdefault((os.path.normpath(r["file"]), m[2]), []).append([r, IDS[k] | {r["rule"]}, SR.get(m[1], -1)])
+dcut = set()
+for b in dp.values():
+    cl = []  # [id set, entries]; a row joins (and bridges) every cluster its ids intersect
+    for e in b:
+        hit = [c for c in cl if c[0] & e[1]]; cl = [c for c in cl if c not in hit]
+        cl.append([e[1].union(*(c[0] for c in hit)), [x for c in hit for x in c[1]] + [e]])
+    for _, c in cl:
+        if len(c) > 1:
+            g = [max(c, key=lambda x: (x[2], x[0]["tool"] == "osv-scanner"))[0]]; g += [x[0] for x in c if x[0] is not g[0]]
+            g[0]["tools"] = sorted({r["tool"] for r in g}); g[0]["also"] = [{"tool": r["tool"], "rule": r["rule"]} for r in g[1:]]
+            sfx = " [also reported by: " + ", ".join(f"{r['tool']} {r['rule']}" for r in g[1:]) + "]"; g[0]["message"] += sfx; g[0]["text"] += sfx; dcut |= {id(r) for r in g[1:]}
+out = [r for r in out if id(r) not in dcut]
+# Scope tag: an osv-scanner/trivy dependency row (line 0) whose pkg@version is reachable only via devDependencies in its npm lockfile (scripts/dep_scope.py) gets " (scope: dev)". Prod, unknown or unparseable stay untagged; severity and row count never change.
+import importlib.util
+ds = importlib.util.spec_from_file_location("dep_scope", os.path.join(os.environ["HERE"], "dep_scope.py")); dsm = importlib.util.module_from_spec(ds); dsc = {}
+try: ds.loader.exec_module(dsm)
+except Exception: dsm = None
+for r in out:
+    m = re.match(r"(\w+): (\S+@\S*): ", r["message"])
+    if dsm and r["line"] == 0 and r["tool"] in ("osv-scanner", "trivy") and m:
+        if r["file"] not in dsc:
+            try: dsc[r["file"]] = dsm.dev_only(r["file"])
+            except Exception: dsc[r["file"]] = set()
+        if m[2] in dsc[r["file"]]: r["message"] += " (scope: dev)"; r["text"] += " (scope: dev)"
 # Corroboration: when different tools flag the same normalized file:line, every such row gets a "tools" list and a " [corroborated by: ...]" suffix. No row is dropped or merged. not-checked, summary, line<=0 and per-file-summary rows are skipped.
 cg = {}
 for r in out:

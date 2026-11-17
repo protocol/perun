@@ -2177,3 +2177,105 @@ rules:
       for ($K in $S) { ... if ($A.includes($K)) { ... } ... }
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.raw-sql-concat
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: A SQL string built by template interpolation or concatenation is passed to a raw query API (Prisma $queryRawUnsafe/$executeRawUnsafe, knex.raw, sequelize.query, pg .query) (CWE-89). Use bound parameters ($1 / ? placeholders) or the tagged $queryRaw form. ponytail, search mode - any interpolated value is reported whether or not it is user-controlled; add a taint source when the noise shows up. ponytail, the receiver is matched by name (db, knex, pool, client, conn, prisma, sequelize, trx, tx, pg), so a client held under another name is missed; an all-literal or literal-ternary operand is skipped.
+  patterns:
+  - pattern-either:
+    - pattern: $DB.$queryRawUnsafe($Q, ...)
+    - pattern: $DB.$executeRawUnsafe($Q, ...)
+    - pattern: $DB.raw($Q, ...)
+    - pattern: $DB.query($Q, ...)
+  - metavariable-pattern:
+      metavariable: $Q
+      patterns:
+      - pattern-either:
+        - pattern: |
+            `...${$X}...`
+        - pattern: |
+            "..." + $X
+        - pattern: |
+            $X + "..."
+      - metavariable-regex:
+          metavariable: $X
+          regex: '^(?!\s*(?:["''`][^"''`]*["''`]|\d+)\s*$)(?!\s*\(?[^?]+\?\s*["''][^"'']*["'']\s*:\s*["''][^"'']*["'']\)?\s*$)'
+  - metavariable-regex:
+      metavariable: $DB
+      regex: (?is).*(db|knex|pool|client|conn|prisma|sequelize|trx|tx|pg|datasource|manager|queryrunner|\bem\b)
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.orm-where-unchecked-input
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A Prisma where-filter takes a request value with no presence check. An undefined value drops the condition, so findFirst/update/delete match an arbitrary row (CWE-20, CWE-639). Reject a missing value first (if (!x) return 400).
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern: |
+            $DB.$MODEL.$M({..., where: {..., $K: req.$A.$B, ...}, ...})
+        - pattern: |
+            $DB.$MODEL.$M({..., where: {..., $K: {..., equals: req.$A.$B, ...}, ...}, ...})
+      - pattern-not-inside: |
+          if (!req.$A.$B) { ... }
+          ...
+    - patterns:
+      - pattern-either:
+        - pattern: |
+            $DB.$MODEL.$M({..., where: {..., $K, ...}, ...})
+        - pattern: |
+            $DB.$MODEL.$M({..., where: {..., $F: {..., equals: $K, ...}, ...}, ...})
+      - pattern-inside: |
+          const { $K, ... } = req.$A;
+          ...
+      - pattern-not-inside: |
+          if (!$K) { ... }
+          ...
+  - metavariable-regex:
+      metavariable: $M
+      regex: ^(findFirst|findFirstOrThrow|findMany|update|updateMany|delete|deleteMany|count)$
+  - metavariable-regex:
+      metavariable: $A
+      regex: ^(body|query)$
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.guard-allows-missing-token
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: An auth guard returns true (or calls next()) when no token or credential is present, so an unauthenticated request passes (CWE-306, CWE-636). Deny when the credential is missing.
+  patterns:
+  - pattern-either:
+    - pattern: |
+        if (!$T) { return true; }
+    - pattern: |
+        if (!$T) return true;
+    - pattern: |
+        if (!$T) { return next(); }
+    - pattern: |
+        if (!$T) return next();
+    - pattern: |
+        if (!$T) { next(); return; }
+    - pattern: |
+        if (!$T && $R) { return true; }
+    - pattern: |
+        if (!$T && $R) return true;
+    - pattern: |
+        if (!$T && $R) { return next(); }
+    - pattern: |
+        if (!$T && $R) { next(); return; }
+  - metavariable-regex:
+      metavariable: $T
+      regex: (?i)^.*(token|authorization|bearer|jwt|api_?key|credential|session).*$
+  - pattern-either:
+    - pattern-inside: |
+        $F(...) { ... }
+    - pattern-inside: |
+        function $F(...) { ... }
+    - pattern-inside: |
+        $F = (...) => { ... }
+  - metavariable-regex:
+      metavariable: $F
+      regex: (?i)^.*(guard|auth|verify|protect|canactivate).*$
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]

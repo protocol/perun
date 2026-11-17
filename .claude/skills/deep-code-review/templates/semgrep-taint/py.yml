@@ -1025,3 +1025,39 @@ rules:
     - focus-metavariable: $V
   paths:
     exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.py.raw-sql-format
+  languages: [python]
+  severity: ERROR
+  message: A SQL string built with an f-string, % formatting, .format() or concatenation is passed to execute() (CWE-89). Pass the values as the second argument (cursor.execute("... WHERE id = %s", (x,))). ponytail, search mode - any interpolated value is reported, user-controlled or not.
+  pattern-either:
+  - pattern: $C.execute(f"...{$X}...", ...)
+  - pattern: $C.executemany(f"...{$X}...", ...)
+  - pattern: $C.execute("..." % $X, ...)
+  - pattern: $C.execute("...".format(...), ...)
+  - pattern: $C.execute("..." + $X, ...)
+  - pattern: $C.execute($X + "...", ...)
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.py.guard-allows-missing-token
+  languages: [python]
+  severity: ERROR
+  message: An auth guard returns True when no token or credential is present, so an unauthenticated request passes (CWE-306, CWE-636). Deny when the credential is missing.
+  patterns:
+  - pattern-either:
+    - pattern: |
+        if not $T:
+            return True
+    - pattern: |
+        if not $T and $R:
+            return True
+  - metavariable-regex:
+      metavariable: $T
+      regex: (?i)^.*(token|authorization|bearer|jwt|api_?key|credential|session).*$
+  - pattern-inside: |
+      def $F(...):
+          ...
+  - metavariable-regex:
+      metavariable: $F
+      regex: (?i)^.*(guard|auth|verify|protect|permission|allowed).*$
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]

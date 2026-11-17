@@ -132,7 +132,7 @@ def main():
         if not rel:
             continue
         rows = [(0, "hidden-unicode", m.replace("hidden character", "hidden character in file name")) for _, m in hidden_hits(rel)[:1]]
-        if not os.path.islink(rel):
+        if not os.path.islink(rel) and os.path.splitext(rel)[1].lower() not in BINARY_EXT:  # scan_file ignores a binary extension, so skip the read and the partial row
             try:
                 with open(rel, "rb") as fh:
                     raw = fh.read(MAX_READ + 1)

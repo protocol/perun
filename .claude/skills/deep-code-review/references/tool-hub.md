@@ -132,6 +132,8 @@ For a full `review_checks.sh` audit of a repo list instead, `python3 .claude/ski
 
 Pinned commit: none yet. The user records the commit they reviewed; an unpinned route is not run.
 
+- An osv-scanner or trivy dependency row (line 0) gets ` (scope: dev)` when its pkg@version is reachable only via devDependencies in its npm lockfile (package-lock v2/v3, yarn v1, pnpm v9; `scripts/dep_scope.py`); prod, shared, devOptional, unknown or unparseable stay untagged, and severity and row count never change.
+
 ## Adding a tool
 
 Add one `hub=` row, a `sjson` shape check and row mapper in `review_checks.sh`, a shim case in `scripts/test-review-checks-tool-hub.sh`, and a row above. Verify flags from the tool's `--help` or official docs first; if you cannot, mark it `unverified`.

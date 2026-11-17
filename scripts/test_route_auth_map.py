@@ -2180,7 +2180,10 @@ class RouteAuthMap(unittest.TestCase):
             r = subprocess.run(["bash", str(RC), "--full", "--repo", str(repo("g", FX))], capture_output=True, text=True, env=env)
             rows = [x for x in json.loads(r.stdout) if x["tool"] == "route-auth"]
             want = {g.split(": HIGH: ")[0] + "|" + g.split(": HIGH: ")[1] for g in self.gold if ": HIGH: " in g}
-            got = {"%s:%d|%s" % (x["file"], x["line"], re.sub(r" \[corroborated by: [^\]]*\]$", "", x["message"])) for x in rows}
+            # --full folds byte-identical copies into one row whose hint names the others ("also: a, b").
+            also = lambda x: [p for h in (x.get("hint") or "").split("; ") if h.startswith("also: ") for p in h[6:].split(", ")]
+            got = {"%s:%d|%s" % (p, x["line"], re.sub(r" \[corroborated by: [^\]]*\]$", "", x["message"])) for x in rows for p in [x["file"], *also(x)]}
+            self.assertLess(len(rows), len(want))
             self.assertEqual(got, want)
             self.assertEqual({x["rule"] for x in rows}, {"missing-auth"})
             self.assertIn("route-auth: heuristic; scanned %d handlers; silence is not proof of authentication" % len(self.gold), r.stderr)
