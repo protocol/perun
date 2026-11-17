@@ -1631,6 +1631,14 @@ data = [t for t in rows if len(t) == 5]
 SUPERSEDES = {("semgrep", "github-actions-mutable-action-tag"): ("zizmor", "unpinned-uses")}
 kept = {(os.path.normpath(t[1]), t[2], t[0], t[3]) for t in data}
 data = [t for t in data if not any(t[0] == dt and t[3].endswith(dr) and (os.path.normpath(t[1]), t[2], kt, kr) in kept for (dt, dr), (kt, kr) in SUPERSEDES.items())]
+# bandit Bnnn and ruff-security Snnn share the number (ruff's flake8-bandit port): on the same file:line the ruff twin is dropped and the bandit row is tagged. A B101-summary row is never tagged.
+# A bandit row carrying a [CWE-n] tag is left to the cross-tool merge below (it folds the ruff row into the CWE group and names its rule), so the twin is not collapsed twice.
+tw = lambda t, p: (os.path.normpath(t[1]), t[2], t[3][1:]) if t[0] == p[0] and re.fullmatch(p[1] + r"\d+", t[3]) else None
+bk = {k for k in (tw(t, ("bandit", "B")) for t in data if not re.search(r"\[CWE-\d+[],]", t[4])) if k}
+rk = {}  # twin key -> the ruff rows to be dropped; their rule and message ride on the kept bandit row as "also" (rows carry no severity or CWE field, so there is nothing else to carry)
+for t in data:
+    if tw(t, ("ruff-security", "S")) in bk: rk.setdefault(tw(t, ("ruff-security", "S")), []).append(f"ruff-security {t[3]}: {t[4]}")
+data = [t for t in data if tw(t, ("ruff-security", "S")) not in bk]
 key = lambda t: not opt and t[0] in ("gitleaks", "gitleaks-history") and t[3] in LOW and FXD.search(t[1]) and (t[0], top(t[1]))
 fkey = lambda t: not opt and (t[0], t[3]) in FILE and (t[0], t[1], "", t[3])
 groups = {}
@@ -1660,6 +1668,10 @@ for g in dg.values():
         g[0]["tools"] = sorted({r["tool"] for r in g}); g[0]["also"] = [{"tool": r["tool"], "rule": r["rule"]} for r in g[1:]]; sfx = " [also reported by: " + ", ".join(f"{r['tool']} {r['rule']}" for r in g[1:]) + "]"
         g[0]["message"] += sfx; g[0]["text"] += sfx; dcut |= {id(r) for r in g[1:]}
 out = [r for r in out if id(r) not in dcut]
+# Twin collapse (bandit Bnnn + ruff-security Snnn, same file:line): the bandit row carries the dropped ruff rows as "also".
+for r in out:
+    a = rk.get(tw((r["tool"], r["file"], str(r["line"]), r["rule"]), ("bandit", "B")))
+    if a: r["also"] = r.get("also", []) + a; r["message"] += " [corroborated: bandit+ruff]"; r["text"] += " [corroborated: bandit+ruff]"
 # Corroboration: when different tools flag the same normalized file:line, every such row gets a "tools" list and a " [corroborated by: ...]" suffix. No row is dropped or merged. not-checked, summary, line<=0 and per-file-summary rows are skipped.
 cg = {}
 for r in out:
