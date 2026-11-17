@@ -224,4 +224,27 @@ snapshots:
   acme-real@1.0.0: {}
 J
 python3 -I -c "$PYS"'"acme-real@1.0.0" in r[0] else 1)' "$ROOT/.claude/skills/deep-code-review/scripts/dep_scope.py" "$PU/d/pnpm-lock.yaml" && r=0 || r=1; chk $r "pnpm: quoted importer alias version resolves to the real snapshot (prod)"
+mkdir -p "$PU/e"
+cat >"$PU/e/pnpm-lock.yaml" <<'J'
+lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      acme-alias:
+        specifier: git+ssh://git@example.com/acme/acme-real.git#abc123
+        version: git+ssh://git@example.com/acme/acme-real.git#abc123
+    devDependencies:
+      acme-dev:
+        specifier: ^1.0.0
+        version: 1.0.0
+
+snapshots:
+
+  acme-dev@1.0.0: {}
+
+  acme-real@git+ssh://git@example.com/acme/acme-real.git#abc123: {}
+J
+python3 -I -c "$PYS"'r is not None and "acme-real@git+ssh://git@example.com/acme/acme-real.git#abc123" in r[0] and "acme-real@git+ssh://git@example.com/acme/acme-real.git#abc123" not in r[1] else 1)' "$ROOT/.claude/skills/deep-code-review/scripts/dep_scope.py" "$PU/e/pnpm-lock.yaml" && r=0 || r=1; chk $r "pnpm: prod git+ssh dep whose version contains '@' resolves by full version part (not dev, lockfile known)"
 echo "Tests: $pass/$total"; [ "$pass" = "$total" ]

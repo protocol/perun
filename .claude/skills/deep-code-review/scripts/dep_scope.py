@@ -98,6 +98,8 @@ def pnpm_v9(path):
             if k not in snap:  # alias "foo@bar@1.0.0" -> "bar@1.0.0"; else every snapshot of that name (superset)
                 n = nm(k); v = k[len(n) + 1:]
                 if v.startswith(('link:', 'file:', 'workspace:')): continue
+                full = [] if v[:1].isdigit() else [x for x in snap if x[len(nm(x)) + 1:] == v]  # "pkg@git+ssh://git@host/o/r#sha": whole v is the version part
+                if full: st += full + [x for x in snap if nm(x) in {nm(h) for h in full}]; continue
                 if '@' in v[1:]:  # alias "foo@bar@1.0.0": real spec is "bar@1.0.0"
                     if v in snap: st.append(v); continue
                     n = nm(v); v = v[len(n) + 1:]

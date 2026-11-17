@@ -35,7 +35,8 @@ npx skills add protocol/perun#vX.Y.Z --skill deep-code-review
 ```
 
 Prefer `--copy` over a symlink that auto-updates. `npx skills update`
-without a re-review is AST07.
+without a re-review is AST07. Default-on auto-update runs remote code from release tags: that high risk is MITIGATED by the
+`auto_update_delay_h` cooldown (default 72h), not closed; it closes only once tags are signed and a `release-signers` file ships.
 
 ## Reporting a vulnerability
 

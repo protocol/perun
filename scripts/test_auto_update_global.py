@@ -10,6 +10,15 @@ import test_auto_update as base  # noqa: E402
 au = base.au
 
 
+
+def _nodelay() -> str:
+    """A policy file with the update cooldown off, so these tests apply a tag at once."""
+    import tempfile as _t
+    f = Path(_t.mkdtemp()) / "policy.json"
+    f.write_text('{"auto_update_delay_h": 0}')
+    return str(f)
+
+
 class GlobalInstallTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
@@ -22,6 +31,10 @@ class GlobalInstallTests(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
         os.environ.pop("PERUN_POLICY", None)
+        self.delay = 0  # cooldown off unless a test sets it
+        dp = mock.patch.object(au, "delay_h", lambda t: self.delay)
+        dp.start()
+        self.addCleanup(dp.stop)
 
     def global_install(self):  # a non-git home with a marker and no managed skill files
         m = json.loads((self.proj / ".claude/.perun-install.json").read_text())

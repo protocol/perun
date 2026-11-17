@@ -28,7 +28,7 @@ def commit_tag(r: Path, t: str, sums_ok=True, force=False):
     (r / "SHA256SUMS").write_text("\n".join(rows) + "\n")
     sh("git", "add", "-A", cwd=r)
     sh("git", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", t, cwd=r)
-    sh("git", "tag", *(["-f"] if force else []), t, cwd=r)
+    sh("git", "-c", "user.name=t", "-c", "user.email=t@example.com", "tag", "-a", "-m", t, *(["-f"] if force else []), t, cwd=r)
 
 
 def fake_remote(base: Path, tags=("v1.2.0", "v1.9.0", "v1.10.0")) -> Path:
@@ -54,11 +54,16 @@ def fake_installed(base: Path, remote: Path, version="1.2.0") -> Path:
     return t
 
 
+
 class AutoUpdateTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         os.environ["XDG_CACHE_HOME"] = str(self.tmp / "cache")
         os.environ.pop("PERUN_POLICY", None)
+        self.delay = 0  # cooldown off unless a test sets it
+        p = mock.patch.object(au, "delay_h", lambda t: self.delay)
+        p.start()
+        self.addCleanup(p.stop)
         self.remote = fake_remote(self.tmp)
         self.proj = fake_installed(self.tmp, self.remote)
 
@@ -96,13 +101,14 @@ class AutoUpdateTests(unittest.TestCase):
         self.assertFalse((self.proj / ".claude/ran").exists())
         self.assertIn("skip: uncommitted changes: .claude/settings.local.json", self.log())
 
-    def test_moved_local_tag_is_refused(self):
-        self.assertEqual(au.run(self.proj), 0)
+    def test_moved_tag_restarts_cooldown_instead_of_stalling(self):
+        self.assertEqual(au.run(self.proj, now=1000.0), 0)  # delay 0: applied, cached tag now old
         (self.proj / ".claude/ran").unlink()
         commit_tag(self.remote, "v1.10.0", force=True)  # the remote re-points an existing tag
-        self.assertEqual(au.run(self.proj), 1)
+        self.delay = 72
+        self.assertEqual(au.run(self.proj, now=2000.0), 0)  # forced fetch works; moved sha resets the clock
         self.assertFalse((self.proj / ".claude/ran").exists())
-        self.assertIn("failed 1.2.0 -> v1.10.0: git fetch", self.log())
+        self.assertIn("waiting cooldown", self.log())
 
     def test_tag_not_on_main_is_refused(self):
         sh("git", "checkout", "-q", "-b", "side", cwd=self.remote)
@@ -157,7 +163,9 @@ class AutoUpdateTests(unittest.TestCase):
         real = shutil.which("git")
         (slow / "git").write_text(f"#!/bin/sh\nsleep 2\nexec {real} \"$@\"\n")
         (slow / "git").chmod(0o755)
-        env = {**os.environ, "PATH": f"{slow}:{os.environ['PATH']}", "CLAUDE_PROJECT_DIR": str(self.proj)}
+        pol = self.tmp / "nodelay.json"
+        pol.write_text('{"auto_update_delay_h": 0}')  # the detached worker is a subprocess: the delay_h patch does not reach it
+        env = {**os.environ, "PATH": f"{slow}:{os.environ['PATH']}", "CLAUDE_PROJECT_DIR": str(self.proj), "PERUN_POLICY": str(pol)}
         t0 = time.monotonic()
         p = subprocess.run([sys.executable, str(AD / "perun_auto_update.py")], env=env, capture_output=True, text=True)
         elapsed = time.monotonic() - t0
@@ -167,6 +175,124 @@ class AutoUpdateTests(unittest.TestCase):
         while time.monotonic() < deadline and "updated" not in self.log():
             time.sleep(0.2)
         self.assertIn("updated 1.2.0 -> v1.10.0", self.log())
+
+
+class CooldownAndSignerTests(unittest.TestCase):
+    """Supply-chain mitigation: per-tag cooldown, installed-copy release-signers, non-empty SHA256SUMS."""
+    H = 3600
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        os.environ["XDG_CACHE_HOME"] = str(self.tmp / "cache")
+        os.environ.pop("PERUN_POLICY", None)
+        self.remote = fake_remote(self.tmp, tags=("v1.2.0",))
+        self.proj = fake_installed(self.tmp, self.remote)
+        self.now = 1_000_000_000.0
+        d = mock.patch.object(au, "delay_h", lambda t: 72)
+        d.start()
+        self.addCleanup(d.stop)
+
+    def log(self):
+        f = au.cache() / "auto-update.log"
+        return f.read_text() if f.is_file() else ""
+
+    def seed(self, ages_h: dict):
+        """Pretend each tag was first seen `age` hours before self.now, with the remote's current sha."""
+        sha = {t: subprocess.run(["git", "rev-parse", t], cwd=self.remote, capture_output=True, text=True).stdout.strip() for t in ages_h}
+        au.cache().mkdir(parents=True, exist_ok=True)
+        (au.cache() / "seen.json").write_text(json.dumps({t: {"sha": sha[t], "first_seen": self.now - a * self.H} for t, a in ages_h.items()}))
+
+    def ran(self):
+        f = self.proj / ".claude/ran"
+        return f.read_text() if f.exists() else ""
+
+    def test_picks_newest_tag_past_the_cooldown(self):
+        for t in ("v1.3.0", "v1.4.0", "v1.5.0"):
+            commit_tag(self.remote, t)
+        self.seed({"v1.3.0": 100, "v1.4.0": 10, "v1.5.0": 1})
+        self.assertEqual(au.run(self.proj, now=self.now), 0)
+        self.assertEqual(self.ran(), "1 v1.3.0\n")
+
+    def test_nothing_eligible_waits_and_exits_zero(self):
+        commit_tag(self.remote, "v1.3.0")
+        self.assertEqual(au.run(self.proj, now=self.now), 0)  # first sight starts the clock
+        self.assertEqual(self.ran(), "")
+        self.assertIn("skip: newest eligible release after 1.2.0 is waiting cooldown", self.log())
+        self.assertEqual(au.run(self.proj, now=self.now + 73 * self.H), 0)
+        self.assertEqual(self.ran(), "1 v1.3.0\n")
+
+    def test_moved_sha_resets_the_clock(self):
+        commit_tag(self.remote, "v1.3.0")
+        self.seed({"v1.3.0": 100})
+        commit_tag(self.remote, "v1.3.0-x")  # new commit, then move the tag onto it
+        sh("git", "-c", "user.name=t", "-c", "user.email=t@example.com", "tag", "-a", "-m", "m", "-f", "v1.3.0", cwd=self.remote)
+        self.assertEqual(au.run(self.proj, now=self.now), 0)
+        self.assertEqual(self.ran(), "")
+        self.assertEqual(json.loads((au.cache() / "seen.json").read_text())["v1.3.0"]["first_seen"], self.now)
+
+    def test_old_tag_object_pushed_under_higher_name_is_refused(self):
+        commit_tag(self.remote, "v1.3.0")
+        sha = subprocess.run(["git", "rev-parse", "v1.3.0"], cwd=self.remote, capture_output=True, text=True).stdout.strip()
+        sh("git", "update-ref", "refs/tags/v1.9.0", sha, cwd=self.remote)  # same tag object, new name
+        sh("git", "tag", "-d", "v1.3.0", cwd=self.remote)
+        with mock.patch.object(au, "delay_h", lambda t: 0):
+            self.assertEqual(au.run(self.proj, now=self.now), 1)
+        self.assertEqual(self.ran(), "")
+        self.assertIn("not an annotated tag named v1.9.0", self.log())
+
+    def test_delay_zero_is_the_old_behaviour(self):
+        commit_tag(self.remote, "v1.3.0")
+        with mock.patch.object(au, "delay_h", lambda t: 0):
+            self.assertEqual(au.run(self.proj, now=self.now), 0)
+        self.assertEqual(self.ran(), "1 v1.3.0\n")
+
+    def test_policy_key_default_and_validation(self):
+        import perun_policy
+        self.assertEqual(perun_policy.validate({})["auto_update_delay_h"], 72)
+        self.assertEqual(perun_policy.validate({"auto_update_delay_h": 0})["auto_update_delay_h"], 0)
+        for bad in (-1, "72", True, 1.5):
+            with self.assertRaises(ValueError):
+                perun_policy.validate({"auto_update_delay_h": bad})
+
+    def test_empty_or_comment_only_sums_fail(self):
+        for body in ("", "\n", "# nothing\n\n"):
+            (self.tmp / "SHA256SUMS").write_text(body)
+            self.assertEqual(au.verify_sums(self.tmp), "empty SHA256SUMS")
+
+    @unittest.skipUnless(shutil.which("ssh-keygen"), "ssh-keygen needed")
+    def test_release_signers_verify_tag(self):
+        keys = {}
+        for n in ("good", "other"):
+            k = self.tmp / n
+            sh("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", n, "-f", str(k))
+            keys[n] = k
+        signers = self.tmp / "release-signers"
+        signers.write_text("releaser@example.com " + (self.tmp / "good.pub").read_text())
+
+        def tag(t, key=None):
+            commit_tag(self.remote, t)
+            if key:
+                sh("git", "-c", "gpg.format=ssh", "-c", f"user.signingkey={keys[key]}.pub", "-c", "user.name=t", "-c", "user.email=t@example.com",
+                   "tag", "-f", "-s", "-m", t, t, cwd=self.remote)
+
+        def attempt(t):
+            os.environ["XDG_CACHE_HOME"] = str(self.tmp / ("cache-" + t))
+            (self.proj / ".claude/ran").unlink(missing_ok=True)
+            with mock.patch.object(au, "delay_h", lambda _t: 0), mock.patch.object(au, "SIGNERS", signers):
+                return au.run(self.proj, now=self.now), self.ran(), au.cache()
+        tag("v1.3.0", "good")
+        rc, ran, c = attempt("v1.3.0")
+        self.assertEqual((rc, ran), (0, "1 v1.3.0\n"))
+        tag("v1.4.0")  # unsigned (lightweight)
+        rc, ran, c = attempt("v1.4.0")
+        self.assertEqual((rc, ran), (1, ""))
+        self.assertIn("signature not verified", (c / "auto-update.log").read_text())
+        tag("v1.5.0", "other")  # signed, but not by an allowed signer
+        rc, ran, c = attempt("v1.5.0")
+        self.assertEqual((rc, ran), (1, ""))
+        with mock.patch.object(au, "delay_h", lambda _t: 0), mock.patch.object(au, "SIGNERS", self.tmp / "absent"):
+            self.assertEqual(au.run(self.proj, now=self.now), 0)
+        self.assertIn("unsigned release: cooldown only", self.log())
 
 
 @unittest.skipUnless(shutil.which("jq"), "jq needed to apply the operating layer")

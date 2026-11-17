@@ -12,11 +12,24 @@ OLD = "https://github.com/remigiusz-antczak/deep-code-review.git"
 NEW = "https://github.com/protocol/perun.git"
 
 
+
+def _nodelay() -> str:
+    """A policy file with the update cooldown off, so these tests apply a tag at once."""
+    import tempfile as _t
+    f = Path(_t.mkdtemp()) / "policy.json"
+    f.write_text('{"auto_update_delay_h": 0}')
+    return str(f)
+
+
 class MoveTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         os.environ["XDG_CACHE_HOME"] = str(self.tmp / "cache")
         os.environ.pop("PERUN_POLICY", None)
+        self.delay = 0  # cooldown off unless a test sets it
+        dp = mock.patch.object(au, "delay_h", lambda t: self.delay)
+        dp.start()
+        self.addCleanup(dp.stop)
         self.remote = fake_remote(self.tmp)
         self.addCleanup(shutil.rmtree, self.tmp, True)
         p = mock.patch.object(au, "CANONICAL_REMOTE", str(self.remote))

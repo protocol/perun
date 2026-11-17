@@ -9,7 +9,8 @@ fails closed (exit 2), never silently falls back.
 
 Each dimension in DIMS takes `efficient` (default), `maximize`, `off`, or a non-negative number (a cap).
 `share_learnings` takes `auto|ask|off` (default `ask`). `auto_update` takes `on|off` (default `on`):
-whether perun_auto_update.py may re-apply a newer release tag in the background. `auto_update_pr` takes `on|off`
+whether perun_auto_update.py may re-apply a newer release tag in the background. `auto_update_delay_h` (integer >= 0, default 72) is the cooldown: a release tag
+is applied only once first seen on the remote that many hours ago (0 = apply at once; see perun_auto_update.py). `auto_update_pr` takes `on|off`
 (default `on`): whether it then opens a `perun/update-v<ver>` PR so the copy committed on the default branch catches
 up (never auto-merged); `auto_update_pr_base` (default empty = `origin/HEAD`) names the branch that PR targets and
 that the committed-version WARN compares against (a base missing on origin skips the PR). `review_gate` takes
@@ -115,7 +116,7 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "landing_branch": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "hold_labels": ["do-not-merge"], "landing_watchdog": "warn", "landing_stall_min": 60, "stage_timeout_min": 120, "wip_cap": 0, "installer_unapplied_h": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "train_budget_min": 90, "train_max_bisect_rounds": 8, "ready_age_p50_h": 0, "ready_age_p90_h": 0, "lane_idle_h": 0, "lane_globs": {}, "lkg_gate": "shadow", "lkg_stale_h": 0, "red_uncovered_max": 0, "red_oldest_h": 0, "background_guard": "warn", "lockfile_skip_review": "off", "train_gate": "shadow", "heavy_trains": 1}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_delay_h": 72, "auto_update_pr_base": "", "landing_branch": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "spend_nudge": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "hold_labels": ["do-not-merge"], "landing_watchdog": "warn", "landing_stall_min": 60, "stage_timeout_min": 120, "wip_cap": 0, "installer_unapplied_h": 0, "merges_per_hour_target": 0, "train_yield_floor": 0, "train_budget_min": 90, "train_max_bisect_rounds": 8, "ready_age_p50_h": 0, "ready_age_p90_h": 0, "lane_idle_h": 0, "lane_globs": {}, "lkg_gate": "shadow", "lkg_stale_h": 0, "red_uncovered_max": 0, "red_oldest_h": 0, "background_guard": "warn", "lockfile_skip_review": "off", "train_gate": "shadow", "heavy_trains": 1}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
@@ -136,7 +137,7 @@ def validate(raw: dict) -> dict:
             ok = isinstance(v, int) and not isinstance(v, bool) and v >= 1
         elif k == "wip_cap":  # opt-in: None or 0 = off, else warn above this many open non-draft PRs
             ok = v is None or (isinstance(v, int) and not isinstance(v, bool) and v >= 0)
-        elif k in ("merges_per_hour_target", "train_yield_floor", "ready_age_p50_h", "ready_age_p90_h", "lane_idle_h", "lkg_stale_h", "red_uncovered_max", "red_oldest_h", "installer_unapplied_h", "train_budget_min", "train_max_bisect_rounds"):  # opt-in flow alarms: integer >= 0, 0 = off
+        elif k in ("merges_per_hour_target", "train_yield_floor", "ready_age_p50_h", "ready_age_p90_h", "lane_idle_h", "lkg_stale_h", "red_uncovered_max", "red_oldest_h", "installer_unapplied_h", "auto_update_delay_h", "train_budget_min", "train_max_bisect_rounds"):  # opt-in flow alarms: integer >= 0, 0 = off
             ok = isinstance(v, int) and not isinstance(v, bool) and v >= 0
         elif k == "lane_globs":  # {lane: [fnmatch globs]} for the watchdog's per-lane stall alarm
             ok = isinstance(v, dict) and all(isinstance(g, list) and g and all(isinstance(x, str) and x for x in g) for g in v.values())
