@@ -2160,3 +2160,20 @@ rules:
   - pattern: process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
   paths:
     exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+# CWE-1321 prototype pollution: a for-in loop that copies keys onto a target with `target[key] = value`, the unguarded merge/extend shape (JSON.parse makes "__proto__" an own key, so hasOwnProperty is no guard). Cleared inside the loop by a comparison of the key with "__proto__" or a blocklist `.includes(key)`. The for pattern also matches for-of. ponytail: search-mode, so a lodash-style helper or Object.keys().forEach merge is not matched; add when a measured miss shows up.
+- id: perun.js.prototype-pollution
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: A for-in loop assigns `target[key] = ...` with no guard on the key, so a "__proto__" key from untrusted JSON pollutes Object.prototype (CWE-1321). Skip "__proto__", "constructor" and "prototype", or merge into Object.create(null).
+  patterns:
+  - pattern: $T[$K] = $V
+  - pattern-inside: |
+      for ($K in $S) { ... }
+  - pattern-not-inside: |
+      for ($K in $S) { ... if (<... $K === "__proto__" ...>) { ... } ... }
+  - pattern-not-inside: |
+      for ($K in $S) { ... if (<... $K !== "__proto__" ...>) { ... } ... }
+  - pattern-not-inside: |
+      for ($K in $S) { ... if ($A.includes($K)) { ... } ... }
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
