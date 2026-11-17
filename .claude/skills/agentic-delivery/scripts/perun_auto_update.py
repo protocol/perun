@@ -19,7 +19,7 @@ merge, rebase, cherry-pick or train lock (`MERGE_HEAD`, `CHERRY_PICK_HEAD`, `reb
 file differs from the hash install recorded, or when `git status` shows uncommitted changes to a
 managed path or `.claude/settings.local.json`. It finds the newest `vX.Y.Z` tag on the remote
 (`git ls-remote`); when it is newer it fetches the tag into a cache clone
-(`$XDG_CACHE_HOME/perun/src`) without `--force` (a local tag that moved is refused), aborts unless
+(`$XDG_CACHE_HOME/perun/src`) with a forced tag refspec (a stale cached tag cannot stall updates; the sha seen at ls-remote must match the fetched tag), aborts unless
 the tag's commit is an ancestor of the remote's `main` and the tree's `SHA256SUMS` verifies, then
 runs that tag's `scripts/update-installed.sh TARGET` (`DCR_NO_PULL=1`), which replays the recorded
 install flags. SHA256SUMS covers the skill files only (not install.sh or scripts/) and ships in the same tag, so it
@@ -34,6 +34,15 @@ A target with `.claude/.dcr-install-flags` but no marker is a legacy install: `l
 installed SKILL.md (inside a closed frontmatter block only) and the canonical remote, and the update writes the real
 marker. Only git locks and an uncommitted `settings.local.json` skip a legacy install; uncommitted skill edits are
 preserved by install.sh's backup, not by a skip. A cache clone whose origin is not the canonical remote is a logged skip.
+Supply-chain mitigation (default-on update runs remote code): (1) cooldown, policy `auto_update_delay_h` (default 72):
+only a tag first seen on the remote at least that long ago (per-tag `{sha, first_seen}` in `cache()/seen.json`; a moved
+sha resets that tag's clock; a wiped cache resets all clocks, which delays, never weakens) is applied, so a
+compromised tag has a detection window; 0 = apply at once. (2) If the installed copy has `release-signers` (ssh allowed_signers
+format, next to this skill's `scripts/`), the tag must pass `git verify-tag` against it; the fetched tree is never trusted for signers. Absent = unsigned
+releases, cooldown only. (3) The tag must be an annotated tag whose own `tag` header equals its name, so an old signed tag object
+re-pushed under a newer name is refused (rollback guard). Separately, an empty or comment-only SHA256SUMS fails: an integrity check, not a
+supply-chain mitigation (an attacker ships matching sums). Status: the high risk is MITIGATED by the delay window,
+not closed; it closes only once release tags are signed and a `release-signers` file ships.
 Stdlib only; a missing marker, remote or parseable version is a logged skip, never a guess.
 """
 import fcntl
@@ -51,6 +60,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import perun_policy  # noqa: E402
 
+# Trust anchor for tag signatures: the INSTALLED copy only, never the fetched tree. ssh allowed_signers format; absent = unsigned releases.
+SIGNERS = Path(__file__).resolve().parent.parent / "release-signers"
 THROTTLE = 6 * 3600
 STALE_LOCK = 24 * 3600  # a lock in a linked worktree older than this is leftover, not a live operation
 SKIP_WARN_AT = 3  # consecutive skips with the same reason before behind_warn surfaces it
@@ -370,7 +381,10 @@ def verify_sums(src: Path) -> str:
     sums = src / "SHA256SUMS"
     if not sums.is_file():
         return "no SHA256SUMS"
-    for line in sums.read_text().splitlines():
+    lines = [l for l in sums.read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")]
+    if not lines:
+        return "empty SHA256SUMS"
+    for line in lines:
         h, _, rel = line.partition("  ")
         p = src / rel
         if not p.is_file() or hashlib.sha256(p.read_bytes()).hexdigest() != h:
@@ -413,8 +427,34 @@ def announce_rules(src: Path, target: Path) -> None:
         log(target, f"installer announce skipped: {e}")
 
 
-def run(target: Path) -> int:
+def delay_h(target: Path) -> int:
+    """Policy `auto_update_delay_h` for `target`; a malformed policy fails closed to the default."""
+    try:
+        return perun_policy.load(perun_policy.find_policy(str(target)))["auto_update_delay_h"]
+    except ValueError:
+        return 72
+
+
+def pick(cands: dict, delay: int, now: float) -> str | None:
+    """Cooldown. `cands` is {tag: sha} for tags newer than installed. Records first-seen per tag in
+    `cache()/seen.json` (a moved sha resets that tag's clock; tags no longer candidates are dropped) and
+    returns the newest tag first seen at least `delay` hours ago, else None. A wiped cache resets every
+    clock, which only delays an update, never weakens the window."""
+    f = cache() / "seen.json"
+    try:
+        old = json.loads(f.read_text())
+    except (OSError, ValueError):
+        old = {}
+    seen = {t: o if isinstance(o, dict) and o.get("sha") == sha and isinstance(o.get("first_seen"), (int, float))
+            else {"sha": sha, "first_seen": now} for t, sha in cands.items() for o in [old.get(t)]}
+    f.write_text(json.dumps(seen))
+    ok = [t for t in cands if seen[t]["first_seen"] <= now - delay * 3600]
+    return max(ok, key=version, default=None)
+
+
+def run(target: Path, now: float | None = None) -> int:
     """Background worker body (see module doc). Returns 0 skip/current/updated, 1 failed update."""
+    now = time.time() if now is None else now
     cache().mkdir(parents=True, exist_ok=True)
     with open(cache() / "auto-update.lock", "w") as lk:
         fcntl.flock(lk, fcntl.LOCK_EX)  # one worker per machine: the cache clone is shared
@@ -451,15 +491,20 @@ def run(target: Path) -> int:
         if ls.returncode != 0:
             log(target, f"skip: cannot list tags on {remote}")
             return 0
-        tags = [r.split("refs/tags/", 1)[1] for r in ls.stdout.split() if r.startswith("refs/tags/")]
-        newest = max((t for t in tags if version(t)), key=version, default=None)
-        if newest is None or version(newest) <= have:
+        rows = [r.split("\t", 1) for r in ls.stdout.splitlines() if "\trefs/tags/" in r]
+        cands = {n.split("refs/tags/", 1)[1]: sha for sha, n in rows}
+        cands = {t: sha for t, sha in cands.items() if version(t) and version(t) > have}
+        if not cands:
             log(target, f"up to date at {marker['version']}")
             pr_step(target)  # also here: a past update may never have reached the default branch
             return 0
+        newest = pick(cands, delay_h(target), now)
+        if newest is None:
+            log(target, f"skip: newest eligible release after {marker['version']} is waiting cooldown ({delay_h(target)}h)")
+            return 0
         steps =([] if (src / ".git").is_dir() else [["clone", "-q", "--no-checkout", remote, str(src)]]) + [
-            ["-C", str(src), "fetch", "-q", remote, f"refs/tags/{newest}:refs/tags/{newest}",
-             "+refs/heads/main:refs/remotes/origin/main"],  # no --force on tags: a moved tag is refused
+            ["-C", str(src), "fetch", "-q", remote, f"+refs/tags/{newest}:refs/tags/{newest}",
+             "+refs/heads/main:refs/remotes/origin/main"],  # forced tag: a stale cached tag must not stall; moves are caught by the sha check below
             ["-C", str(src), "-c", "advice.detachedHead=false", "checkout", "-q", "-f", "--detach", newest]]
         for step in steps:
             r = git(*step, timeout=600)
@@ -467,6 +512,20 @@ def run(target: Path) -> int:
                 log(target, f"failed {marker['version']} -> {newest}: git {next(x for x in step if x in ('clone', 'fetch', 'checkout'))}: "
                     f"{(r.stderr.strip().splitlines() or ['?'])[-1]}")
                 return 1
+        if git("-C", str(src), "rev-parse", f"refs/tags/{newest}").stdout.strip() != cands[newest]:
+            log(target, f"failed {marker['version']} -> {newest}: aborted, tag moved since first seen")
+            return 1
+        hdr = git("-C", str(src), "cat-file", "-p", f"refs/tags/{newest}").stdout.split("\n\n", 1)[0].splitlines()
+        if f"tag {newest}" not in hdr or not any(h.startswith("type commit") for h in hdr):  # lightweight or renamed tag object
+            log(target, f"failed {marker['version']} -> {newest}: aborted, not an annotated tag named {newest}")
+            return 1
+        if SIGNERS.is_file():
+            v = git("-C", str(src), "-c", "gpg.format=ssh", "-c", f"gpg.ssh.allowedSignersFile={SIGNERS}", "verify-tag", newest)
+            if v.returncode != 0:
+                log(target, f"failed {marker['version']} -> {newest}: aborted, tag signature not verified by release-signers")
+                return 1
+        else:
+            log(target, "unsigned release: cooldown only")
         why = ("" if git("-C", str(src), "merge-base", "--is-ancestor", f"refs/tags/{newest}",
                          "refs/remotes/origin/main").returncode == 0 else f"{newest} is not an ancestor of main")
         why = why or verify_sums(src)

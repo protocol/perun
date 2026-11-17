@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the updater's stale-lock, installed-over-committed and repeated-skip handling (perun_auto_update.py)."""
 import hashlib, json, os, sys, tempfile, time, unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -11,11 +12,24 @@ SKILL = ".claude/skills/deep-code-review/SKILL.md"
 NEW = b"name: deep-code-review\nnew\n"
 
 
+
+def _nodelay() -> str:
+    """A policy file with the update cooldown off, so these tests apply a tag at once."""
+    import tempfile as _t
+    f = Path(_t.mkdtemp()) / "policy.json"
+    f.write_text('{"auto_update_delay_h": 0}')
+    return str(f)
+
+
 class StaleLockTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         os.environ["XDG_CACHE_HOME"] = str(self.tmp / "cache")
         os.environ.pop("PERUN_POLICY", None)
+        self.delay = 0  # cooldown off unless a test sets it
+        dp = mock.patch.object(au, "delay_h", lambda t: self.delay)
+        dp.start()
+        self.addCleanup(dp.stop)
         self.proj = fake_installed(self.tmp, fake_remote(self.tmp))
 
     def marker(self):
