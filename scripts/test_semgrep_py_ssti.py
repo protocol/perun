@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for perun.py.ssti (CWE-1336) in templates/semgrep-taint/py.yml: request data or a function parameter compiled as a
+"""Tests for perun.py.ssti (CWE-1336) in templates/semgrep-taint/py.yml: request data or a route-handler parameter compiled as a
 template (jinja2.Template, Template, Environment.from_string, render_template_string) is a finding; a literal template with the data
 passed as render context stays clean. Fixtures use `# ruleid: <id>` (next line must be a finding) and `# ok: <id>` (next line must
 stay clean). Live check needs semgrep and prints SKIP without it. Fictional names only. RULES=<dir> checks another copy."""
@@ -33,6 +33,7 @@ def ssti_render_string():
     # ruleid: perun.py.ssti
     return render_template_string(request.args["tpl"])
 
+@app.route("/t/<tpl>")
 def ssti_param(tpl):
     # ruleid: perun.py.ssti
     return Template(tpl).render()

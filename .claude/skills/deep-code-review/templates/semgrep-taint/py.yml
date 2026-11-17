@@ -1,4 +1,4 @@
-# Bundled generic taint rules (Python). Sources: request data and function parameters (excluding self/cls).
+# Bundled generic taint rules (Python). Sources: request data and entry-point parameters (route-decorated handlers, Django/DRF views, any parameter in a module importing a web framework; excluding self/cls).
 # Sinks: classic injection calls. A guard `if X not in ALLOW: raise|return` before the sink suppresses it for X.
 # Also hardcoded-credential-compare (a pass/secret/token/api-key name vs a non-empty string literal, WARNING) and hardcoded-basic-auth (a base64-decoded value vs a literal, ERROR); env reads, JWT header fields (alg, typ, kid), scheme/sentinel literals (bearer, none, true, ...), single-character literals and test/fixture paths are skipped. ponytail: template literals are not matched.
 # Also secret-env-fallback (WARNING: os.environ.get("X", "..."), os.getenv("X", "..."), os.environ.setdefault("X", "..."), the same with default="...", and os.environ.get("X") or "..." or os.getenv("X") or "...", also when environ or getenv comes from `from os import`, where X ends in a secret stem (pass, passwd, password, passcode, passphrase, secret, token, credential, credentials, api_key, apikey, a secret, private, signing, encryption, session, jwt, hmac, master, access, auth, client, app, service, service_role or webhook key compound, or _pwd) after an optional prefix that ends in _ or . or sits at a camelCase boundary; the literal rule is the one hardcoded-credential-compare uses plus a second check that skips a literal that looks like a file path (it starts with /, ./, ../ or ~/, or ends in .json, .pem, .key, .crt, .cer, .der, .p12, .pfx, .jks, .keystore, .yaml or .yml), no default, None, "" and non-literal defaults are skipped, and test, fixture and mock paths are skipped). ponytail: a chained or (a or b or "x"), a conditional expression, an f-string with a {} field and os.environ bound to another name first are not matched, and the public-prefix check (public-env-secret) exists for JavaScript only. Not followed: a value first copied to a variable (s = os.environ.get("X"); s or "x") and a value-based fallback (a connection string holding a password under a non-secret name).
@@ -8,20 +8,111 @@ rules:
   mode: taint
   languages: [python]
   severity: ERROR
-  message: Untrusted data reaches a SQL string passed to execute(). Use bound parameters.
+  message: Untrusted data reaches a SQL string passed to execute(). Use bound parameters. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
   pattern-sources:
   - patterns:
     - pattern: $X
     - pattern-either:
-      - pattern-inside: |
-          def $F(..., $X, ...):
-            ...
+      - pattern-either: &py-entry
+        - patterns:
+          - pattern-inside: |
+              @$A.$M(...)
+              def $F(..., $X, ...):
+                ...
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(route|get|post|put|patch|delete|api_route|websocket)$
+        - patterns:
+          - pattern-inside: |
+              @$A.$M(...)
+              async def $F(..., $X, ...):
+                ...
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(route|get|post|put|patch|delete|api_route|websocket)$
+        - pattern-inside: |
+            def $F(request, ..., $X, ...):
+              ...
+        - pattern-inside: |
+            def $F(self, request, ..., $X, ...):
+              ...
+        - pattern-inside: |
+            def $F(req, ..., $X, ...):
+              ...
+        - pattern-inside: |
+            def $F(self, req, ..., $X, ...):
+              ...
+        - pattern-inside: |
+            async def $F(request, ..., $X, ...):
+              ...
+        - pattern-inside: |
+            async def $F(self, request, ..., $X, ...):
+              ...
+        - pattern-inside: |
+            async def $F(req, ..., $X, ...):
+              ...
+        - pattern-inside: |
+            async def $F(self, req, ..., $X, ...):
+              ...
+        - patterns:
+          - pattern-inside: |
+              def $F($X, context):
+                ...
+          - metavariable-regex:
+              metavariable: $X
+              regex: ^event$
+        - patterns:
+          - pattern-inside: |
+              def $F($X, start_response):
+                ...
+          - metavariable-regex:
+              metavariable: $X
+              regex: ^environ$
+        - patterns:
+          - pattern-inside: |
+              from $M import $A
+              ...
+          - metavariable-regex:
+              metavariable: $M
+              regex: '^(flask|fastapi|django|rest_framework|starlette|aiohttp|tornado|sanic|bottle|pyramid|falcon|quart|litestar|werkzeug|chalice|cherrypy)(\..*)?$'
+          - pattern-inside: |
+              def $F(..., $X, ...):
+                ...
+        - patterns:
+          - pattern-inside: |
+              import $M
+              ...
+          - metavariable-regex:
+              metavariable: $M
+              regex: '^(flask|fastapi|django|rest_framework|starlette|aiohttp|tornado|sanic|bottle|pyramid|falcon|quart|litestar|werkzeug|chalice|cherrypy)(\..*)?$'
+          - pattern-inside: |
+              def $F(..., $X, ...):
+                ...
+        - patterns:
+          - pattern-inside: |
+              from $M import $A
+              ...
+          - metavariable-regex:
+              metavariable: $M
+              regex: '^(flask|fastapi|django|rest_framework|starlette|aiohttp|tornado|sanic|bottle|pyramid|falcon|quart|litestar|werkzeug|chalice|cherrypy)(\..*)?$'
+          - pattern-inside: |
+              async def $F(..., $X, ...):
+                ...
+        - patterns:
+          - pattern-inside: |
+              import $M
+              ...
+          - metavariable-regex:
+              metavariable: $M
+              regex: '^(flask|fastapi|django|rest_framework|starlette|aiohttp|tornado|sanic|bottle|pyramid|falcon|quart|litestar|werkzeug|chalice|cherrypy)(\..*)?$'
+          - pattern-inside: |
+              async def $F(..., $X, ...):
+                ...
       - pattern: request.$A.get(...)
       - pattern: request.$A.getlist(...)
       - pattern: request.$A[...]
       - pattern: flask.request.$A.get(...)
       - pattern: flask.request.$A.getlist(...)
-      - pattern: input(...)
     - metavariable-regex:
         metavariable: $X
         regex: ^(?!self$|cls$)
@@ -42,20 +133,17 @@ rules:
   mode: taint
   languages: [python]
   severity: ERROR
-  message: Untrusted data reaches a shell command. Use an argv list without shell=True.
+  message: Untrusted data reaches a shell command. Use an argv list without shell=True. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
   pattern-sources:
   - patterns:
     - pattern: $X
     - pattern-either:
-      - pattern-inside: |
-          def $F(..., $X, ...):
-            ...
+      - pattern-either: *py-entry
       - pattern: request.$A.get(...)
       - pattern: request.$A.getlist(...)
       - pattern: request.$A[...]
       - pattern: flask.request.$A.get(...)
       - pattern: flask.request.$A.getlist(...)
-      - pattern: input(...)
     - metavariable-regex:
         metavariable: $X
         regex: ^(?!self$|cls$)
@@ -166,20 +254,17 @@ rules:
   mode: taint
   languages: [python]
   severity: WARNING
-  message: Untrusted data reaches a filesystem path. Resolve and confine to a base directory, or use an allowlist.
+  message: Untrusted data reaches a filesystem path. Resolve and confine to a base directory, or use an allowlist. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
   pattern-sources:
   - patterns:
     - pattern: $X
     - pattern-either:
-      - pattern-inside: |
-          def $F(..., $X, ...):
-            ...
+      - pattern-either: *py-entry
       - pattern: request.$A.get(...)
       - pattern: request.$A.getlist(...)
       - pattern: request.$A[...]
       - pattern: flask.request.$A.get(...)
       - pattern: flask.request.$A.getlist(...)
-      - pattern: input(...)
     - metavariable-regex:
         metavariable: $X
         regex: ^(?!self$|cls$)
@@ -301,20 +386,17 @@ rules:
   mode: taint
   languages: [python]
   severity: ERROR
-  message: Untrusted data selects an outbound request URL. Allowlist scheme and host.
+  message: Untrusted data selects an outbound request URL. Allowlist scheme and host. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
   pattern-sources:
   - patterns:
     - pattern: $X
     - pattern-either:
-      - pattern-inside: |
-          def $F(..., $X, ...):
-            ...
+      - pattern-either: *py-entry
       - pattern: request.$A.get(...)
       - pattern: request.$A.getlist(...)
       - pattern: request.$A[...]
       - pattern: flask.request.$A.get(...)
       - pattern: flask.request.$A.getlist(...)
-      - pattern: input(...)
     - metavariable-regex:
         metavariable: $X
         regex: ^(?!self$|cls$)
@@ -341,20 +423,17 @@ rules:
   mode: taint
   languages: [python]
   severity: ERROR
-  message: Untrusted data reaches an unsafe deserializer. Use json or yaml.safe_load.
+  message: Untrusted data reaches an unsafe deserializer. Use json or yaml.safe_load. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
   pattern-sources:
   - patterns:
     - pattern: $X
     - pattern-either:
-      - pattern-inside: |
-          def $F(..., $X, ...):
-            ...
+      - pattern-either: *py-entry
       - pattern: request.$A.get(...)
       - pattern: request.$A.getlist(...)
       - pattern: request.$A[...]
       - pattern: flask.request.$A.get(...)
       - pattern: flask.request.$A.getlist(...)
-      - pattern: input(...)
     - metavariable-regex:
         metavariable: $X
         regex: ^(?!self$|cls$)
@@ -373,14 +452,12 @@ rules:
   mode: taint
   languages: [python]
   severity: ERROR
-  message: Untrusted data is compiled as a template (CWE-1336, SSTI). Render a literal template and pass the data as context.
+  message: Untrusted data is compiled as a template (CWE-1336, SSTI). Render a literal template and pass the data as context. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
   pattern-sources:
   - patterns:
     - pattern: $X
     - pattern-either:
-      - pattern-inside: |
-          def $F(..., $X, ...):
-            ...
+      - pattern-either: *py-entry
       - pattern: request.$A.get(...)
       - pattern: request.$A.getlist(...)
       - pattern: request.$A[...]
@@ -391,7 +468,6 @@ rules:
       - pattern: request.get_json(...).get(...)
       - pattern: flask.request.get_json(...)[...]
       - pattern: flask.request.get_json(...).get(...)
-      - pattern: input(...)
     - metavariable-regex:
         metavariable: $X
         regex: ^(?!self$|cls$)
@@ -409,20 +485,17 @@ rules:
   mode: taint
   languages: [python]
   severity: WARNING
-  message: Untrusted data is returned as markup without escaping.
+  message: Untrusted data is returned as markup without escaping. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
   pattern-sources:
   - patterns:
     - pattern: $X
     - pattern-either:
-      - pattern-inside: |
-          def $F(..., $X, ...):
-            ...
+      - pattern-either: *py-entry
       - pattern: request.$A.get(...)
       - pattern: request.$A.getlist(...)
       - pattern: request.$A[...]
       - pattern: flask.request.$A.get(...)
       - pattern: flask.request.$A.getlist(...)
-      - pattern: input(...)
     - metavariable-regex:
         metavariable: $X
         regex: ^(?!self$|cls$)
@@ -443,20 +516,17 @@ rules:
   mode: taint
   languages: [python]
   severity: WARNING
-  message: Untrusted data selects a redirect target. Allowlist relative paths or known hosts.
+  message: Untrusted data selects a redirect target. Allowlist relative paths or known hosts. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
   pattern-sources:
   - patterns:
     - pattern: $X
     - pattern-either:
-      - pattern-inside: |
-          def $F(..., $X, ...):
-            ...
+      - pattern-either: *py-entry
       - pattern: request.$A.get(...)
       - pattern: request.$A.getlist(...)
       - pattern: request.$A[...]
       - pattern: flask.request.$A.get(...)
       - pattern: flask.request.$A.getlist(...)
-      - pattern: input(...)
     - metavariable-regex:
         metavariable: $X
         regex: ^(?!self$|cls$)
