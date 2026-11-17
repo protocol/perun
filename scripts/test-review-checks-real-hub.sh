@@ -129,7 +129,7 @@ raw() { case $1 in tfsec) (cd infra && tfsec . --format sarif --no-colour --soft
 for t in $tools; do
   re=$(want "$t"); cf=$(cany "$t")
   if grep -qE "analyzers ran:.*\b$t\b" "$T/err" && ! grep -q "not run: $t" "$T/err" && ! grep -q "NOT CHECKED: $t" "$T/err" \
-     && jq -e --arg t "$t" --arg re "$re" --arg cf "$cf" 'any(.[]; .tool==$t and (.rule|test($re)) and (.file|tostring|endswith($cf)))' "$T/out" >/dev/null; then
+     && jq -e --arg t "$t" --arg re "$re" --arg cf "$cf" 'any(.[]; ((.tool==$t and (.rule|test($re))) or any(.also[]?; .tool==$t and (.rule|test($re)))) and (.file|tostring|endswith($cf)))' "$T/out" >/dev/null; then
     echo "ok - $t: RAN, rule matching $re reported"
   else
     echo "FAIL - $t: not RAN or no rule matching $re; its rows: $(jq -c --arg t "$t" '[.[]|select(.tool==$t)|{file,rule}]' "$T/out" 2>&1 | head -c 400)"; fail=1

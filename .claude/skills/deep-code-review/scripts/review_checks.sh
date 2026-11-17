@@ -316,6 +316,33 @@ def keyline(path, start, end, words, skip=(), yaml=False):
 def nf(f):  # scanners echo the path they were given ("./.github/..."); rows must carry the changed-file form
     return os.path.normpath(f) if f else f
 cl = lambda s: "".join(c if c.isprintable() else "?" for c in str(s)) or "?"  # a package or file can be named with a \r: it would split the row and the closing summary drops it, so control characters become "?", never vanish
+def cw(c, sv=None):  # " [CWE-n, severity]" from a scanner's own metadata (bandit issue_cwe + issue_severity, gosec cwe + severity, semgrep metadata.cwe + extra.severity); the cross-tool merge in the closing step reads it and keeps the highest severity. No CWE metadata, no tag.
+    c = c[0] if isinstance(c, list) and c else c
+    m = re.search(r"\d+", str(c.get("id") if isinstance(c, dict) else c))
+    return f" [CWE-{m[0]}{', ' + cl(sv).lower() if sv else ''}]" if m else ""
+UU = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+LOCK = re.compile(r"(^|/)([^/]*\.lock|package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|go\.sum|[^/]*manifest[^/]*\.json)$", re.I)
+def lf(rule, f, n, sec=""):
+    """Reason a secret-scanner row is probably not a credential, else "". A demotion hint only, never a drop: the row stays and its message
+    ends "[likely-fixture: reason]". Judged from the matched source line plus gitleaks' Secret; the value is read to classify and is never printed."""
+    r = str(rule).lower()
+    try: ln = open(f, errors="replace").read().split("\n")[n - 1] if n >= 1 else ""
+    except (OSError, IndexError, TypeError): ln = ""
+    ln += " " + sec  # gitleaks: its matched value joins the line, so a rule judges the value even where the file moved
+    if re.search(r"jdbc|postgres|mongo|uri|basic auth", r):  # (detect-secrets "Basic Auth Credentials" too) every password on the line must be a literal placeholder; the host never decides
+        ps = re.findall(r"//[^:/@\s\"']+:([^@\s\"']*)@", ln) or re.findall(r"password=([^&\s\"']+)", ln, re.I)
+        if "basic auth" in r:  # detect-secrets flags the line, not the value: any other credential-shaped token (Basic/Bearer value, token=, Authorization:, password=) must be a placeholder too
+            ps += [g for m in re.finditer(r"(?i)\b(?:basic|bearer)\s+([\w+/=.~-]+)|(?:token|api[_-]?key|secret|passw(?:or)?d)[\"']?\s*[=:]\s*[\"']?([^\s\"'&@,;]+)|authorization[\"']?\s*[=:]\s*[\"']?(?:\w+\s+)?([^\s\"',;]+)", ln) for g in m.groups() if g]
+        if ps and all(re.fullmatch(r"pass(word|wd)?|example|changeme|secret|x{3,}|<[^>]*>|\$\{[^}]*\}", p, re.I) for p in ps): return "placeholder password"
+    elif "circle" in r or "generic" in r:
+        if LOCK.search(f) and re.search(r"integrity|checksum|hash|sha\d+|[0-9a-f]{40,}", ln, re.I): return "content hash in a lockfile or manifest"
+    elif "hubspot" in r:
+        if re.search(r"\w*_id[\"']?\s*[:=]\s*[\"']?" + UU + r"(?![\w-])", ln, re.I): return "a UUID in an id field, not a HubSpot key"
+    elif "cloudflare" in r:
+        if re.fullmatch(r"\s*(- )?uses:\s*[\w./-]+@[0-9a-f]{40}\s*(#.*)?\s*", ln): return "a 40-hex action SHA after @ in a uses: line"
+    elif r in ("linkedin-client-id", "linkedin-client-secret"):
+        if re.fullmatch(r"[A-Za-z_]*[Ll]inked[Ii]n[A-Za-z_]*", sec) and re.search(r"[a-z][A-Z]|_", sec): return "an identifier name, not credential-shaped"
+    return ""
 t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
 # The JSON starts a line. A log line before it can hold a bracket of its own (zizmor logs each audited path: x/[]/action.yml, and "[]" would read as no findings).
 if kind == "cppcheck":  # XML, not JSON: <results version="2"><cppcheck/><errors><error id severity msg><location file line/></error></errors></results>; the tool writes it to stderr, which the runner merges. Anything else is damaged output
@@ -462,7 +489,7 @@ elif kind == "guarddog":  # results: rule -> hits; errors: rule -> why it did no
 elif not isinstance(d, dict) or not isinstance(d.get("results"), list):
     sys.exit(f"sjson: {kind} output has no results list")
 rows = []
-if kind == "gitleaks":  # Secret/Match fields are deliberately never read
+if kind == "gitleaks":  # Secret is read only to hash it for the allowlist and to classify linkedin rows (lf); Match is never read, and neither is ever printed
     # Rewrite-proof allowlist: "rule path-glob sha256(secret)" lines (not the commit fingerprint, which a history rewrite breaks).
     # Fail closed: any unreadable or malformed line voids the whole list and every finding is kept.
     al = []
@@ -493,7 +520,7 @@ if kind == "gitleaks":  # Secret/Match fields are deliberately never read
     kept = [r for r in d if not allowed(r) and (r.get("Fingerprint") or "").removeprefix("./") not in ign]
     if len(kept) < len(d):
         print(f"review_checks: .gitleaks-allow/.gitleaksignore suppressed {len(d) - len(kept)} finding(s)", file=sys.stderr)
-    rows = [(r.get("File"), r.get("StartLine"), r.get("RuleID"), r.get("Description") or "secret detected") for r in kept]
+    rows = [(r.get("File"), r.get("StartLine"), r.get("RuleID"), (r.get("Description") or "secret detected") + (f" [likely-fixture: {w}]" if (w := lf(r.get("RuleID"), r.get("File") or "", r.get("StartLine") or 0, r.get("Secret") or "")) else "")) for r in kept]
 elif kind.startswith("trivy"):
     for r in d.get("Results") or []:  # Secrets only in the secret-only fallback, and never the Match (it would leak the value)
         if kind == "trivy-secret": rows += [(r["Target"], s.get("StartLine", 0), s.get("RuleID"), s.get("Title", "secret detected")) for s in r.get("Secrets") or []]
@@ -522,7 +549,7 @@ elif kind == "zizmor":  # row is 0-based in json-v1; fixes and snippets are neve
         r = (((l.get("concrete") or {}).get("location") or {}).get("start_point") or {}).get("row", -1)
         rows.append((nf(f), r + 1, x.get("ident"), x.get("desc", "")))
 elif kind == "bandit":  # issue_text (B105 embeds the secret) and code are never read
-    rows = [(os.path.relpath(r["filename"]), r.get("line_number", 0), r.get("test_id"), "potential issue (see the bandit docs for this test id)") for r in d["results"]]
+    rows = [(os.path.relpath(r["filename"]), r.get("line_number", 0), r.get("test_id"), "potential issue (see the bandit docs for this test id)" + cw(r.get("issue_cwe"), r.get("issue_severity"))) for r in d["results"]]
 elif kind == "ruff-security":  # the S rules (flake8-bandit); messages name the construct, never the value
     rows = [(os.path.relpath(r["filename"]), (r.get("location") or {}).get("row", 0), r.get("code"), cl(r.get("message", ""))) for r in d]
 elif kind == "eslint-security":  # only security rules: the project's config may carry style rules too; ruleId null = an ignore or config note
@@ -583,13 +610,18 @@ elif kind == "njsscan":  # same per-rule severity as mobsfscan, over both the no
 elif kind == "sobelow":  # rows for every finding, the confidence tier in the message; the scan covers the whole app, the shell keeps changed files
     rows = [(os.path.relpath(x["file"]), x["line"] if isinstance(x.get("line"), int) else 0, cl(x["type"]), cl(f"{t} confidence")) for t in ("high", "medium", "low") for x in d["findings"][t + "_confidence"]]
 elif kind == "detect-secrets":  # one row per potential secret; the message never carries the hashed or plain value
-    rows = [(os.path.relpath(fn), x["line_number"] if isinstance(x.get("line_number"), int) else 0, cl(x["type"]), "potential secret (value not printed)") for fn, v in d["results"].items() for x in v]
+    rows = []
+    for fn, v in d["results"].items():
+        for x in v:
+            n = x["line_number"] if isinstance(x.get("line_number"), int) else 0
+            w = lf(x["type"], os.path.relpath(fn), n) if x["type"] == "Basic Auth Credentials" else ""  # strict URI placeholder rule, as trufflehog
+            rows.append((os.path.relpath(fn), n, cl(x["type"]), "potential secret (value not printed)" + (f" [likely-fixture: {w}]" if w else "")))
 elif kind == "psalm":  # taint findings only (is_security); psalm exits 2 on any issue
     rows = [(nf(x["file_name"]), x["line_from"], cl(x.get("type")), cl(f"{x.get('severity')}: {x.get('message')}")) for x in d if x.get("is_security")]
 elif kind == "gosec":
     for r in d["Issues"] or []:
         ln = str(r.get("line", "0")).split("-")[0]
-        rows.append((os.path.relpath(r["file"]), int(ln) if ln.isdigit() else 0, r.get("rule_id"), r.get("details", "")))
+        rows.append((os.path.relpath(r["file"]), int(ln) if ln.isdigit() else 0, r.get("rule_id"), r.get("details", "") + cw(r.get("cwe"), r.get("severity"))))
 elif kind == "govulncheck":  # only called vulnerabilities: the first trace frame is the vulnerable symbol, the last the entry point in this repo; a frame with no function is imported-only, not reachable
     seen = set()
     for x in d:
@@ -634,7 +666,7 @@ elif kind == "semgrep":
         fs += [os.path.join(a, "x") for a, _, _ in os.walk(c)] if os.path.isdir(c) else [c]
     ps = sorted({pfx(f) for f in fs} - {""}, key=len, reverse=True)
     cid = lambda i: next((i[len(q):] for q in ps if isinstance(i, str) and i.startswith(q)), i)
-    rows = [(r["path"], r["start"]["line"], cid(r.get("check_id")), (r.get("extra") or {}).get("message", "")) for r in d["results"]]
+    rows = [(r["path"], r["start"]["line"], cid(r.get("check_id")), (r.get("extra") or {}).get("message", "") + cw(((r.get("extra") or {}).get("metadata") or {}).get("cwe"), (r.get("extra") or {}).get("severity"))) for r in d["results"]]
 elif kind in ("codeql", "flawfinder", "devskim", "tfsec", "ansible-lint", "pmd", "solhint", "skillspector"):  # SARIF: ruleId, uri, startLine and the query's message text (never source); results with no location raise: unparseable, never dropped
     for run in d["runs"]:
         for r in run["results"]:
@@ -659,7 +691,8 @@ elif kind == "trufflehog":  # only ruleId (the detector), uri and startLine are 
                     else: blob = re.fullmatch(r"[A-Za-z0-9+/]{60,}={0,2}", re.sub(r"\\n|[\s\"',]", "", ln)) or re.search(r"[A-Za-z0-9+/=_-]{200}", ln) or len(ln) > 2000
                     if blob: continue
                 except (OSError, IndexError): pass
-            rows.append((f, n, r["ruleId"], "secret detected (unverified: offline scan, --no-verification)"))
+            why = lf(r["ruleId"], f, n)
+            rows.append((f, n, r["ruleId"], "secret detected (unverified: offline scan, --no-verification)" + (f" [likely-fixture: {why}]" if why else "")))
 elif kind == "guarddog":  # threat-* rules only (capability-* fire on benign code); one row per rule from its first hit, relative to the package dir; code and match are source snippets and are never read
     for r, h in d["results"].items():
         if r.startswith("threat-") and h:
@@ -1566,8 +1599,9 @@ FXB = re.compile(r"(^|[._-])(fixture|sample|example|mock|test)s?([._-]|$)", re.I
 def fx(p): return FXD.search(p) or FXB.search(p.rsplit("/", 1)[-1])
 def row(t):
     d = {"file": t[1], "line": int(t[2]) if t[2].isdigit() else 0, "rule": t[3], "message": t[4], "text": f"{t[3]}: {t[4]}", "tool": t[0]}
-    if t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "invisible-chars") and fx(t[1]):
-        d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
+    lft = "[likely-fixture:" in t[4]  # a scanner-side demotion (lf in sjson): the message already says why
+    if lft or (t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "invisible-chars") and fx(t[1])):  # detect-secrets is hinted only by lf, never by path alone
+        d["hint"] = "likely-fixture"; d["text"] += "" if lft else " [likely-fixture]"
     return d
 # Low-confidence buckets: generic-api-key (the low-signal rule) hits from gitleaks or gitleaks-history collapse when they are more than 3 in one group:
 # under a fixture DIRECTORY per (tool, top fixture dir), tagged likely-fixture; elsewhere per (tool, file), rule generic-api-key-summary, untagged unless the file is name-only fixture-like.
@@ -1608,6 +1642,24 @@ for t in data:
     k = key(t) or fkey(t)
     if not k or len(groups[k]) <= 3: out.append(row(t))
     elif k not in done: done.add(k); out.append(summ(k, groups[k]) if key(t) else fsumm(k, groups[k]))
+# Cross-tool duplicate: bandit, ruff-security (the S rules are bandit's B rules, same number), semgrep and gosec rows on the same file:line with the same CWE (the "[CWE-n]" tag their own metadata gave the row) are one defect: one row is kept (the first tool in DUPT order), its tools list names every tool, its also list holds each merged row's tool and rule (so per-tool attribution survives), and its message the others' rules. A ruff-security row takes the CWE of a bandit row on that line with the matching id. A row with no tag never merges.
+DUPT = ("semgrep", "bandit", "ruff-security", "gosec")
+dk = lambda r: (os.path.normpath(r["file"]), r["line"])
+bcwe = {(*dk(r), r["rule"]): m[1] for r in out if r["tool"] == "bandit" and r["line"] > 0 and (m := re.search(r"\[CWE-(\d+)[],]", r["message"]))}
+dg, dcut = {}, set()
+for r in sorted((r for r in out if r["tool"] in DUPT and r["line"] > 0), key=lambda r: DUPT.index(r["tool"])):
+    m = re.search(r"\[CWE-(\d+)[],]", r["message"]); c = m[1] if m else bcwe.get((*dk(r), "B" + r["rule"][1:])) if r["tool"] == "ruff-security" else None
+    if c: dg.setdefault((*dk(r), c), []).append(r)
+RK = {"info": 0, "low": 0, "warning": 1, "medium": 1, "high": 2, "error": 2, "critical": 3}
+for g in dg.values():
+    if len({r["tool"] for r in g}) > 1:
+        sv = [x for x in (re.search(r"\[CWE-\d+, (\w+)\]", r["message"]) for r in g) if x]
+        if len(sv) > 1:  # keep the highest severity any merged row carried
+            hi = max((x[1] for x in sv), key=lambda v: RK.get(v, 0)); lo = g[0]["message"]
+            g[0]["message"] = re.sub(r"(\[CWE-\d+), \w+\]", lambda m: f"{m[1]}, {hi}]", lo, 1); g[0]["text"] = g[0]["text"].replace(lo, g[0]["message"])
+        g[0]["tools"] = sorted({r["tool"] for r in g}); g[0]["also"] = [{"tool": r["tool"], "rule": r["rule"]} for r in g[1:]]; sfx = " [also reported by: " + ", ".join(f"{r['tool']} {r['rule']}" for r in g[1:]) + "]"
+        g[0]["message"] += sfx; g[0]["text"] += sfx; dcut |= {id(r) for r in g[1:]}
+out = [r for r in out if id(r) not in dcut]
 # Corroboration: when different tools flag the same normalized file:line, every such row gets a "tools" list and a " [corroborated by: ...]" suffix. No row is dropped or merged. not-checked, summary, line<=0 and per-file-summary rows are skipped.
 cg = {}
 for r in out:
