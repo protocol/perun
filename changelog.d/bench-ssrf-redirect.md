@@ -1,2 +1,0 @@
-### Added
-- bench/tool-only: Python SSRF redirect pair (CWE-918). The vuln file checks the host allowlist on the original URL but requests follows redirects to any host; the clean twin sets allow_redirects=False and re-checks the Location. Existing rules (perun.py.ssrf and registry) already catch it, so no new rule. The twin still trips them because semgrep cannot prove the re-check; that is a documented limit, accepted as noise.

@@ -1,4 +1,0 @@
-### Changed
-
-- `org_audit_driver.py --noise-re ERE` passes the ERE to `review_checks.sh` as `REVIEW_NOISE_RE`, and the jq JSON check now honors the noise paths like semgrep, bandit and ruff-security (skipped files are NOT CHECKED rows). The default noise paths are unchanged, so a target repo's own `docs/bench/` stays scanned; a tree you own can opt out. Self-audit command: `org_audit_driver.py --repos FILE --out DIR --noise-re '(^|/)(mocks|fixtures|e2e|__mocks__|testdata)/|(^|/)docs/bench/'` (the default ERE plus `docs/bench`). On this repo's own tree about 68,000 bench output files made semgrep (344 chunked runs) and jq (one process per file) exceed an 1800s audit.
-- size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 62695→62810 noise-path paragraph names the jq check and --noise-re

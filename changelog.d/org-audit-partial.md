@@ -1,2 +1,0 @@
-### Changed
-- org_audit_driver: the clone uses `--filter=blob:limit=5m`, and every history blob the filter skipped is a `git-clone` not-checked row (one aggregated entry in the summary). A review_checks run that outlives `--timeout` is now a PARTIAL row instead of FAILED: findings gathered so far are kept and each unfinished tool is a "timed out" not-checked row. review_checks.sh writes a `progress` file in its temp dir for this.

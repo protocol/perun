@@ -1,2 +1,0 @@
-### Fixed
-- dep_scope.py keeps prod a superset of the real production tree, so a prod package is never tagged "(scope: dev)": a yarn v1 or pnpm v9 edge that is missing from the lockfile (resolutions, aliases) now counts every locked copy of that name as reached, pnpm leaf snapshots written as "pkg@1.0.0: {}" are read, and workspaces globs like "packages/**" match nested members (matches outside the lockfile directory are ignored). review_checks.sh leaves rows untagged and supply_chain_check.sh marks the scan incomplete when dep_scope.py fails to load or run.
