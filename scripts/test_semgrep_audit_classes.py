@@ -49,6 +49,37 @@ export async function search(req, res) {
   await pool.query(`SELECT * FROM widgets ORDER BY ${(req.query.desc ? "name DESC" : "name ASC")}`);
   // ok: perun.js.raw-sql-concat
   await cache.query(`SELECT ${req.query.name}`);
+  // ok: perun.js.raw-sql-concat
+  await pool.query(`SELECT ${ROW_COLUMNS} FROM ${TABLE} WHERE id = $1`, [req.params.id]);
+  // ok: perun.js.raw-sql-concat
+  await prisma.$queryRawUnsafe(`${BASE_SELECT} WHERE owner = $1`, req.body.owner);
+}
+
+export async function listSorted(req, values) {
+  let query = `SELECT * FROM widgets ORDER BY ${req.query.orderBy}`;
+  // ruleid: perun.js.raw-sql-concat
+  return await this.prisma.$queryRawUnsafe(query, ...values);
+}
+
+export async function listFiltered(req, values) {
+  let query = "SELECT * FROM widgets WHERE 1 = 1";
+  if (req.query.name) {
+    query += ` AND name = '${req.query.name}'`;
+  }
+  // ruleid: perun.js.raw-sql-concat
+  return await pool.query(query, values);
+}
+
+export async function listConst(req, values) {
+  let query = `SELECT ${ROW_COLUMNS} FROM ${TABLE} WHERE id = $1`;
+  // ok: perun.js.raw-sql-concat
+  return await this.prisma.$queryRawUnsafe(query, ...values);
+}
+
+export async function listTaintedConst(req) {
+  const TABLE = req.query.table;
+  // tainted: perun.js.sqli
+  return await pool.query(`SELECT * FROM ${TABLE}`);
 }
 
 export async function login(req, res) {
@@ -103,6 +134,26 @@ function readOnlyGuard(request, res, next) {
   return verify(token);
 }
 
+function loggedGuard(req, res, next) {
+  const token = process.env.WIDGET_TOKEN?.trim();
+  // ruleid: perun.js.guard-allows-missing-token
+  if (!token) {
+    logger.warn('no token configured');
+    return true;
+  }
+  return verify(token);
+}
+
+function loggedGuardSafe(req, res, next) {
+  const token = process.env.WIDGET_TOKEN?.trim();
+  // ok: perun.js.guard-allows-missing-token
+  if (!token) {
+    logger.warn('no token configured');
+    return false;
+  }
+  return verify(token);
+}
+
 function sessionAuth(req, res, next) {
   const token = req.headers.authorization;
   // ruleid: perun.js.guard-allows-missing-token
@@ -149,6 +200,33 @@ def run(cur, name, uid):
     cur.execute("SELECT * FROM widgets WHERE name = %s", (name,))
     # ok: perun.py.raw-sql-format
     cur.execute("SELECT * FROM widgets")
+    # ok: perun.py.raw-sql-format
+    cur.execute(f"SELECT * FROM {TABLE} WHERE id = %s", (uid,))
+
+
+def run_var(cur, order):
+    sql = f"SELECT * FROM widgets ORDER BY {order}"
+    # ruleid: perun.py.raw-sql-format
+    cur.execute(sql)
+
+
+def run_var_append(cur, name):
+    sql = "SELECT * FROM widgets WHERE 1 = 1"
+    sql += f" AND name = '{name}'"
+    # ruleid: perun.py.raw-sql-format
+    cur.execute(sql)
+
+
+def run_var_const(cur, uid):
+    sql = f"SELECT * FROM {TABLE} WHERE id = %s"
+    # ok: perun.py.raw-sql-format
+    cur.execute(sql, (uid,))
+
+
+def run_tainted_const(cur, request):
+    TABLE = request.args["t"]
+    # tainted: perun.py.sqli
+    cur.execute(f"SELECT * FROM {TABLE}")
 
 
 def check_auth(request):
@@ -172,6 +250,15 @@ def check_read_auth_safe(request):
     # ok: perun.py.guard-allows-missing-token
     if not token and request.method == "GET":
         return False
+    return verify(token)
+
+
+def check_logged_auth(request):
+    token = request.headers.get("Authorization")
+    # ruleid: perun.py.guard-allows-missing-token
+    if not token:
+        log.warning("no token configured")
+        return True
     return verify(token)
 
 
@@ -209,7 +296,34 @@ func find(db *sql.DB, name string) {
 	// ok: perun.go.raw-sql-sprintf
 	db.QueryContext(ctx, "SELECT * FROM widgets WHERE name = ?", name)
 }
+
+func findVar(db *sql.DB, name string) {
+	q := fmt.Sprintf("SELECT * FROM widgets WHERE name = '%s'", name)
+	// ruleid: perun.go.raw-sql-sprintf
+	db.Query(q)
+}
+
+func findVarCtx(db *sql.DB, name string) {
+	q := "SELECT * FROM widgets WHERE 1 = 1"
+	q += " AND name = '" + name + "'"
+	// ruleid: perun.go.raw-sql-sprintf
+	db.QueryContext(ctx, q)
+}
+
+func findBound(db *sql.DB, name string) {
+	q := "SELECT * FROM widgets WHERE name = $1"
+	// ok: perun.go.raw-sql-sprintf
+	db.Query(q, name)
+}
 '''
+# Migration files are excluded from the SQL-format rules; every line here must stay clean.
+MIG = {"migrations/0001_init.py": 'def upgrade(op, TABLE):\n    op.execute(f"ALTER TABLE {TABLE} ADD COLUMN note text")\n    op.get_bind().execute(f"UPDATE widgets SET n = {len(TABLE)}")\n',
+       "alembic/versions/a1.py": 'def upgrade(cur, col):\n    cur.execute(f"ALTER TABLE widgets ADD COLUMN {col} text")\n',
+       "app/migrations/0002_x.py": 'def upgrade(cur, col):\n    cur.execute(f"ALTER TABLE widgets ADD COLUMN {col} text")\n',
+       "db/alembic/versions/b2.py": 'def upgrade(cur, col):\n    cur.execute(f"ALTER TABLE widgets ADD COLUMN {col} text")\n',
+       "migrations/001.ts": 'export async function up(pool, col) {\n  await pool.query(`ALTER TABLE widgets ADD COLUMN ${col} text`);\n}\n'}
+# Non-migration code that merely sits under a directory named migrations/alembic must still be scanned (a request handler hid there).
+NOTMIG = {"src/routes/migrations/run.ts": MIG["migrations/001.ts"], "src/routes/migrations/runner.py": MIG["alembic/versions/a1.py"]}
 FILES = {"js.ts": TS, "app.py": PY, "db.go": GO}
 
 
@@ -229,7 +343,8 @@ if os.environ.get("REQUIRE_SEMGREP") and not shutil.which("semgrep"):
     raise SystemExit("FAIL: REQUIRE_SEMGREP=1 but semgrep is not installed")
 if shutil.which("semgrep"):
     with tempfile.TemporaryDirectory() as d:
-        for fn, body in FILES.items():
+        for fn, body in {**FILES, **MIG, **NOTMIG}.items():
+            os.makedirs(os.path.dirname(os.path.join(d, fn)), exist_ok=True)
             open(os.path.join(d, fn), "w").write(body)
         env = dict(os.environ, HOME=d, SEMGREP_USER_HOME=d)
         run = subprocess.run(["semgrep", "--config", RULES, "--metrics=off", "--disable-version-check", "--json", "--quiet", "--", "."],
@@ -241,6 +356,14 @@ if shutil.which("semgrep"):
             want = annotated(FILES[fn], "ruleid", rid)
             got = {x["start"]["line"] for x in r["results"] if x["check_id"].endswith(rid) and x["path"].endswith(fn)}
             assert got == want, (rid, "unexpected", sorted(got - want), "missed", sorted(want - got))
+    # name-based UPPER_SNAKE skip must not hide tainted values: another (taint) rule has to report them
+    for fn in ("js.ts", "app.py"):
+        for m in re.finditer(r"(?://|\#) tainted: (\S+)\n", FILES[fn]):
+            ln = FILES[fn][:m.end()].count("\n") + 1
+            assert any(x["check_id"].endswith(m.group(1)) and x["path"].endswith(fn) and x["start"]["line"] == ln for x in r["results"]), (fn, ln, m.group(1))
+    assert not [x["path"] for x in r["results"] if x["path"] in MIG and re.search(r"raw-sql-(concat|format|sprintf)$", x["check_id"])], [x["path"] for x in r["results"] if x["path"] in MIG and re.search(r"raw-sql-(concat|format|sprintf)$", x["check_id"])]
+    hit = {x["path"] for x in r["results"] if re.search(r"raw-sql-(concat|format|sprintf)$", x["check_id"])}
+    assert set(NOTMIG) <= hit, ("non-migration files under migrations/ were skipped", sorted(set(NOTMIG) - hit))
     print("semgrep-audit-classes: live ok")
 else:
     print("SKIP: semgrep not installed (offline pins only)")

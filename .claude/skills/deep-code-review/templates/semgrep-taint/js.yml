@@ -2180,31 +2180,72 @@ rules:
 - id: perun.js.raw-sql-concat
   languages: [javascript, typescript]
   severity: ERROR
-  message: A SQL string built by template interpolation or concatenation is passed to a raw query API (Prisma $queryRawUnsafe/$executeRawUnsafe, knex.raw, sequelize.query, pg .query) (CWE-89). Use bound parameters ($1 / ? placeholders) or the tagged $queryRaw form. ponytail, search mode - any interpolated value is reported whether or not it is user-controlled; add a taint source when the noise shows up. ponytail, the receiver is matched by name (db, knex, pool, client, conn, prisma, sequelize, trx, tx, pg), so a client held under another name is missed; an all-literal or literal-ternary operand is skipped.
+  message: A SQL string built by template interpolation or concatenation is passed to a raw query API (Prisma $queryRawUnsafe/$executeRawUnsafe, knex.raw, sequelize.query, pg .query), directly or through a variable assigned earlier in the same function (CWE-89). Use bound parameters ($1 / ? placeholders) or the tagged $queryRaw form. ponytail, search mode - any interpolated value is reported whether or not it is user-controlled, except UPPER_SNAKE constants (${TABLE}, ${ROW_COLUMNS}) and literal operands (the UPPER_SNAKE skip is name-based, so a tainted value held in an UPPER_SNAKE name is left to perun.js.sqli); migration files (migrations/<digit>* and alembic/versions/) are skipped, other files under a migrations/ directory are still checked. Remaining limits - the receiver is matched by name (db, knex, pool, client, conn, prisma, sequelize, trx, tx, pg), so a client held under another name is missed; the variable form only follows one assignment or += in the same function, not a value built in a helper or across files, and it does not check that the interpolated value is user-controlled.
   patterns:
   - pattern-either:
-    - pattern: $DB.$queryRawUnsafe($Q, ...)
-    - pattern: $DB.$executeRawUnsafe($Q, ...)
-    - pattern: $DB.raw($Q, ...)
-    - pattern: $DB.query($Q, ...)
-  - metavariable-pattern:
-      metavariable: $Q
-      patterns:
+    - patterns:
       - pattern-either:
-        - pattern: |
-            `...${$X}...`
-        - pattern: |
-            "..." + $X
-        - pattern: |
-            $X + "..."
+        - pattern: $DB.$queryRawUnsafe($Q, ...)
+        - pattern: $DB.$executeRawUnsafe($Q, ...)
+        - pattern: $DB.raw($Q, ...)
+        - pattern: $DB.query($Q, ...)
+      - metavariable-pattern:
+          metavariable: $Q
+          patterns:
+          - pattern-either:
+            - pattern: |
+                `...${$X}...`
+            - pattern: |
+                "..." + $X
+            - pattern: |
+                $X + "..."
+          - metavariable-regex:
+              metavariable: $X
+              regex: '^(?!\s*(?:["''`][^"''`]*["''`]|\d+)\s*$)(?!\s*\(?[^?]+\?\s*["''][^"'']*["'']\s*:\s*["''][^"'']*["'']\)?\s*$)(?!\s*(?:this\.)?[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*\s*$)'
+    - patterns:
+      - pattern-either:
+        - pattern: $DB.$queryRawUnsafe($V, ...)
+        - pattern: $DB.$executeRawUnsafe($V, ...)
+        - pattern: $DB.raw($V, ...)
+        - pattern: $DB.query($V, ...)
+      - pattern-either:
+        - pattern-inside: |
+            $V = `...${$X}...`;
+            ...
+        - pattern-inside: |
+            let $V = `...${$X}...`;
+            ...
+        - pattern-inside: |
+            const $V = `...${$X}...`;
+            ...
+        - pattern-inside: |
+            let $V = "..." + $X;
+            ...
+        - pattern-inside: |
+            const $V = "..." + $X;
+            ...
+        - pattern-inside: |
+            let $V = $I;
+            ...
+            if ($C) { ... $V += `...${$X}...`; ... }
+            ...
+        - pattern-inside: |
+            $V += `...${$X}...`;
+            ...
+        - pattern-inside: |
+            $V = "..." + $X;
+            ...
+        - pattern-inside: |
+            $V += $X;
+            ...
       - metavariable-regex:
           metavariable: $X
-          regex: '^(?!\s*(?:["''`][^"''`]*["''`]|\d+)\s*$)(?!\s*\(?[^?]+\?\s*["''][^"'']*["'']\s*:\s*["''][^"'']*["'']\)?\s*$)'
+          regex: '^(?!\s*(?:["''`][^"''`]*["''`]|\d+)\s*$)(?!\s*\(?[^?]+\?\s*["''][^"'']*["'']\s*:\s*["''][^"'']*["'']\)?\s*$)(?!\s*(?:this\.)?[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*\s*$)'
   - metavariable-regex:
       metavariable: $DB
       regex: (?is).*(db|knex|pool|client|conn|prisma|sequelize|trx|tx|pg|datasource|manager|queryrunner|\bem\b)
   paths:
-    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "migrations/[0-9]*", "alembic/versions", "*.test.*", "*.spec.*"]
 - id: perun.js.orm-where-unchecked-input
   languages: [javascript, typescript]
   severity: WARNING
@@ -2243,7 +2284,7 @@ rules:
 - id: perun.js.guard-allows-missing-token
   languages: [javascript, typescript]
   severity: ERROR
-  message: An auth guard returns true (or calls next()) when no token or credential is present, so an unauthenticated request passes (CWE-306, CWE-636). Deny when the credential is missing.
+  message: An auth guard returns true (or calls next()) when no token or credential is present, so an unauthenticated request passes (CWE-306, CWE-636). Deny when the credential is missing. Statements before the return (a log line) are tolerated; a guard that returns the allow value only after a nested branch, or via a differently named flag, is not matched.
   patterns:
   - pattern-either:
     - pattern: |
@@ -2264,6 +2305,12 @@ rules:
         if (!$T && $R) { return next(); }
     - pattern: |
         if (!$T && $R) { next(); return; }
+    - pattern: |
+        if (!$T) { ... return true; }
+    - pattern: |
+        if (!$T) { ... return next(); }
+    - pattern: |
+        if (!$T) { ... next(); return; }
   - metavariable-regex:
       metavariable: $T
       regex: (?i)^.*(token|authorization|bearer|jwt|api_?key|credential|session).*$

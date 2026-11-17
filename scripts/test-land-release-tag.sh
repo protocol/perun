@@ -32,4 +32,40 @@ out=$(cd "$R" && bash scripts/land-release.sh tag 2>&1); rc=$?
 g tag -d "v$exp" >/dev/null; git -C "$WORK/origin.git" tag -d "v$exp" >/dev/null
 g tag "v$exp" "$(g rev-parse HEAD~1)"   # stale local tag on the wrong commit
 (cd "$R" && bash scripts/land-release.sh tag) >/dev/null 2>&1; [ $? -ne 0 ]; ok $? "local tag on a different commit is refused"
+
+# --- signed-tags policy (release-signers file present) ---
+g tag -d "v$exp" >/dev/null
+K="$WORK/keys"; mkdir "$K"
+ssh-keygen -q -t ed25519 -N '' -f "$K/a" -C a@example.com; ssh-keygen -q -t ed25519 -N '' -f "$K/b" -C b@example.com
+SF="$R/.claude/skills/agentic-delivery/release-signers"
+printf 'a@example.com %s\n' "$(cut -d' ' -f1,2 "$K/a.pub")" >"$SF"
+g add -A; g commit -q -m signers; g push -q origin HEAD:main   # policy is read from origin/main, not the tree
+sign() { GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=gpg.format GIT_CONFIG_VALUE_0=ssh GIT_CONFIG_KEY_1=user.signingkey GIT_CONFIG_VALUE_1="$1" bash "$R/scripts/land-release.sh" tag; }
+clean() { g tag -d "v$exp" >/dev/null 2>&1; git -C "$WORK/origin.git" tag -d "v$exp" >/dev/null 2>&1; true; }
+(cd "$R" && sign "$K/a") >/dev/null 2>&1; ok $? "signers file: tag signed by an allowed key is pushed"
+[ -n "$(git -C "$WORK/origin.git" tag -l "v$exp")" ]; ok $? "signed tag reached the remote"
+clean
+(cd "$R" && sign "$K/b") >/dev/null 2>&1; [ $? -ne 0 ]; ok $? "signers file: tag signed by another key is refused"
+[ -z "$(git -C "$WORK/origin.git" tag -l "v$exp")" ]; ok $? "other-key tag not pushed"
+clean
+(cd "$R" && bash scripts/land-release.sh tag) >/dev/null 2>&1; [ $? -ne 0 ]; ok $? "signers file: no signing key configured is refused"
+[ -z "$(git -C "$WORK/origin.git" tag -l "v$exp")" ]; ok $? "unsigned tag not pushed"
+clean
+rel=$(g log -1 --format=%H origin/main -S"$exp" -- .claude/skills/deep-code-review/VERSION)
+g tag -a "v$exp" -m x "$rel"   # on the release commit itself, so only the signature check can refuse it
+(cd "$R" && sign "$K/a") >/dev/null 2>&1; [ $? -ne 0 ]; ok $? "signers file: pre-existing unsigned local tag is refused"
+[ -z "$(git -C "$WORK/origin.git" tag -l "v$exp")" ]; ok $? "pre-existing unsigned tag not pushed"
+clean
+# unsigned remote tag on the release commit (same sha, different tag object): refused when signers exist
+g tag -a "v$exp" -m x "$rel"; g push -q origin "refs/tags/v$exp"; g tag -d "v$exp" >/dev/null
+(cd "$R" && sign "$K/a") >/dev/null 2>&1; [ $? -ne 0 ]; ok $? "signers file: unsigned remote tag on the same commit is refused"
+clean; rm "$SF"   # deleted from the working tree only: origin/main still has it
+(cd "$R" && bash scripts/land-release.sh tag) >/dev/null 2>&1; [ $? -ne 0 ]; ok $? "signers deleted in tree but on origin/main: unsigned tag refused"
+[ -z "$(git -C "$WORK/origin.git" tag -l "v$exp")" ]; ok $? "tree-deleted signers: tag not pushed"
+clean
+printf 'b@example.com %s\n' "$(cut -d' ' -f1,2 "$K/b.pub")" >"$SF"   # tree-only edit allowing key b
+(cd "$R" && sign "$K/b") >/dev/null 2>&1; [ $? -ne 0 ]; ok $? "signers edited in tree only: other-key tag refused"
+clean; rm "$SF"
+g rm -q "$SF" 2>/dev/null || g rm -q --cached .claude/skills/agentic-delivery/release-signers; g commit -q -m "drop signers"; g push -q origin HEAD:main
+(cd "$R" && bash scripts/land-release.sh tag) >/dev/null 2>&1; ok $? "no signers file on origin/main: unsigned annotated tag still pushed"
 exit $fail
