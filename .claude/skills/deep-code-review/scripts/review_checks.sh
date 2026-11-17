@@ -1123,7 +1123,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     fi ;;
   esac
   # Helm chart templates are not plain manifests and the hub does not render charts: named as unchecked surface, never dropped silently
-  if [ "$hn" = kubescape ] && printf '%s\n' "$hf" | grep -qE '(^|/)templates/'; then echo "NOT CHECKED: kubescape (Helm chart templates are not rendered by the hub)" >&2; add kubescape "" 0 not-checked "Helm chart templates are not rendered by the hub"; fi
+  if [ "$hn" = kubescape ] && grep -qE '(^|/)templates/' <<<"$hf"; then echo "NOT CHECKED: kubescape (Helm chart templates are not rendered by the hub)" >&2; add kubescape "" 0 not-checked "Helm chart templates are not rendered by the hub"; fi
   case $hn in
     kube-linter|kube-score|kubescape) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do [[ $f == templates/* || $f == */templates/* || $f == kustomization.y*ml || $f == */kustomization.y*ml ]] && continue; grep -qE '^apiVersion:' -- "$f" && grep -qE '^kind:' -- "$f" && printf '%s\n' "$f"; done || true) ;; # Kubernetes manifests only (Helm templates and kustomization files are not plain manifests)
     eslint-security) { compgen -G 'eslint.config.*' || compgen -G '.eslintrc*' || grep -qs '"eslintConfig"' package.json; } >/dev/null 2>&1 || hf= # no config of its own: not routed
@@ -1137,7 +1137,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       if [ "$kc" -gt 0 ]; then echo "NOT CHECKED: kics ($kc file name(s) with a comma not scanned)" >&2; add kics "" 0 not-checked "$kc file name(s) with a comma not scanned"; hf=$(printf '%s\n' "$hf" | grep -v , || true); fi ;;
     cfn-lint) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do grep -qF 'AWSTemplateFormatVersion' -- "$f" && printf '%s\n' "$f"; done || true) ;; # CloudFormation templates only
     bundler-audit) [ -n "$(ls -A "${BUNDLER_AUDIT_DB:-${HOME:-/nonexistent}/.local/share/ruby-advisory-db}" 2>/dev/null)" ] || { echo "NOT CHECKED: bundler-audit (no local ruby-advisory-db; it would download one)" >&2; add "$hn" "" 0 not-checked "no local ruby-advisory-db: bundler-audit would download one"; hf=; } ;;
-    mobsfscan) git ls-files | grep -qE '(^|/)(AndroidManifest\.xml|Info\.plist|Podfile|project\.pbxproj)$' || hf= ;; # no mobile project: not routed
+    mobsfscan) grep -qE '(^|/)(AndroidManifest\.xml|Info\.plist|Podfile|project\.pbxproj)$' <<<"$(git ls-files)" || hf= ;; # no mobile project: not routed. Here-string, not a pipe: grep -q's early exit SIGPIPEs git ls-files (141) under pipefail on a large repo, which would read as no marker
     sobelow) grep -qF '{:phoenix,' mix.exs 2>/dev/null || hf= ;; # no Phoenix app at the root: not routed (Sobelow prints text and exits 0 there)
     ansible-lint) hf=$(printf '%s\n' "$hf" | while IFS= read -r f; do [[ $f == roles/* || $f == */roles/* || $f == tasks/* || $f == */tasks/* || $f == handlers/* || $f == */handlers/* || $f == playbooks/* || $f == */playbooks/* ]] || { grep -qE '^[[:space:]-]*hosts:' -- "$f" && grep -qE '^[[:space:]]*(tasks|roles|pre_tasks|post_tasks):' -- "$f"; } && printf '%s\n' "$f"; done || true) ;; # Ansible content only
     brakeman) grep -qiE "^[[:space:]]*gem[[:space:]]+['\"]rails['\"]" Gemfile 2>/dev/null || hf= ;;
@@ -1207,7 +1207,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       continue
     fi
     # --soft-fail hides tfsec's exit, so an HCL parse failure can leave an empty SARIF: any non-JSON stderr line that names an error is not run (unverified wording: tfsec's real parse-error text was not fetched)
-    if [ "$hn" = tfsec ] && grep -v '^[[:space:]]*[][{},"]' "$jf" | grep -qiE 'error|fail|cannot|unable|invalid|panic'; then skip tfsec "$f: tfsec reported an error on stderr; the scan may be incomplete"; continue; fi
+    if [ "$hn" = tfsec ] && grep -qiE 'error|fail|cannot|unable|invalid|panic' <<<"$(grep -v '^[[:space:]]*[][{},"]' "$jf" || true)"; then skip tfsec "$f: tfsec reported an error on stderr; the scan may be incomplete"; continue; fi
     [ "$hn" != staticcheck ] || [ "$rc" = 0 ] || grep -q '[^[:space:]]' "$jf" || { skip staticcheck "exit $rc with no output"; break; } # exit 1 and nothing printed is a setup failure, not a clean run
     # rubocop may skip an explicit file (excludes, unparseable): its inspected count must equal the files passed, else findings may be missing
     if [ "$hn" = rubocop ] && ! python3 -I -c 'import json,sys;sys.exit(0 if json.load(open(sys.argv[1]))["summary"]["inspected_file_count"]==int(sys.argv[2]) else 1)' "$jf" "$(printf '%s\n' "$hf" | grep -c .)" 2>/dev/null; then skip rubocop "inspected file count differs from the changed Ruby files"; break; fi
