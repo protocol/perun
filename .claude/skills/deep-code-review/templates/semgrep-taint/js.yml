@@ -2486,7 +2486,7 @@ rules:
 - id: perun.js.raw-sql-concat
   languages: [javascript, typescript]
   severity: ERROR
-  message: A SQL string built by template interpolation or concatenation is passed to a raw query API (Prisma $queryRawUnsafe/$executeRawUnsafe, knex.raw, sequelize.query, pg .query), directly or through a variable assigned earlier in the same function (CWE-89). Use bound parameters ($1 / ? placeholders) or the tagged $queryRaw form. ponytail, search mode - any interpolated value is reported whether or not it is user-controlled, except UPPER_SNAKE constants (${TABLE}, ${ROW_COLUMNS}) and literal operands (the UPPER_SNAKE skip is name-based, so a tainted value held in an UPPER_SNAKE name is left to perun.js.sqli); migration files (migrations/<digit>* and alembic/versions/) are skipped, other files under a migrations/ directory are still checked. Remaining limits - the receiver is matched by name (db, knex, pool, client, conn, prisma, sequelize, trx, tx, pg), so a client held under another name is missed; the variable form only follows one assignment or += in the same function, not a value built in a helper or across files, and it does not check that the interpolated value is user-controlled.
+  message: A SQL string built by template interpolation or concatenation is passed to a raw query API (Prisma $queryRawUnsafe/$executeRawUnsafe, knex.raw, sequelize.query, pg .query), directly or through a variable assigned earlier in the same function (CWE-89). Use bound parameters ($1 / ? placeholders) or the tagged $queryRaw form. ponytail, search mode - any interpolated value is reported whether or not it is user-controlled, except UPPER_SNAKE constants (${TABLE}, ${ROW_COLUMNS}) and literal operands (the UPPER_SNAKE skip is name-based, so a tainted value held in an UPPER_SNAKE name is left to perun.js.sqli; also skipped are values that are numeric by construction (params.length, n + 1, i * 2 + 1, a plain name plus digits, single letters or CONSTANTS), the return of x.push(...) (a length), ident()/quoteIdent()/escapeIdentifier() calls, a map-to-$N-placeholders .join(), and a plain variable named like a SQL fragment (whereSql, idClause, tuples; plain order, orderBy, limit, offset and team are still reported) or sets/conds/clauses/parts.join(...), because those build bind-parameter indexes, quoted identifiers or fragments assembled from literals, not data; a tainted fragment is perun.js.sqli's job); migration files (migrations/<digit>* and alembic/versions/) are skipped, other files under a migrations/ directory are still checked. Remaining limits - the receiver is matched by name (db, knex, pool, client, conn, prisma, sequelize, trx, tx, pg), so a client held under another name is missed; the variable form only follows one assignment or += in the same function, not a value built in a helper or across files, and it does not check that the interpolated value is user-controlled.
   patterns:
   - pattern-either:
     - patterns:
@@ -2507,7 +2507,7 @@ rules:
                 $X + "..."
           - metavariable-regex:
               metavariable: $X
-              regex: '^(?!\s*(?:["''`][^"''`]*["''`]|\d+)\s*$)(?!\s*\(?[^?]+\?\s*["''][^"'']*["'']\s*:\s*["''][^"'']*["'']\)?\s*$)(?!\s*(?:this\.)?[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*\s*$)'
+              regex: '^(?!\s*(?:["''`][^"''`]*["''`]|\d+)\s*$)(?!\s*\(?[^?]+\?\s*["''][^"'']*["'']\s*:\s*["''][^"'']*["'']\)?\s*$)(?!\s*(?:this\.)?[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*\s*$)(?!\s*\(?\s*\w+(?:\.length)?(?:\s*[-+*]\s*(?:\d+|[a-z]|[A-Z][A-Z0-9_]*))+\s*\)?\s*$)(?!\s*\w+(?:\.\w+)*\.length\s*$)(?!\s*\w+\.push\([^()]*\)\s*$)(?!\s*(?:[a-z]\w*(?:Sql|SQL|Clause|Where|Filter|Cols|Columns|Placeholders|Tuples)|sql|where|clause|tuples|placeholders)\s*$)(?!\s*(?:sets|conds|conditions|clauses|where|parts|cols|columns|fields|filters)\.join\([^()]*\)\s*$)(?!\s*(?:\w+\.)?(?:ident|quoteIdent|quoteIdentifier|escapeIdentifier|quote_ident)\([^()]*\)\s*$)(?!\s*\w+\.map\(\([^()]*\)\s*=>\s*`\$\$\{[^`{}]*\}`\)\.join\([^()]*\)\s*$)'
     - patterns:
       - pattern-either:
         - pattern: $DB.$queryRawUnsafe($V, ...)
@@ -2546,7 +2546,7 @@ rules:
             ...
       - metavariable-regex:
           metavariable: $X
-          regex: '^(?!\s*(?:["''`][^"''`]*["''`]|\d+)\s*$)(?!\s*\(?[^?]+\?\s*["''][^"'']*["'']\s*:\s*["''][^"'']*["'']\)?\s*$)(?!\s*(?:this\.)?[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*\s*$)'
+          regex: '^(?!\s*(?:["''`][^"''`]*["''`]|\d+)\s*$)(?!\s*\(?[^?]+\?\s*["''][^"'']*["'']\s*:\s*["''][^"'']*["'']\)?\s*$)(?!\s*(?:this\.)?[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*\s*$)(?!\s*\(?\s*\w+(?:\.length)?(?:\s*[-+*]\s*(?:\d+|[a-z]|[A-Z][A-Z0-9_]*))+\s*\)?\s*$)(?!\s*\w+(?:\.\w+)*\.length\s*$)(?!\s*\w+\.push\([^()]*\)\s*$)(?!\s*(?:[a-z]\w*(?:Sql|SQL|Clause|Where|Filter|Cols|Columns|Placeholders|Tuples)|sql|where|clause|tuples|placeholders)\s*$)(?!\s*(?:sets|conds|conditions|clauses|where|parts|cols|columns|fields|filters)\.join\([^()]*\)\s*$)(?!\s*(?:\w+\.)?(?:ident|quoteIdent|quoteIdentifier|escapeIdentifier|quote_ident)\([^()]*\)\s*$)(?!\s*\w+\.map\(\([^()]*\)\s*=>\s*`\$\$\{[^`{}]*\}`\)\.join\([^()]*\)\s*$)'
   - metavariable-regex:
       metavariable: $DB
       regex: (?is).*(db|knex|pool|client|conn|prisma|sequelize|trx|tx|pg|datasource|manager|queryrunner|\bem\b)
