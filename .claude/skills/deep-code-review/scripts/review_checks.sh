@@ -209,6 +209,12 @@ if [ -n "$sh_files" ]; then
     run_one bash-n bash -n "./$f" || continue
     [ "$rc" = 0 ] || add bash-n "$f" "$(sed -nE 's/.*line ([0-9]+):.*/\1/p' "$out" | head -n1)" syntax "$(head -n1 "$out")"
   done <<<"$sh_files"
+  # Built-in, no tool to install: multi-write producer piped into grep -q/-m/head in a condition under pipefail (pipefail_sigpipe.py). Rows: tool pipefail-sigpipe, rule pipefail-sigpipe|not-checked. Cheap, so unleased; leads.
+  if [ ! -f "$here/pipefail_sigpipe.py" ]; then skip pipefail-sigpipe "pipefail_sigpipe.py missing"
+  else
+    psok=0; run_one pipefail-sigpipe sh -c 'python3 -I "$1" 2>/dev/null' _ "$here/pipefail_sigpipe.py" <<<"$sh_files" && scan_ok pipefail-sigpipe && psok=1
+    if [ "$psok" = 1 ] || [ "$rc" = 124 ] || [ "$rc" = 142 ]; then while IFS=$'\t' read -r f l r m; do if [ -n "$m" ]; then add pipefail-sigpipe "$f" "$l" "$r" "$m"; fi; done <"$out"; fi
+  fi
 fi
 
 py_files=$(changed '\.py$')

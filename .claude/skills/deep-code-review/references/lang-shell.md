@@ -109,3 +109,4 @@ Read this when the target runs any shell — CI `run:` steps, hooks, Dockerfile 
   `--dry-run`) before the mutating command in the same block. Mechanise as a grep over fenced blocks in `*.md`
   for an unbraced variable followed by `:`; Low, or High when the block pushes, deletes or deploys. This rule
   pins the form, not a specific zsh expansion mechanism.
+- Under `set -o pipefail`, `git ls-files | grep -q x` in a condition can read false: grep exits early, the producer dies of SIGPIPE (141). Use `grep -q PAT <<<"$(producer)"`. `pipefail_sigpipe.py` flags it; `# sigpipe-ok` silences.
