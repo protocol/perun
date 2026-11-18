@@ -33,7 +33,7 @@ printf '#!/bin/sh\necho %s\n' "'{\"results\":[],\"errors\":[]}'" >"$T/base/semgr
 printf '#!/bin/sh\necho %s\n' "'{\"Results\":[]}'" >"$T/base/trivy"
 printf '#!/bin/sh\nexit 0\n' >"$T/base/gitleaks"
 chmod +x "$T/base/semgrep" "$T/base/trivy" "$T/base/gitleaks"
-for b in bash env git grep sed head tail cat rm mkdir mktemp dirname basename python3 perl timeout gtimeout jq true sort uniq paste tr cut wc awk date cp mv ls find touch tee readlink sleep; do
+for b in bash env git grep sed head tail cat rm mkdir mktemp dirname basename python3 perl timeout gtimeout jq true sort uniq paste tr cut wc awk date cp mv ls find touch tee readlink sleep tar; do
   p=$(type -P "$b") || continue; ln -s "$p" "$T/sys/$b"
 done
 MOBS='{
@@ -90,6 +90,11 @@ MOBS_RC=0 J_mobs=$MW$LOG run
 ran mobsfscan && row mobsfscan A.kt android_logging && ok "mobsfscan: exit 0 with only WARNING rows keeps them" || bad "mobs exit0 warning"
 MOBS_RC=1 J_mobs=$MW$LOG run
 ran mobsfscan && row mobsfscan A.kt android_logging && ok "mobsfscan: exit 1 with only WARNING rows keeps them" || bad "mobs exit1 warning"
+# a tracked-file list larger than the pipe buffer, marker listed first: `git ls-files | grep -q` SIGPIPEs git under pipefail (141), which read as "no mobile marker"
+mkdir zz && for i in $(seq 2500); do : >"zz/padding-so-the-tracked-file-list-outgrows-the-pipe-buffer-$i.txt"; done; G add zz && G commit -q -m pad
+MOBS_RC=1 J_mobs=$MW$LOG run
+ran mobsfscan && ok "mobsfscan: still routed when the tracked-file list outgrows the pipe buffer" || bad "mobs big file list: $(grep -c . "$T/err") err lines"
+G rm -rq zz && G commit -q -m unpad
 # psalm scans the whole project: a report whose rows are all in unchanged files is clean for this diff, not a failure
 PSALM_RC=2 J_psalm='[{"severity":"error","line_from":4,"type":"TaintedHtml","message":"m","file_name":"other.php","is_security":true}]' run
 ran psalm && ! row psalm other.php TaintedHtml && ! grep -q 'not run: psalm' "$T/err" && ok "psalm: rows only in unchanged files are dropped, not a failure" || bad "psalm unchanged rows"
