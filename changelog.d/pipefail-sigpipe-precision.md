@@ -1,2 +1,0 @@
-### Fixed
-- pipefail_sigpipe.py (the pipefail-sigpipe lead-finder) judges only the first pipeline stage and flags it only when it is a generator: find, git diff/branch/log, gh, curl, `cat FILE` or `grep -r`. Filters such as grep, sed, cut, sort, jq, awk and wc no longer count as multi-write producers. On this repository that cuts the rows from 23 (all filter producers) to 0. Trade-off: a filter reading a large file can still raise SIGPIPE and is no longer reported.

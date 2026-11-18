@@ -1,2 +1,0 @@
-### Fixed
-- review_checks.sh routed mobsfscan with `git ls-files | grep -q`; under `set -o pipefail` grep exiting early on a match made git ls-files die with SIGPIPE (exit 141) on repos with a large file list, so the check read as "no mobile project" and mobsfscan was silently not routed. The mobsfscan, kubescape Helm-template and tfsec stderr checks now read their input through here-strings instead of a pipe, and scripts/test-review-checks-hub-lang.sh gains a regression case ("mobs big file list") with a tracked-file list larger than the pipe buffer.
