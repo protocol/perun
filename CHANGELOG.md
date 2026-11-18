@@ -3,6 +3,11 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.657.0] — 2026-11-18
+
+### Fixed
+- release workflow: the "Create GitHub Release" step now exits cleanly when `scripts/land-release.sh publish` has already published the release for that tag. Before this change, every such release run since v1.653.0 failed with HTTP 422. A draft release or a failed lookup still falls through to `gh release create`, so that case still fails visibly. The VERSION and CHANGELOG checks before this step are unchanged.
+
 ## [1.656.0] — 2026-11-18
 
 ### Fixed
