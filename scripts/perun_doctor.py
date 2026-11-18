@@ -14,7 +14,7 @@ Exit 0 = nothing to fix, 1 = at least one WARN/FAIL (INFO rows are optional add-
 re-runs the recorded install flags via scripts/update-installed.sh (skills are backed up
 by install.sh first), and re-checks. Stdlib only; read-only without --fix.
 """
-import argparse, hashlib, json, os, re, shlex, subprocess, sys, time
+import argparse, hashlib, json, math, os, re, shlex, shutil, subprocess, sys, time
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent
@@ -312,6 +312,21 @@ def check(repo, home):
             add("WARN" if big else "OK", label, f"{len(paths)} worktree(s){size}{hint}")
     except (OSError, subprocess.SubprocessError, TypeError, AttributeError):
         add("INFO", "lane worktrees", "git worktree list failed: not checked")
+    note = ""
+    try:
+        warn_gb, fail_gb = float(os.environ.get("PERUN_DISK_WARN_GB", 50)), float(os.environ.get("PERUN_DISK_FAIL_GB", 10))
+        ok = math.isfinite(warn_gb) and math.isfinite(fail_gb) and 0 <= fail_gb <= warn_gb
+    except ValueError:
+        ok = False
+    if not ok:
+        warn_gb, fail_gb, note = 50.0, 10.0, " [ignored invalid PERUN_DISK_WARN_GB/PERUN_DISK_FAIL_GB: need finite 0 <= fail <= warn; defaults used]"
+    try:
+        free = shutil.disk_usage(repo).free / 2**30
+        add("FAIL" if free < fail_gb else "WARN" if free < warn_gb else "OK", "disk free",
+            f"{free:.1f} GiB free on the repo's volume (warn < {warn_gb:g}, fail < {fail_gb:g}; PERUN_DISK_WARN_GB / PERUN_DISK_FAIL_GB)" + note
+            + (". List finished lane worktrees and merged branches: bash .claude/skills/agentic-delivery/scripts/reclaim_disk.sh (add --apply to remove them)" if free < warn_gb else ""))
+    except OSError:
+        add("INFO", "disk free", "could not read free space: not checked")
     st, detail = review_scanners(repo)
     add(st, "review scanners", detail)
     return rows
