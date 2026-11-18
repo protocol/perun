@@ -84,6 +84,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # land-release.sh publish may create the release before this tag-triggered run; creating it again fails with HTTP 422.
+          # Only a published (non-draft) release counts; a draft or a failed lookup falls through to create, which fails loudly.
+          if [ "$(gh release view "${GITHUB_REF_NAME}" --json isDraft -q .isDraft 2>/dev/null)" = false ]; then echo "release ${GITHUB_REF_NAME} already published (land-release.sh publish); nothing to do"; exit 0; fi
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
             --notes-file notes.md \
