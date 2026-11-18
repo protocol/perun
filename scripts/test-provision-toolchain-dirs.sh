@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # provision_tools.sh and review_checks.sh must both see tools that dotnet/composer/mix install outside ~/.local/bin.
 set -euo pipefail
+unset DCR_USER_BIN # scrub_env.sh exports it empty (disables the dirs); the default-dir cases need it unset
 P=.claude/skills/deep-code-review/scripts/provision_tools.sh
 R=.claude/skills/deep-code-review/scripts/review_checks.sh
 t=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-tcd.XXXXXX"); trap 'rm -rf "$t"' EXIT

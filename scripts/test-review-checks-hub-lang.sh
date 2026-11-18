@@ -9,6 +9,7 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/hublang.XXXXXX") && [ -n "$T" ] && [ -d "$T" ] ||
 trap 'cd /; rm -r -- "$T"' EXIT; fail=0
 ok() { echo "ok - $1"; }; bad() { echo "FAIL - $1"; fail=1; }
 export PERUN_HEAVY_DIR="$T/heavy" HUB_LOG="$T/hub.log" DCR_CACHE_ROOT="$T/nocache" DCR_USER_BIN= TMPDIR="$T/tmp"
+export REVIEW_TEST_CMD=true # eslint and psalm execute project code, so the hub runs them only with this opt-in (scripts/test-review-checks-lint-config-gate.sh)
 mkdir -p "$T/repo" "$T/bin" "$T/base" "$T/sys" "$T/tmp" && cd "$T/repo"
 git init -q . && case "$(git rev-parse --show-toplevel)" in "$(cd "$T" && pwd -P)"/*) ;; *) echo "refusing: repo not under temp dir" >&2; exit 1 ;; esac
 G() { git -c user.email=t@example.com -c user.name=t "$@"; }

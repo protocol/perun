@@ -89,7 +89,9 @@ case " $tools " in *" nuclei "*)
   python3 -I -m http.server "$port" --bind 127.0.0.1 --directory "$T/site" >/dev/null 2>&1 & SP=$!
   export REVIEW_DAST_URL="http://127.0.0.1:$port" && tmo=420
   for _ in 1 2 3 4 5 6 7 8 9 10; do curl -sf --max-time 2 -o /dev/null "$REVIEW_DAST_URL" && break; sleep 1; done ;; esac
-for i in 1 2 3; do rc=0; bash "$RC" --base base --timeout "$tmo" >"$T/out" 2>"$T/err" || rc=$?; grep -qE 'not run:.*\b(govulncheck|grype|trivy|osv-scanner|guarddog|cargo-audit|cargo-deny|brakeman|mobsfscan|eslint-security|nuclei)\b' "$T/err" && [ "$i" -lt 3 ] || break; sleep $((i * 10)); done
+# REVIEW_TEST_CMD=true: eslint-security runs the project's own config and binary, so the hub runs it only with this opt-in; no other
+# gated tool changes here (no .checkov.yaml, .tflint.hcl, ansible-lint config or tsconfig.json in this repo)
+for i in 1 2 3; do rc=0; REVIEW_TEST_CMD=true bash "$RC" --base base --timeout "$tmo" >"$T/out" 2>"$T/err" || rc=$?; grep -qE 'not run:.*\b(govulncheck|grype|trivy|osv-scanner|guarddog|cargo-audit|cargo-deny|brakeman|mobsfscan|eslint-security|nuclei)\b' "$T/err" && [ "$i" -lt 3 ] || break; sleep $((i * 10)); done
 echo "review_checks exit $rc; stderr tail:"; tail -n 15 "$T/err"
 # tool -> rule id regex (rubocop and ansible-lint ids are exact; tfsec and cfn-lint match the rule family, unpinned ids)
 want() { case $1 in tfsec) echo '^aws-s3-' ;; ansible-lint) echo '^no-changed-when' ;; rubocop) echo '^Security/Eval$' ;; cfn-lint) echo '^E3' ;;

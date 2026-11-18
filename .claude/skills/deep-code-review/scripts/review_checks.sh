@@ -226,14 +226,15 @@ py_files=$(changed '\.py$')
 if [ -n "$py_files" ]; then
   if have python3; then
     while IFS= read -r f; do
-      run_one py_compile python3 -c 'import sys;compile(open(sys.argv[1],"rb").read(),sys.argv[1],"exec")' "./$f" || continue
+      run_one py_compile python3 -I -c 'import sys;compile(open(sys.argv[1],"rb").read(),sys.argv[1],"exec")' "./$f" || continue
       [ "$rc" = 0 ] || add py_compile "$f" "$(sed -nE 's/.*[(,] ?line ([0-9]+).*/\1/p' "$out" | head -n1)" SyntaxError "$(tail -n1 "$out")"
     done <<<"$py_files"
   fi
   lint=()
   if command -v ruff >/dev/null; then lint=(ruff check --output-format concise --no-cache) ln=ruff
   elif command -v pyflakes >/dev/null; then lint=(pyflakes) ln=pyflakes
-  elif python3 -m pyflakes --version >/dev/null 2>&1; then lint=(python3 -m pyflakes) ln=pyflakes
+  # -P (Python 3.11+): no cwd on sys.path, so a repo pyflakes.py cannot shadow the linter; site-packages stay. Older Python rejects -P: not installed.
+  elif python3 -P -m pyflakes --version >/dev/null 2>&1; then lint=(python3 -P -m pyflakes) ln=pyflakes
   else skip "ruff/pyflakes" "not installed"; ln=; fi
   wiredx+=" ${ln:-ruff/pyflakes}"
   if [ -n "$ln" ]; then
@@ -316,7 +317,7 @@ export REVIEW_HYGIENE_SHOW=$hyg HYG_COUNT="$td/hyg"
 # Scanner JSON (file $2, may have log lines before the JSON, which starts a line) of kind $1 -> TSV: file, line, rule, message.
 # Fails closed: missing, empty or malformed JSON exits non-zero instead of reading as "no findings".
 sjson() {
-  python3 - "$1" "$2" <<'PY'
+  python3 -I - "$1" "$2" <<'PY'
 import collections, hashlib, json, os, pathlib, re, sys
 kind = sys.argv[1]
 show_hyg = os.environ.get("REVIEW_HYGIENE_SHOW") == "1"
@@ -843,7 +844,7 @@ EOT
       else skip gitleaks-history "unparseable report"; fi
     fi
   fi
-elif [ -n "$files" ]; then add gitleaks "" 0 not-checked "not installed or heavy lease full; secrets were not scanned"; fi
+elif [ -n "$files" ]; then add gitleaks "" 0 not-checked "$(command -v gitleaks >/dev/null && echo "heavy lease full" || echo "not installed"); secrets were not scanned"; fi
 
 # trufflehog: a second secret detector set, with gitleaks' lease and degraded-nice handling. Offline (--no-verification never calls a provider; --no-update skips the version check). --sarif, never --json or the default
 # output: those print the secret (--json as Raw, RawV2, Redacted and SecretParts), while SARIF holds only the detector, path, line and a fingerprint hash, so no value reaches $out, a row or the record. --log-level=-1 keeps stderr (merged into $out) from corrupting the document.
@@ -883,7 +884,7 @@ if have trufflehog; then
     for ((j = 0; j < ${#tfbad[@]}; j++)); do add trufflehog "${tfbad[j]}" 0 not-checked "trufflehog failed on this file alone (${tfbw[j]}); it was not scanned for secrets"; done
     [ ${#tfbad[@]} -eq 0 ] || { echo "review_checks: partial: trufflehog could not scan ${#tfbad[@]} of ${#tfc[@]} file(s) of a failed chunk (each is a not-checked row)" >&2; case " $ran " in *" trufflehog(errors) "*) ;; *) ran+=" trufflehog(errors)" ;; esac; }
   done
-elif [ -n "$files" ]; then add trufflehog "" 0 not-checked "not installed or heavy lease full; secrets were not scanned"; fi
+elif [ -n "$files" ]; then add trufflehog "" 0 not-checked "$(command -v trufflehog >/dev/null && echo "heavy lease full" || echo "not installed"); secrets were not scanned"; fi
 
 # go.mod, not go.sum: osv-scanner 2.x reads Go deps from go.mod only (a go.sum errors, exit 127, and reads as not run)
 lock_files=$(changed '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|go\.mod|Cargo\.lock|poetry\.lock|requirements[^/]*\.txt|composer\.lock)$')
@@ -1163,6 +1164,9 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   case $hn in detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim|tfsec|ansible-lint|pmd|solhint|skillspector) wired+=" $hn" ;; esac
   if [ "$hn" = rubocop ] && [ "$full" = 0 ] && [ -n "$(changed '(^|/)\.rubocop[^/]*\.yml$')" ]; then nc ".rubocop*.yml changed in this diff: its config can require code, not run"; continue; fi
   if [ "$hn" = sobelow ] && [ "$full" = 0 ] && [ -n "$(changed '(^|/)(mix\.exs|\.sobelow-conf)$')" ]; then nc "mix.exs or .sobelow-conf changed in this diff: its config is code, not run"; continue; fi
+  # checkov reads .checkov.yaml or .checkov.yml from its working directory (the repo root), and its external-checks-dir runs Python from the repo:
+  # project code, the same class as REVIEW_TEST_CMD, so with such a file checkov runs only when REVIEW_TEST_CMD is set (any mode, --full too).
+  if [ "$hn" = checkov ] && [ -z "${REVIEW_TEST_CMD:-}" ] && { [ -e .checkov.yaml ] || [ -e .checkov.yml ]; }; then nc "a .checkov.yaml or .checkov.yml in the repo root can load Python checks (external-checks-dir); set REVIEW_TEST_CMD to run it"; continue; fi
   # zizmor, actionlint, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
   case $hn in grype|checkov|gosec|govulncheck|staticcheck|kics) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
   case $hn in gosec|govulncheck|staticcheck) [ -f go.mod ] || { nc "no go.mod at repo root"; continue; } ;; esac
@@ -1177,6 +1181,11 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     [ -f psalm.xml ] || [ -f psalm.xml.dist ] || { nc "no psalm.xml at repo root"; continue; }
     [ "$full" != 0 ] || [ -z "$(changed '(^|/)(psalm\.xml(\.dist)?|composer\.json)$')" ] || { nc "psalm.xml or composer.json changed in this diff: its config is code, not run"; continue; }
   fi
+  # eslint (eslint.config.js, its plugins, the repo-local binary), psalm (psalm.xml plugins and autoloader) and ansible-lint with a project config
+  # (rulesdir loads Python rules) execute project code: the same class as REVIEW_TEST_CMD and a repo-local tsc, so they run only when it is set.
+  # The diff guards above cannot see a config's imports or a committed node_modules/.bin/eslint (XRE drops node_modules), and --full skips them.
+  case $hn in eslint-security|psalm) pcode=$hn ;; ansible-lint) pcode=; for acf in .ansible-lint .ansible-lint.yml .ansible-lint.yaml .config/ansible-lint.yml .config/ansible-lint.yaml ansible.cfg; do [ ! -e "$acf" ] || pcode=$acf; done ;; *) pcode= ;; esac
+  [ -z "$pcode" ] || [ -n "${REVIEW_TEST_CMD:-}" ] || { nc "it executes project code (its config and plugins); set REVIEW_TEST_CMD to run it"; continue; }
   targets=()
   if [ "$hm" = batch ]; then while IFS= read -r f; do targets+=("./$f"); done <<<"$hf"; fi
   # ponytail: batch tools get every matching file in one call (argv/timeout ceiling); chunk like semgrep if it bites.
@@ -1194,6 +1203,11 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       fi
       continue
     fi
+    # tflint reads .tflint.hcl or .tflint.json in its --chdir directory; plugin_dir and enabled plugins there (or ./.tflint.d/plugins) name binaries it runs
+    if [ "$hn" = tflint ] && [ -z "${REVIEW_TEST_CMD:-}" ]; then
+      tfd=${f%/*}; [ "$tfd" != "$f" ] || tfd=.
+      if [ -e "$tfd/.tflint.hcl" ] || [ -e "$tfd/.tflint.json" ] || [ -e "$tfd/.tflint.d" ]; then nc "$f: a .tflint.hcl, .tflint.json or .tflint.d beside it can load plugin binaries; set REVIEW_TEST_CMD to run it"; continue; fi
+    fi
     # solhint 6.x throws RangeError (exit 255, no output) on a file outside its cwd, so the canary runs from $td
     if [ "$hn" = solhint ]; then # canary: the config's `extends` value is unverified, so a config that loads no rules would read as clean; the throwaway tx.origin contract must raise avoid-tx-origin first
       hubcmd solhint canary.sol; cmd=(bash -c 'cd "$1" && shift && exec "$@"' _ "$td" "${cmd[@]}"); printf 'pragma solidity ^0.8.0;\ncontract C { function f() public view returns (bool) { return tx.origin == msg.sender; } }\n' >"$td/canary.sol"
@@ -1206,13 +1220,13 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     run_one "$hn" "${cmd[@]}" || { [ "$hn" != syft ] || rm -f "$sb"; [ "$hm" = batch ] && break; continue; }
     scan_ok "$hn" $okrc || { [ "$hn" != syft ] || rm -f "$sb"; [ "$hm" = batch ] && break; continue; }
     if [ "$hn" = licensee ]; then # inventory only: name the detected license, never a finding row
-      if n=$(python3 -c 'import json,sys;s=open(sys.argv[1]).read();print(",".join(str(l["spdx_id"]) for l in json.JSONDecoder().raw_decode(s[s.index("{"):])[0]["licenses"]) or "none")' "$out" 2>/dev/null); then
+      if n=$(python3 -I -c 'import json,sys;s=open(sys.argv[1]).read();print(",".join(str(l["spdx_id"]) for l in json.JSONDecoder().raw_decode(s[s.index("{"):])[0]["licenses"]) or "none")' "$out" 2>/dev/null); then
         echo "review_checks: license inventory (not a scan): licensee detected $(printf %s "$n" | tr -cd 'A-Za-z0-9.+,_-') in $f" >&2
       else skip licensee "unparseable output"; fi
       continue
     fi
     if [ "$hn" = syft ]; then # inventory only: count packages, never a finding row
-      if n=$(python3 -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["artifacts"]))' "$sb" 2>/dev/null); then
+      if n=$(python3 -I -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["artifacts"]))' "$sb" 2>/dev/null); then
         echo "review_checks: SBOM inventory (not a vulnerability scan): syft listed $n packages in $f (SBOM: $sb)" >&2
       else rm -f "$sb"; skip syft "unparseable output"; fi
       continue
@@ -1670,7 +1684,7 @@ r=; for t in $ran; do case " $failed " in *" ${t%%(*} "*) ;; *) r+=" $t" ;; esac
 # Most rows read the working tree but the diff reads commits (sibling-sweep reads HEAD, so for it null is only cautious), so a row in a file whose working copy differs from HEAD (edited, staged or not, or untracked) is flagged null, not a guessed true/false: $td/dirty is `git status --porcelain -z` (an "XY path" entry per file; --no-renames lists both sides of a rename, -uall every untracked file). --no-optional-locks keeps it a pure read: `git diff HEAD` rewrote .git/index for a file that only changed its mtime even with that flag (git 2.50.1). If a git read here fails, "new" is omitted from every row and stderr says so.
 # ponytail: ignored untracked files and assume-unchanged/skip-worktree edits are not listed (add --ignored if a row ever needs the first); a file staged different from HEAD but reverted in the working tree is listed too, where null is only cautious.
 ud=; if [ "$wr" = 0 ] && [ "$hist" = 0 ]; then ud=$td/udiff; { git -c core.quotePath=false diff -U0 --inter-hunk-context=0 -M -a --no-color --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/ "$base"...HEAD >"$ud" && git --no-optional-locks status --porcelain -z --no-renames -uall >"$td/dirty"; } || { ud=; echo 'review_checks: could not list files that differ from HEAD; "new" omitted' >&2; }; fi
-REVIEW_WR="$wr" REVIEW_STATE="$(git rev-parse --git-common-dir)/review-checks-last.json" HERE="$here" python3 - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" "$wired" "$gap" "$wiredx" "$ud" "$td/dirty" <<'PY'
+REVIEW_WR="$wr" REVIEW_STATE="$(git rev-parse --git-common-dir)/review-checks-last.json" HERE="$here" python3 -I - "$raw" "$ran" "$missing" "$nex" "$dg" "$w1" "$nice19" "$wired" "$gap" "$wiredx" "$ud" "$td/dirty" <<'PY'
 import functools, json, os, re, shlex, sys, time
 rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1], encoding="utf-8", errors="replace")]
 IDS = {(t[0], t[1], t[3], t[4]): set(t.pop().split(",")) for t in rows if len(t) == 6}  # advisory ids of osv-scanner and trivy rows (hidden 6th column), stripped here
