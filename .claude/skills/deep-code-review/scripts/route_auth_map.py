@@ -417,7 +417,7 @@ NESTGLOBAL = re.compile(r"\bAPP_GUARD\b|\buseGlobalGuards\s*\(")
 NESTRATE = re.compile(r"(?![\w$.]*(?:auth|jwt|session|role|permission))[\w$.]*(?:throttl|rate_?limit)", re.I)  # `.match`: a rate-limit guard is no identity check, unless its name also says Auth, Jwt, Session, Role or Permission
 
 
-NESTDECO = re.compile(r"@[\w$.]+\s*(?:<[^>()]*>)?\s*\(?")  # `@Name`, optionally spaced, with a generic argument, and its opening paren
+NESTDECO = re.compile(r"@[\w$.]+\s*(?:<[^()]*)?\s*\(?")  # `@Name`, optionally spaced, with a generic argument (nested `<A<B>>` too: skipped up to the next paren), and its opening paren
 
 
 def nest_deco_end(m, i, j):
@@ -455,7 +455,9 @@ def app_of(rel, mf):
     ponytail: a workspace lib with its own package.json that exports an APP_GUARD module is its own "app", so it does not reach the apps importing it; those routes read auth=none (HIGH), the safe direction. A nested `main.ts` or `tsconfig.app.json` (`src/cli`) is likewise its own app, which a global guard does not reach (safe)."""
     d = os.path.dirname(rel)
     while d and d not in mf: d = os.path.dirname(d)
-    return d
+    if d: return d
+    ps = rel.split("/")[:-1]  # no marker below the root: the dir above the deepest `src/` (apps/a/src/x.ts -> apps/a), so sibling apps stay apart
+    return "/".join(ps[:len(ps) - ps[::-1].index("src") - 1]) if "src" in ps else ""
 
 
 def nest_global(m):
@@ -821,6 +823,7 @@ def scan(root):
             rel = os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/")
             if f.endswith(EXT) and not TEST.search(rel): files.append(rel)
     known = set(files)
+    NESTSAFE.clear(); FWDROWS.clear()
     glob, mws, rows, todo, cov, own = set(), {}, [], [], {}, {}  # todo: files with handlers; cov: file -> wiring() sites that wire it; own: file -> its own wiring() hooks
     for rel in files:
         raw = read(root, rel) if MWF.fullmatch(os.path.basename(rel)) else None
