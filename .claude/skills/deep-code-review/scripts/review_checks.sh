@@ -53,6 +53,10 @@ set -euo pipefail
 # pipx and `uv tool` install into ~/.local/bin, which a sandboxed shell's PATH may lack: append it so provisioned scanners are found (DCR_USER_BIN overrides; empty disables)
 lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin}
 case ":$PATH:" in *":$lb:"*) ;; *) [ -z "$lb" ] || [ ! -d "$lb" ] || PATH=$PATH:$lb ;; esac
+# dotnet/composer/mix tool installs (provision_tools.sh) land in their own dirs; add each that exists (empty DCR_USER_BIN disables)
+for td in .dotnet/tools .composer/vendor/bin .config/composer/vendor/bin .mix/escripts; do
+  td=${HOME:-/nonexistent}/$td; [ -z "$lb" ] || [ ! -d "$td" ] || case ":$PATH:" in *":$td:"*) ;; *) PATH=$PATH:$td ;; esac
+done
 
 repo=. base=origin/main tests=0 fuzz=0 hist=0 hyg=0 tmo=60 ran="" nr="" failed="" missing="" gap="" dg="" w1="" nice19=0 lease=ok leased=0 full=0 wr=0 hmax= cov="" wired="" wiredx=""
 while [ $# -gt 0 ]; do
