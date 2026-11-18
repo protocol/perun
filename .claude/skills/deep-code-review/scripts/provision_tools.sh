@@ -3,8 +3,8 @@
 # the tools and their offline caches are provisioned ONCE by the owner, outside the sandbox.
 # Default (dry run): list the scanner binaries not on PATH and the cold caches (trivy DB, osv-scanner offline DB, local semgrep p/default
 # snapshot). Installs nothing, writes nothing, exit 0.
-# --print: emit ONE copy-paste line (type it yourself outside the sandbox, with the `!` prefix) that installs what is missing (brew, pipx, gem;
-# pipx pins are the PyPI versions checked 2026-10-29, brew formulae cannot be pinned) and warms the cold caches; it ends with this script's
+# --print: emit ONE copy-paste line (type it yourself outside the sandbox, with the `!` prefix) that installs what is missing (brew, brew --cask on macOS only, pipx, gem;
+# pins are unverified, see tool-hub.md; brew formulae cannot be pinned) and warms the cold caches; it ends with this script's
 # dry run so the result is visible. Nothing missing or cold: a `# nothing to provision` comment. DIR (default: the current dir) is the
 # project whose root lockfiles osv-scanner downloads offline databases for (one per ecosystem found there). A DIR given on the command line
 # always re-downloads, so `--print OTHER_DIR` adds the ecosystems OTHER_DIR needs.
@@ -43,42 +43,83 @@ esac
 dir=$(cd "$dir" && pwd)
 exec 3>&1; [ "$pr" = 0 ] || exec 1>&2 # --print: stdout carries only the one owner line, the listing goes to stderr
 self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
-# binary installer spec
+# binary installer spec: BIN how SPEC. how = brew|cask|pipx|gem (SPEC is the package), cmd (SPEC is the whole install command: cargo, go, npm,
+# dotnet, composer, mix, uv) or blocked (SPEC is the reason no install line is printed). Every review_checks.sh --list-tools name is covered here or listed with a reason in scripts/test-provision-covers-list-tools.sh.
 tools='gitleaks brew gitleaks
 trufflehog brew trufflehog
-semgrep pipx semgrep==1.182.1
+semgrep pipx semgrep==1.186.0
 trivy brew trivy
 osv-scanner brew osv-scanner
 actionlint brew actionlint
-zizmor pipx zizmor==1.31.1
+zizmor pipx zizmor==1.32.0
 bandit pipx bandit==1.9.4
 scorecard brew scorecard
 gosec brew gosec
 grype brew grype
 checkov pipx checkov==3.4.5
 hadolint brew hadolint
-ruff pipx ruff
+ruff pipx ruff==0.17.5
 syft brew syft
 kube-linter brew kube-linter
 kube-score brew kube-score
-tflint brew tflint
+tflint brew terraform-linters/tap/tflint
 staticcheck brew staticcheck
-brakeman gem brakeman
+brakeman gem brakeman -v 8.1.0
 kics brew kics
-licensee gem licensee
+licensee brew licensee
 cosign brew cosign
-opengrep brew opengrep
-nuclei brew nuclei'
+nuclei brew nuclei
+ansible-lint pipx ansible-lint==26.11.0
+cfn-lint pipx cfn-lint==1.60.1
+detect-secrets pipx detect-secrets==1.5.0
+flawfinder brew flawfinder
+guarddog pipx guarddog==3.2.0
+mobsfscan pipx mobsfscan==1.2.0
+njsscan pipx njsscan==1.0.2
+pyflakes pipx pyflakes==4.1.0
+slither brew slither-analyzer
+codeql cask codeql
+cppcheck brew cppcheck
+jq brew jq
+kubescape brew kubescape
+pmd brew pmd
+shellcheck brew shellcheck
+tfsec brew tfsec
+node brew node
+go brew go
+bundler-audit gem bundler-audit -v 0.9.3
+rubocop gem rubocop -v 1.92.3
+cargo-audit brew cargo-audit
+cargo-deny brew cargo-deny
+govulncheck brew govulncheck
+retire cmd npm install -g retire@6.1.1
+solhint cmd npm install -g solhint@6.2.5
+tsc cmd npm install -g typescript@7.0.2
+devskim cmd dotnet tool install --global Microsoft.CST.DevSkim.CLI --version 1.0.103
+psalm cmd composer global require vimeo/psalm:7.10.0
+sobelow cmd mix escript.install --force hex sobelow 0.19.0
+opengrep blocked no Homebrew formula and the upstream installer is an unpinned script on main with no checksummed release pin verified: install it yourself from a release you verified
+uv brew uv
+skillspector cmd uv tool install git+https://github.com/NVIDIA/skillspector.git@e2674da339b0bddc6e565d059c0577c6d9cd25da'
 lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin} # pipx and `uv tool` install here; a sandboxed PATH may lack it
-miss=0 cold=0 brew=() pipx=() gem=() fix=()
+# dotnet/composer/mix installs land in their own dirs; probe them too (same dirs review_checks.sh adds to PATH; empty DCR_USER_BIN disables all)
+dirs=(); [ -z "$lb" ] || for d in "$lb" "${HOME:-/nonexistent}/.dotnet/tools" "${HOME:-/nonexistent}/.composer/vendor/bin" "${HOME:-/nonexistent}/.config/composer/vendor/bin" "${HOME:-/nonexistent}/.mix/escripts"; do [ -d "$d" ] && dirs+=("$d"); done
+have() { local d; for d in ${dirs[@]+"${dirs[@]}"}; do [ -x "$d/$1" ] && { echo "$d"; return 0; }; done; return 1; }
+miss=0 cold=0 brew=() cask=() pipx=() gem=() oth=() othb=() fix=()
 while read -r bin how spec; do
   if command -v "$bin" >/dev/null; then echo "ok       $bin"; continue; fi
-  if [ -n "$lb" ] && [ -x "$lb/$bin" ]; then echo "ok       $bin ($lb/$bin, not on PATH; review_checks.sh adds $lb)"; continue; fi
-  echo "MISSING  $bin ($how install $spec)"; miss=$((miss + 1))
-  case $how in brew) brew+=("$spec") ;; gem) gem+=("$spec") ;; *) pipx+=("$spec") ;; esac
+  if d=$(have "$bin"); then echo "ok       $bin ($d/$bin, not on PATH; review_checks.sh adds $d)"; continue; fi
+  # a cmd entry needs its own toolchain (first word of the command); without it the line would fail, so name the blocker instead
+  if [ "$how" = blocked ]; then echo "BLOCKED  $bin ($spec)"; miss=$((miss + 1)); continue; fi
+  if [ "$how" = cask ] && [ "$(uname)" != Darwin ]; then echo "BLOCKED  $bin (cask install is macOS-only: install it yourself)"; miss=$((miss + 1)); continue; fi
+  tc=${spec%% *}; [ "$tc" != npm ] || tc=node # npm ships with Homebrew's node
+  if [ "$how" = cmd ] && ! command -v "$tc" >/dev/null && ! have "$tc" >/dev/null && [[ " ${brew[*]-} " != *" $tc "* ]]; then echo "BLOCKED  $bin (needs $tc: install it first, then re-run)"; miss=$((miss + 1)); continue; fi
+  if [ "$how" = cmd ]; then echo "MISSING  $bin (run: $spec)"; else echo "MISSING  $bin ($how install $spec)"; fi; miss=$((miss + 1))
+  case $how in brew) brew+=("$spec") ;; cask) cask+=("$spec") ;; gem) gem+=("$spec") ;; cmd) oth+=("$spec"); othb+=("$bin") ;; *) pipx+=("$spec") ;; esac
 done <<<"$tools"
+[ ${#gem[@]} -eq 0 ] || brew=(ruby ${brew[@]+"${brew[@]}"})
 [ ${#pipx[@]} -eq 0 ] || command -v pipx >/dev/null || brew=(pipx ${brew[@]+"${brew[@]}"})
-[ ${#brew[@]} -eq 0 ] || command -v brew >/dev/null || echo "note: brew not found; install Homebrew (https://brew.sh) or use each tool's own installer"
+[ ${#brew[@]} -eq 0 ] && [ ${#cask[@]} -eq 0 ] || command -v brew >/dev/null || echo "note: brew not found; install Homebrew (https://brew.sh) or use each tool's own installer${gem[0]+"; without it the gem rows fall back to the system ruby, which is too old and may fail"}"
 q() { printf '%q' "$1"; }
 cache() { # NAME WARM-FN PATH COMMAND [FORCE]
   if [ -z "${5:-}" ] && "$2"; then echo "warm     $1 ($3)"; else echo "COLD     $1 ($3)"; cold=$((cold + 1)); fix+=("$4"); fi
@@ -91,9 +132,13 @@ cache "semgrep p/default snapshot" sg_warm "$sgf" "mkdir -p $(q "$(dirname "$sgf
 echo "provision_tools: $miss missing, $cold cold; nothing was installed or downloaded (--print emits the one line to run yourself)"
 [ "$pr" = 1 ] || exit 0
 cmd=()
-[ ${#brew[@]} -eq 0 ] || cmd+=("brew install ${brew[*]}")
-for p in ${pipx[@]+"${pipx[@]}"}; do cmd+=("pipx install $p"); done
-for p in ${gem[@]+"${gem[@]}"}; do cmd+=("gem install $p"); done
+# every package installs on its own, so one unknown name or failed install prints FAILED and does not stop the rest; groups join with ;
+[ ${#brew[@]} -eq 0 ] || cmd+=("for f in ${brew[*]}; do brew install \"\$f\" || echo \"FAILED \$f\"; done")
+[ ${#cask[@]} -eq 0 ] || cmd+=("if [ \"\$(uname)\" = Darwin ]; then for f in ${cask[*]}; do brew install --cask \"\$f\" || echo \"FAILED \$f\"; done; fi") # casks are macOS-only
+[ ${#pipx[@]} -eq 0 ] || cmd+=("for f in ${pipx[*]}; do pipx install \"\$f\" || echo \"FAILED \$f\"; done")
+# system ruby is too old for these gems: use Homebrew's when brew exists, installing into $DCR_USER_BIN (default ~/.local/bin, on review_checks.sh's PATH)
+for p in ${gem[@]+"${gem[@]}"}; do cmd+=("\$(command -v brew >/dev/null && echo \$(brew --prefix ruby)/bin/)gem install $p${lb:+ -n $(q "$lb")} || echo FAILED ${p%% *}"); done
+for i in ${!oth[@]}; do cmd+=("${oth[i]} || echo FAILED ${othb[i]}"); done
 [ ${#fix[@]} -eq 0 ] || cmd+=("${fix[@]}")
 [ ${#cmd[@]} -gt 0 ] || { echo "# nothing to provision" >&3; exit 0; }
 cmd+=("bash $(q "$self")") # re-check at the end so the owner sees what is still missing
