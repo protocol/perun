@@ -2045,7 +2045,7 @@ MUTANTS = [
     ('gated(sites, route) or meth != "GET" and gated([("", mine)], route)', "gated(sites, route)"), ('meth != "GET" and gated(', "gated("), ('meth != "GET" and gated(', 'meth == "GET" and gated('),
     ('gated([("", mine)], route)', "gated([(None, mine)], route)"), ("hooks.get(rcv, ())", "hooks.get(None, ())"), ("hooks.get(rcv, ())", 'hooks.get("app", ())'),
     ("hooks.get(rcv, ()) if p < pos < q]", "hooks.get(rcv, ()) if p < pos]"), ("hooks.get(rcv, ()) if p < pos < q]", "hooks.get(rcv, ()) if pos < q]"),
-    ('hooks, py = hooks or {}, rel.endswith(".py")', 'hooks, py = hooks, rel.endswith(".py")'), ("own.get(rel), glob)", "None, glob)"),
+    ('hooks, py = hooks or {}, rel.endswith(".py")', 'hooks, py = hooks, rel.endswith(".py")'), ("own.get(rel), app_of(rel, mf) in glob)", "None, app_of(rel, mf) in glob)"),
     ('".register" in raw or "addHook" in raw', '".register" in raw'), ('".register" in raw or "addHook" in raw', '"addHook" in raw'),
     # main
     ("len(a) != 1 or not os.path.isdir(a[0])", "len(a) < 1 or not os.path.isdir(a[0])"), ("len(a) != 1 or not os.path.isdir(a[0])", "len(a) != 1"),
@@ -2055,10 +2055,10 @@ MUTANTS = [
     ("        return 0\n    rows, files =", "        return 1\n    rows, files ="),
     (' and (r[0], r[1]) not in FWDROWS)', ')'),
     ('r[4] == "presence-check" and', 'r[4] != "x" and'),
-    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x not in ("GET", "HEAD", "OPTIONS") for x in r[2].split("|"))', 'r[4] != "public" and any(x != "GET" for x in r[2].split("|"))'),
-    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x not in ("GET", "HEAD", "OPTIONS") for x in r[2].split("|"))', 'r[4] == "none" and all(x != "GET" for x in r[2].split("|"))'),
-    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x not in ("GET", "HEAD", "OPTIONS") for x in r[2].split("|"))', 'r[4] == "none" and any(x == "POST" for x in r[2].split("|"))'),
-    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x not in ("GET", "HEAD", "OPTIONS") for x in r[2].split("|"))', 'any(x != "GET" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|"))', 'r[4] != "public" and any(x != "GET" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|"))', 'r[4] == "none" and all(x != "GET" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|"))', 'r[4] == "none" and any(x == "POST" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|"))', 'any(x != "GET" for x in r[2].split("|"))'),
     ('"%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4])', '("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))[:-1]'),
 ]
 

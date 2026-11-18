@@ -131,7 +131,81 @@ GLOBAL_REVERSED = "providers: [{ useClass: JwtAuthGuard, provide: APP_GUARD }]\n
 THROTTLE_REVERSED = "providers: [{ useClass: ThrottlerGuard, provide: APP_GUARD }]\n"
 
 
+EXPRESS_SAFE = 'const app = require("express")();\napp.options("/w", (req, res) => res.send("x"));\napp.head("/h", (req, res) => res.send("x"));\napp.post("/save", (req, res) => res.send("x"));\n'
+FASTIFY_SAFE = 'const fastify = require("fastify")();\nfastify.head("/h", async () => 1);\nfastify.post("/save", async () => 1);\n'
+MEMBER_PUBLIC = """@UseGuards(JwtAuthGuard)
+@Controller('mp')
+export class MpController {
+  @Public()
+  @Post('login')
+  login() { return 1; }
+
+  @Post('save')
+  save() { return 1; }
+}
+"""
+CLASSNAME = """@Controller('cn')
+@Meta({ className: 1 })
+@UseGuards(JwtAuthGuard)
+export class CnController {
+  @Post()
+  a() { return 1; }
+}
+"""
+GUARDED_B = "@Controller('b')\nexport class BController {\n  @Post('save')\n  save() { return 1; }\n}\n"
+GUARDED_A = GUARDED_B.replace("'b'", "'a'").replace("BController", "AController")
+PKG = '{ "name": "app" }\n'
+
+
+ROOT_PKG_APPS = {"package.json": PKG, "apps/a/src/app.module.ts": GLOBAL, "apps/a/src/a.controller.ts": GUARDED_A, "apps/b/src/b.controller.ts": GUARDED_B}
+BODY_PUBLIC = """@Controller('bp')
+export class BpController {
+  @Post('run')
+  run() { return this.svc.run(@Public()); }
+}
+"""
+
+
+SPACED = "@Controller('sp')\nexport class SpController {\n  @UseGuards (JwtAuthGuard)\n  @Post('a')\n  a() { return 1; }\n\n  @Post('b')\n  @ApiBody<Foo>({}) @UseGuards(JwtAuthGuard)\n  b() { return 1; }\n}\n"
+
+
 class NestRoutes(unittest.TestCase):
+    def test_guard_decorator_with_space_or_generic_argument_is_read(self):
+        self.assertEqual(lines({"s.controller.ts": SPACED}), ["INFO: POST /sp/a auth=UseGuards(JwtAuthGuard)", "INFO: POST /sp/b auth=UseGuards(JwtAuthGuard)"])
+        self.assertEqual(lines({"s.controller.ts": SPACED.replace("JwtAuthGuard", "ThrottlerGuard")}), ["HIGH: POST /sp/a auth=none", "HIGH: POST /sp/b auth=none"])  # twin
+
+    def test_root_manifest_only_monorepo_scopes_guard_by_nest_cli_projects(self):
+        cli = '{ "projects": { "a": { "root": "apps/a" }, "b": { "root": "apps/b", "sourceRoot": "apps/b/src" } } }'
+        want = ["HIGH: POST /b/save auth=none", "INFO: POST /a/save auth=global guard, unverified"]
+        self.assertEqual(sorted(lines({**ROOT_PKG_APPS, "nest-cli.json": cli})), want)
+
+    def test_root_manifest_only_monorepo_falls_back_to_main_ts(self):
+        f = {**ROOT_PKG_APPS, "apps/a/src/main.ts": "bootstrap();\n", "apps/b/src/main.ts": "bootstrap();\n"}
+        self.assertEqual(sorted(lines(f)), ["HIGH: POST /b/save auth=none", "INFO: POST /a/save auth=global guard, unverified"])
+        g = {**ROOT_PKG_APPS, "apps/a/tsconfig.app.json": "{}", "apps/b/tsconfig.app.json": "{}"}
+        self.assertEqual(sorted(lines(g)), sorted(lines(f)))
+
+    def test_public_call_inside_a_member_body_is_not_a_decorator(self):
+        self.assertEqual(lines({"b.controller.ts": BODY_PUBLIC}), ["HIGH: POST /bp/run auth=none"])
+
+    def test_head_options_stay_info_for_nest_and_other_frameworks_keep_their_rows(self):
+        self.assertEqual(lines({"u.controller.ts": SHAPES})[-2:], ["INFO: HEAD /users/h auth=none", "INFO: OPTIONS /users/o auth=none"])
+        self.assertEqual(lines({"e.js": EXPRESS_SAFE}), ["HIGH: POST /save auth=none"])  # app.options / app.head are no rows, as before
+        self.assertEqual(lines({"f.js": FASTIFY_SAFE}), ["HIGH: POST /save auth=none"])
+
+    def test_global_guard_reaches_only_its_own_app(self):
+        f = {"apps/a/package.json": PKG, "apps/b/package.json": PKG, "apps/a/src/app.module.ts": GLOBAL,
+             "apps/a/src/a.controller.ts": GUARDED_A, "apps/b/src/b.controller.ts": GUARDED_B}
+        self.assertEqual(sorted(lines(f)), ["HIGH: POST /b/save auth=none", "INFO: POST /a/save auth=global guard, unverified"])
+        f["apps/b/src/app.module.ts"] = GLOBAL  # twin: both apps guarded
+        self.assertEqual(sorted(lines(f)), ["INFO: POST /a/save auth=global guard, unverified", "INFO: POST /b/save auth=global guard, unverified"])
+
+    def test_member_public_beats_class_guard_and_its_twin_keeps_the_guard(self):
+        self.assertEqual(lines({"m.controller.ts": MEMBER_PUBLIC}), ["INFO: POST /mp/login auth=public", "INFO: POST /mp/save auth=UseGuards(JwtAuthGuard)"])
+
+    def test_class_keyword_is_a_word_not_a_substring(self):
+        self.assertEqual(lines({"c.controller.ts": CLASSNAME}), ["INFO: POST /cn auth=UseGuards(JwtAuthGuard)"])
+
     def test_rate_limit_name_with_an_auth_token_still_counts_and_its_twin_does_not(self):
         self.assertEqual(lines({"l.controller.ts": RATE_AUTH}), ["INFO: POST /lim/a auth=UseGuards(RateLimitedAuthGuard)", "HIGH: POST /lim/b auth=none"])
 
