@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# review_checks.sh [--base REF] [--tests] [--history] [--full] [--hygiene] [--timeout SECS] — run local, read-only analyzers over the files
+# review_checks.sh [--base REF] [--tests] [--fuzz] [--history] [--full] [--hygiene] [--timeout SECS] — run local, read-only analyzers over the files
 # changed since REF (default origin/main, compared as REF...HEAD) and print findings as a JSON array on
 # stdout: [{"file","line","rule","message","text","tool"}]. `text` ("rule: message") is the key
 # scripts/score_review.py matches on. Findings are LEADS: verify each against the code before reporting.
@@ -35,7 +35,7 @@
 # dropped on a crash and retried once) and the summary labels them "(degraded: lease full, ...)"; REVIEW_LEASE_FULL=skip restores the old skip.
 # A summary "N findings; N files excluded; analyzers ran: ...; skipped (not installed): ..." goes to stderr (N counts every row but the not-checked ones, which are surface nobody covered, not findings; lead rows such as `unchanged-sibling-call` and `header-not-found` count in N too; a "K not-checked row(s)" line follows when there are any), then "NOT RUN: <tool> (<why>), ..." (or "none"); a tool
 # that timed out, crashed or (REVIEW_LEASE_FULL=skip) lost the lease is listed there (once, with a not-checked row on stdout) and never under "ran", so it cannot read as zero findings; a tool that is merely not installed stays under "skipped (not installed)". `--tests` also runs the command
-# declared in env REVIEW_TEST_CMD (opt-in; it executes project code). Never installs anything. A missing tool
+# declared in env REVIEW_TEST_CMD (opt-in; it executes project code). `--fuzz` (or env REVIEW_FUZZ=1; never implied by --full or --full-history) also runs each Go native fuzz target: it executes repo code, so it is explicit opt-in, like --tests. Never installs anything. A missing tool
 # or a timeout prints "review_checks: not run: <tool> (<why>)" on stderr and is not a failure. A semgrep scan that emitted findings but
 # reported errors prints "review_checks: partial: semgrep ran ..." instead (never "not run"), whatever the error level (a warn-level parse error still makes the scan partial). That line ends with the error counts (N errors on M of S scanned files, by type and level) and each errored file is a not-checked row (path, line 0; 20 per 200-file chunk at most, then one row with the path `.` for the rest, naming the first path left out so two chunks never share a row; an error with no path is counted, not rowed). A semgrep chunk with errors and zero results is "partial" when every error names a path and some scanned file raised no error, and "not run" when every scanned file errored or any error has no path (the unread files are then unknown, so the chunk counts as not scanned and no row names a file). A hub tool that reports a file outside its scanned list is "not run" (paths do not line up), never a clean. tsc also resolves the repo-local node_modules/.bin/tsc (cwd or git toplevel only), run only when REVIEW_TEST_CMD is set.
 # Offline caches that scripts/provision_tools.sh --print warms once, outside the sandbox, are used when present: the osv-scanner offline DB
@@ -54,12 +54,13 @@ set -euo pipefail
 lb=${DCR_USER_BIN-${HOME:-/nonexistent}/.local/bin}
 case ":$PATH:" in *":$lb:"*) ;; *) [ -z "$lb" ] || [ ! -d "$lb" ] || PATH=$PATH:$lb ;; esac
 
-repo=. base=origin/main tests=0 hist=0 hyg=0 tmo=60 ran="" nr="" failed="" missing="" gap="" dg="" w1="" nice19=0 lease=ok leased=0 full=0 wr=0 hmax= cov="" wired="" wiredx=""
+repo=. base=origin/main tests=0 fuzz=0 hist=0 hyg=0 tmo=60 ran="" nr="" failed="" missing="" gap="" dg="" w1="" nice19=0 lease=ok leased=0 full=0 wr=0 hmax= cov="" wired="" wiredx=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base=${2:?--base needs a ref}; case "$base" in -*) echo "review_checks: --base must not start with '-'" >&2; exit 2 ;; esac; shift 2 ;;
     --timeout) tmo=${2:?--timeout needs seconds}; shift 2 ;;
     --tests) tests=1; shift ;;
+    --fuzz) fuzz=1; shift ;;
     --repo) repo=${2:?--repo needs a dir}; [ -d "$repo" ] || { echo "review_checks: --repo: not a directory: $repo" >&2; exit 2; }; shift 2 ;; # replaces `cd DIR && review_checks.sh` (bash guards block chains)
     --history) hist=1; shift ;;
     --hygiene) hyg=1; shift ;;
@@ -67,7 +68,7 @@ while [ $# -gt 0 ]; do
     --full-history) hist=1 full=1; shift ;;
     # --list-tools: every tool name this script can run (run_one literals, the lint choice, the hub= array), read from its own source, for the org driver's timeout report
     --list-tools) { grep -oE 'run_one +[a-z][a-z0-9_-]*|ln=[a-z]+' "$0" | sed -E 's/^(run_one +|ln=)//'; sed -n "/^hub=(/,/^)/p" "$0" | grep -oE "^  '[a-z0-9_-]+" | tr -d " '"; } | grep -vxE 'exit|tests' | sort -u; exit 0 ;;
-    *) echo "usage: review_checks.sh [--repo DIR] [--base REF] [--tests] [--history] [--full] [--hygiene] [--timeout SECS]" >&2; exit 2 ;;
+    *) echo "usage: review_checks.sh [--repo DIR] [--base REF] [--tests] [--fuzz] [--history] [--full] [--hygiene] [--timeout SECS]" >&2; exit 2 ;;
   esac
 done
 case "$tmo" in ''|*[!0-9]*) echo "review_checks: --timeout must be an integer" >&2; exit 2 ;; esac
@@ -1616,6 +1617,40 @@ if [ "$full" != 1 ] && [ -n "$files" ]; then
       while IFS=$'\t' read -r f l r m; do [ -z "$m" ] || add sibling-sweep "$f" "$l" "$r" "$m"; done <"$out"  # the stderr summary line has no tabs: not a row
     fi
   fi
+fi
+
+# Opt-in only (--fuzz or REVIEW_FUZZ=1, never because of --full or --full-history: it executes repo test code, like --tests): each Go native fuzz target (func FuzzXxx(*testing.F)) for min(10, remaining-5)s,
+# at most REVIEW_FUZZ_MAX (default 5) targets and at most --timeout seconds in total, in its own process group (no orphaned fuzz.test worker). Tool fuzz, rule go-fuzz-crash: one row per crasher naming its
+# testdata/fuzz corpus path; the crasher file is deleted after the row when untracked and a plain testdata/fuzz/<Name>/<hex> path (the audited tree is left as found), its input is quoted in the message. Needs go >= 1.20 (go -C).
+if [ "$fuzz" = 1 ] || [ "${REVIEW_FUZZ:-}" = 1 ]; then
+  fz=$(git grep -nE '^func Fuzz[A-Za-z0-9_]*\([A-Za-z_]+ \*testing\.F\)' -- '*_test.go' 2>/dev/null | grep -Ev "$XRE" || true)
+  gv=$(env GOTOOLCHAIN=local GOPROXY=off go env GOVERSION 2>/dev/null || true); gv=${gv#go}
+  if [ -z "$fz" ]; then :
+  elif ! command -v go >/dev/null; then skip fuzz "go missing (install: brew install go)"
+  elif case $gv in ''|0.*|1.[0-9]|1.[0-9].*|1.1[0-9]|1.1[0-9].*) true ;; *) false ;; esac; then skip fuzz "go ${gv:-version unknown} is too old; needs >= 1.20 for go -C"
+  else
+    fzn=0 fzt=$SECONDS tmo0=$tmo
+    while IFS=: read -r f l s; do
+      [ $((fzn += 1)) -le "${REVIEW_FUZZ_MAX:-5}" ] || { skip fuzz "over REVIEW_FUZZ_MAX; $f:$l not run"; continue; }
+      fzr=$((tmo0 - (SECONDS - fzt))); [ "$fzr" -ge 7 ] || { skip fuzz "total fuzz time (--timeout ${tmo0}s) spent; $f:$l not run"; continue; }
+      n=${s#func }; n=${n%%(*}; d=$(dirname "$f"); ft=$((fzr - 5)); [ "$ft" -le 10 ] || ft=10
+      tmo=$((fzr + 3)) # outer timebox sits just above the perl group-killer
+      run_one fuzz perl -e 'setpgrp(0,0); my $t=shift; my $p=fork; exec @ARGV or exit 127 unless $p; $SIG{ALRM}=sub{$SIG{TERM}="IGNORE"; kill "TERM",-$$; exit 124}; alarm $t; waitpid($p,0); exit($?>>8)' "$fzr" \
+        env GOPROXY=off GOTOOLCHAIN=local go -C "$d" test -mod=readonly -run='^$' -fuzz="^$n\$" -fuzztime="${ft}s" . </dev/null || { tmo=$tmo0; continue; }
+      tmo=$tmo0
+      [ "$rc" = 0 ] || { c=$(sed -n 's/.*Failing input written to //p' "$out" | head -n1)
+        # c comes from repo-controlled go output: only a plain corpus path is trusted, and only an untracked file is deleted
+        if printf '%s\n' "$c" | grep -qE '^testdata/fuzz/[A-Za-z0-9_]+/[0-9a-f]+$'; then cf=$d/$c; cf=${cf#./}; iv=$(sed -n 2p "$cf" 2>/dev/null | cut -c1-80)
+          add fuzz "$cf" 0 go-fuzz-crash "$n crashed on $iv; corpus file $cf (deleted after this run if untracked; re-run: go -C $d test -run=^\$ -fuzz=^$n\$ to regenerate it)"
+          if ! git ls-files --error-unmatch -- "$cf" >/dev/null 2>&1; then rm -f -- "$cf"; rmdir -- "$(dirname "$cf")" "$d/testdata/fuzz" "$d/testdata" 2>/dev/null || true; fi
+        else skip fuzz "$n exit $rc"; fi; }
+    done <<<"$fz"
+  fi
+fi
+# Inventory only (--full, runs nothing): atheris, cargo-fuzz and jazzer targets, rule fuzz-target-inventory (detected, not run).
+if [ "$full" = 1 ]; then
+  { { git grep -lE '^[[:space:]]*(import|from) atheris' -- '*.py' || true; } | sed 's/$/\tatheris/'; { git ls-files | grep -E '(^|/)fuzz/fuzz_targets/[^/]+\.rs$' || true; } | sed 's/$/\tcargo-fuzz/'
+    { git grep -lE 'fuzzerTestOneInput|@FuzzTest' -- '*.java' '*.kt' || true; } | sed 's/$/\tjazzer/'; } 2>/dev/null | { grep -Ev "$XRE" || true; } | while IFS=$'\t' read -r f k; do add fuzz "$f" 0 fuzz-target-inventory "$k target (detected, not run)"; done
 fi
 
 if [ "$tests" = 1 ]; then
