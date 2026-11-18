@@ -7,14 +7,14 @@ Checks, in plain language: installed version vs this checkout (and the global co
 hook entries whose files exist, shipped hook scripts that nothing calls, forked copies
 that drifted from the checkout (sha256), janitor/scheduler presence, policy file, a WARN when user.email is not a noreply form
 but the default branch's recent commits are (identity_gate.py), and the sandbox probe (git, ssl, network, local bind,
-~/.cache write; DCR_NO_PROBE=1 skips it), and an advisory
+~/.cache write; DCR_NO_PROBE=1 skips it), free disk space on the repo's volume (disk_free; INFO under DCR_NO_PROBE=1), and an advisory
 "To run autonomously, add:" section from sandbox_preflight.py (read-only advice: the permissions, sandbox excludes and
 domains this repo's own flows need; it never changes the exit code).
 Exit 0 = nothing to fix, 1 = at least one WARN/FAIL (INFO rows are optional add-ons and never fail the exit code). `--fix` prints a plan (and what default-on would add), needs a typed yes on a TTY or --yes, then
 re-runs the recorded install flags via scripts/update-installed.sh (skills are backed up
 by install.sh first), and re-checks. Stdlib only; read-only without --fix.
 """
-import argparse, hashlib, json, os, re, shlex, subprocess, sys, time
+import argparse, hashlib, json, math, os, re, shlex, shutil, subprocess, sys, time
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent
@@ -184,6 +184,27 @@ def review_scanners(repo):
     return ("INFO", f"{seen}; {'; '.join(notes)} (no provisioning fixes it, see the NOT RUN and partial lines)") if notes else ("OK", seen)
 
 
+def disk_free(repo):
+    """(status, detail) for the "disk free" row: FAIL under PERUN_DISK_FAIL_GB (default 10) GiB free on repo's volume, WARN under
+    PERUN_DISK_WARN_GB (default 50), else OK; below the warn line the detail names reclaim_disk.sh. Invalid thresholds (not finite,
+    negative, fail above warn) fall back to the defaults with a note. INFO when the volume cannot be read. Read-only, no subprocess."""
+    note = ""
+    try:
+        warn_gb, fail_gb = float(os.environ.get("PERUN_DISK_WARN_GB", 50)), float(os.environ.get("PERUN_DISK_FAIL_GB", 10))
+        ok = math.isfinite(warn_gb) and math.isfinite(fail_gb) and 0 <= fail_gb <= warn_gb
+    except ValueError:
+        ok = False
+    if not ok:
+        warn_gb, fail_gb, note = 50.0, 10.0, " [ignored invalid PERUN_DISK_WARN_GB/PERUN_DISK_FAIL_GB: need finite 0 <= fail <= warn; defaults used]"
+    try:
+        free = shutil.disk_usage(repo).free / 2**30
+    except OSError:
+        return "INFO", "could not read free space: not checked"
+    return ("FAIL" if free < fail_gb else "WARN" if free < warn_gb else "OK",
+            f"{free:.1f} GiB free on the repo's volume (warn < {warn_gb:g}, fail < {fail_gb:g}; PERUN_DISK_WARN_GB / PERUN_DISK_FAIL_GB)" + note
+            + (". List finished lane worktrees and merged branches: bash .claude/skills/agentic-delivery/scripts/reclaim_disk.sh (add --apply to remove them)" if free < warn_gb else ""))
+
+
 def check(repo, home):
     rows = []  # (status, check, detail)
     add = lambda s, c, d: rows.append((s, c, d))
@@ -312,6 +333,9 @@ def check(repo, home):
             add("WARN" if big else "OK", label, f"{len(paths)} worktree(s){size}{hint}")
     except (OSError, subprocess.SubprocessError, TypeError, AttributeError):
         add("INFO", "lane worktrees", "git worktree list failed: not checked")
+    # host free space is a host probe like the du above: under DCR_NO_PROBE (tests, offline) it must not move the exit code
+    st, detail = ("INFO", "not checked (DCR_NO_PROBE set)") if os.environ.get("DCR_NO_PROBE") else disk_free(repo)
+    add(st, "disk free", detail)
     st, detail = review_scanners(repo)
     add(st, "review scanners", detail)
     return rows
