@@ -6,7 +6,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 S=$ROOT/.claude/skills/deep-code-review/scripts
 BUILTIN=" agent-injection attempt-limit bash-n committed-data cost-limit csrf-cookie dep-currency dep-risk header-config insecure-defaults invisible-chars literals mcp-config ownership pii-data pipefail-sigpipe privileged-route py_compile route-auth sibling-sweep tenant-scope "
 # name:binary where the --list-tools name is not the binary the script runs
-ALIAS=" gitleaks-history:gitleaks ruff-security:ruff node-check:node go-vet:go "
+ALIAS=" gitleaks-history:gitleaks ruff-security:ruff node-check:node go-vet:go fuzz:go "
 # name:reason, no global install path
 NOINSTALL=" eslint-security:project-local npm devDependency (eslint plus eslint-plugin-security from the scanned repo's own node_modules), never installed globally snyk-agent-scan:route-only, needs SNYK_TOKEN and calls a remote API, never run by the hub (tool-hub.md) "
 bins=$(PATH=/usr/bin:/bin DCR_USER_BIN= bash "$S/provision_tools.sh" 2>&1 | awk '$1=="ok"||$1=="MISSING"||$1=="BLOCKED"{print $2}')
