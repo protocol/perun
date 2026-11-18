@@ -1,0 +1,219 @@
+# Bundled webhook-signature rules (CWE-345, CWE-347; OWASP API2:2023). A handler that takes the request body from a webhook sender and never verifies the sender's signature
+# accepts forged events: anyone who can guess the URL can mark an invoice paid or trigger a deploy. Coverage-matrix row "Webhook signatures".
+# Entry points: a "webhook" name, or a route path containing "webhook" or a /hook or /hooks segment (/hooks/stripe, /github/hooks), case-insensitive. Delivery methods only: GET, HEAD and
+# OPTIONS routes are skipped (Express/Nest/Next/FastAPI by verb, Flask by methods=["GET"]). JS/TS: a function, arrow function or class method named like webhook, or an Express/Koa-style route call
+# with a function-literal handler, so an outbound axios.post(WEBHOOK_URL, ...) is not a route (perun.js.webhook-no-signature-verify); a NestJS @Post/@Put/@Patch method or @Controller class (perun.js.webhook-nest-no-signature-verify); a Next.js route or pages/api handler in a file under a webhook or hooks
+# path (perun.js.webhook-next-no-signature-verify). Python: a Flask/FastAPI route decorator, a @csrf_exempt/@require_POST view named like webhook, or a Django-style class with a post/put/patch
+# method (perun.py.webhook-no-signature-verify); a FastAPI route whose handler takes a bytes/dict/model parameter (perun.py.webhook-fastapi-no-signature-verify). A plain function named webhook
+# with no route decorator does not fire (Python). Go: net/http only, a func or method named like webhook, a ServeHTTP method on a webhook-named type, or a HandleFunc route (perun.go.webhook-no-signature-verify); gin/echo/chi are out of scope.
+# Body read: req.body, req.rawBody, request.json()/text()/arrayBuffer()/formData()/blob(), buffer(req), getRawBody(req) (JS); a NestJS @Body(...)/@RawBody(...) parameter; request.json/get_json/data/body/form/
+# POST/stream/get_data/files (Python); a FastAPI parameter annotated bytes, dict, Any or a model class, bare, Optional[...] or Annotated[..., Body()] (not Request, Response, BackgroundTasks, Session); r.Body (Go).
+# Verifier (any one anywhere in the entry point's text, its decorators and route arguments included, clears it). Crypto evidence: a call to timingSafeEqual, tsscmp, scmp, safeCompare, secureCompare, safeEqual,
+# constructEvent/constructEventAsync/construct_event (exact names; Go ConstructEvent and ConstructEventWithOptions), hmac.compare_digest, constant_time_compare, Go hmac.Equal, subtle.ConstantTimeCompare
+# or ValidatePayload; Python slack is_valid_request(; or verify( / .verify( / isValidRequest( (plus verifyAndReceive( and validateRequest( in JS, validate( in Python) with an argument naming sig, signature,
+# rawBody or raw_body, where sig must be its own word (sigHeader, x_sig, SIG_HEADER; not consignment or SIGNING_KEY): @octokit/webhooks, Twilio. NOT secret or headers alone, so
+# jwt.verify(token, SECRET) does not clear. A svix Webhook(secret) receiver constructed in the handler and then .verify(...)'d, chained or two-step, also clears. A Python def of a signature-named verifier (def _verify_signature) is not a call.
+# Name evidence: a verb-led name (verif*, validat*, check*, assert*, ensure*, require*) that contains signature or hmac, called, or passed bare as an argument, option value or list item
+# (verifySignature(req), security.verifySignature, preHandler: verifySignature, [verifySignature]); a flag read such as if (config.verifySignature) does not clear. Also a verb-led decorator
+# or Depends(...) name, a class-level @UseGuards(...) naming a signature or hmac guard in any position (it clears the class's methods for both JS rules), or Django/DRF
+# authentication_classes/permission_classes naming a signature or hmac class. A name without signature or hmac never clears (verifyEmail, verifyToken, verifyEvent, verifyPayload, checkSenderIp,
+# validateEventType, verify_user, VerifiedUserGuard, IsVerifiedUser, a bare verify(x)), and computeSignature(body) === is not verb-led, so it does not clear.
+# Computing an HMAC does NOT clear a handler: crypto.createHmac(...) or hmac.new(...) followed by ===, !==, == or != is a timing-unsafe compare and is flagged on purpose.
+# ponytail: the verifier check is a text regex over the entry point, not a dataflow proof; names are not chased. Known false positives (suppress with nosemgrep): a custom helper defined elsewhere or an aliased import
+# (checkSender, authenticate, handler.handle(body, sig)); createNodeMiddleware or another verifier mounted on a different route;
+# an outbound sender named like webhook (notifyWebhook); webhook-subscription management APIs under a webhooks path (app/api/webhooks/mgmt/route.ts, Express /api/webhooks CRUD);
+# a svix Webhook constructed outside the handler. Known false negatives, pinned in the tests: a verifier-looking call inside a comment or string
+# (// verifySignature(req)) clears the finding (pattern-not-regex only filters matches that start inside the handler's range, so a comment-aware anchor cannot work); a DRF list with a permissive class beside a signature class is silent.
+# Provider-named routes with no webhook/hooks segment (/stripe/events, /payments/notify, app/api/stripe/route.ts) are not seen: widening to provider names would flag checkout and billing routes. A handler that hands the body to a helper which verifies elsewhere is a false positive.
+# A handler whose route is registered in another file (urls.py, a router module) is not seen unless its own name says webhook (JS) or it carries a route decorator (Python). Go cannot tell the HTTP
+# verb, so a GET-only webhook-named Go handler that reads r.Body fires. Test paths are skipped.
+# Known limits (not seen): a JS request parameter not named req or request; a Go request parameter not named r, req or request; a Go handler registered by name through HandleFunc is seen only
+# if its own name says webhook; a route built as fastify.route({url, handler}); a body read through a destructure of a nested object or an alias (const {body} = ctx.request, const r = req; r.body).
+rules:
+- id: perun.js.webhook-no-signature-verify
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A webhook handler reads the request body and never verifies the sender's signature (no verif*Signature/validate*Signature/check*Signature/constructEvent/timingSafeEqual call, no verif* middleware; computing an HMAC and comparing with ===/!== does not count). Anyone who can reach the URL can send forged events. Verify the HMAC of the raw body against the provider's signing secret with a constant-time compare (stripe.webhooks.constructEvent, svix Webhook.verify, @octokit/webhooks verify, crypto.createHmac + crypto.timingSafeEqual) before parsing or acting on it.
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern: function $F(...) { $...B }
+        - pattern: async function $F(...) { $...B }
+        - pattern: $F = (...) => { $...B }
+        - pattern: $F = async (...) => { $...B }
+        - pattern: $F = function (...) { $...B }
+        - pattern: $F = async function (...) { $...B }
+        - pattern: $F(...) { $...B }
+        - pattern: async $F(...) { $...B }
+      - metavariable-regex: {metavariable: $F, regex: (?i).*webhook}
+    - patterns:
+      - pattern-either:
+        - pattern: $APP.$HM($F, $...B)
+        - pattern: $APP.route($F).$HM($...B)
+      - metavariable-regex: {metavariable: $HM, regex: ^(?:post|put|patch|all|use|route)$}
+      - metavariable-regex: {metavariable: $...B, regex: '(?s).*(?:=>|\bfunction\b)'}
+      - metavariable-regex: {metavariable: $F, regex: &hookpath '(?is).*(?:webhook|(?<![\w-])hooks?(?![\w-]))'}
+  - pattern-not-inside: &classguard
+      patterns:
+      - pattern: |
+          @UseGuards(..., $G, ...)
+          class $K { ... }
+      - metavariable-regex: {metavariable: $G, regex: (?i).*(?:signature|hmac)}
+  - metavariable-regex: {metavariable: $...B, regex: &jsbody '(?s).*(?:(?:(?<![\w.])|(?<=\bctx\.)|(?<=\bthis\.))(?:req|request)\.(?:(?:body|rawBody)\b|(?:json|text|arrayBuffer|formData|blob)\s*\()|(?<![\w.])(?:buffer|getRawBody)\(\s*(?:req|request)\b|(?:const|let|var)\s*\{[^}]*\b(?:body|rawBody)\b[^}]*\}\s*=\s*(?:req|request)\b)'}
+  - pattern-not-regex: &jsverify '(?i)(?:(?<![A-Za-z0-9])(?:timingSafeEqual|tsscmp|scmp|safeCompare|secureCompare|safeEqual|construct_?event(?:_?async)?|(?:verif|validat|check|assert|ensure|require)\w*(?:signature|hmac)\w*)\s*\(|(?<![A-Za-z0-9])(?:verify|isValidRequest|verifyAndReceive|validateRequest)\s*\((?:[^()]|\([^()]*\))*?(?:(?:(?-i:(?<![a-z])sig(?![a-z])|Sig(?![a-z])|SIG(?![A-Z]))|signature|rawBody|raw_body)|\([^()]*?(?:(?-i:(?<![a-z])sig(?![a-z])|Sig(?![a-z])|SIG(?![A-Z]))|signature|rawBody|raw_body))|\bnew\s+[\w.]*Webhook\w*\s*\((?:[^()]|\([^()]*\))*\)[\s\S]*?\.verify\s*\(|(?:[,:\[]|(?<!\bif\s)(?<!\bif)\()\s*(?:\w+\.)*(?:verif|validat|check|assert|ensure|require)\w*(?:signature|hmac)\w*\s*[,)}\]]|UseGuards\([^)]*(?:signature|hmac))'
+  paths:
+    exclude: &jsexclude ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.webhook-nest-no-signature-verify
+  languages: [typescript]
+  severity: WARNING
+  message: A NestJS webhook route (a @Post/@Put/@Patch path or @Controller path containing "webhook" or a hooks segment) takes the request body and has no signature check (no verif*Signature/validate*Signature/check*Signature/constructEvent/timingSafeEqual call and no @UseGuards naming a signature, verif or hmac guard on the method or class). Anyone who can reach the URL can send forged events. Verify the HMAC of the raw body with a constant-time compare, in a guard or in the handler, before acting on it.
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern: |
+            @$VERB($F)
+            $M(..., @Body(...) $X, ...) { $...B }
+        - pattern: |
+            @$VERB($F)
+            $M(..., @RawBody(...) $X, ...) { $...B }
+        - patterns:
+          - pattern: |
+              @$VERB($F)
+              $M(...) { $...B }
+          - metavariable-regex: {metavariable: $...B, regex: '(?s).*(?<![\w.])(?:req|request)\.(?:body|rawBody)\b'}
+      - metavariable-regex: {metavariable: $F, regex: *hookpath}
+      - pattern-not-inside: *classguard
+    - patterns:
+      - pattern-inside: |
+          @Controller($F)
+          class $K { ... }
+      - pattern-either:
+        - pattern: |
+            @$VERB(...)
+            $M(..., @Body(...) $X, ...) { $...B }
+        - pattern: |
+            @$VERB(...)
+            $M(..., @RawBody(...) $X, ...) { $...B }
+        - patterns:
+          - pattern: |
+              @$VERB(...)
+              $M(...) { $...B }
+          - metavariable-regex: {metavariable: $...B, regex: '(?s).*(?<![\w.])(?:req|request)\.(?:body|rawBody)\b'}
+      - metavariable-regex: {metavariable: $F, regex: *hookpath}
+      - pattern-not-inside: *classguard
+  - metavariable-regex: {metavariable: $VERB, regex: ^(?:Post|Put|Patch)$}
+  - pattern-not-regex: *jsverify
+  paths:
+    exclude: *jsexclude
+- id: perun.js.webhook-next-no-signature-verify
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A Next.js route handler in a webhook path (a file or directory whose name contains "webhook", or a hooks directory) reads the request body and never verifies the sender's signature (no verif*Signature/validate*Signature/check*Signature/constructEvent/timingSafeEqual call; computing an HMAC and comparing with ===/!== does not count). Anyone who can reach the URL can send forged events. Read the raw body (await request.text()) and verify its HMAC against the provider's signing secret with a constant-time compare before parsing or acting on it.
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern: export async function $M(...) { $...B }
+        - pattern: export function $M(...) { $...B }
+        - pattern: export const $M = async (...) => { $...B }
+        - pattern: export const $M = (...) => { $...B }
+      - metavariable-regex: {metavariable: $M, regex: ^(?:POST|PUT|PATCH|DELETE|handler)$}
+    - pattern: export default async function $M(...) { $...B }
+    - pattern: export default function $M(...) { $...B }
+    - pattern: export default async function (...) { $...B }
+    - pattern: export default function (...) { $...B }
+  - metavariable-regex: {metavariable: $...B, regex: *jsbody}
+  - pattern-not-regex: *jsverify
+  paths:
+    include: ["**/*[Ww][Ee][Bb][Hh][Oo][Oo][Kk]*/**", "**/*[Ww][Ee][Bb][Hh][Oo][Oo][Kk]*.*", "**/[Hh][Oo][Oo][Kk]/**", "**/[Hh][Oo][Oo][Kk][Ss]/**"]
+    exclude: *jsexclude
+- id: perun.py.webhook-no-signature-verify
+  languages: [python]
+  severity: WARNING
+  message: A webhook handler (a Flask/FastAPI route whose path contains "webhook" or a hooks segment, a @csrf_exempt/@require_POST view named like webhook, or a Django-style webhook class with a post method) reads the request body and never verifies the sender's signature (no verif*Signature/validate*Signature/check*Signature/construct_event/compare_digest call; computing an HMAC and comparing with == does not count). Anyone who can reach the URL can send forged events. Verify the HMAC of the raw body against the provider's signing secret with hmac.compare_digest (or stripe.Webhook.construct_event, svix Webhook.verify) before parsing or acting on it.
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern: |
+            class $F(...):
+                ...
+                def $M(...):
+                    $...B
+        - pattern: |
+            class $F(...):
+                ...
+                async def $M(...):
+                    $...B
+      - metavariable-regex: {metavariable: $F, regex: (?i).*webhook}
+      - metavariable-regex: {metavariable: $M, regex: ^(?:post|put|patch)$}
+    - patterns:
+      - pattern-either:
+        - pattern: |
+            @$APP.$M($F, ...)
+            def $X(...):
+                $...B
+        - pattern: |
+            @$APP.$M($F, ...)
+            async def $X(...):
+                $...B
+      - metavariable-regex: {metavariable: $M, regex: ^(?:route|post|put|patch|api_route)$}
+      - metavariable-regex: {metavariable: $F, regex: *hookpath}
+    - patterns:
+      - pattern-either:
+        - pattern: |
+            @csrf_exempt
+            def $F(...):
+                $...B
+        - pattern: |
+            @require_POST
+            def $F(...):
+                $...B
+      - metavariable-regex: {metavariable: $F, regex: (?i).*webhook}
+  - metavariable-regex: {metavariable: $...B, regex: '(?s).*(?:(?<![\w.])|(?<=\bself\.)|(?<=\bflask\.))(?:request|req)\.(?:json|get_json|data|body|form|POST|stream|get_data|files)\b'}
+  - pattern-not-regex: &pyverify '(?i)(?:@(?:[\w.]*\.)?(?:verif|validat|check|assert|ensure|require)\w*(?:signature|hmac)\w*|(?<!def |def _|def __)(?<![A-Za-z0-9])(?:compare_digest|constant_time_compare|scmp|is_valid_request|construct_?event(?:_?async)?|(?:verif|validat|check|assert|ensure|require)\w*(?:signature|hmac)\w*)\s*\(|(?<![A-Za-z0-9])(?:verify|isValidRequest|validate)\s*\((?:[^()]|\([^()]*\))*?(?:(?:(?-i:(?<![a-z])sig(?![a-z])|Sig(?![a-z])|SIG(?![A-Z]))|signature|rawBody|raw_body)|\([^()]*?(?:(?-i:(?<![a-z])sig(?![a-z])|Sig(?![a-z])|SIG(?![A-Z]))|signature|rawBody|raw_body))|(?<![\w.])(?<!def )(?<!class )[\w.]*(?-i:Webhook)\w*\s*\((?:[^()]|\([^()]*\))*\)[\s\S]*?\.verify\s*\(|(?:[,:\[]|(?<!\bif\s)(?<!\bif)\()\s*(?:\w+\.)*(?:verif|validat|check|assert|ensure|require)\w*(?:signature|hmac)\w*\s*[,)}\]]|Depends\(\s*(?:\w+\.)*(?:verif|validat|check|assert|ensure|require)\w*(?:signature|hmac)\w*|(?:authentication|permission)_classes\s*=\s*[\[(][^\])]*(?:signature|hmac))'
+  - pattern-not-regex: &pyget '(?i)methods\s*=\s*[\[\(\{]\s*[''"](?:get|head|options)[''"]\s*[\]\)\}]'
+  paths:
+    exclude: &pyexclude ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.py.webhook-fastapi-no-signature-verify
+  languages: [python]
+  severity: WARNING
+  message: A FastAPI webhook route (a path containing "webhook" or a hooks segment) takes the body as a typed parameter (bytes, dict, Any or a model) and has no signature check (no verif*Signature/validate*Signature/check*Signature call, no Depends on a signature or verif dependency). FastAPI parses the body before your code runs, so the signature cannot be checked against the raw bytes. Take the Request, read await request.body(), and verify its HMAC with hmac.compare_digest before parsing.
+  patterns:
+  - pattern-either:
+    - pattern: |
+        @$APP.$M($F, ...)
+        def $X($...P):
+            $...B
+    - pattern: |
+        @$APP.$M($F, ...)
+        async def $X($...P):
+            $...B
+  - metavariable-regex: {metavariable: $M, regex: ^(?:post|put|patch|api_route)$}
+  - metavariable-regex: {metavariable: $F, regex: *hookpath}
+  - metavariable-regex: {metavariable: $...P, regex: '(?s).*\w+\s*:\s*(?:Annotated\[\s*(?:bytes|dict|Dict\[[^\]]*\]|(?!Request\b|Response\b|BackgroundTasks\b|Session\b|HTTPConnection\b|WebSocket\b)[A-Z]\w*)\s*,\s*Body\b|Optional\[\s*(?:bytes|dict|Dict\[[^\]]*\]|(?!Request\b|Response\b|BackgroundTasks\b|Session\b|HTTPConnection\b|WebSocket\b)[A-Z]\w*)\s*\]\s*(?:[,)]|$|=\s*(?:None|Body)\b)|(?:bytes|dict|Dict\[[^\]]*\]|(?!Request\b|Response\b|BackgroundTasks\b|Session\b|HTTPConnection\b|WebSocket\b)[A-Z]\w*)\s*(?:[,)]|$|=\s*Body\b))'}
+  - pattern-not-regex: *pyverify
+  - pattern-not-regex: *pyget
+  paths:
+    exclude: *pyexclude
+- id: perun.go.webhook-no-signature-verify
+  languages: [go]
+  severity: WARNING
+  message: A net/http webhook handler (a func or method named like webhook, or a HandleFunc route whose path contains "webhook" or a hooks segment) reads r.Body and never verifies the sender's signature (no hmac.Equal, subtle.ConstantTimeCompare, ValidatePayload or verif*Signature/validate*Signature/check*Signature call; computing an HMAC and comparing with == does not count). Anyone who can reach the URL can send forged events. Verify the HMAC of the raw body against the provider's signing secret with hmac.Equal before parsing or acting on it.
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern: func $F(..., $R *http.Request) { $...B }
+      - metavariable-regex: {metavariable: $F, regex: (?i).*webhook}
+    - patterns:
+      - pattern: func ($X $T) ServeHTTP(..., $R *http.Request) { $...B }
+      - metavariable-regex: {metavariable: $T, regex: (?i).*webhook}
+    - patterns:
+      - pattern: $MUX.HandleFunc($P, func(..., $R *http.Request) { $...B })
+      - metavariable-regex: {metavariable: $P, regex: *hookpath}
+  - metavariable-regex: {metavariable: $...B, regex: '(?s).*(?<![\w.])(?:r|req|request)\.Body\b'}
+  - pattern-not-regex: '(?i)(?:hmac\.Equal|subtle\.ConstantTimeCompare|(?<![A-Za-z0-9])(?:validatepayload|constructevent(?:withoptions)?|scmp|(?:verif|validat|check|assert|ensure|require)\w*(?:signature|hmac)\w*)\s*\(|(?<![A-Za-z0-9])(?:verify|isValidRequest)\s*\((?:[^()]|\([^()]*\))*?(?:(?:(?-i:(?<![a-z])sig(?![a-z])|Sig(?![a-z])|SIG(?![A-Z]))|signature|rawBody|raw_body)|\([^()]*?(?:(?-i:(?<![a-z])sig(?![a-z])|Sig(?![a-z])|SIG(?![A-Z]))|signature|rawBody|raw_body)))'
+  paths:
+    exclude: ["test", "tests", "testdata", "vendor", "*_test.go"]
