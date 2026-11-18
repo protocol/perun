@@ -20,13 +20,13 @@ Verification date for all direct fetches below: **2026-08-13**.
 
 | Standard | URL | What was confirmed |
 |---|---|---|
-| OWASP Top 10:2025 | https://top10.owasp.org/2025 | Categories A01–A10:2025 verbatim (A01 Broken Access Control … A10 Mishandling of Exceptional Conditions). |
-| OWASP Top 10 for LLM Applications 2025 | https://genai.owasp.org/llm-top-10/ | LLM01–LLM10:2025 names verbatim. A 2026 edition now exists (verified 2026-08-21; see the verification addendum below). |
+| OWASP Top 10:2025 | https://top10.owasp.org/2025 | Categories A01–A10:2025 verbatim (A01 Broken Access Control … A10 Mishandling of Exceptional Conditions). Re-fetched 2026-11-18; class list pinned in the section at the end. |
+| OWASP Top 10 for LLM Applications 2025 | https://genai.owasp.org/llm-top-10/ | LLM01–LLM10:2025 names verbatim. A 2026 edition now exists (verified 2026-08-21; see the verification addendum below). Re-fetched 2026-11-18: page still headlines 2025; the 2026 edition is pinned in the section at the end. |
 | OWASP Top 10 for LLM Applications 2025 (resource) | https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/ | Edition landing page; document publication 2024-11-17. |
 | OWASP Top 10 for Agentic Applications 2026 | https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/ | Framework exists; published 2025-12-09; peer-reviewed by 100+ practitioners. (ASI01–ASI10 titles later confirmed verbatim from the official 2025-12-09 announcement — see the 2026-08-21 addendum below; the authoritative PDF was not re-fetched and wins on any conflict.) |
-| OWASP API Security Top 10 (2023) | https://api-security.owasp.org/editions/2023/en/0x11-t10 | API1–API10:2023 names verbatim. |
+| OWASP API Security Top 10 (2023) | https://api-security.owasp.org/editions/2023/en/0x11-t10 | API1–API10:2023 names verbatim. Re-fetched 2026-11-18; class list pinned in the section at the end. |
 | CWE-502 — Deserialization of Untrusted Data | https://cwe.mitre.org/data/definitions/502.html | Deserializing attacker- or otherwise-untrusted serialized data. Security face: can enable RCE (never auto-deserialize untrusted input — `security-appsec.md` A08). Data-integrity face: a parser weaker than its builder reintroduces a fabricated value across serialize→parse — re-derive computed fields + validate element shape, never trust the serialized form (`data-quality.md`). Stable identifier; by-name. |
-| CWE Top 25 (2025) | https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html | Official 2025 edition, last updated 2025-12-15; top entries (XSS, SQLi, CSRF, Missing Authorization, OOB Write, Path Traversal, Use-After-Free, OOB Read, OS Command Injection, Code Injection). |
+| CWE Top 25 (2025) | https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html | Official 2025 edition, last updated 2025-12-15; top entries (XSS, SQLi, CSRF, Missing Authorization, OOB Write, Path Traversal, Use-After-Free, OOB Read, OS Command Injection, Code Injection). Re-fetched 2026-11-18; all 25 entries pinned in the section at the end. |
 | WCAG 2.2 | https://www.w3.org/TR/WCAG22/ | W3C Recommendation, dated 2024-12-12; conformance levels A/AA/AAA; WCAG 3.0 still in development. |
 | EU Accessibility Act (EAA) — Directive (EU) 2019/882 | https://eur-lex.europa.eu/eli/dir/2019/882/oj | "Directive (EU) 2019/882 … on the accessibility requirements for products and services." Covers consumer digital surfaces on the EU market — e-commerce, consumer banking / payment terminals, passenger-transport ticketing & self-service, e-readers, computers / operating systems. (The directive mandates functional accessibility requirements to be met via future harmonised standards; it does **not** name EN 301 549 or WCAG on this page — those appear in the skill body as engineering leads *by name only*, not sourced here.) In-scope / micro-enterprise exemption / timelines routed to counsel (not encoded). Fetched 2026-09-19. |
 | EU NIS2 Directive — Directive (EU) 2022/2555 | https://eur-lex.europa.eu/eli/dir/2022/2555/oj | "Directive (EU) 2022/2555 … on measures for a high common level of cybersecurity across the Union … repealing Directive (EU) 2016/1148" (NIS2). Applies to medium-sized+ **essential** and **important** entities across covered sectors (energy, transport, digital infrastructure, cloud / data centres / DNS, online marketplaces / search / social networks, health, drinking/waste water, public administration, space, postal, trust services; financial entities fall under DORA, Regulation (EU) 2022/2554). The preamble previews risk-management-measure categories — risk assessment, incident handling, access control, basic cyber hygiene (zero-trust, updates, segmentation, identity/access), training, and physical/environmental security; the full measure set (including business continuity and supply-chain security) and the staged incident-reporting windows were **not** pinned down in the fetch and are cited by name only (reporting is to "the CSIRT, the competent authority or the single point of contact"). In-scope / essential-vs-important / authority / timelines / management accountability routed to counsel (not encoded). Fetched 2026-09-19. |
@@ -2019,3 +2019,37 @@ Verification date: **2026-11-05**. Raw-byte sha256 of each fetch and the item id
 | NVIDIA SkillSpector — README and tags | https://github.com/NVIDIA/skillspector | Fetched 2026-11-14: `scan`, `--no-llm`, `-f` terminal/json/markdown/sarif, `-o`, exit 0/1/2, JSON keys, Apache-2.0; latest tag v2.13.4 (/tags). SARIF result shape not documented (unverified). |
 | Cisco mcp-scanner — README and tags | https://github.com/cisco-ai-defense/mcp-scanner | Fetched 2026-11-14: `--analyzers yara` keyless, `static --tools FILE`, `--format` summary/detailed/table/by_severity/raw, Apache-2.0; latest tag 4.8.7 (/tags). Raw output schema and offline behavior of config scans not documented (unverified), so not routed. |
 | snyk-agent-scan — PyPI page and GitHub README | https://pypi.org/project/snyk-agent-scan/ | Fetched 2026-11-15 (also https://github.com/snyk/agent-scan): Apache-2.0; 0.6.11 (uploaded 2026-11-06); `uvx snyk-agent-scan@latest [path]`, `--json` (v0.6+ `scan_path_responses`); requires `SNYK_TOKEN`, sends component info to the Agent Scan API, no offline mode documented, can run stdio MCP servers. Needs a key: kept route-only, never run. |
+
+## Pinned class lists (coverage-matrix input), verified 2026-11-18
+
+Each list below was copied from the page fetched on 2026-11-18, not from memory. Edition per standard: OWASP Top 10:2025 (the page calls itself a "Release" and does not say final versus release candidate), OWASP API Security Top 10 2023, CWE Top 25 2025, OWASP LLM Top 10 2026 v1.0 (latest; the 2025 edition is also listed).
+
+### OWASP Top 10:2025 (10 classes)
+
+URL: https://top10.owasp.org/2025
+
+A01:2025 Broken Access Control; A02:2025 Security Misconfiguration; A03:2025 Software Supply Chain Failures; A04:2025 Cryptographic Failures; A05:2025 Injection; A06:2025 Insecure Design; A07:2025 Authentication Failures; A08:2025 Software or Data Integrity Failures; A09:2025 Security Logging and Alerting Failures; A10:2025 Mishandling of Exceptional Conditions.
+
+### OWASP API Security Top 10, 2023 edition (10 classes)
+
+URL: https://api-security.owasp.org/editions/2023/en/0x11-t10
+
+API1:2023 Broken Object Level Authorization; API2:2023 Broken Authentication; API3:2023 Broken Object Property Level Authorization; API4:2023 Unrestricted Resource Consumption; API5:2023 Broken Function Level Authorization; API6:2023 Unrestricted Access to Sensitive Business Flows; API7:2023 Server Side Request Forgery; API8:2023 Security Misconfiguration; API9:2023 Improper Inventory Management; API10:2023 Unsafe Consumption of APIs.
+
+### CWE Top 25, 2025 edition (25 classes, rank order)
+
+URL: https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html
+
+1 CWE-79 Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting'); 2 CWE-89 Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection'); 3 CWE-352 Cross-Site Request Forgery (CSRF); 4 CWE-862 Missing Authorization; 5 CWE-787 Out-of-bounds Write; 6 CWE-22 Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal'); 7 CWE-416 Use After Free; 8 CWE-125 Out-of-bounds Read; 9 CWE-78 Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection'); 10 CWE-94 Improper Control of Generation of Code ('Code Injection'); 11 CWE-120 Buffer Copy without Checking Size of Input ('Classic Buffer Overflow'); 12 CWE-434 Unrestricted Upload of File with Dangerous Type; 13 CWE-476 NULL Pointer Dereference; 14 CWE-121 Stack-based Buffer Overflow; 15 CWE-502 Deserialization of Untrusted Data; 16 CWE-122 Heap-based Buffer Overflow; 17 CWE-863 Incorrect Authorization; 18 CWE-20 Improper Input Validation; 19 CWE-284 Improper Access Control; 20 CWE-200 Exposure of Sensitive Information to an Unauthorized Actor; 21 CWE-306 Missing Authentication for Critical Function; 22 CWE-918 Server-Side Request Forgery (SSRF); 23 CWE-77 Improper Neutralization of Special Elements used in a Command ('Command Injection'); 24 CWE-639 Authorization Bypass Through User-Controlled Key; 25 CWE-770 Allocation of Resources Without Limits or Throttling.
+
+### OWASP Top 10 for LLM Applications 2026 v1.0, latest (10 classes)
+
+URL: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/ (page dated 2026-08-03, titled "OWASP GenAI LLM Top 10 2026"; the page text does not list the titles, so they come from the table of contents of the linked 122-page PDF extracted with pdftotext on 2026-11-18).
+
+LLM01:2026 Prompt Injection; LLM02:2026 Sensitive Information Disclosure; LLM03:2026 Excessive Agency; LLM04:2026 Supply Chain; LLM05:2026 Data and Model Poisoning; LLM06:2026 Unbounded Consumption; LLM07:2026 Misinformation; LLM08:2026 Hidden Context Exposure; LLM09:2026 Vector and Embedding Weaknesses; LLM10:2026 Improper Output Handling.
+
+### OWASP Top 10 for LLM Applications 2025 (other edition, 10 classes)
+
+URL: https://genai.owasp.org/llm-top-10/ (on 2026-11-18 this landing page still headlines 2025 and does not mention the 2026 edition as official).
+
+LLM01:2025 Prompt Injection; LLM02:2025 Sensitive Information Disclosure; LLM03:2025 Supply Chain; LLM04:2025 Data and Model Poisoning; LLM05:2025 Improper Output Handling; LLM06:2025 Excessive Agency; LLM07:2025 System Prompt Leakage; LLM08:2025 Vector and Embedding Weaknesses; LLM09:2025 Misinformation; LLM10:2025 Unbounded Consumption.
