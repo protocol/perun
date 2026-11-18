@@ -1,0 +1,62 @@
+# Bundled Python rules for ML supply chain and model/data poisoning (OWASP LLM03:2025 Supply Chain, LLM04:2025 Data and Model Poisoning).
+# Pattern rules, no taint. Hub ids are string literals only: a local path (starts with . / ~) or a variable is skipped, not guessed.
+# ponytail: pickle.load and joblib.load are flagged for any argument; the rule cannot tell a model or data file from a trusted in-process buffer, so audit each hit for where the file came from.
+rules:
+- id: perun.py.llm-unpinned-hub-download
+  languages: [python]
+  severity: WARNING
+  message: A Hugging Face hub model or repo is fetched by id with no revision=, so a later push to the repo (or a takeover of the name) changes the weights and code you load. Pin revision= to a full commit sha.
+  metadata:
+    cwe: "CWE-494: Download of Code Without Integrity Check"
+    owasp-llm: ["LLM03:2025 Supply Chain", "LLM04:2025 Data and Model Poisoning"]
+  patterns:
+  - pattern-either:
+    - pattern: $M.from_pretrained("$ID", ...)
+    - pattern: hf_hub_download("$ID", ...)
+    - pattern: $H.hf_hub_download("$ID", ...)
+    - pattern: hf_hub_download(..., repo_id="$ID", ...)
+    - pattern: $H.hf_hub_download(..., repo_id="$ID", ...)
+    - pattern: snapshot_download("$ID", ...)
+    - pattern: $H.snapshot_download("$ID", ...)
+    - pattern: snapshot_download(..., repo_id="$ID", ...)
+    - pattern: $H.snapshot_download(..., repo_id="$ID", ...)
+  - pattern-not: $F(..., revision=..., ...)
+  - metavariable-regex:
+      metavariable: $ID
+      regex: ^[^./~]
+- id: perun.py.llm-trust-remote-code
+  languages: [python]
+  severity: ERROR
+  message: trust_remote_code=True runs Python shipped inside the model repo on load. A compromised or swapped repo gets code execution. Remove it, or pin revision= to a reviewed commit and vendor the code.
+  metadata:
+    cwe: "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+    owasp-llm: ["LLM03:2025 Supply Chain"]
+  pattern: $F(..., trust_remote_code=True, ...)
+- id: perun.py.llm-torch-load-unsafe
+  languages: [python]
+  severity: ERROR
+  message: torch.load with weights_only=False unpickles the file, so a poisoned checkpoint runs code on load. Pass weights_only=True or load safetensors.
+  metadata:
+    cwe: "CWE-502: Deserialization of Untrusted Data"
+    owasp-llm: ["LLM03:2025 Supply Chain", "LLM04:2025 Data and Model Poisoning"]
+  pattern: torch.load(..., weights_only=False, ...)
+- id: perun.py.llm-torch-load-default
+  languages: [python]
+  severity: WARNING
+  message: torch.load with no weights_only= argument is safe only on torch 2.6 or later, where weights_only defaults to True; an older torch unpickles the file, so a poisoned checkpoint runs code on load. Pass weights_only=True explicitly, or pin torch>=2.6.
+  metadata:
+    cwe: "CWE-502: Deserialization of Untrusted Data"
+    owasp-llm: ["LLM03:2025 Supply Chain", "LLM04:2025 Data and Model Poisoning"]
+  patterns:
+  - pattern: torch.load(...)
+  - pattern-not: torch.load(..., weights_only=$W, ...)
+- id: perun.py.llm-pickle-model-load
+  languages: [python]
+  severity: WARNING
+  message: pickle.load or joblib.load on a model or data file runs code embedded in the file. Load only files you produced and verified, or use a data-only format (safetensors, JSON, npy, parquet).
+  metadata:
+    cwe: "CWE-502: Deserialization of Untrusted Data"
+    owasp-llm: ["LLM03:2025 Supply Chain", "LLM04:2025 Data and Model Poisoning"]
+  pattern-either:
+  - pattern: pickle.load(...)
+  - pattern: joblib.load(...)

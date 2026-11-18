@@ -4,7 +4,8 @@
 
 Inline tempdir fixtures (fictional names). A line ending in the HIT marker must be flagged by the named rule,
 every other line must stay silent; negatives (near misses) must produce no hit at all. Rules are not edited to fit
-the seeds. A missing semgrep skips, never passes. Known uncovered: a helper in another file returning the response
+the seeds. API data in a string-built SQL query is reported once, by the CWE-89 rule (perun.py.raw-sql-format,
+perun.js.raw-sql-concat; lines tagged `HIT raw-sql-format` / `HIT raw-sql-concat`). A missing semgrep skips, never passes. Known uncovered: a helper in another file returning the response
 field (taint stays inside one file).
 """
 import sys
@@ -17,8 +18,8 @@ from test_g1_api_pilot_a import semgrep_hits, tree  # noqa: E402
 UAC, TLS = "unsafe-api-consumption", "tls-verify-off"
 
 PY_POS = {
-    "sql_fstring.py": 'def f(cur):\n    d = requests.get("https://api.acme.example/u").json()\n    cur.execute(f"SELECT * FROM t WHERE n = \'{d[\'name\']}\'")  # HIT\n',
-    "sql_concat_get.py": 'def f(cur):\n    r = httpx.get("https://api.acme.example/u")\n    name = r.json().get("name")\n    cur.execute("SELECT * FROM t WHERE n = \'" + name + "\'")  # HIT\n',
+    "sql_fstring.py": 'def f(cur):\n    d = requests.get("https://api.acme.example/u").json()\n    cur.execute(f"SELECT * FROM t WHERE n = \'{d[\'name\']}\'")  # HIT raw-sql-format\n',
+    "sql_concat_get.py": 'def f(cur):\n    r = httpx.get("https://api.acme.example/u")\n    name = r.json().get("name")\n    cur.execute("SELECT * FROM t WHERE n = \'" + name + "\'")  # HIT raw-sql-format\n',
     "sql_text.py": 'def f(conn):\n    body = requests.post("https://api.acme.example/q", json={}).text\n    conn.execute(text(f"DELETE FROM t WHERE k = {body}"))  # HIT\n',
     "path_open.py": 'def f():\n    d = requests.get("https://api.acme.example/f").json()\n    open(d["path"], "w")  # HIT\n',
     "path_join.py": 'import os\ndef f():\n    d = httpx.get("https://api.acme.example/f").json()\n    return open(os.path.join("/srv/data", d["file"]))  # HIT\n',
@@ -26,7 +27,7 @@ PY_POS = {
     "url_host.py": 'def f():\n    d = requests.get("https://api.acme.example/cfg").json()\n    return httpx.post("https://" + d["host"] + "/hook", json={})  # HIT\n',
     "shell_system.py": 'import os\ndef f():\n    r = requests.get("https://api.acme.example/job")\n    os.system("convert " + r.text)  # HIT\n',
     "shell_run.py": 'import subprocess\ndef f():\n    d = requests.get("https://api.acme.example/job").json()\n    subprocess.run(f"tar xf {d[\'archive\']}", shell=True)  # HIT\n',
-    "client_session.py": 'import httpx\nasync def f(cur):\n    async with httpx.AsyncClient() as client:\n        r = await client.get("https://api.acme.example/u")\n        cur.execute("SELECT " + r.json()["col"])  # HIT\n',
+    "client_session.py": 'import httpx\nasync def f(cur):\n    async with httpx.AsyncClient() as client:\n        r = await client.get("https://api.acme.example/u")\n        cur.execute("SELECT " + r.json()["col"])  # HIT raw-sql-format\n',
 }
 PY_NEG = {
     "bound.py": 'def f(cur):\n    d = requests.get("https://api.acme.example/u").json()\n    cur.execute("SELECT * FROM t WHERE n = %s", (d["name"],))\n',
@@ -52,15 +53,16 @@ PY_TLS = {
     "tls_post.py": 'def f(p):\n    return requests.post("https://api.acme.example/u", json=p, timeout=5, verify=False)  # HIT\n',
 }
 JS_POS = {
-    "sql_json.js": 'async function f(db) {\n  const res = await fetch("https://api.acme.example/u");\n  const body = await res.json();\n  await db.query(`SELECT * FROM t WHERE n = \'${body.name}\'`);  // HIT\n}\n',
+    "sql_json.js": 'async function f(db) {\n  const res = await fetch("https://api.acme.example/u");\n  const body = await res.json();\n  await db.query(`SELECT * FROM t WHERE n = \'${body.name}\'`);  // HIT raw-sql-concat\n}\n',
     "path_axios.js": 'const fs = require("fs");\nconst path = require("path");\nasync function f() {\n  const { data } = await axios.get("https://api.acme.example/f");\n  fs.readFileSync(path.join("/srv", data.file));  // HIT\n}\n',
     "shell_axios.js": 'const { exec } = require("child_process");\nasync function f() {\n  const r = await axios.get("https://api.acme.example/job");\n  exec("convert " + r.data.name);  // HIT\n}\n',
     "url_next.js": 'async function f() {\n  const j = await (await fetch("https://api.acme.example/p")).json();\n  return fetch(j.next);  // HIT\n}\n',
-    "then_chain.js": 'function f(db) {\n  fetch("https://api.acme.example/u").then((r) => r.json()).then((u) => {\n    db.query("SELECT " + u.col);  // HIT\n  });\n}\n',
+    "then_chain.js": 'function f(db) {\n  fetch("https://api.acme.example/u").then((r) => r.json()).then((u) => {\n    db.query("SELECT " + u.col);  // HIT raw-sql-concat\n  });\n}\n',
     "then_axios.js": 'const fs = require("fs");\nfunction f() {\n  axios.get("https://api.acme.example/u").then((resp) => {\n    fs.writeFileSync(resp.data.name, "x");  // HIT\n  });\n}\n',
     "text_exec.js": 'const cp = require("child_process");\nasync function f() {\n  const res = await fetch("https://api.acme.example/job");\n  const t = await res.text();\n  cp.execSync(`run ${t}`);  // HIT\n}\n',
     "axios_host.js": 'async function f() {\n  const { data } = await axios.get("https://api.acme.example/cfg");\n  return axios.post(`https://${data.host}/hook`, {});  // HIT\n}\n',
-    "raw_prisma.js": 'async function f(prisma) {\n  const res = await fetch("https://api.acme.example/u");\n  const u = await res.json();\n  return prisma.$queryRawUnsafe("SELECT * FROM t WHERE n = \'" + u.name + "\'");  // HIT\n}\n',
+    "raw_prisma.js": 'async function f(prisma) {\n  const res = await fetch("https://api.acme.example/u");\n  const u = await res.json();\n  return prisma.$queryRawUnsafe("SELECT * FROM t WHERE n = \'" + u.name + "\'");  // HIT raw-sql-concat\n}\n',
+    "sql_other_receiver.js": 'async function f(database, repo) {\n  const res = await fetch("https://api.acme.example/u");\n  const body = await res.json();\n  await database.query(`SELECT * FROM t WHERE id = ${body.id}`);  // HIT\n  await repo.query("SELECT * FROM t WHERE id = " + body.id);  // HIT\n}\n',
     "fs_write.js": 'const fs = require("fs");\nasync function f() {\n  const r = await axios.get("https://api.acme.example/f");\n  await fs.promises.writeFile(r.data.target, "x");  // HIT\n}\n',
 }
 JS_NEG = {
@@ -88,8 +90,9 @@ JS_TLS = {
 }
 
 
-def marked(files):
-    return {(n, i + 1) for n, b in files.items() for i, ln in enumerate(b.splitlines()) if ln.rstrip().endswith("# HIT") or ln.rstrip().endswith("// HIT")}
+def marked(files, tag="HIT"):
+    """Lines ending in `# <tag>` or `// <tag>`; tag "HIT raw-sql-format" / "HIT raw-sql-concat" marks string-built SQL that rule owns."""
+    return {(n, i + 1) for n, b in files.items() for i, ln in enumerate(b.splitlines()) if ln.rstrip().endswith(("# " + tag, "// " + tag))}
 
 
 class Api10(unittest.TestCase):
@@ -100,6 +103,15 @@ class Api10(unittest.TestCase):
 
     def test_py_unsafe_consumption(self):
         self.check("py.yml", PY_POS, PY_NEG, UAC)
+
+    def test_string_built_sql_reported_by_raw_sql_rule(self):
+        """API data in a string-built SQL query: one report, by the CWE-89 raw-SQL rule, not by the API10 rule."""
+        for cfg, pos, rule, n in (("py.yml", PY_POS, "raw-sql-format", 3), ("js.yml", JS_POS, "raw-sql-concat", 3)):
+            sql = marked(pos, "HIT " + rule)
+            self.assertEqual(len(sql), n, cfg)
+            rows = semgrep_hits(cfg, tree(pos))
+            self.assertEqual({(f, line) for f, line, r in rows if r.endswith(rule) and (f, line) in sql}, sql, cfg)
+            self.assertEqual({(f, line) for f, line, r in rows if r.endswith(UAC) and (f, line) in sql}, set(), cfg)
 
     def test_py_tls_verify_off(self):
         self.check("py.yml", PY_TLS, PY_NEG, TLS)

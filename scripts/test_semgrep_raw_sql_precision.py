@@ -65,6 +65,8 @@ else:
 # Offline: the interpolation regex ($X) in both query shapes skips the safe forms and keeps the data forms (semgrep anchors at the start, like re.match).
 SRC = open(RULES if os.path.isfile(RULES) else os.path.join(RULES, "js.yml")).read()
 blk = SRC.split(f"- id: {ID}\n")[1].split("\n- id:")[0]
+if "pattern-either: *raw_sql_shapes" in blk:  # the shapes are a YAML anchor shared with perun.js.unsafe-api-consumption
+    blk = SRC.split("pattern-either: &raw_sql_shapes\n")[1].split("\n- id:")[0]
 rxs = re.findall(r"metavariable: \$X\n\s+regex: '(.*)'", blk)
 assert len(rxs) == 2 and rxs[0] == rxs[1], "direct and variable shapes share one $X regex"
 rx = re.compile(rxs[0].replace("''", "'"))

@@ -1,0 +1,201 @@
+# Bundled taint rules for improper handling of LLM output (OWASP LLM05:2025). Python and JavaScript/TypeScript.
+# Source: the result of an LLM completion call, so the whole response and any .text / .content / .choices[..].message.content read from it.
+# OpenAI chat.completions.create and responses.create, Anthropic messages.create, Gemini generate_content / generateContent, Vercel AI SDK generateText.
+# Sinks: eval, exec, Function; innerHTML, dangerouslySetInnerHTML; subprocess, os.system, child_process; raw SQL. One rule per sink class.
+# JS code-exec also treats a call $H(..., tainted, ...) as a sink when a same-file `function $H(..., $P, ...)` declaration passes $P to eval, Function or vm.*. Semgrep CE does not follow taint across functions, so this is a file-scoped join. Missed: helpers defined in another file, arrow or method helpers, and helpers that wrap $P first.
+# Legacy OpenAI v3 (createChatCompletion, createCompletion) and v0 Python (openai.ChatCompletion.create, openai.Completion.create) clients are sources too.
+# ponytail: a client whose own method is called `.messages.create` (an SMS or mail SDK) is also a source; the text must still reach a sink. Streaming chunks, a value saved to a field first and read in another function, and other SDKs are not followed.
+rules:
+- id: perun.py.llm-output-code-exec
+  mode: taint
+  languages: [python]
+  severity: ERROR
+  message: LLM output reaches eval() or exec(). Model text is attacker-influenced (prompt injection, poisoned context), so this is code execution. Do not execute model text; parse it as data or run it in a sandbox.
+  metadata:
+    cwe: "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    owasp-llm: ["LLM05:2025 Improper Output Handling"]
+  pattern-sources:
+  - pattern-either: &py-llm
+    - pattern: $C.chat.completions.create(...)
+    - pattern: $C.responses.create(...)
+    - pattern: $C.messages.create(...)
+    - pattern: $M.generate_content(...)
+    - pattern: openai.ChatCompletion.create(...)
+    - pattern: openai.Completion.create(...)
+    - pattern: $C.completions.create(...)
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: eval($X, ...)
+      - pattern: exec($X, ...)
+    - focus-metavariable: $X
+- id: perun.py.llm-output-command
+  mode: taint
+  languages: [python]
+  severity: ERROR
+  message: LLM output reaches a subprocess, os.system or os.popen call. Model text is attacker-influenced, so this is command injection. Pass a fixed argv built from an allowlist, never model text.
+  metadata:
+    cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    owasp-llm: ["LLM05:2025 Improper Output Handling"]
+  pattern-sources:
+  - pattern-either: *py-llm
+  pattern-sanitizers:
+  - pattern: shlex.quote(...)
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: subprocess.run($X, ...)
+      - pattern: subprocess.call($X, ...)
+      - pattern: subprocess.check_call($X, ...)
+      - pattern: subprocess.check_output($X, ...)
+      - pattern: subprocess.Popen($X, ...)
+      - pattern: os.system($X)
+      - pattern: os.popen($X, ...)
+    - focus-metavariable: $X
+- id: perun.py.llm-output-sql
+  mode: taint
+  languages: [python]
+  severity: ERROR
+  message: LLM output is used as the SQL text of execute(), executemany(), executescript() or text(). Model text is attacker-influenced, so this is SQL injection. Use a fixed query with bound parameters; never run model-written SQL on a write-capable connection.
+  metadata:
+    cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    owasp-llm: ["LLM05:2025 Improper Output Handling"]
+  pattern-sources:
+  - pattern-either: *py-llm
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $DB.execute($X, ...)
+      - pattern: $DB.executemany($X, ...)
+      - pattern: $DB.executescript($X)
+      - pattern: $DB.exec_driver_sql($X, ...)
+      - pattern: text($X)
+      - pattern: sqlalchemy.text($X)
+    - focus-metavariable: $X
+- id: perun.js.llm-output-code-exec
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: LLM output reaches eval(), Function() or new Function(). Model text is attacker-influenced (prompt injection, poisoned context), so this is code execution. Do not execute model text; parse it as data or run it in a sandbox.
+  metadata:
+    cwe: "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    owasp-llm: ["LLM05:2025 Improper Output Handling"]
+  pattern-sources:
+  - pattern-either: &js-llm
+    - pattern: $C.chat.completions.create(...)
+    - pattern: $C.responses.create(...)
+    - pattern: $C.messages.create(...)
+    - pattern: $M.generateContent(...)
+    - pattern: generateText(...)
+    - pattern: $C.createChatCompletion(...)
+    - pattern: $C.createCompletion(...)
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: eval($X)
+      - pattern: new Function(..., $X)
+      - pattern: Function(..., $X)
+      - patterns:
+        - pattern: $H(..., $X, ...)
+        - pattern-either:
+          - pattern-inside: |
+              function $H(..., $P, ...) {
+                ...
+                eval($P)
+                ...
+              }
+              ...
+          - pattern-inside: |
+              function $H(..., $P, ...) {
+                ...
+                new Function(..., $P)
+                ...
+              }
+              ...
+          - pattern-inside: |
+              function $H(..., $P, ...) {
+                ...
+                Function(..., $P)
+                ...
+              }
+              ...
+          - pattern-inside: |
+              function $H(..., $P, ...) {
+                ...
+                vm.$RUN($P, ...)
+                ...
+              }
+              ...
+    - focus-metavariable: $X
+- id: perun.js.llm-output-xss
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: LLM output is written to innerHTML, outerHTML, insertAdjacentHTML, document.write or dangerouslySetInnerHTML unsanitized. Model text can carry injected markup or script, so this is XSS. Render as text, or sanitize with DOMPurify first.
+  metadata:
+    cwe: "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    owasp-llm: ["LLM05:2025 Improper Output Handling"]
+  pattern-sources:
+  - pattern-either: *js-llm
+  pattern-sanitizers:
+  - pattern: DOMPurify.sanitize(...)
+  - pattern: $D.sanitize(...)
+  - pattern: sanitizeHtml(...)
+  - pattern: escapeHtml(...)
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $E.innerHTML = $X
+      - pattern: $E.outerHTML = $X
+      - pattern: $E.insertAdjacentHTML($P, $X)
+      - pattern: document.write($X)
+      - pattern: |
+          <$T ... dangerouslySetInnerHTML={{__html: $X}} ... />
+    - focus-metavariable: $X
+- id: perun.js.llm-output-command
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: LLM output reaches a child_process exec, execSync, execFile or spawn call. Model text is attacker-influenced, so this is command injection. Pass a fixed command with an allowlisted argv, never model text.
+  metadata:
+    cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    owasp-llm: ["LLM05:2025 Improper Output Handling"]
+  pattern-sources:
+  - pattern-either: *js-llm
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: exec($X, ...)
+      - pattern: execSync($X, ...)
+      - pattern: execFile($X, ...)
+      - pattern: execFileSync($X, ...)
+      - pattern: spawn($X, ...)
+      - pattern: spawnSync($X, ...)
+      - pattern: $CP.exec($X, ...)
+      - pattern: $CP.execSync($X, ...)
+      - pattern: $CP.execFile($X, ...)
+      - pattern: $CP.execFileSync($X, ...)
+      - pattern: $CP.spawn($X, ...)
+      - pattern: $CP.spawnSync($X, ...)
+    - metavariable-regex:
+        metavariable: $CP
+        regex: ^(cp|child_process|childProcess)$
+    - focus-metavariable: $X
+- id: perun.js.llm-output-sql
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: LLM output is used as the SQL text of query(), raw(), $queryRawUnsafe() or $executeRawUnsafe(). Model text is attacker-influenced, so this is SQL injection. Use a fixed query with bound parameters; never run model-written SQL on a write-capable connection.
+  metadata:
+    cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    owasp-llm: ["LLM05:2025 Improper Output Handling"]
+  pattern-sources:
+  - pattern-either: *js-llm
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $DB.query($X, ...)
+      - pattern: $DB.raw($X, ...)
+      - pattern: $DB.$queryRawUnsafe($X, ...)
+      - pattern: $DB.$executeRawUnsafe($X, ...)
+    - focus-metavariable: $X

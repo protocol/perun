@@ -1,0 +1,234 @@
+# Bundled CWE-434 rules (unrestricted upload of a dangerous file type), one per ecosystem, kept in their own file so the per-language rule files stay untouched.
+# Precision first: a rule reports only when the missing check is provable inside one function. A function that calls an extension check
+# (path.extname / os.path.splitext / filepath.Ext / File.extname, or .endswith / .rsplit / .lower().endswith / .lower().rsplit on a Python
+# filename, or Path(filename).suffix) counts as checked and never reports. In Python a helper defined elsewhere counts when the function exits
+# on it (if not allowed_file(f.filename): return / raise / abort(...)); any other use of such a helper is not followed and reports. Like the
+# other guards, this one does not check that the exit comes before the save.
+# Werkzeug secure_filename is not a check: it strips path parts but keeps the extension (secure_filename("shell.php") is "shell.php").
+# ponytail: multer options passed through a variable or spread are not followed, so those stay silent (a miss, not noise).
+rules:
+- id: perun.js.upload-multer-no-filter
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: multer is configured with no fileFilter, so any file type is accepted. Add a fileFilter that allowlists extension and MIME type (limits.fileSize alone does not restrict the type). With memoryStorage this is reported only when the same file writes or serves the buffer.
+  metadata:
+    cwe: "CWE-434"
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern: multer()
+        - pattern: multer({...})
+      - pattern-not: "multer({..., storage: multer.memoryStorage(), ...})"
+    - patterns:
+      - pattern: "multer({..., storage: multer.memoryStorage(), ...})"
+      - pattern-either:
+        - pattern-inside: |
+            ...
+            <... $FS.writeFile(..., $B.buffer, ...) ...>
+        - pattern-inside: |
+            ...
+            <... $FS.writeFileSync(..., $B.buffer, ...) ...>
+        - pattern-inside: |
+            ...
+            <... $S.write($B.buffer, ...) ...>
+        - pattern-inside: |
+            ...
+            <... $S.end($B.buffer, ...) ...>
+        - pattern-inside: |
+            ...
+            <... $S.send($B.buffer, ...) ...>
+  - pattern-not: "multer({..., fileFilter: ..., ...})"
+  - pattern-not: multer({..., fileFilter, ...})
+  - pattern-not: multer({..., ...$O, ...})
+- id: perun.js.upload-express-fileupload-mv
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: An express-fileupload file is moved to a path built from the client-supplied file name with no extension check in this function. Allowlist the extension and generate the stored name yourself.
+  metadata:
+    cwe: "CWE-434"
+  patterns:
+  - pattern-either:
+    - pattern: $REQ.files.$K.mv(<... $REQ.files.$K.name ...>, ...)
+    - pattern: |
+        $F = $REQ.files.$K;
+        ...
+        $F.mv(<... $F.name ...>, ...)
+    - pattern: |
+        const $F = $REQ.files.$K;
+        ...
+        $F.mv(<... $F.name ...>, ...)
+  - pattern-not-inside: |
+      function $FN(...) {
+        ...
+        path.extname(...)
+        ...
+      }
+  - pattern-not-inside: |
+      function (...) {
+        ...
+        path.extname(...)
+        ...
+      }
+  - pattern-not-inside: |
+      (...) => {
+        ...
+        path.extname(...)
+        ...
+      }
+  - pattern-not-inside: |
+      async (...) => {
+        ...
+        path.extname(...)
+        ...
+      }
+  - pattern-not-inside: |
+      async function $FN(...) {
+        ...
+        path.extname(...)
+        ...
+      }
+- id: perun.py.upload-save-unrestricted
+  languages: [python]
+  severity: WARNING
+  message: An uploaded file is saved under the client-supplied filename with no extension allowlist in this function (secure_filename keeps the extension, so it does not count). Check the extension against an allowlist and generate the stored name yourself.
+  metadata:
+    cwe: "CWE-434"
+  patterns:
+  - pattern-either:
+    - pattern: request.files[...].save(<... request.files[...].filename ...>)
+    - pattern: |
+        $F = request.files[...]
+        ...
+        $F.save(<... $F.filename ...>)
+    - pattern: |
+        $F = request.files.get(...)
+        ...
+        $F.save(<... $F.filename ...>)
+    - pattern: |
+        $F = request.files[...]
+        ...
+        $N = $F.filename
+        ...
+        $F.save(<... $N ...>)
+    - pattern: |
+        $F = request.files.get(...)
+        ...
+        $N = $F.filename
+        ...
+        $F.save(<... $N ...>)
+  - pattern-not-inside: |
+      def $FN(...):
+        ...
+        <... os.path.splitext(...) ...>
+        ...
+  - pattern-not-inside: |
+      def $FN(...):
+        ...
+        <... $Z.filename.endswith(...) ...>
+        ...
+  - pattern-not-inside: |
+      def $FN(...):
+        ...
+        <... $Z.filename.rsplit(...) ...>
+        ...
+  - pattern-not-inside:
+      pattern-either:
+      - pattern: |
+          def $FN(...):
+            ...
+            <... $Z.filename.lower().endswith(...) ...>
+            ...
+      - pattern: |
+          def $FN(...):
+            ...
+            <... $Z.filename.lower().rsplit(...) ...>
+            ...
+      - pattern: |
+          def $FN(...):
+            ...
+            <... $P($Z.filename).suffix ...>
+            ...
+  # a helper check (allowed_file) counts only as an early exit (return, raise or abort) in the same function; secure_filename keeps the extension, so it never counts
+  - pattern-not-inside:
+      patterns:
+      - pattern-either:
+        - pattern: |
+            def $FN(...):
+              ...
+              if not $CHK(..., $Z.filename, ...):
+                ...
+                return ...
+              ...
+        - pattern: |
+            def $FN(...):
+              ...
+              if not $CHK(..., $Z.filename, ...):
+                ...
+                raise $E
+              ...
+        - pattern: |
+            def $FN(...):
+              ...
+              if not $CHK(..., $Z.filename, ...):
+                ...
+                abort(...)
+              ...
+      - metavariable-regex: {metavariable: $CHK, regex: '^(?!(\w+\.)*secure_filename$)'}
+- id: perun.go.upload-filename-path
+  mode: taint
+  languages: [go]
+  severity: WARNING
+  message: The client-supplied multipart filename is used to build a file path with no extension check in this function. Allowlist the extension (filepath.Ext) and generate the stored name yourself.
+  metadata:
+    cwe: "CWE-434"
+  pattern-sources:
+  - patterns:
+    - pattern: $H.Filename
+    - pattern-inside: |
+        $X, $H, $E := $R.FormFile(...)
+        ...
+  - pattern: $R.MultipartForm.File[...][...].Filename
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: os.Create(...)
+      - pattern: os.OpenFile(...)
+      - pattern: filepath.Join(...)
+    - pattern-not-inside: |
+        func $FN(...) {
+          ...
+          filepath.Ext(...)
+          ...
+        }
+    - pattern-not-inside: |
+        func(...) {
+          ...
+          filepath.Ext(...)
+          ...
+        }
+- id: perun.rb.upload-original-filename
+  mode: taint
+  languages: [ruby]
+  severity: WARNING
+  message: An uploaded file's client-supplied original_filename is written to disk with no File.extname allowlist in this method. Check the extension against an allowlist and generate the stored name yourself.
+  metadata:
+    cwe: "CWE-434"
+  pattern-sources:
+  - pattern: $U.original_filename
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: File.write(...)
+      - pattern: File.binwrite(...)
+      - patterns:
+        - pattern: File.open($P, $MODE, ...)
+        - metavariable-regex:
+            metavariable: $MODE
+            regex: ^["'][wa]
+    - pattern-not-inside: |
+        def $M(...)
+          ...
+          File.extname(...)
+          ...
+        end

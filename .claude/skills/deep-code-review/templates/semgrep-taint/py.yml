@@ -423,7 +423,7 @@ rules:
   mode: taint
   languages: [python]
   severity: ERROR
-  message: Untrusted data reaches an unsafe deserializer. Use json or yaml.safe_load. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
+  message: Untrusted data reaches an unsafe deserializer. Use json or yaml.safe_load. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors (request body and form accessors, including await request.post()/read()/body() and self.request.body/data). The bare name `request` is treated as a source even in a module with no web framework, so a non-web local named request can false-positive. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
   pattern-sources:
   - patterns:
     - pattern: $X
@@ -434,6 +434,30 @@ rules:
       - pattern: request.$A[...]
       - pattern: flask.request.$A.get(...)
       - pattern: flask.request.$A.getlist(...)
+      - pattern: request.get_json(...)
+      - pattern: request.json
+      - pattern: request.stream
+      - pattern: request.POST
+      - pattern: request.form
+      - pattern: request.files
+      - pattern: await request.post()
+      - pattern: self.request.body
+      - pattern: self.request.data
+      - pattern: request.get_data(...)
+      - pattern: request.data
+      - pattern: request.body
+      - pattern: request.body()
+      - pattern: request.read()
+      # bare request.* is deliberate: `request` is the conventional name in every framework, no import needed
+      - pattern: request.stream.read(...)
+      - pattern: flask.request.get_data(...)
+      - pattern: flask.request.get_json(...)
+      - pattern: flask.request.json
+      - pattern: flask.request.form
+      - pattern: flask.request.files
+      - pattern: flask.request.stream
+      - pattern: flask.request.data
+      - pattern: flask.request.stream.read(...)
     - metavariable-regex:
         metavariable: $X
         regex: ^(?!self$|cls$)
@@ -443,9 +467,40 @@ rules:
     - pattern-either:
       - pattern: pickle.loads($S, ...)
       - pattern: pickle.load($S, ...)
+      - pattern: _pickle.loads($S, ...)
+      - pattern: _pickle.load($S, ...)
+      - pattern: cPickle.loads($S, ...)
+      - pattern: cPickle.load($S, ...)
       - pattern: marshal.loads($S)
-      - pattern: yaml.load($S, ...)
+      - pattern: marshal.load($S)
+      - pattern: dill.loads($S, ...)
+      - pattern: dill.load($S, ...)
+      - pattern: pickle.Unpickler($S, ...)
+      - patterns:
+        - pattern: yaml.load($S, ...)
+        - pattern-not: yaml.load($S, Loader=yaml.SafeLoader)
+        - pattern-not: yaml.load($S, Loader=SafeLoader)
+        - pattern-not: yaml.load($S, Loader=yaml.CSafeLoader)
+        - pattern-not: yaml.load($S, Loader=CSafeLoader)
+        - pattern-not: yaml.load($S, yaml.SafeLoader)
+        - pattern-not: yaml.load($S, SafeLoader)
+        - pattern-not: yaml.load($S, yaml.CSafeLoader)
+        - pattern-not: yaml.load($S, CSafeLoader)
+      - patterns:
+        - pattern: yaml.load_all($S, ...)
+        - pattern-not: yaml.load_all($S, Loader=yaml.SafeLoader)
+        - pattern-not: yaml.load_all($S, Loader=SafeLoader)
+        - pattern-not: yaml.load_all($S, Loader=yaml.CSafeLoader)
+        - pattern-not: yaml.load_all($S, Loader=CSafeLoader)
+        - pattern-not: yaml.load_all($S, yaml.SafeLoader)
+        - pattern-not: yaml.load_all($S, SafeLoader)
+        - pattern-not: yaml.load_all($S, yaml.CSafeLoader)
+        - pattern-not: yaml.load_all($S, CSafeLoader)
+      - pattern: yaml.unsafe_load_all($S, ...)
       - pattern: yaml.unsafe_load($S, ...)
+      # FullLoader is not SafeLoader: untrusted YAML belongs in yaml.safe_load
+      - pattern: yaml.full_load($S, ...)
+      - pattern: yaml.full_load_all($S, ...)
       - pattern: jsonpickle.decode($S, ...)
     - focus-metavariable: $S
 - id: perun.py.ssti
@@ -726,7 +781,7 @@ rules:
   mode: taint
   languages: [python]
   severity: WARNING
-  message: A field of a third-party or internal API response reaches a SQL string, file path, outbound URL or shell command unvalidated. Validate the type, shape and allowed values of response data first, and bind SQL parameters. Known limit, only flows inside one file are followed, so a response read in one file and used in another is not reported.
+  message: A field of a third-party or internal API response reaches a SQL string, file path, outbound URL or shell command unvalidated. Validate the type, shape and allowed values of response data first, and bind SQL parameters. A SQL string built with an f-string, %, .format() or concatenation at execute() is left to perun.py.raw-sql-format (CWE-89), so it goes unreported here wherever that rule skips it (allow-listed values, migration files). Known limit, only flows inside one file are followed, so a response read in one file and used in another is not reported.
   pattern-sources:
   - patterns:
     - pattern-either:
@@ -953,6 +1008,49 @@ rules:
         - metavariable-regex:
             metavariable: $M
             regex: ^(?:execute|executemany|raw)$
+    # string-built SQL at execute() is reported once, by perun.py.raw-sql-format (CWE-89 fits the sink): the same shapes, so no line gets two reports
+    - pattern-not:
+        patterns:
+        - pattern-either:
+          - patterns:
+            - pattern-either:
+              - pattern: $C.execute(f"...{$X}...", ...)
+              - pattern: $C.executemany(f"...{$X}...", ...)
+              - patterns:
+                - pattern-either:
+                  - pattern: $C.execute($V, ...)
+                  - pattern: $C.executemany($V, ...)
+                - pattern-either:
+                  - pattern-inside: |
+                      $V = f"...{$X}..."
+                      ...
+                  - pattern-inside: |
+                      $V += f"...{$X}..."
+                      ...
+            - metavariable-regex:
+                metavariable: $X
+                regex: ^(?!\s*[A-Z][A-Z0-9_]*\s*$)
+          - pattern: $C.execute("..." % $X, ...)
+          - pattern: $C.execute("...".format(...), ...)
+          - pattern: $C.execute("..." + $X, ...)
+          - pattern: $C.execute($X + "...", ...)
+          - patterns:
+            - pattern-either:
+              - pattern: $C.execute($V, ...)
+              - pattern: $C.executemany($V, ...)
+            - pattern-either:
+              - pattern-inside: |
+                  $V = "..." % $X
+                  ...
+              - pattern-inside: |
+                  $V = "...".format(...)
+                  ...
+              - pattern-inside: |
+                  $V = "..." + $X
+                  ...
+              - pattern-inside: |
+                  $V += $X
+                  ...
     - metavariable-regex:
         metavariable: $S
         regex: ^(?!\[|f?["']https?://[^/{"']+[/"'])
@@ -1098,7 +1196,7 @@ rules:
 - id: perun.py.raw-sql-format
   languages: [python]
   severity: ERROR
-  message: A SQL string built with an f-string, % formatting, .format() or concatenation is passed to execute(), directly or through a variable assigned earlier in the same function (CWE-89). Pass the values as the second argument (cursor.execute("... WHERE id = %s", (x,))). ponytail, search mode - any interpolated value is reported, user-controlled or not, except UPPER_SNAKE constants in an f-string ({TABLE}; the skip is name-based, so a tainted value held in an UPPER_SNAKE name is left to perun.py.sqli); migration files (migrations/<digit>* and alembic/versions/) are skipped, other files under a migrations/ directory are still checked. Remaining limits - the variable form follows one assignment or += in the same function, not a value built in a helper or across files, and % / .format() / concatenation operands are not checked for constants.
+  message: A SQL string built with an f-string, % formatting, .format() or concatenation is passed to execute(), directly or through a variable assigned earlier in the same function (CWE-89). Pass the values as the second argument (cursor.execute("... WHERE id = %s", (x,))). ponytail, search mode - any interpolated value is reported, user-controlled or not, except UPPER_SNAKE constants in an f-string ({TABLE}; the skip is name-based, so a tainted value held in an UPPER_SNAKE name is left to perun.py.sqli); an f-string value that passed an unconditionally exiting `x not in ALLOWED` check (an `assert x in ALLOWED` still reports, since python -O strips asserts), that is wrapped by `if x in ALLOWED`, or that came from a same-file helper whose only statement is return MAP.get(x, "literal") / MAP[x], is skipped as allow-listed (the list or map must be an UPPER_SNAKE name, so a lowercase or request-derived list still reports; the check must be on the same variable; a reassignment of that variable after the check or helper call reports again); migration files (migrations/<digit>* and alembic/versions/) are skipped, other files under a migrations/ directory are still checked. Remaining limits - the variable form follows one assignment or += in the same function, not a value built in a helper or across files, and % / .format() / concatenation operands are not checked for constants.
   patterns:
   - pattern-either:
     - patterns:
@@ -1108,6 +1206,123 @@ rules:
       - metavariable-regex:
           metavariable: $X
           regex: ^(?!\s*[A-Z][A-Z0-9_]*\s*$)
+      # allow-listed value: see the message. Each guard needs an UPPER_SNAKE list/map and no reassignment of $X after the check or helper call.
+      # exit guard: the block is a bare raise/return or one statement then raise/return (a leading ... would also match a conditional exit nested deeper, so it is not used)
+      - &allow_exit
+        pattern-not-inside:
+          patterns:
+          - pattern-either:
+            - pattern: |
+                if $X not in $S:
+                    $EX
+                ...
+            - pattern: |
+                if $X not in $S:
+                    $A
+                    $EX
+                ...
+          - pattern-not: |
+              if $X not in $S:
+                  $EX
+              ...
+              $X = $V
+              ...
+          - pattern-not: |
+              if $X not in $S:
+                  $EX
+              ...
+              $X += $V
+              ...
+          - pattern-not: |
+              if $X not in $S:
+                  $A
+                  $EX
+              ...
+              $X = $V
+              ...
+          - pattern-not: |
+              if $X not in $S:
+                  $A
+                  $EX
+              ...
+              $X += $V
+              ...
+          - metavariable-regex: {metavariable: $EX, regex: '^(?:raise|return)\b'}
+          - metavariable-regex: {metavariable: $S, regex: '^[A-Z][A-Z0-9_]*$'}
+      - &allow_wrapped
+        pattern-not-inside:
+          patterns:
+          - pattern: |
+              if $X in $S:
+                  ...
+          - pattern-not: |
+              if $X in $S:
+                  ...
+              else:
+                  ...
+          - pattern-not: |
+              if $X in $S:
+                  ...
+                  $X = $V
+                  ...
+          - pattern-not: |
+              if $X in $S:
+                  ...
+                  $X += $V
+                  ...
+          - metavariable-regex: {metavariable: $S, regex: '^[A-Z][A-Z0-9_]*$'}
+      - &allow_helper_get
+        pattern-not-inside:
+          patterns:
+          - pattern: |
+              def $F(...):
+                  return $M.get(..., "...")
+              ...
+              $X = $F(...)
+              ...
+          - pattern-not: |
+              def $F(...):
+                  return $M.get(..., "...")
+              ...
+              $X = $F(...)
+              ...
+              $X = $V
+              ...
+          - pattern-not: |
+              def $F(...):
+                  return $M.get(..., "...")
+              ...
+              $X = $F(...)
+              ...
+              $X += $V
+              ...
+          - metavariable-regex: {metavariable: $M, regex: '^[A-Z][A-Z0-9_]*$'}
+      - &allow_helper_index
+        pattern-not-inside:
+          patterns:
+          - pattern: |
+              def $F(...):
+                  return $M[...]
+              ...
+              $X = $F(...)
+              ...
+          - pattern-not: |
+              def $F(...):
+                  return $M[...]
+              ...
+              $X = $F(...)
+              ...
+              $X = $V
+              ...
+          - pattern-not: |
+              def $F(...):
+                  return $M[...]
+              ...
+              $X = $F(...)
+              ...
+              $X += $V
+              ...
+          - metavariable-regex: {metavariable: $M, regex: '^[A-Z][A-Z0-9_]*$'}
     - pattern: $C.execute("..." % $X, ...)
     - pattern: $C.execute("...".format(...), ...)
     - pattern: $C.execute("..." + $X, ...)
@@ -1126,6 +1341,10 @@ rules:
       - metavariable-regex:
           metavariable: $X
           regex: ^(?!\s*[A-Z][A-Z0-9_]*\s*$)
+      - *allow_exit
+      - *allow_wrapped
+      - *allow_helper_get
+      - *allow_helper_index
     - patterns:
       - pattern-either:
         - pattern: $C.execute($V, ...)
