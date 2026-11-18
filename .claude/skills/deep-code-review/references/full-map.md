@@ -189,6 +189,8 @@ applicable domains. Language footguns:
 | T | Multi-tenancy & isolation | `domain-t.md` (multi-tenant; Prisma: `tenant_scope_check`) |
 | W | Workflows, jobs & scheduling | `domain-w.md` (when the target runs cron, queues, or multi-step workflows) |
 
+Read `scripts/secret_exposure_triage.py` when a gitleaks report has findings and you must say which secret to rotate first (reachability, still-at-HEAD, age; offline, never prints the value).
+
 Also: `app-pentest.md` (live app), `supply-chain-check.md` (advisories, Actions), `dynamic-probe.md`.
 
 ---

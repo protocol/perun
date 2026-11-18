@@ -1,0 +1,151 @@
+# Bundled logging rules for OWASP A09:2025 (Security Logging and Alerting Failures). They complement, and do not duplicate, scripts/pii_data_map.py and scripts/insecure_defaults.py, neither of which inspects log calls.
+# perun.{js,py,go}.log-sensitive (CWE-532): a sensitive-named value (password, passwd, secret, token, api key, authorization, cookie, ssn, card number) or a whole request body reaches a log sink (console, logger, log, logging, pino, winston, bunyan, log.Printf). Search mode and name based: a value is matched by its identifier or member path, so a literal ("[REDACTED]"), a masking call (mask(token)) and a key whose value is a literal are clean. A sensitive value held in a neutrally named variable is not seen. A bare `token` or `secret` is skipped (in a 5-clone probe every such hit was a public slug or a secret's name), while `user.token`, `accessToken` and `clientSecret` report.
+# perun.{py,go}.log-injection (CWE-117): request input reaches a log call unsanitized. Sanitizers: a newline-stripping replace, repr, json.dumps, int, strconv.Quote. Python's %r and Go's %q format verbs are not recognised, so those report.
+# ponytail: no cross-function flow and no wrapper detection (a custom function named differently from the sinks above is not a sink).
+rules:
+- id: perun.js.log-sensitive
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A sensitive value (password, token, secret, API key, authorization header, cookie, SSN, card number) or the whole request body is written to a log (CWE-532). Log an identifier or a redacted copy instead (pino's redact option, a mask helper).
+  metadata:
+    cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+    owasp: ["A09:2025 - Security Logging and Alerting Failures"]
+    category: security
+  patterns:
+  - pattern-either:
+    - pattern: $L.$M(..., $ARG, ...)
+    - pattern: '$L.$M(..., {..., $K: $ARG, ...}, ...)'
+    - pattern: $L.$M(..., {..., $ARG, ...}, ...)
+    - pattern: $L.$M(..., `...${$ARG}...`, ...)
+    - pattern: $L.$M(..., "..." + $ARG, ...)
+  - metavariable-regex:
+      metavariable: $L
+      regex: ^(console|logger|log|pino|winston|bunyan|this\.logger|this\.log|req\.log)$
+  - metavariable-regex:
+      metavariable: $M
+      regex: ^(log|trace|debug|info|warn|warning|error|fatal|verbose|silly|http)$
+  - metavariable-regex:
+      metavariable: $ARG
+      regex: (?i)^((\w+\.)+body|(\w+\.)+headers(\.(authorization|cookie)|\[['"](authorization|cookie)['"]\])|(\w+\.)*(\w*(password|passwd|api_?key|ssn|cookie|card_?number|authorization)|\w+(secret|token))s?|(\w+\.)+(secret|token)s?)$
+  - focus-metavariable: $ARG
+
+- id: perun.py.log-sensitive
+  languages: [python]
+  severity: WARNING
+  message: A sensitive value (password, token, secret, API key, authorization header, cookie, SSN, card number) or the whole request body is written to a log (CWE-532). Log an identifier or a redacted copy instead.
+  metadata:
+    cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+    owasp: ["A09:2025 - Security Logging and Alerting Failures"]
+    category: security
+  patterns:
+  - pattern-either:
+    - pattern: $L.$M(..., $ARG, ...)
+    - pattern: $L.$M(..., f"...{$ARG}...", ...)
+    - pattern: $L.$M(..., $FMT % $ARG, ...)
+  - metavariable-regex:
+      metavariable: $L
+      regex: ^(logging|logger|log|self\.logger|self\.log|LOGGER|LOG)$
+  - metavariable-regex:
+      metavariable: $M
+      regex: ^(debug|info|warning|warn|error|exception|critical|fatal|log)$
+  - metavariable-regex:
+      metavariable: $ARG
+      regex: (?i)^((\w+\.)*request\.(json|data|body|get_json\(\))|(\w+\.)*request\.(headers|cookies)(\[['"](authorization|cookie|set-cookie)['"]\]|\.get\(['"](authorization|cookie)['"]\))|(\w+\.)*(\w*(password|passwd|api_?key|ssn|cookie|card_?number|authorization)|\w+(secret|token))s?|(\w+\.)+(secret|token)s?)$
+  - focus-metavariable: $ARG
+
+- id: perun.go.log-sensitive
+  languages: [go]
+  severity: WARNING
+  message: A sensitive value (password, token, secret, API key, authorization header, cookie, SSN, card number) is written to a log (CWE-532). Log an identifier or a redacted copy instead.
+  metadata:
+    cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+    owasp: ["A09:2025 - Security Logging and Alerting Failures"]
+    category: security
+  patterns:
+  - pattern-either:
+    - pattern: $L.$M(..., $ARG, ...)
+  - metavariable-regex:
+      metavariable: $L
+      regex: ^(log|logger|slog|zap|logrus|l|s\.log|s\.logger)$
+  - metavariable-regex:
+      metavariable: $M
+      regex: ^(Print|Printf|Println|Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln|Debug|Debugf|Info|Infof|Warn|Warnf|Error|Errorf)$
+  - metavariable-regex:
+      metavariable: $ARG
+      regex: (?i)^((\w+\.)*(\w*(password|passwd|api_?key|ssn|cookie|card_?number|authorization)|\w+(secret|token))s?|(\w+\.)+(secret|token)s?|\w+\.Header\.Get\("(authorization|cookie)"\))$
+  - focus-metavariable: $ARG
+
+- id: perun.py.log-injection
+  mode: taint
+  languages: [python]
+  severity: WARNING
+  message: Request input is written to a log unsanitized (CWE-117). A value with CR/LF can forge log lines. Strip or escape newlines first (value.replace("\n", "\\n").replace("\r", "\\r")), or log repr(value).
+  metadata:
+    cwe: ["CWE-117: Improper Output Neutralization for Logs"]
+    owasp: ["A09:2025 - Security Logging and Alerting Failures"]
+    category: security
+  pattern-sources:
+  - pattern-either:
+    - pattern: request.args.get(...)
+    - pattern: request.args[...]
+    - pattern: request.form.get(...)
+    - pattern: request.form[...]
+    - pattern: request.values.get(...)
+    - pattern: request.headers.get(...)
+    - pattern: request.headers[...]
+    - pattern: request.GET.get(...)
+    - pattern: request.POST.get(...)
+    - pattern: request.query_params.get(...)
+    - pattern: request.path
+  pattern-sanitizers:
+  - pattern-either:
+    - pattern: $X.replace("\n", ...)
+    - pattern: $X.replace("\r", ...)
+    - pattern: repr(...)
+    - pattern: json.dumps(...)
+    - pattern: int(...)
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $L.$M(..., $SINK, ...)
+      - pattern: $L.$M(..., f"...{$SINK}...", ...)
+    - metavariable-regex:
+        metavariable: $L
+        regex: ^(logging|logger|log|self\.logger|self\.log|LOGGER|LOG)$
+    - metavariable-regex:
+        metavariable: $M
+        regex: ^(debug|info|warning|warn|error|exception|critical|fatal)$
+    - focus-metavariable: $SINK
+
+- id: perun.go.log-injection
+  mode: taint
+  languages: [go]
+  severity: WARNING
+  message: Request input is written to a log unsanitized (CWE-117). A value with CR/LF can forge log lines. Escape it first (strconv.Quote, or strings.ReplaceAll on "\n" and "\r").
+  metadata:
+    cwe: ["CWE-117: Improper Output Neutralization for Logs"]
+    owasp: ["A09:2025 - Security Logging and Alerting Failures"]
+    category: security
+  pattern-sources:
+  - pattern-either:
+    - pattern: $R.URL.Query().Get(...)
+    - pattern: $R.FormValue(...)
+    - pattern: $R.PostFormValue(...)
+    - pattern: $R.Header.Get(...)
+    - pattern: $R.URL.Path
+    - pattern: $R.PathValue(...)
+  pattern-sanitizers:
+  - pattern-either:
+    - pattern: strconv.Quote(...)
+    - pattern: strings.ReplaceAll($X, "\n", ...)
+    - pattern: strings.ReplaceAll($X, "\r", ...)
+    - pattern: url.QueryEscape(...)
+  pattern-sinks:
+  - patterns:
+    - pattern: $L.$M(...)
+    - metavariable-regex:
+        metavariable: $L
+        regex: ^(log|logger)$
+    - metavariable-regex:
+        metavariable: $M
+        regex: ^(Print|Printf|Println|Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln)$

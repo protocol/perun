@@ -1,0 +1,2 @@
+### Added
+- semgrep: new `templates/semgrep-taint/input-exposure.yml` with three rules. `perun.js.unvalidated-size-or-qty` (CWE-20) reports a request value used as an Array length, Buffer size, `.repeat` count or price multiplier with no `Number.isInteger` or range check. `perun.py.exception-in-response` and `perun.py.secret-field-in-response` (CWE-200) report a traceback or caught exception returned in an HTTP response, and password, API key or secret fields (or `os.environ`) returned by `jsonify`/`JsonResponse` or a route handler.

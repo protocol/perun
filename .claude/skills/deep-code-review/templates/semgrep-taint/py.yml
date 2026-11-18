@@ -1098,7 +1098,7 @@ rules:
 - id: perun.py.raw-sql-format
   languages: [python]
   severity: ERROR
-  message: A SQL string built with an f-string, % formatting, .format() or concatenation is passed to execute(), directly or through a variable assigned earlier in the same function (CWE-89). Pass the values as the second argument (cursor.execute("... WHERE id = %s", (x,))). ponytail, search mode - any interpolated value is reported, user-controlled or not, except UPPER_SNAKE constants in an f-string ({TABLE}; the skip is name-based, so a tainted value held in an UPPER_SNAKE name is left to perun.py.sqli); migration files (migrations/<digit>* and alembic/versions/) are skipped, other files under a migrations/ directory are still checked. Remaining limits - the variable form follows one assignment or += in the same function, not a value built in a helper or across files, and % / .format() / concatenation operands are not checked for constants.
+  message: A SQL string built with an f-string, % formatting, .format() or concatenation is passed to execute(), directly or through a variable assigned earlier in the same function (CWE-89). Pass the values as the second argument (cursor.execute("... WHERE id = %s", (x,))). ponytail, search mode - any interpolated value is reported, user-controlled or not, except UPPER_SNAKE constants in an f-string ({TABLE}; the skip is name-based, so a tainted value held in an UPPER_SNAKE name is left to perun.py.sqli); an f-string value that passed an unconditionally exiting `x not in ALLOWED` / `assert x in ALLOWED` check, that is wrapped by `if x in ALLOWED`, or that came from a same-file helper whose only statement is return MAP.get(x, "literal") / MAP[x], is skipped as allow-listed (the list or map must be an UPPER_SNAKE name, so a lowercase or request-derived list still reports; the check must be on the same variable; a reassignment of that variable after the check or helper call reports again); migration files (migrations/<digit>* and alembic/versions/) are skipped, other files under a migrations/ directory are still checked. Remaining limits - the variable form follows one assignment or += in the same function, not a value built in a helper or across files, and % / .format() / concatenation operands are not checked for constants.
   patterns:
   - pattern-either:
     - patterns:
@@ -1108,6 +1108,140 @@ rules:
       - metavariable-regex:
           metavariable: $X
           regex: ^(?!\s*[A-Z][A-Z0-9_]*\s*$)
+      # allow-listed value: see the message. Each guard needs an UPPER_SNAKE list/map and no reassignment of $X after the check or helper call.
+      # exit guard: the block is a bare raise/return or one statement then raise/return (a leading ... would also match a conditional exit nested deeper, so it is not used)
+      - &allow_exit
+        pattern-not-inside:
+          patterns:
+          - pattern-either:
+            - pattern: |
+                if $X not in $S:
+                    $EX
+                ...
+            - pattern: |
+                if $X not in $S:
+                    $A
+                    $EX
+                ...
+          - pattern-not: |
+              if $X not in $S:
+                  $EX
+              ...
+              $X = $V
+              ...
+          - pattern-not: |
+              if $X not in $S:
+                  $EX
+              ...
+              $X += $V
+              ...
+          - pattern-not: |
+              if $X not in $S:
+                  $A
+                  $EX
+              ...
+              $X = $V
+              ...
+          - pattern-not: |
+              if $X not in $S:
+                  $A
+                  $EX
+              ...
+              $X += $V
+              ...
+          - metavariable-regex: {metavariable: $EX, regex: '^(?:raise|return)\b'}
+          - metavariable-regex: {metavariable: $S, regex: '^[A-Z][A-Z0-9_]*$'}
+      - &allow_assert
+        pattern-not-inside:
+          patterns:
+          - pattern: |
+              assert $X in $S
+              ...
+          - pattern-not: |
+              assert $X in $S
+              ...
+              $X = $V
+              ...
+          - pattern-not: |
+              assert $X in $S
+              ...
+              $X += $V
+              ...
+          - metavariable-regex: {metavariable: $S, regex: '^[A-Z][A-Z0-9_]*$'}
+      - &allow_wrapped
+        pattern-not-inside:
+          patterns:
+          - pattern: |
+              if $X in $S:
+                  ...
+          - pattern-not: |
+              if $X in $S:
+                  ...
+              else:
+                  ...
+          - pattern-not: |
+              if $X in $S:
+                  ...
+                  $X = $V
+                  ...
+          - pattern-not: |
+              if $X in $S:
+                  ...
+                  $X += $V
+                  ...
+          - metavariable-regex: {metavariable: $S, regex: '^[A-Z][A-Z0-9_]*$'}
+      - &allow_helper_get
+        pattern-not-inside:
+          patterns:
+          - pattern: |
+              def $F(...):
+                  return $M.get(..., "...")
+              ...
+              $X = $F(...)
+              ...
+          - pattern-not: |
+              def $F(...):
+                  return $M.get(..., "...")
+              ...
+              $X = $F(...)
+              ...
+              $X = $V
+              ...
+          - pattern-not: |
+              def $F(...):
+                  return $M.get(..., "...")
+              ...
+              $X = $F(...)
+              ...
+              $X += $V
+              ...
+          - metavariable-regex: {metavariable: $M, regex: '^[A-Z][A-Z0-9_]*$'}
+      - &allow_helper_index
+        pattern-not-inside:
+          patterns:
+          - pattern: |
+              def $F(...):
+                  return $M[...]
+              ...
+              $X = $F(...)
+              ...
+          - pattern-not: |
+              def $F(...):
+                  return $M[...]
+              ...
+              $X = $F(...)
+              ...
+              $X = $V
+              ...
+          - pattern-not: |
+              def $F(...):
+                  return $M[...]
+              ...
+              $X = $F(...)
+              ...
+              $X += $V
+              ...
+          - metavariable-regex: {metavariable: $M, regex: '^[A-Z][A-Z0-9_]*$'}
     - pattern: $C.execute("..." % $X, ...)
     - pattern: $C.execute("...".format(...), ...)
     - pattern: $C.execute("..." + $X, ...)
@@ -1126,6 +1260,11 @@ rules:
       - metavariable-regex:
           metavariable: $X
           regex: ^(?!\s*[A-Z][A-Z0-9_]*\s*$)
+      - *allow_exit
+      - *allow_assert
+      - *allow_wrapped
+      - *allow_helper_get
+      - *allow_helper_index
     - patterns:
       - pattern-either:
         - pattern: $C.execute($V, ...)
