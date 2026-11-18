@@ -12,12 +12,13 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-prov.XXXXXX") && [ -n "$T" ] && [ -d "$T
 trap '[ -n "$T" ] && rm -rf "$T"' EXIT; fail=0
 ok() { echo "ok - $1"; }; bad() { echo "FAIL - $1"; fail=1; }
 BASH_BIN=$(type -P bash)
-ALL="gitleaks trufflehog semgrep trivy osv-scanner actionlint zizmor bandit scorecard gosec grype checkov hadolint ruff syft kube-linter kube-score tflint staticcheck brakeman kics licensee cosign opengrep nuclei"
+ALL="gitleaks trufflehog semgrep trivy osv-scanner actionlint zizmor bandit scorecard gosec grype checkov hadolint ruff syft kube-linter kube-score tflint staticcheck brakeman kics licensee cosign opengrep nuclei ansible-lint cfn-lint detect-secrets flawfinder guarddog mobsfscan njsscan pyflakes slither codeql cppcheck jq kubescape pmd shellcheck tfsec node go bundler-audit rubocop cargo-audit cargo-deny govulncheck retire solhint tsc devskim psalm sobelow skillspector uv"
 mkdir "$T/farm" "$T/ub" "$T/tmp" "$T/proj"
 for c in awk bash basename cat chmod cp cut date dirname env find git grep gtimeout head jq ls mkdir mktemp mv nice paste perl python3 readlink rm sed sleep sort tail tee timeout tr uname uniq wc xargs; do
   p=$(type -P "$c") || continue
   printf '#!/bin/sh\nexec %s "$@"\n' "$p" >"$T/farm/$c"; chmod +x "$T/farm/$c"
 done
+printf '#!/bin/sh\necho Darwin\n' >"$T/farm/uname" # the cask line below is the macOS one, whatever the host
 stubs() { local d t; d=$(mktemp -d "$T/st.XXXXXX"); for t in "$@"; do printf '#!/bin/sh\nexit 0\n' >"$d/$t"; chmod +x "$d/$t"; done; echo "$d"; }
 # run [VAR=val ...] CMD...: PA (a dir of stubs) comes first on PATH, then the wrappers; caches and ~/.local/bin are throwaway dirs.
 run() { env -i PATH="${PA:+$PA:}$T/farm" HOME="$T/home" TMPDIR="$T/tmp" DCR_CACHE_ROOT="$T/cache" DCR_USER_BIN="$T/ub" "$@"; }
@@ -29,15 +30,15 @@ cd "$T/proj"; PHYS=$(pwd -P); q() { printf '%q' "$1"; }
 
 # 1. dry run: lists every missing tool and cold cache, exits 0, writes nothing
 PA=; rc=0; o=$(PT 2>&1) || rc=$?
-[ "$rc" = 0 ] && [ "$(grep -c "^MISSING " <<<"$o")" = 25 ] && grep -q 'COLD     trivy DB' <<<"$o" && grep -q 'COLD     osv-scanner offline DB' <<<"$o" \
-  && grep -q 'COLD     semgrep p/default snapshot' <<<"$o" && grep -q '25 missing, 3 cold; nothing was installed' <<<"$o" && ok "dry run lists 25 missing, 3 cold" || { bad "dry run"; echo "$o"; }
+[ "$rc" = 0 ] && grep -q '^MISSING  gitleaks' <<<"$o" && grep -q '^MISSING  codeql' <<<"$o" && grep -q 'COLD     trivy DB' <<<"$o" && grep -q 'COLD     osv-scanner offline DB' <<<"$o" \
+  && grep -q 'COLD     semgrep p/default snapshot' <<<"$o" && grep -qE '[0-9]+ missing, 3 cold; nothing was installed' <<<"$o" && ok "dry run lists named missing tools and 3 cold caches" || { bad "dry run"; echo "$o"; }
 [ ! -e "$T/cache" ] && [ ! -e "$T/home" ] && ok "dry run writes nothing" || bad "dry run wrote"
 
 # 2. --print: exactly one stdout line with the whole fix; the listing goes to stderr
 PA=; o=$(PT --print 2>"$T/e")
 [ "$(wc -l <<<"$o")" -eq 1 ] && ! grep -q 'MISSING' <<<"$o" && grep -q 'MISSING  gitleaks' "$T/e" && ok "--print: one stdout line, listing on stderr" || { bad "--print shape"; echo "$o"; }
-for want in "brew install pipx gitleaks trufflehog trivy osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kube-score tflint staticcheck kics cosign opengrep nuclei" \
-  "pipx install semgrep==1.182.1; pipx install zizmor==1.31.1; pipx install bandit==1.9.4; pipx install checkov==3.4.5; pipx install ruff; gem install brakeman; gem install licensee" \
+for want in "for f in pipx ruby gitleaks trufflehog trivy osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kube-score terraform-linters/tap/tflint staticcheck kics licensee cosign nuclei" \
+  "for f in semgrep==1.186.0 zizmor==1.32.0 bandit==1.9.4 checkov==3.4.5 ruff==0.17.5 ansible-lint==26.11.0" \
   'mkdir -p '"$(q "$T/cache/dcr-tools/docker-config-empty")"' && DOCKER_CONFIG='"$(q "$T/cache/dcr-tools/docker-config-empty")"' trivy --cache-dir '"$(q "$T/cache/trivy")"' fs --download-db-only' \
   "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$(q "$T/cache") osv-scanner --offline-vulnerabilities --download-offline-databases $(q "$PHYS")" \
   "curl -fsSL https://semgrep.dev/c/p/default -o $(q "$T/cache/dcr-tools/semgrep/p-default.yml.part") && mv " ; do
@@ -48,7 +49,7 @@ grep -qE '; bash [^ ]*/provision_tools\.sh$' <<<"$o" && ok "--print ends with a 
 # 3. present tools and warm caches are left out; pipx present means no `brew install pipx`
 PA=$(stubs gitleaks trufflehog trivy semgrep pipx); warm_trivy
 o=$(PT --print 2>/dev/null)
-grep -qF "brew install osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kube-score tflint staticcheck kics cosign opengrep nuclei; pipx install zizmor==1.31.1" <<<"$o" && ! grep -q 'semgrep==\|download-db-only' <<<"$o" && ok "--print omits present tools and the warm trivy DB" || { bad "partial"; echo "$o"; }
+grep -qF "for f in ruby osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kube-score terraform-linters/tap/tflint staticcheck kics licensee cosign nuclei flawfinder slither-analyzer cppcheck kubescape pmd shellcheck tfsec node go cargo-audit cargo-deny govulncheck uv; do brew install \"\$f\" || echo \"FAILED \$f\"; done; if [ \"\$(uname)\" = Darwin ]; then for f in codeql; do brew install --cask \"\$f\" || echo \"FAILED \$f\"; done; fi; for f in zizmor==1.32.0" <<<"$o" && ! grep -q 'semgrep==\|download-db-only' <<<"$o" && ok "--print omits present tools and the warm trivy DB" || { bad "partial"; echo "$o"; }
 : >"$T/cache/trivy/db/trivy.db"; o=$(PT --print 2>/dev/null); grep -q 'download-db-only' <<<"$o" && ok "an empty trivy.db is cold" || bad "empty db warm"
 
 # 4. a tool only in ~/.local/bin (pipx, uv tool) counts as installed; DCR_USER_BIN= (empty) turns that off
@@ -195,7 +196,7 @@ st '.not_run == ["trivy","osv-scanner"] and .fixable == ["trivy","osv-scanner"]'
 cmd=$(sed -n 's/.*(run: \(.*\))$/\1/p' "$T/err" | tail -n1); line=$(run DCR_CACHE_ROOT="$C2" "$BASH_BIN" -c "$cmd" 2>/dev/null)
 run DCR_CACHE_ROOT="$C2" "$BASH_BIN" -c "$line" >"$T/prov.out" 2>&1 || true
 cold=; for n in trivy osv semgrep; do run DCR_CACHE_ROOT="$C2" "$BASH_BIN" "$S/provision_tools.sh" --cache "$n" >/dev/null || cold+=" $n"; done
-[ -z "$cold" ] && grep -qx 'pipx install zizmor==1.31.1' "$PL" && ok "the printed owner line installs and warms every cache" || { bad "owner line left cold:$cold"; cat "$T/prov.out" "$PL"; }
+[ -z "$cold" ] && grep -qx 'pipx install zizmor==1.32.0' "$PL" && ok "the printed owner line installs and warms every cache" || { bad "owner line left cold:$cold"; cat "$T/prov.out" "$PL"; }
 rc_run DCR_CACHE_ROOT="$C2" TV_NEEDDB=1 # trivy must find the DB the owner line warmed: no loop of NOT RUN after a provision
 e "review_checks: ran 5 / wired 5 scanners" && ! e "fixable:" && st '.not_run == [] and .fixable == [] and .partial == []' && ok "after the owner line: ran 5 / wired 5, nothing fixable" || { bad "e2e re-run"; cat "$T/err"; }
 PA=$SCN

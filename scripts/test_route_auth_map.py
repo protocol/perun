@@ -12,6 +12,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from test_route_auth_nestjs import FWD_A, FWD_B, twoscan
+
 ROOT = Path(__file__).resolve().parent.parent
 SK = ROOT / ".claude/skills/deep-code-review/scripts"
 SCRIPT = SK / "route_auth_map.py"
@@ -1651,6 +1653,19 @@ def each(old, a, b, sep=", "):
 
 LIT_POST = r'\s*={2,3}(?!=)\s*[\w$.]+(?=\s*[^\s\w$.?(\[])", post)'  # lit()'s test of what follows the literal
 # One row per rule: replacing `old` (which must occur exactly once in route_auth_map.py) by `new` must change what the script prints.
+FX["nest/body.controller.ts"] = "@Controller('nb')\nexport class NbController {\n  @Post('run')\n  run() { return this.svc.run(@UseGuards(JwtAuthGuard)); }\n}\n"
+FX["nest/cn.controller.ts"] = "@Controller('cn')\n@Meta({ className: 1 })\n@UseGuards(JwtAuthGuard)\nexport class CnController {\n  @Post()\n  a() { return 1; }\n}\n"
+FX["nest/gen.controller.ts"] = "@Controller('gn')\nexport class GnController {\n  @Post('a')\n  @ApiBody<Foo<Bar>>({}) @UseGuards(JwtAuthGuard)\n  a() { return 1; }\n}\n"
+FX["nest/apps/a/src/app.module.ts"] = "providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }]\n"
+FX["nest/apps/a/src/a.controller.ts"] = "@Controller('na')\nexport class NaController {\n  @Post('save')\n  save() { return 1; }\n}\n"
+FX["nest/apps/b/src/b.controller.ts"] = FX["nest/apps/a/src/a.controller.ts"].replace("'na'", "'nbb'").replace("NaController", "NbbController")
+
+
+GOLD += [("nest/body.controller.ts", "@Post('run')", "HIGH: POST /nb/run auth=none"), ("nest/cn.controller.ts", "@Post()", "INFO: POST /cn auth=UseGuards(JwtAuthGuard)"),
+         ("nest/gen.controller.ts", "@Post('a')", "INFO: POST /gn/a auth=UseGuards(JwtAuthGuard)"), ("nest/apps/a/src/a.controller.ts", "@Post('save')", "INFO: POST /na/save auth=global guard, unverified"),
+         ("nest/apps/b/src/b.controller.ts", "@Post('save')", "HIGH: POST /nbb/save auth=none")]
+
+
 MUTANTS = [
     # header: the sibling import must work under -I and leave no bytecode beside the script
     ("sys.dont_write_bytecode = True", "sys.dont_write_bytecode = False"),
@@ -1739,7 +1754,7 @@ MUTANTS = [
     *each(r"(?:onRequest|preHandler|preValidation|preParsing)", "(?:", ")", "|"),
     (r"""(["'])(?:onRequest""", r"""(["])(?:onRequest"""), (r"""(["'])(?:onRequest""", r"""(['])(?:onRequest"""),
     *each(r"(?:express|Router|Hono|Fastify|fastify|Elysia)", "(?:", ")", "|"),
-    (r"=\s*(?:await\s+)?(?:new\s+)?(?:express", r"=\s*(?:new\s+)?(?:express"), (r"(?:new\s+)?", ""), (r"\b(\w+)\s*(?::[^=\n]+)?=\s*(?:await", r"\b(\w+)\s*=\s*(?:await"),
+    (r"=\s*(?:await\s+)?(?:new\s+)?(?:express", r"=\s*(?:new\s+)?(?:express"), (r"(?:await\s+)?(?:new\s+)?(?:express", r"(?:await\s+)?(?:express"), (r"\b(\w+)\s*(?::[^=\n]+)?=\s*(?:await", r"\b(\w+)\s*=\s*(?:await"),
     (r"""\b(\w+)\s*(?::[^=\n]+)?=\s*(?:[Ff]astify""", r"""\b(\w+)\s*=\s*(?:[Ff]astify"""), (r"=\s*(?:await\s+)?(?:require|import)", r"=\s*(?:require|import)"),
     (r"^([ \t]*)@", r"^()@"), (r"@\w+\.(%s|route)", r"@\w\.(%s|route)"), (r'(%s|route)\(" % H, re.M)', r'(%s)\(" % H, re.M)'),
     (r'" % H, re.M)', r'" % H)'),
@@ -1930,7 +1945,7 @@ MUTANTS = [
     ('elif c in ")]}":', 'elif c in ")]":'), ('elif c in ")]}":', 'elif c in ")}":'), ('elif c in ")]}":', 'elif c in "]}":'),
     ("if o < 0: return -1", "pass"), ("elif o == 0:", "elif True:"), ('if c == "<": a += 1', 'if c == "<": a += 2'),
     ('elif c == ">" and m[k - 1] != "=":', 'elif c == ">":'), ('elif c == ">" and m[k - 1] != "=":', 'elif c == ">" and m[k + 1] != "=":'),
-    ("a -= 1", "a -= 2"), ("a -= 1", "pass"), ("if a == 0:", "if a == 1:"),
+    ("a -= 1\n                if a == 0:", "a -= 2\n                if a == 0:"), ("a -= 1\n                if a == 0:", "pass\n                if a == 0:"), ("if a == 0:", "if a == 1:"),
     ("OPEN.match(m, k + 1)", "OPEN.match(m, k)"), ("OPEN.match(m, k + 1)", "OPEN.match(m, k + 2)"), ("OPEN.match(m, k + 1)", "OPEN.search(m, k + 1)"),
     (r'OPEN = re.compile(r"\s*\(")', r'OPEN = re.compile(r"\(")'), (r'OPEN = re.compile(r"\s*\(")', r'OPEN = re.compile(r"\s+\(")'),
     ("return x.end() - 1 if x else -1", "return x.end() if x else -1"),
@@ -2045,8 +2060,12 @@ MUTANTS = [
     ('gated(sites, route) or meth != "GET" and gated([("", mine)], route)', "gated(sites, route)"), ('meth != "GET" and gated(', "gated("), ('meth != "GET" and gated(', 'meth == "GET" and gated('),
     ('gated([("", mine)], route)', "gated([(None, mine)], route)"), ("hooks.get(rcv, ())", "hooks.get(None, ())"), ("hooks.get(rcv, ())", 'hooks.get("app", ())'),
     ("hooks.get(rcv, ()) if p < pos < q]", "hooks.get(rcv, ()) if p < pos]"), ("hooks.get(rcv, ()) if p < pos < q]", "hooks.get(rcv, ()) if pos < q]"),
-    ('hooks, py = hooks or {}, rel.endswith(".py")', 'hooks, py = hooks, rel.endswith(".py")'), ("own.get(rel))", "None)"),
+    ('hooks, py = hooks or {}, rel.endswith(".py")', 'hooks, py = hooks, rel.endswith(".py")'), ("own.get(rel), app_of(rel, mf) in glob)", "None, app_of(rel, mf) in glob)"),
     ('".register" in raw or "addHook" in raw', '".register" in raw'), ('".register" in raw or "addHook" in raw', '"addHook" in raw'),
+    # nest_deco_end span, CLASSKW word boundary, app_of src fallback and marker lookup, nested generics
+    ("g, mp = nest_guard(m, i, dj), NESTPUB.search(m, i, dj)", "g, mp = nest_guard(m, i, j), NESTPUB.search(m, i, j)"),
+    ('CLASSKW = re.compile(r"\\bclass\\b")', 'CLASSKW = re.compile("class")'), ("    if d: return d\n", '    return ""\n'),
+    (r"(?:<[^()]*)?\s*\(?", r"(?:<[^>()]*>)?\s*\(?"),
     # main
     ("len(a) != 1 or not os.path.isdir(a[0])", "len(a) < 1 or not os.path.isdir(a[0])"), ("len(a) != 1 or not os.path.isdir(a[0])", "len(a) != 1"),
     ("print(\"usage: route_auth_map.py [--paths | --all | --privileged] DIR\", file=sys.stderr); return 2", "print(\"usage: route_auth_map.py [--paths | --all] DIR\", file=sys.stderr); return 1"),
@@ -2054,11 +2073,12 @@ MUTANTS = [
     ('m in ("GET", "ANY")', 'm in ("GET",)'), ('m in ("GET", "ANY")', 'm in ("ANY",)'), ('m in ("GET", "ANY")', 'm in ("GET", "ANY", "POST")'),
     ("        return 0\n    rows, files =", "        return 1\n    rows, files ="),
     (' and (r[0], r[1]) not in FWDROWS)', ')'),
+    ("    NESTSAFE.clear(); FWDROWS.clear()\n", ""),
     ('r[4] == "presence-check" and', 'r[4] != "x" and'),
-    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|"))', 'r[4] != "public" and any(x != "GET" for x in r[2].split("|"))'),
-    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|"))', 'r[4] == "none" and all(x != "GET" for x in r[2].split("|"))'),
-    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|"))', 'r[4] == "none" and any(x == "POST" for x in r[2].split("|"))'),
-    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|"))', 'any(x != "GET" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|"))', 'r[4] != "public" and any(x != "GET" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|"))', 'r[4] == "none" and all(x != "GET" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|"))', 'r[4] == "none" and any(x == "POST" for x in r[2].split("|"))'),
+    ('(r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|"))', 'any(x != "GET" for x in r[2].split("|"))'),
     ('"%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4])', '("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))[:-1]'),
 ]
 
@@ -2091,6 +2111,7 @@ def verdict(text, fx, base):
             except subprocess.TimeoutExpired:
                 return "killed"
             if (r.returncode, r.stdout, r.stderr) != want: return "killed"
+        if "HIGH:" not in twoscan(script, FWD_A, FWD_B): return "killed"  # per-scan state reset
         return "killed" if sorted(os.listdir(d)) != sorted(["route_auth_map.py", *SIBLINGS]) else "alive"  # a leftover __pycache__ is a change too
 
 

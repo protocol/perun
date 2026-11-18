@@ -206,7 +206,7 @@ REASON = {
     "deep-code-review/references/security-agent-skills.md": "the skill-security checklist that describes these attacks",
     "agentic-delivery/scripts/subagent_brief_lint.py": "advisory hook; its docstring and stamp writer name the per-user cache dir where it records briefs it already flagged",
     "agentic-ceo/scripts/context_audit.py": "docstring listing the instruction files the read-only audit measures; the script never writes",
-    "deep-code-review/references/tool-hub.md": "hub doc naming the ZAP baseline container image host; documents the route, which never pulls the image silently",
+    "deep-code-review/references/tool-hub.md": "hub doc naming the ZAP baseline container image host (the route never pulls it silently)",
     "deep-code-review/scripts/provision_tools.sh": "prints, never runs, the owner line that downloads the semgrep p/default snapshot from semgrep.dev; the owner pastes it outside the sandbox",
 }
 

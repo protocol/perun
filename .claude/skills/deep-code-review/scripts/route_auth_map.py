@@ -10,7 +10,7 @@ OF AUTHENTICATION: the scan only sees the call shapes listed below.
    pages/api/** (methods read from `req.method` checks, else ANY), "use server" exported async functions (METHOD ACTION), Express/Router/Hono/
    Fastify `<receiver>.get|post|put|patch|delete|all("/path", ...)` (TS type arguments allowed: `app.post<{ Body: Widget }>("/path", h)`), raw node:http / fetch-handler dispatch (a file that calls `createServer(`,
    `Deno.serve(`, `Bun.serve(` or defines `fetch(request) {`: one handler per `if (pathname === "/x" && req.method === "POST")` branch or `switch (pathname) { case "/x": ... }` case, either operand order,
-   `url.pathname`, a `pathname` variable or `req.url`, a path literal or a same-file `const X = "/x"`; the method comes from the condition, the block or an enclosing `if`, and a branch with no method test, a branch in a class that is not `export default class` (a Durable Object), a `startsWith` or regex dispatch and an imported path constant are not seen; identity evidence before the dispatch in the enclosing function counts, an earlier branch's block does not), FastAPI `@x.get(...)` and Flask `@x.route(..., methods=[...])` decorators.
+   `url.pathname`, a `pathname` variable or `req.url`, a path literal or a same-file `const X = "/x"`; the method comes from the condition, the block or an enclosing `if`, and a branch with no method test, a branch in a class that is not `export default class` (a Durable Object), a `startsWith` or regex dispatch and an imported path constant are not seen; identity evidence before the dispatch in the enclosing function counts, an earlier branch's block does not), FastAPI `@x.get(...)` and Flask `@x.route(..., methods=[...])` decorators, NestJS `@Controller('prefix' | { path })` classes with `@Get|Post|Put|Patch|Delete|All|Head|Options('path' | ['a', 'b'])` members (`@UseGuards(X)` on the member or class is the evidence, a Throttler or RateLimit guard is not, `@Public()`-style decorators read `public`, `none` otherwise; a repo that wires a non-rate-limit `APP_GUARD` or `useGlobalGuards(` reads `global guard, unverified` for the unguarded ones; a constant path reads `{?}`).
    `--paths` and `--all` also inventory (no auth evidence is judged for these; default mode prints one UNJUDGED line per file with state-changing Go, Spring, PHP or Django routes) Go (`HandleFunc|Handle("[METHOD ]/p")` incl. Go 1.22 patterns, chi/gin/echo `x.Get|GET|Any("/p")`, `x.Handle|Method|Add("GET", "/p")`,
    gorilla `.Methods(...)`, with `Group`/`PathPrefix` variables and chi `Route("/a", func...)` prefixes), Spring (`@Get|Post|Put|Patch|DeleteMapping`, `@RequestMapping` with `method=`, array paths, the class-level `@RequestMapping` prefix)
    Django urlconfs (`path|re_path|url`, method ANY, `include("pkg.urls")` prefixes resolved to a scanned file) and PHP (Symfony `#[Route(path, methods: [...])]` attributes and `@Route` annotations, with the class-level
@@ -50,7 +50,7 @@ custom names reads none; an identity check that calls no listed name (`ctx.state
 only one level through same-file functions (from a route's own arguments, not from `.use(guard)`), and a name in IDENTITY covers by name alone;
 Flask `before_request` and FastAPI `@app.middleware` guards are not followed (those routes read none); server actions are not matched against
 middleware; the shown route has no mount prefix; ANY has no method check, so a read-only
-pages/api handler can be over-flagged; not handled: Django urls, NestJS decorators, `.route(path).get()` chains, calls chained on a call result
+pages/api handler can be over-flagged; not handled: Django urls,`.route(path).get()` chains, calls chained on a call result
 (`new Elysia().get(...)`) or split from their receiver by whitespace, `fastify.route({...})`, `app.on(...)`, a call with a spread argument
 (`app.post("/x", ...guards, h)`), inline "use server", wrapped action consts (`export const a = wrap(async ...)`), template or computed route
 paths, `.all("/x/*", guard)` as a gate (it reads as an ANY route). A type-argument list is read only when its angle brackets balance within 2000 characters with no `;`, `&&` or `||` outside
@@ -407,6 +407,124 @@ def call_hs(m, mk, hs, uses, gone):
                        ident(",".join(a[0] for a in ps[:-1]), True), r, None))
 
 
+NEST = re.compile(r"@Controller\s*\(")
+NESTM = re.compile(r"@(Get|Post|Put|Patch|Delete|All|Head|Options)\s*\(")
+NESTG = re.compile(r"@UseGuards\s*\(")
+NESTSTR = re.compile(r"""(["'`])([^"'`]*)\1""")
+NESTPUB = re.compile(r"@(?:Public|IsPublic|SkipAuth|NoAuth|AllowAnonymous|AllowUnauthenticated)\s*\(")
+CLASSKW = re.compile(r"\bclass\b")
+NESTGLOBAL = re.compile(r"\bAPP_GUARD\b|\buseGlobalGuards\s*\(")
+NESTRATE = re.compile(r"(?![\w$.]*(?:auth|jwt|session|role|permission))[\w$.]*(?:throttl|rate_?limit)", re.I)  # `.match`: a rate-limit guard is no identity check, unless its name also says Auth, Jwt, Session, Role or Permission
+
+
+NESTDECO = re.compile(r"@[\w$.]+\s*(?:<[^()]*)?\s*\(?")  # `@Name`, optionally spaced, with a generic argument (nested `<A<B>>` too: skipped up to the next paren), and its opening paren
+
+
+def nest_deco_end(m, i, j):
+    """End of the run of decorators (`@Name(...)`) that starts at m[i:j] after whitespace: where the member signature begins, so a `@UseGuards(` or `@Public(` inside a body or parameter list is not a member decorator."""
+    p = i
+    while True:
+        while p < j and m[p].isspace(): p += 1
+        t = NESTDECO.match(m, p, j)
+        if not t: return p
+        p = t.end()
+        if t[0].endswith("("): p = max(close_of(m, p - 1), p) + 1
+
+
+def nest_guard(m, i, j):
+    """Name of the first `@UseGuards(...)` argument in masked m[i:j] that is not a rate-limit guard (`AuthGuard('jwt')` reads AuthGuard), else None."""
+    for t in NESTG.finditer(m, i, j):
+        cl = close_of(m, t.end() - 1)
+        for n in re.findall(r"(?<![\w$.])[A-Za-z_$][\w$.]*", m[t.end():cl] if cl > 0 else ""):
+            if not NESTRATE.match(n): return n
+
+
+def app_roots(rel, raw):
+    """App-root directories a manifest-ish file marks: its own dir for `package.json`, `nest-cli.json`, `main.ts`, `tsconfig.app.json`; plus each `projects.*.root` of a `nest-cli.json` (monorepo mode)."""
+    d, out = os.path.dirname(rel), {os.path.dirname(rel)}
+    if os.path.basename(rel) == "nest-cli.json":
+        try: ps = json.loads(raw).get("projects") or {}
+        except ValueError: ps = {}
+        for v in ps.values() if isinstance(ps, dict) else ():
+            if isinstance(v, dict) and isinstance(v.get("root"), str): out.add("" if (q := posixpath.normpath(posixpath.join(d, v["root"]))) == "." else q)
+    return out
+
+
+def app_of(rel, mf):
+    """The app a file belongs to: its nearest directory above (set mf, from app_roots) marking an app, else "" (the repo root); a global guard reaches only controllers of its own app.
+    ponytail: a workspace lib with its own package.json that exports an APP_GUARD module is its own "app", so it does not reach the apps importing it; those routes read auth=none (HIGH), the safe direction. A nested `main.ts` or `tsconfig.app.json` (`src/cli`) is likewise its own app, which a global guard does not reach (safe)."""
+    d = os.path.dirname(rel)
+    while d and d not in mf: d = os.path.dirname(d)
+    if d: return d
+    ps = rel.split("/")[:-1]  # no marker below the root: the dir above the deepest `src/` (apps/a/src/x.ts -> apps/a), so sibling apps stay apart
+    return "/".join(ps[:len(ps) - ps[::-1].index("src") - 1]) if "src" in ps else ""
+
+
+def nest_global(m):
+    """True when masked text m wires an auth-looking global guard: a class named by `APP_GUARD` (`useClass|useExisting|useValue: X`) or `useGlobalGuards(new X())` that is not a rate-limit guard."""
+    names = []
+    for t in NESTGLOBAL.finditer(m):
+        if t[0] == "APP_GUARD":  # the whole enclosing `{ provide, useClass }` object, whichever order
+            a, d = t.start() - 1, 0
+            while a >= 0 and (d or m[a] != "{"): d += (m[a] == "}") - (m[a] == "{"); a -= 1
+            cl = close_of(m, a) if a >= 0 else -1
+            names += re.findall(r"(?:useClass|useExisting|useValue)\s*:\s*(?:new\s+)?([\w$.]+)", m[a:cl] if cl > 0 else "")
+        else:
+            cl = close_of(m, t.end() - 1)
+            names += re.findall(r"(?<![\w$.])[A-Za-z_$][\w$.]*", m[t.end():cl])
+    return any(n != "new" and not NESTRATE.match(n) for n in names)
+
+
+def nest_paths(a):
+    """Paths named by the arguments a (strings kept) of a Controller or verb decorator: a string, an array of strings (all of them), or the `path:` key of an options object; empty is [""];
+    a part that is no string literal (a constant) reads `{?}`, so the row names an unresolved path, never the prefix alone."""
+    a = a.strip()
+    if a.startswith("{"):
+        x = re.search(r"\bpath\s*:\s*(\[[^\]]*\]|[^,}]*)", a)
+        a = x[1].strip() if x else ""
+    els = [e.strip() for e in a.strip("[] \n").split(",") if e.strip()]
+    return [(NESTSTR.fullmatch(e) or [0, 0, "{?}"])[2] for e in els] or [""]
+
+
+def nest_hs(m, mk, hs, gone, glob=False):
+    """NestJS `@Controller('prefix')` classes: each `@Get|Post|Put|Patch|Delete|All|Head|Options('path')` member is a route `/prefix/path` (an array of paths gives one route each; `{ path }` object form read).
+    Evidence: `@UseGuards(X)` on the member or on the class (a decorator above or below `@Controller`, never reaching back past the previous class), a rate-limit guard (Throttler, RateLimit) excluded; else a `@Public()`-style
+    decorator reads `public`; else, when the repo wires an auth-looking global guard (`APP_GUARD`, `useGlobalGuards(`), `global guard, unverified`.
+    ponytail: guards are matched by presence, never by what the guard class checks; a guard built inline or by a factory reads by its first identifier. `setGlobalPrefix(...)` and URI versioning
+    (`enableVersioning`, `version:` in `@Controller`/`@Version`) are not applied: a row's path is the controller prefix plus the member path only.
+    A global guard reaches only controllers of its own app (see app_of)."""
+    prev = 0
+    for t in NEST.finditer(m):
+        op = t.end() - 1; cl = close_of(m, op)
+        k = CLASSKW.search(m, cl)
+        k = k.start() if k else -1
+        b = m.find("{", k) if k > 0 else -1
+        e = close_of(m, b) if b > 0 else -1
+        if e < 0: continue
+        pres = nest_paths(mk[op + 1:cl])
+        w = max(m.rfind("\n}", 0, t.start()), m.rfind(";", 0, t.start()), prev)
+        cg, cp = nest_guard(m, w, k), NESTPUB.search(m, w, k)
+        prev = e + 1
+        gone.append((t.start(), e + 1))
+        i = b + 1
+        while i < e:  # one class member per pass: ends at the `}` or `;` that closes it at depth 0
+            j, d = i, 0
+            while j < e:
+                c = m[j]
+                d += (c in "([{") - (c in ")]}")
+                if d == 0 and c in ";}": break
+                j += 1
+            for r in NESTM.finditer(m, i, j):
+                o = r.end() - 1; c2 = close_of(m, o)
+                dj = nest_deco_end(m, i, j)
+                g, mp = nest_guard(m, i, dj), NESTPUB.search(m, i, dj)  # a member guard or member @Public beats the class guard
+                g = g or (None if mp else cg)
+                lab = "UseGuards(%s)" % g if g else "public" if cp or mp else "global guard, unverified" if glob else None
+                for y in nest_paths(mk[o + 1:c2] if c2 > 0 else ""):
+                    for p in pres: hs.append((r.start(), "ANY" if r[1] == "All" else r[1].upper(), join(p, y), [(i, j)], lab, None, None))
+            i = j + 1
+
+
 def py_hs(m, mk, hs, gone):
     """FastAPI `@x.get("/p")` and Flask `@x.route("/p", methods=[...])` decorators; the span is the route decorator, the ones below it, the signature and the body.
     Decorators ABOVE the route decorator are not evidence for it: the framework registers the undecorated function."""
@@ -631,11 +749,12 @@ def priv_ctx(ctx, rcv, route, pos, fn, mk):
     return "", gt, False
 
 
+NESTSAFE = set()  # (file, line) of NestJS @Head/@Options members: a safe method, never HIGH; other frameworks keep the GET-only rule (none emits a HEAD/OPTIONS row today: Express/Fastify/Next/Flask read VERBS only, Go's HEAD|OPTIONS rows never reach scan())
 FWDROWS = set()  # (file, line) of handlers whose span forwards an Authorization/Bearer credential
 BODY = {}  # (file, line) -> the handler's own and helper text with strings kept, filled by analyze() for --privileged
 
 
-def analyze(rel, raw, mws, sites=None, hooks=None):
+def analyze(rel, raw, mws, sites=None, hooks=None, glob=False):
     """[(path, line, METHOD, route, auth)] for one file; sites: the wiring() sites that wire the file, for the root-hook evidence; hooks: the wiring() hooks of the file itself.
     A non-GET route is also covered by the hook of its own receiver declared before it in a block that holds the route (a route above the hook keeps its own evidence, and a GET reads INFO either way).
     ponytail: source order stands in for Fastify registration order, so a route added before the hook is never credited (conservative); block nesting stands in for encapsulation, so a hook
@@ -657,6 +776,9 @@ def analyze(rel, raw, mws, sites=None, hooks=None):
             for t in re.finditer(r"^export\s+async\s+function\s+(\w+)|^export\s+const\s+(\w+)\s*=\s*async\b", m, re.M):
                 gone.append((t.end(), nextdecl(m, t.start())))
                 hs.append((t.start(), "ACTION", t.group(1) or t.group(2), [gone[-1]], None, None, None))
+        n0 = len(hs)
+        nest_hs(m, mk, hs, gone, glob)
+        nestpos = {h[0] for h in hs[n0:] if h[1] in ("HEAD", "OPTIONS")}
         call_hs(m, mk, hs, uses, gone)
         raw_hs(m, mk, hs, gone)
     ctx = pyctx(m, mk) if py else jsctx(m, mk, fn)  # for --privileged only
@@ -671,6 +793,7 @@ def analyze(rel, raw, mws, sites=None, hooks=None):
         pfx, gt, gate = priv_ctx(ctx, r_, route, pos, fn, mk)
         EXTRA[(rel, ln)] = (pfx, gt, gate)
         if any(FWD.search(mk[a:b]) for a, b in spans): FWDROWS.add((rel, ln))
+        if not py and pos in nestpos: NESTSAFE.add((rel, ln))
         got = [(ident(m[a:b]), tok(mk[a:b])) for a, b in spans + [fn[w] for w in sorted(set(re.findall(r"[\w$]+", own))) if w in fn]] + [(mod, False)]
         use = next((u[3] for u in uses if u[0] == rcv and u[1] < pos and (route == u[2] or route.startswith(u[2] + "/"))), None)
         pats = mws.get(mwb) if mwb is not None else None
@@ -689,25 +812,31 @@ def read(root, rel):
 
 
 def scan(root):
-    files = []
+    files, mf = [], set()
     for dp, dn, fn in os.walk(root):
         dn[:] = sorted(d for d in dn if d not in SKIP_DIR)
+        for f in fn:
+            if f in ("nest-cli.json", "package.json", "main.ts", "tsconfig.app.json"):
+                rl = os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/")
+                mf |= app_roots(rl, read(root, rl) if f == "nest-cli.json" else "")
         for f in sorted(fn):
             rel = os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/")
             if f.endswith(EXT) and not TEST.search(rel): files.append(rel)
     known = set(files)
-    mws, rows, todo, cov, own = {}, [], [], {}, {}  # todo: files with handlers; cov: file -> wiring() sites that wire it; own: file -> its own wiring() hooks
+    NESTSAFE.clear(); FWDROWS.clear()
+    glob, mws, rows, todo, cov, own = set(), {}, [], [], {}, {}  # todo: files with handlers; cov: file -> wiring() sites that wire it; own: file -> its own wiring() hooks
     for rel in files:
         raw = read(root, rel) if MWF.fullmatch(os.path.basename(rel)) else None
         if raw is not None: mws[os.path.dirname(rel)] = mw_pats(mask(raw), mask(raw, True))
     for rel in files:
         raw = read(root, rel)
         if raw is None: continue
+        if NESTGLOBAL.search(raw) and nest_global(mask(raw, True)): glob.add(app_of(rel, mf))
         if ".register" in raw or "addHook" in raw:
             own[rel], sites = wiring(rel, raw, known)
             for f, site in sites: cov.setdefault(f, []).append(site)
-        if NAPP.match(rel) or NAPI.match(rel) or (PYDEC if rel.endswith(".py") else JSPRE).search(raw) or not rel.endswith(".py") and SRV.search(raw): todo.append((rel, raw))
-    for rel, raw in todo: rows += analyze(rel, raw, mws, cov.get(rel), own.get(rel))
+        if NAPP.match(rel) or NAPI.match(rel) or (PYDEC if rel.endswith(".py") else JSPRE).search(raw) or not rel.endswith(".py") and (NEST.search(raw) or SRV.search(raw)): todo.append((rel, raw))
+    for rel, raw in todo: rows += analyze(rel, raw, mws, cov.get(rel), own.get(rel), app_of(rel, mf) in glob)
     return sorted(rows), len(todo)
 
 
@@ -956,7 +1085,7 @@ def main(argv):
         for r, why in pv: print("%s:%d: PRIV: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why))
         return 0
     print("heuristic; scanned %d files with %d handlers; silence is not proof of authentication" % (files, len(rows)), file=sys.stderr)
-    out = [(r, "HIGH" if (r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" for x in r[2].split("|")) else "INFO") for r in rows]
+    out = [(r, "HIGH" if (r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|")) else "INFO") for r in rows]
     for r, s in out: print("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))
     hi = [(r, s) for r, s in out if s == "HIGH"]
     uj = unjudged(a[0])
