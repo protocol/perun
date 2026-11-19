@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """ownership_sibling_check.py (OWASP API1 object-level authorization by sibling comparison): seeded positives and near-miss negatives
 over Express, Flask, FastAPI and Django, the output-line contract, exit code and the skipped path segments. Fixtures are fictional
-(Acme, example.com) tempdir files; each positive pins the exact reported line; each negative must stay silent."""
+(Acme, example.com) tempdir files; each positive pins the exact reported line; each negative prints no OWNERSHIP row,
+and a negative whose handler has its own check prints it as OWNERSHIP-CHECKED with the class and line read."""
 import subprocess
 import sys
 import tempfile
@@ -216,6 +217,20 @@ def patch_task(task_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404)
     return task
 """, None),
+    "pos_forbidden_is_no_ownership_check.py": (FASTAPI_BASE + """@app.get('/tasks/{task_id}')
+def get_task(task_id: int, session: Session = Depends(get_session)):
+    task = session.get(Task, task_id)
+    if task.archived:
+        raise HTTPException(status_code=403, detail='Forbidden')
+    return task
+
+@app.patch('/tasks/{task_id}')
+def patch_task(task_id: int, session: Session = Depends(get_session)):
+    task = session.get(Task, task_id)
+    if task.owner_id != current_user.id:
+        raise HTTPException(status_code=404)
+    return task
+""", "task = session.get(Task, task_id)|get_task|task|patch_task"),
     "neg_depends_guard.py": (FASTAPI_BASE + """@app.get('/tasks/{task_id}')
 def get_task(task_id: int, task=Depends(get_owned_task), session: Session = Depends(get_session)):
     task = session.get(Task, task_id)
@@ -288,7 +303,7 @@ class OwnershipSiblingCheck(unittest.TestCase):
                 f.write_text(src)
                 r = run(f)
                 self.assertEqual(r.returncode, 0, r.stderr)
-                lines = r.stdout.splitlines()
+                lines = [x for x in r.stdout.splitlines() if ": OWNERSHIP: " in x]
                 if want is None:
                     self.assertEqual(lines, [], name)
                     continue
@@ -297,6 +312,37 @@ class OwnershipSiblingCheck(unittest.TestCase):
                 self.assertEqual(len(lines), 1, (name, lines))
                 self.assertTrue(lines[0].startswith(str(f) + f":{line}: OWNERSHIP: "), lines[0])
                 self.assertTrue(lines[0].endswith(f"OWNERSHIP: {handler} loads {model} by client id; sibling {sib} checks ownership"), lines[0])
+
+    def test_handler_check_demotes_the_row(self):
+        # a handler with its own check is kept as OWNERSHIP-CHECKED with the class and line the scan read, never dropped or left an OWNERSHIP row
+        want = {"neg_decorator.py": ("show_report", "decorator-guard", "@owner_required"),
+                "neg_helper_call.py": ("read_doc", "guard-call", "check_ownership(doc, user)"),
+                "neg_scoped_itself.py": ("view_invoice", "requester-compare", "invoice = Invoice.objects.filter(owner=request.user).get(pk=")}
+        for name, (handler, cls, match) in want.items():
+            with self.subTest(name), tempfile.TemporaryDirectory() as d:
+                f = Path(d) / name
+                f.write_text(CASES[name][0])
+                r = run(f)
+                rows = [x.split(": OWNERSHIP-CHECKED: ", 1)[1] for x in r.stdout.splitlines() if ": OWNERSHIP-CHECKED: " in x]
+                self.assertEqual(next(x for x in rows if x.startswith(handler + " ")).rsplit(" (", 1)[1], f"class={cls}; match={match})")
+                self.assertNotIn(": OWNERSHIP: ", r.stdout)
+                self.assertRegex(r.stderr, r"0 OWNERSHIP rows, [1-9]\d* OWNERSHIP-CHECKED")
+
+    def test_check_class_order_and_match(self):
+        # a decorator guard wins over a guard call in the same handler; a comparison is the match even below a line that only names the current user;
+        # a lookup of another model scoped to the user on a bare-auth line is no check on the record loaded by client id
+        dec = CASES["neg_decorator.py"][0].replace("    report = Report.query.get(rid)\n", "    report = Report.query.get(rid)\n    check_ownership(report, current_user)\n", 1)
+        cmp = CASES["neg_handler_compares.js"][0].replace("  if (note.owner", "  log(req.user.id);\n  if (note.owner", 1)
+        other = CASES["neg_handler_compares.js"][0].replace("  if (note.owner.toString() !== req.user.id) return res.sendStatus(404);\n",
+                                                            "  if (!req.user) return res.sendStatus(401); const tag = await Tag.findOne({ owner: req.user.id });\n", 1)
+        for name, src, want in (("order.py", dec, "OWNERSHIP-CHECKED: show_report loads report by client id; sibling drop_report checks ownership (class=decorator-guard; match=@owner_required)"),
+                                ("compare.js", cmp, "OWNERSHIP-CHECKED: GET /notes/:id loads note by client id; sibling DELETE /notes/:id checks ownership "
+                                                    "(class=requester-compare; match=if (note.owner.toString() !== req.user.id) return res.sendSt)\n"),
+                                ("other.js", other, ": OWNERSHIP: GET /notes/:id loads note by client id; sibling DELETE /notes/:id checks ownership\n")):
+            with self.subTest(name), tempfile.TemporaryDirectory() as d:
+                f = Path(d) / name
+                f.write_text(src)
+                self.assertIn(want, run(f).stdout)
 
     def test_skips_test_segments_and_dirs(self):
         with tempfile.TemporaryDirectory() as d:

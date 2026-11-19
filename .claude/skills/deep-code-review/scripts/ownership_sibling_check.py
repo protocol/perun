@@ -14,10 +14,11 @@ the same model or store with the current user in the lookup (`filter(owner=reque
 it and compares the record's owner field with the current user. The handler is reported only when it does neither.
 
 Output: one line per finding, `REL/PATH:LINE: OWNERSHIP: <handler> loads <model> by client id; sibling <handler2> checks ownership`, LINE
-being the lookup line; exit 0 always (2 on bad usage). Stays silent when the handler itself scopes the lookup, compares an owner, calls a
-guard helper (owner / authorize / can_* / policy ...), raises 403, mentions the current user beyond a bare authenticated check, is
-guarded by a decorator / `Depends` / route middleware / class-level `get_queryset` or permission whose name says owner or authorize;
-when the id is not client-supplied; or when the sibling scopes a different model.
+being the lookup line; exit 0 always (2 on bad usage). When the handler itself scopes the lookup, compares an owner, calls a guard helper
+(owner / authorize / can_* / policy ...), mentions the current user beyond a bare authenticated check, or is guarded by a decorator /
+`Depends` / route middleware / class-level `get_queryset` or permission whose name says owner or authorize, the row is demoted, not dropped:
+`... OWNERSHIP-CHECKED: <same text> (class=<decorator-guard|guard-call|requester-compare>; match=<masked line read>)`, so a reviewer can
+see what the scan took as the check. Silent when the id is not client-supplied, or when no sibling checks the same model.
 
 Known limits (NOT covered, so silence proves nothing): lookups hidden in a helper function or service layer (only code inside the
 handler is read); a current user derived indirectly (`u = load_session(); ... u.id`) unless the name is user / owner shaped; handlers
@@ -40,14 +41,14 @@ STRONG = re.compile(r"(?:self\.)?(?:req|request)\.(?:user|auth|userId|user_id)(?
 WEAK = ("user", "user_id", "userId", "uid", "owner", "owner_id", "ownerId", "created_by", "createdBy", "author_id", "authorId",
         "tenant_id", "tenantId", "org_id", "orgId", "account_id", "accountId", "team_id", "teamId")
 WEAK_RE = re.compile(r"(?<![\w.])(" + "|".join(WEAK) + r")\b")
-OWN_ATTR = re.compile(r"\.\s*(?:owner|user|author|creator|created_?by|account|tenant|org|team|member|uid)\w*", re.I)
+OWNER_WORDS = r"owner|user|author|creator|created_?by|account|tenant|org|team|member|uid"  # the owner-side words; route_auth_map.py's ownership rows reuse this list
+OWN_ATTR = re.compile(r"\.\s*(?:" + OWNER_WORDS + r")\w*", re.I)
 COMPARE = re.compile(r"[!=]==?|\.equals\(|\bnot in\b|\bis not\b|\bin\b|\.includes\(|\.toString\(\)\s*[!=]")
 # A call/decorator/Depends/route-middleware whose NAME says the object owner is checked (a bare "permission" or "login" is not enough).
 GUARD = re.compile(r"owner|ownership|owns\b|authori[sz]e|\bcan_?(?:access|edit|view|read|write|delete|update|modify|manage)|policy|has_?access|"
                    r"check_?access|verify_?access|ensure_?access|require_?access|get_?owned|user_passes_test|abilit|object_?permission|"
                    r"Is\w*(?:Author|Creator)\b|belongs_?to", re.I)
 GUARD_CALL = re.compile(r"\b\w*(?:" + GUARD.pattern + r")\w*\s*\(", re.I)
-DENY = re.compile(r"\b403\b|Forbidden|PermissionDenied|PermissionError")
 AUTH_ONLY = re.compile(r"(?:!|\bnot\s)\s*\(?[\w.?]*(?:user|session|auth)\w*\)?\s*(?:[:){]|$)|is_?[Aa]uthenticated|\.isAuthenticated\(")
 INFRA = {"self", "cls", "request", "req", "res", "response", "next", "db", "session", "current_user", "user", "background_tasks", "args", "kwargs"}
 PY_SRC = r"request\.(?:args|GET|POST|json|form|data|query_params|values|view_args|get_json|body)|kwargs"
@@ -155,9 +156,8 @@ def cur_hit(text, client):
 
 
 def own_compare(body, client):
-    for ln in body.split("\n"):
-        if COMPARE.search(ln) and OWN_ATTR.search(STRONG.sub(" ", ln)) and cur_hit(ln, client): return True
-    return False
+    """The first line of body that compares a record's owner field with the current user, else None."""
+    return next((ln for ln in body.split("\n") if COMPARE.search(ln) and OWN_ATTR.search(STRONG.sub(" ", ln)) and cur_hit(ln, client)), None)
 
 
 class H:
@@ -322,11 +322,14 @@ def checks(h):
 
 
 def exempt(h, py):
-    """The handler itself has some ownership evidence beyond the sibling comparison."""
-    if GUARD.search(h.ctx) or GUARD_CALL.search(h.body) or DENY.search(h.body) or own_compare(h.body, h.client): return True
-    for ln in h.body.split("\n"):
-        if cur_hit(ln, h.client) and not AUTH_ONLY.search(ln): return True
-    return False
+    """(class, match) of the handler's own ownership evidence beyond the sibling comparison, else None; match is the masked line read, whitespace collapsed, at most 60 characters.
+    `decorator-guard`: an owner / authorize word in its decorators, route middleware or class gates (h.ctx). `guard-call`: a guard helper call in the body. `requester-compare`: an owner-vs-user
+    comparison or a line naming the current user beyond a bare authenticated check (a scoped lookup on such a line is no check on the record loaded by client id)."""
+    for cls, t, rx in (("decorator-guard", h.ctx, GUARD), ("guard-call", h.body, GUARD_CALL)):
+        m = rx.search(t)
+        if m: return cls, " ".join(t[t.rfind("\n", 0, m.start()) + 1:].split("\n", 1)[0].split())[:60]
+    ln = own_compare(h.body, h.client) or next((x for x in h.body.split("\n") if cur_hit(x, h.client) and not AUTH_ONLY.search(x)), None)
+    return ln and ("requester-compare", " ".join(ln.split())[:60])
 
 
 def stores_of(s, py):
@@ -349,14 +352,15 @@ def scan_file(path, rel):
     for h in hs: find_lookups(h, py, stores)
     out = []
     for h in hs:
-        if exempt(h, py) or any(m in checks(h) for m, _, _ in h.lookups): continue
+        ex = exempt(h, py)
         seen = set()
         for model, off, stmt in h.lookups:
             if model in seen or not client_id(h, stmt, py): continue
             sib = next((o for o in hs if o is not h and model in checks(o)), None)
             if sib is None: continue
             seen.add(model)
-            out.append((rel, lineno(s, off), f"{rel}:{lineno(s, off)}: OWNERSHIP: {h.name} loads {model} by client id; sibling {sib.name} checks ownership"))
+            row = f"{h.name} loads {model} by client id; sibling {sib.name} checks ownership"
+            out.append((rel, lineno(s, off), f"{rel}:{lineno(s, off)}: " + (f"OWNERSHIP-CHECKED: {row} (class={ex[0]}; match={ex[1]})" if ex else f"OWNERSHIP: {row}")))
     return out
 
 
@@ -374,7 +378,7 @@ def files_of(paths):
 def main(argv):
     if len(argv) < 2 or any(not os.path.exists(a) for a in argv[1:]):
         print("usage: ownership_sibling_check.py PATH...", file=sys.stderr); return 2
-    seen, n = set(), 0
+    seen, n, c = set(), 0, 0
     for f in files_of(argv[1:]):
         rel = os.path.relpath(f)
         if rel.startswith(".."): rel = os.path.abspath(f)
@@ -384,8 +388,8 @@ def main(argv):
         except Exception as ex:
             print(f"ownership_sibling_check: skipped {rel}: {ex}", file=sys.stderr); continue
         for _, _, line in out:
-            print(line); n += 1
-    print(f"heuristic; scanned {len(seen)} files; silence is not proof of object-level authorization", file=sys.stderr)
+            print(line); c += "OWNERSHIP-CHECKED: " in line; n += "OWNERSHIP-CHECKED: " not in line
+    print(f"heuristic; scanned {len(seen)} files; {n} OWNERSHIP rows, {c} OWNERSHIP-CHECKED (the handler has its own check); silence is not proof of object-level authorization", file=sys.stderr)
     return 0
 
 
