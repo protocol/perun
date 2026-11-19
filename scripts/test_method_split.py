@@ -19,7 +19,7 @@ import review_load_bytes as r  # noqa: E402
 
 R = ROOT / ".claude/skills/deep-code-review/references"
 FILES = ("method.md", "method-diff.md", "method-lenses.md")
-CORE_CAP = 30000  # old file 43524 B; 30467 would be exactly -30%
+CORE_CAP = 30200  # old file 43524 B; 30467 would be exactly -30%. Raised from 30000 for the known-vuln dependency impact-path clause.
 h = lambda s: hashlib.sha256(s.strip().encode()).hexdigest()[:16]  # noqa: E731
 text = lambda n: (R / n).read_text(encoding="utf-8")  # noqa: E731
 OLD = [x for x in (ROOT / "scripts/method-split-lines.txt").read_text().split()]

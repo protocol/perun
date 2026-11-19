@@ -360,6 +360,7 @@ owner action is not a finding. Drop or demote to Nit/Info:
   reported at provisional severity that blocks only once a path is shown, not asserted as a
   confirmed High on suspicion (the *mechanism-unproven* rule applied to the classes that most
   produce false alarms; a proven impact path re-promotes it to its real severity);
+  a known-vuln dependency's path is its advisory's impact plus a verified unauthenticated or self-signup route to the vulnerable call: one request crashes/hangs the process = High, volume/leak only = Medium, known-exploited = Critical/High;
 - a recommendation that would break a passing test (already `REFUTED`);
 - a kit leftover (`AGENTS.md` / `CLAUDE.md` still describing a scaffold
   `app/` layout while the real product lives in `apps/` or `packages/`) —

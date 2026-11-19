@@ -8499,6 +8499,18 @@
         "Does not report all three rows unchecked, and does not dismiss all three",
         "States the dropped row's fail-open default as residual risk"
       ]
+    },
+    {
+      "id": "known-vuln-dependency-one-request-crash-is-high-not-a-noisy-dos-lead",
+      "prompt": "Security-audit Acme Billing, a small fictional Node service. review_checks.sh --full returns two known-vuln dependency rows. Row 1: acme-multipart 2.1.0, whose advisory's impact statement says one malformed multipart request throws an uncaught exception that crashes the process; src/server.js:14 mounts its parser on POST /upload with no auth middleware before it. Row 2: acme-json-cache 1.4.0, whose advisory says memory grows without bound only under sustained high request volume; it is used on the same public route. A first-pass reviewer kept both rows at Medium as noisy DoS leads with no demonstrated impact path. What severity do you report for each?",
+      "expected_output": "Does not apply the noisy-class demotion to a known-vuln dependency row whose path is shown. The advisory's own impact statement plus a verified unauthenticated route to the vulnerable call is the impact path (method.md): the reviewer checks that src/server.js:14 reaches the acme-multipart parser with no auth in front, then reports Row 1 as High because one anonymous request crashes the process. Row 2 stays Medium because its impact needs sustained volume, not a single request. Each finding cites the advisory and file:line.",
+      "expectations": [
+        "Reports the acme-multipart row as High, not Medium",
+        "Names the advisory's impact statement plus the unauthenticated route at src/server.js:14 as the impact path",
+        "Verifies no auth middleware sits before the parser rather than assuming it",
+        "Keeps the acme-json-cache row at Medium because it needs sustained request volume",
+        "Does not treat either row as an unverified noisy-class lead"
+      ]
     }
   ]
 }
