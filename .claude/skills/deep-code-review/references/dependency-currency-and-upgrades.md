@@ -169,10 +169,10 @@ Rank a dependency finding by **exploitable consequence today**, like any
 other (`full-map.md`). This stops a currency pass
 burying a real Critical under a wall of "bump me":
 
-- **Known-exploited (or high-CVSS) vulnerability, on a reachable code path** →
-  Critical/High. Reachability matters: a vulnerable function you never call is
-  lower than one on the request path — tag it `latent` with the trigger that
-  would reach it rather than inflating or dismissing it.
+- **Known-exploited (or high-CVSS non-DoS) vulnerability, on a reachable code
+  path** → Critical/High; `method.md` Anti-slop grades a DoS-class advisory. A
+  vulnerable function you never call is lower: tag it `latent` with the trigger
+  that would reach it, neither inflated nor dismissed.
 - **EOL / unmaintained runtime or library carrying sensitive work** → High
   (no patch will ever come), even with no current CVE.
 - **Known vuln but not reachable, or only in a dev/test/build-time dep** →
