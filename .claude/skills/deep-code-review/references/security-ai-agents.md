@@ -188,11 +188,11 @@ lens named in parentheses — do not re-walk the general form. The **OWASP MCP T
 (`owasp.org/www-project-mcp-top-10`, lead V. Verma Sehgal) catalogs this layer but is
 **Phase-3 beta** — name it if a target cites it, but do **not** walk its `MCPxx:2025`
 IDs as current (cf. the 2025 compatibility map above). The OWASP **Agent Control Standard (ACS)**
-(`genai.owasp.org`) is the same shape of pre-stable spec — a runtime-governance layer (Instrument /
-Trace / Inspect; a Guardian-Agent hook contract) rather than a risk catalog, and **pre-1.0** (spec
-v0.1.0, tag v0.1.4, the newest as of 2026-11-19): name it if a target adopts it, but do **not** pin its hook method names
-or the `allow`/`deny`/`modify`/`ask`/`defer` decision enum as stable. The concrete `MUST`/`SHOULD`
-controls below are from the official MCP security spec
+(`genai.owasp.org`) is another pre-stable spec — a runtime-governance layer (Instrument /
+Trace / Inspect; a Guardian-Agent hook contract), not a risk catalog, and **pre-1.0** (spec
+v0.1.0; newest tag v0.1.4 as of 2026-11-19): name it if a target adopts it, but do **not** pin
+its hook method names or the `allow`/`deny`/`modify`/`ask`/`defer` decision enum as stable.
+The concrete `MUST`/`SHOULD` controls below are from the official MCP security spec
 (`modelcontextprotocol.io/docs/tutorials/security/security_best_practices`, fetched
 2026-09-19).
 
