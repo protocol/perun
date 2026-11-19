@@ -2,10 +2,11 @@
 # Tests for conflict-free lane PRs: two PRs that touch different skills merge without a conflict, because a lane
 # commits no derived file (SHA256SUMS, size-budgets.tsv rows, INDEX.md), no shared ci.yml list and no CHANGELOG
 # edit. Also pins that the derived files are still checked: rebuilt for an unlanded tree, byte-for-byte on a land
-# commit. Plain bash; works on an rsync copy of this repo (the temp dir is left for the OS tmp cleaner).
+# commit. Plain bash; works on an rsync copy of this repo (the temp dirs are removed on exit).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-conflict-free.XXXXXX")"
+trap '[ -n "$WORK" ] && rm -rf "$WORK"' EXIT
 export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
 pass=0 fail=0
 ok() { if [ "$1" -eq 0 ]; then echo "PASS  $2"; pass=$((pass + 1)); else echo "FAIL  $2"; fail=$((fail + 1)); fi; }
@@ -82,7 +83,7 @@ o=$(cd "$R" && bash scripts/ci-gates.sh enumeration . 2>&1); grep -q 'has no ci.
 g checkout -q -f -- .github/workflows/ci.yml; rm -f "$R/.github/workflows/ci.yml.bak"
 grep -qF 'bash -e "$t"' "$ROOT/.github/workflows/ci.yml"; ok $? "ci-tests.d files run under bash -e (an early failure is not masked)"
 # Background per-PR tests: run ci.yml's own start + wait step bodies over a fake ci-tests.d, so a dead line can't pass.
-BG="$(mktemp -d "${TMPDIR:-/tmp}/dcr-bg.XXXXXX")"; mkdir -p "$BG/scripts/ci-tests.d"; echo 'echo fast' >"$BG/scripts/ci-tests.d/a.sh"
+BG="$(mktemp -d "${TMPDIR:-/tmp}/dcr-bg.XXXXXX")"; trap '[ -n "$WORK" ] && rm -rf "$WORK"; [ -n "$BG" ] && rm -rf "$BG"' EXIT; mkdir -p "$BG/scripts/ci-tests.d"; echo 'echo fast' >"$BG/scripts/ci-tests.d/a.sh"
 cp "$ROOT/scripts/ci-tests-shard.sh" "$BG/scripts/"  # the start step lists the leg's tests with it (SHARD unset here: every test runs)
 python3 -c '
 import sys

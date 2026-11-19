@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Host-safety tests. Inspect install output and generated settings only; nothing is deleted or killed.
+# Host-safety tests. Inspect install output and generated settings only; only the temp dir is removed (on exit).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SC="$ROOT/.claude/skills/agentic-delivery/scripts"
 TSV="$ROOT/.claude/skills/agentic-delivery/templates/host-safety.tsv"
 W="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-hs.XXXXXX")"
+trap '[ -n "$W" ] && rm -rf "$W"' EXIT
 fail=0; n=0; p=0
 ok() { n=$((n+1)); if [ "$1" -eq 0 ]; then p=$((p+1)); echo "PASS  $2"; else echo "FAIL  $2"; fail=1; fi; }
 

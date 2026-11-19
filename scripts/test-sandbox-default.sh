@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Sandbox-by-default tests. Inspect generated settings JSON only; nothing is deleted or killed
-# (the temp dir under TMPDIR is left for the OS to reap).
+# Sandbox-by-default tests. Inspect generated settings JSON only; only the temp dir under TMPDIR is removed (on exit).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SC="$ROOT/.claude/skills/agentic-delivery/scripts"
 command -v jq >/dev/null 2>&1 || { echo "SKIP  jq missing"; exit 0; }
 W="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-sb.XXXXXX")"
+trap '[ -n "$W" ] && rm -rf "$W"' EXIT
 export DCR_NO_PROBE=1  # no network probe on test installs; the probe has its own tests
 fail=0; n=0
 ok() { n=$((n+1)); if [ "$1" -eq 0 ]; then echo "PASS  $2"; else echo "FAIL  $2"; fail=1; fi; }

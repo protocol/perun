@@ -87,9 +87,8 @@ out=$(cd "${TMPDIR:-/tmp}" && cp perun-f.$$.json findings.json && python3 perun-
 rm -f "${TMPDIR:-/tmp}"/perun-counts.$$.py "${TMPDIR:-/tmp}"/perun-f.$$.json "${TMPDIR:-/tmp}/findings.json"
 
 # install.sh --with-gates must not drop the template into a target repo
-T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-prw.XXXXXX"); git -C "$T" init -q; bash "$ROOT/install.sh" --with-gates "$T" >/dev/null 2>&1
+T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-prw.XXXXXX"); trap '[ -n "$T" ] && rm -rf "$T"' EXIT; git -C "$T" init -q; bash "$ROOT/install.sh" --with-gates "$T" >/dev/null 2>&1
 [ ! -e "$T/.github/workflows/perun-review.yml" ]; ok $? "install --with-gates does not install perun-review.yml"
-rm -rf "$T"
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

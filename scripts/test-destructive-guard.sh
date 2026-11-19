@@ -3,7 +3,8 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 G="$ROOT/.claude/skills/agentic-delivery/scripts/destructive_guard.py"
-W="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-dg.XXXXXX")"   # left for the OS temp reaper: the guard's own rule forbids a variable-path rm -rf
+W="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-dg.XXXXXX")"
+trap '[ -n "$W" ] && rm -rf "$W"' EXIT
 fail=0; n=0; p=0
 ok() { n=$((n+1)); if [ "$1" -eq 0 ]; then p=$((p+1)); echo "PASS  $2"; else echo "FAIL  $2"; fail=1; fi; }
 

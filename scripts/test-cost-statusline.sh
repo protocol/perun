@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Cost statusLine wiring: the operating layer writes statusLine (never over a user's own, never into machine settings),
 # the written command runs and prints the session line, and uninstall removes only what install added.
-# Fixture repos under TMPDIR; nothing is deleted or killed.
+# Fixture repos under TMPDIR, removed on exit; nothing else is deleted or killed.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SC="$ROOT/.claude/skills/agentic-delivery/scripts"
 command -v jq >/dev/null 2>&1 || { echo "SKIP  jq missing"; exit 0; }
 W="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-sl.XXXXXX")"
+trap '[ -n "$W" ] && rm -rf "$W"' EXIT
 export DCR_NO_PROBE=1 CLAUDE_CONFIG_DIR="$W/home"  # an empty user-global dir: the owner's real settings never leak in
 mkdir -p "$W/home"
 fail=0; n=0
