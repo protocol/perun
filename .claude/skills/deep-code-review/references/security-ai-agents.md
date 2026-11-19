@@ -188,11 +188,11 @@ lens named in parentheses — do not re-walk the general form. The **OWASP MCP T
 (`owasp.org/www-project-mcp-top-10`, lead V. Verma Sehgal) catalogs this layer but is
 **Phase-3 beta** — name it if a target cites it, but do **not** walk its `MCPxx:2025`
 IDs as current (cf. the 2025 compatibility map above). The OWASP **Agent Control Standard (ACS)**
-(`genai.owasp.org`) is the same shape of pre-stable spec — a runtime-governance layer (Instrument /
-Trace / Inspect; a Guardian-Agent hook contract) rather than a risk catalog, and **pre-1.0** (spec
-v0.1.0, active development): name it if a target adopts it, but do **not** pin its hook method names
-or the `allow`/`deny`/`modify`/`ask`/`defer` decision enum as stable. The concrete `MUST`/`SHOULD`
-controls below are from the official MCP security spec
+(`genai.owasp.org`) is another pre-stable spec — a runtime-governance layer (Instrument /
+Trace / Inspect; a Guardian-Agent hook contract), not a risk catalog, and **pre-1.0** (spec
+v0.1.0; newest tag v0.1.4 as of 2026-11-19): name it if a target adopts it, but do **not** pin
+its hook method names or the `allow`/`deny`/`modify`/`ask`/`defer` decision enum as stable.
+The concrete `MUST`/`SHOULD` controls below are from the official MCP security spec
 (`modelcontextprotocol.io/docs/tutorials/security/security_best_practices`, fetched
 2026-09-19).
 
@@ -508,10 +508,10 @@ LLM-backed feature, add cases that assert the guardrail holds:
     "Decisions needed."
   - *Self-declared by the untrusted party the gate is supposed to check.* An MCP
     tool's own `annotations` — e.g. `readOnlyHint` (schema reference, fetched
-    2026-09-20) — are hints the **tool/server asserts about itself**, and the
+    2026-11-19) — are hints the **tool/server asserts about itself**, and the
     spec's Warning is explicit: "For trust & safety and security, clients MUST
     consider tool annotations to be untrusted unless they come from trusted
-    servers" (`specification/2025-06-18/server/tools`, fetched 2026-09-20). A
+    servers" (`specification/2026-07-28/server/tools`, fetched 2026-11-19). A
     confirmation/approval gate that reads `readOnlyHint === true` and skips
     itself — without first checking the server is on a trusted/vetted list —
     asserts a safety property (no human check needed) that the very party being
