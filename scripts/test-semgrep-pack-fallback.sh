@@ -2,7 +2,8 @@
 # review_checks.sh: the semgrep p/default pack (the registry, or the provisioned snapshot standing in for it) does not load. The chunk reruns
 # with the bundled rules and the gap is reported ONCE, through one mechanism: the not-run line, the NOT RUN entry and one not-checked row, with the
 # fix named (provision_tools.sh --print). The closing "ran X / wired Y" line and review-checks-last.json count semgrep as partial and fixable
-# (a snapshot fixes it); there is no second "missing tools" report. Stub semgrep, gitleaks, trufflehog and trivy: hermetic, offline.
+# (a snapshot fixes it); there is no second "missing tools" report. Stub semgrep, gitleaks, trufflehog and trivy; hermetic PATH (stubs plus
+# symlinks to only the system tools review_checks needs, so a scanner installed on the host never changes the counts), offline.
 # shellcheck disable=SC2015
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -10,7 +11,7 @@ SK=$ROOT/.claude/skills/deep-code-review/scripts
 T=$(mktemp -d "${TMPDIR:-/tmp}/spf.XXXXXX") && [ -d "$T" ] || exit 1
 trap 'rm -rf "$T"' EXIT; fail=0 n=0 pass=0
 ok() { n=$((n + 1)); pass=$((pass + 1)); echo "ok - $1"; }; bad() { n=$((n + 1)); fail=1; echo "FAIL - $1"; cat "$LOG" "$T/e"; }
-mkdir -p "$T/stub" "$T/tmp" "$T/repo"
+mkdir -p "$T/stub" "$T/sys" "$T/tmp" "$T/repo"
 cat >"$T/stub/semgrep" <<'S'
 #!/usr/bin/env bash
 # SG_MODE: hang = the p/default pack (registry or snapshot) hangs; allhang = every run hangs; ok = nothing fails. Logs "pack:FIRST_FILE" per run.
@@ -28,10 +29,13 @@ cat >"$T/stub/trivy" <<'S'
 echo '{"Results":[]}'
 S
 chmod +x "$T/stub"/*
+for b in bash env git grep sed head tail cat rm mkdir mktemp dirname basename python3 perl timeout gtimeout jq true sort uniq paste tr cut wc awk date cp mv ls find touch tee readlink sleep xargs; do
+  p=$(type -P "$b") || continue; ln -s "$p" "$T/sys/$b"
+done
 export PERUN_HEAVY_DIR="$T/heavy" REVIEW_LEASE_WAIT=0 DCR_CACHE_ROOT="$T/cache" DCR_USER_BIN='' LOG="$T/log"
 ( cd "$T/repo" && git init -q . && git -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m base && git branch base \
   && printf 'x\ny\n' >f000.txt && git add . && git -c user.email=t@example.com -c user.name=t commit -q -m files ) || exit 1
-run() { : >"$LOG"; (cd "$T/repo" && SG_MODE=$1 PATH="$T/stub:$PATH" TMPDIR="$T/tmp" bash "$SK/review_checks.sh" --base base --timeout 2 >"$T/o" 2>"$T/e"); } # run MODE
+run() { : >"$LOG"; (cd "$T/repo" && SG_MODE=$1 PATH="$T/stub:$T/sys" TMPDIR="$T/tmp" bash "$SK/review_checks.sh" --base base --timeout 2 >"$T/o" 2>"$T/e"); } # run MODE
 calls() { [ "$(paste -sd' ' "$LOG")" = "$*" ]; }                       # the exact semgrep runs, in order
 err() { grep -qF -- "$1" "$T/e"; }                                     # stderr has this text
 st() { jq -e "$1" "$T/repo/.git/review-checks-last.json" >/dev/null; } # the record

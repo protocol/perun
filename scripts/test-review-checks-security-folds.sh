@@ -71,8 +71,9 @@ jq -e 'any(.[]; .tool=="bash-n" or .tool=="jq")' "$T/out" >/dev/null && bad "das
 grep -q -- '-s ./-v.sh' "$GL_LOG" && ok "gitleaks gets ./ path" || bad "gitleaks gets ./ path"
 grep -q -- '-L ./package-lock.json' "$OSV_LOG" && ok "osv-scanner gets ./ path" || bad "osv-scanner gets ./ path"
 grep -q 'shellcheck .* ./-v.sh' "$TOOL_LOG" && grep -q 'ruff .* ./-p.py' "$TOOL_LOG" && grep -q 'node --check ./-n.js' "$TOOL_LOG" && ok "linters get ./ path" || bad "linters get ./ path"
-# One semgrep call for the changed files, targets after --.
-[ "$(wc -l <"$SG_LOG")" -eq 1 ] && grep -q -- ' -- .*a.txt' "$SG_LOG" && grep -q -- 'b.txt' "$SG_LOG" && ok "semgrep batched once" || bad "semgrep batched once"
+# One semgrep call for the changed files, targets after --. Count only the hub's own call: a real njsscan on PATH adds
+# `semgrep scan ... njsscan/rules` lines through this stub, so a whole-log line count is not the hub's call count.
+[ "$(grep -cF "semgrep --config $REVIEW_SEMGREP_CONFIG" "$SG_LOG")" -eq 1 ] && grep -q -- ' -- .*a.txt' "$SG_LOG" && grep -q -- 'b.txt' "$SG_LOG" && ok "semgrep batched once" || bad "semgrep batched once"
 
 # Malformed scanner output: not-run line, no findings, still exit 0.
 SG_OUT='not json' GL_OUT='not json' OSV_OUT='not json' run && ok "bad json exit 0" || bad "bad json exit 0"

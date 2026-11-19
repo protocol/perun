@@ -40,7 +40,10 @@ def run(truth_path=ROOT / "bench/tool-only/answer.json", fixtures=ROOT / "bench/
         g = ["git", "-c", "user.name=b", "-c", "user.email=b@example.com"]
         for a in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "bench"]):
             subprocess.run(g + a, cwd=t, check=True, capture_output=True)
-        out = subprocess.run(["bash", str(HUB), "--full"], cwd=t, capture_output=True, text=True).stdout
+        # Real-scanner bench: read the host tool caches too. scrub_env.sh points DCR_CACHE_ROOT at an empty dir,
+        # which leaves semgrep without its p/default snapshot (bundled rules only) and fails recall for no code reason.
+        env = {k: v for k, v in os.environ.items() if k != "DCR_CACHE_ROOT"}
+        out = subprocess.run(["bash", str(HUB), "--full"], cwd=t, capture_output=True, text=True, env=env).stdout
     rows = [r for r in json.loads(out or "[]") if r.get("tool") != "not-checked" and r.get("rule") != "not-checked"]
     noise = {r["rule"] for r in rows if r["file"].startswith("clean/")}  # rules that also fire on clean twins prove nothing
     found, per = set(), {}
