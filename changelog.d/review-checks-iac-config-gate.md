@@ -1,2 +1,0 @@
-### Fixed
-- review_checks.sh no longer runs a scanned repo's own checkov or tflint config-as-code by default: a `.checkov.yaml` or `.checkov.yml` in the repo root (its `external-checks-dir` runs repo Python) makes checkov `NOT CHECKED`, and a `.tflint.hcl`, `.tflint.json` or `.tflint.d` beside a `.tf` file (plugin binaries) makes that file `NOT CHECKED` for tflint, in a diff review and in a `--full` audit alike, unless `REVIEW_TEST_CMD` is set (the opt-in that already runs project code). Test: `scripts/test-review-checks-iac-config-gate.sh`.
