@@ -2150,7 +2150,8 @@ class RouteAuthMap(unittest.TestCase):
             exp.add((path, int(ln), "HIGH", msg))
         self.assertEqual(got, exp)
         self.assertEqual(j["files"], len({g.split(":")[0] for g in self.gold}) + len(QUIET))  # every file with a row, plus the files that look like routes but yield none
-        self.assertEqual(self.res.stderr, "heuristic; scanned %d files with %d handlers; silence is not proof of authentication\n" % (j["files"], j["handlers"]))
+        self.assertEqual(self.res.stderr, "heuristic; scanned %d files with %d handlers; silence is not proof of authentication\n"
+                         "coverage: 0 file(s) with route-like decorators this scan skipped\n" % (j["files"], j["handlers"]))
 
     def test_paths_lists_get_routes(self):
         res = run(SCRIPT, self.fx, "--paths")

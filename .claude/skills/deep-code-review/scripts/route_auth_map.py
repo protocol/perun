@@ -10,7 +10,7 @@ OF AUTHENTICATION: the scan only sees the call shapes listed below.
    pages/api/** (methods read from `req.method` checks, else ANY), "use server" exported async functions (METHOD ACTION), Express/Router/Hono/
    Fastify `<receiver>.get|post|put|patch|delete|all("/path", ...)` (TS type arguments allowed: `app.post<{ Body: Widget }>("/path", h)`), raw node:http / fetch-handler dispatch (a file that calls `createServer(`,
    `Deno.serve(`, `Bun.serve(` or defines `fetch(request) {`: one handler per `if (pathname === "/x" && req.method === "POST")` branch or `switch (pathname) { case "/x": ... }` case, either operand order,
-   `url.pathname`, a `pathname` variable or `req.url`, a path literal or a same-file `const X = "/x"`; the method comes from the condition, the block or an enclosing `if`, and a branch with no method test, a branch in a class that is not `export default class` (a Durable Object), a `startsWith` or regex dispatch and an imported path constant are not seen; identity evidence before the dispatch in the enclosing function counts, an earlier branch's block does not), FastAPI `@x.get(...)` and Flask `@x.route(..., methods=[...])` decorators, NestJS `@Controller('prefix' | { path })` classes with `@Get|Post|Put|Patch|Delete|All|Head|Options('path' | ['a', 'b'])` members (`@UseGuards(X)` on the member or class is the evidence, a Throttler or RateLimit guard is not, `@Public()`-style decorators read `public`, `none` otherwise; a repo that wires a non-rate-limit `APP_GUARD` or `useGlobalGuards(` reads `global guard, unverified` for the unguarded ones; a constant path reads `{?}`).
+   `url.pathname`, a `pathname` variable or `req.url`, a path literal or a same-file `const X = "/x"`; the method comes from the condition, the block or an enclosing `if`, and a branch with no method test, a branch in a class that is not `export default class` (a Durable Object), a `startsWith` or regex dispatch and an imported path constant are not seen; identity evidence before the dispatch in the enclosing function counts, an earlier branch's block does not), FastAPI `@x.get(...)` and Flask `@x.route(..., methods=[...])` decorators, NestJS `@Controller('prefix' | { path })` classes with `@Get|Post|Put|Patch|Delete|All|Head|Options('path' | ['a', 'b'])` members (`@UseGuards(X)` on the member or class is the evidence, a Throttler or RateLimit guard is not, `@Public()`-style decorators read `public`, `none` otherwise; a repo that wires a non-rate-limit `APP_GUARD` or `useGlobalGuards(` reads `global guard, unverified` for the unguarded ones; a constant path reads `{?}`); in those classes a ts-rest member (`@Api(server.route.x)`, `@TsRest(contract.x)`, `@TsRestHandler(c.x)`) is one row with the same guard evidence, METHOD and path read from the scanned contract (`name = x.router({ x: { method: 'PUT', path: '/v1/a/:id' } })`, a `${...}` reading `{?}`), else route `contract:x` (method `ANY` unless the entry names one; never guessed). A coverage line counts the files with a `@Get(`-style or ts-rest decorator this scan emitted no row for.
    `--paths` and `--all` also inventory (no auth evidence is judged for these; default mode prints one UNJUDGED line per file with state-changing Go, Spring, PHP or Django routes) Go (`HandleFunc|Handle("[METHOD ]/p")` incl. Go 1.22 patterns, chi/gin/echo `x.Get|GET|Any("/p")`, `x.Handle|Method|Add("GET", "/p")`,
    gorilla `.Methods(...)`, with `Group`/`PathPrefix` variables and chi `Route("/a", func...)` prefixes), Spring (`@Get|Post|Put|Patch|DeleteMapping`, `@RequestMapping` with `method=`, array paths, the class-level `@RequestMapping` prefix)
    Django urlconfs (`path|re_path|url`, method ANY, `include("pkg.urls")` prefixes resolved to a scanned file) and PHP (Symfony `#[Route(path, methods: [...])]` attributes and `@Route` annotations, with the class-level
@@ -418,6 +418,67 @@ NESTRATE = re.compile(r"(?![\w$.]*(?:auth|jwt|session|role|permission))[\w$.]*(?
 
 
 NESTDECO = re.compile(r"@[\w$.]+\s*(?:<[^()]*)?\s*\(?")  # `@Name`, optionally spaced, with a generic argument (nested `<A<B>>` too: skipped up to the next paren), and its opening paren
+TSR = re.compile(r"@(?:Api|TsRest|TsRestHandler)\s*\(\s*([\w$]+(?:\s*\.\s*[\w$]+)*)\s*[,)]")  # a ts-rest member decorator whose argument is a contract route reference; `@TsRest({ jsonQuery })` options are not
+TSRSRV = re.compile(r"\b([\w$]+)\s*=\s*(initNestServer|nestControllerContract)\s*\(\s*([\w$]+)\s*\)")  # `const server = initNestServer(contract)`: `server.route.x` names contract.x
+TSRDEF = re.compile(r"\b([\w$]+)\s*=\s*[\w$]+\.router\s*\(\s*\{")
+TSRC = {}  # ts-rest contract name -> {key: (METHOD or None, path or None)}, None when two definitions share the name; filled by scan()
+ROUTEDECO = re.compile(NESTM.pattern + "|" + TSR.pattern)  # for the coverage line: a decorator that should give a row
+
+
+def fields(m, a, b):
+    """{key: (start, end)} of the depth-0 `key: value` pairs in the object body m[a:b] (masked): a value runs to the next depth-0 comma, so a key of a nested object is not the body's own; quoted keys are not read."""
+    f, d = [], 0
+    if b < a: return {}
+    for c in m[a:b]:
+        d -= c in ")]}"
+        f.append(c if d == 0 else " ")
+        d += c in "([{"
+    f, out = "".join(f), {}
+    for x in re.finditer(r"(?:^|,)\s*([\w$]+)\s*:", f):
+        z = f.find(",", x.end())
+        out.setdefault(x[1], (a + x.end(), a + (z if z >= 0 else len(f))))
+    return out
+
+
+def tsval(s):
+    """The value of a string-literal expression s (strings kept), each `${...}` of a template reading `{?}`; None for anything else (a variable, a concatenation, a call)."""
+    s = re.sub(r"\s+as\s+const$", "", s.strip())
+    t = NESTSTR.fullmatch(re.sub(r"\$\{[^}]*\}", "{?}", s) if s.startswith("`") else s)
+    return t[2] if t else None
+
+
+def ts_contracts(m, mk):
+    """{name: {key: (METHOD or None, path or None)}} of the ts-rest contracts `name = x.router({ key: { method: 'PUT', path: '/a/:id' } }, { pathPrefix: '/v1' })` in masked text m (mk: strings kept).
+    Only an entry whose value is an object literal is read, and only its own depth-0 `method:` and `path:` (a `path` field of a body schema is not the route); a path that is no string literal is None,
+    a `pathPrefix` that is none reads `{?}`. A nested router (`users: c.router(...)`, a router variable) is not entered, so its routes stay unresolved.
+    A name defined twice in m maps to None (unresolved), as scan() does for a name defined in two files."""
+    out = {}
+    for t in TSRDEF.finditer(m):
+        b = t.end() - 1; e = close_of(m, b)
+        if e < 0: continue
+        q, pfx = re.compile(r"\s*,\s*\{").match(m, e + 1), ""
+        px = q and fields(m, q.end(), close_of(m, q.end() - 1)).get("pathPrefix")
+        if px: pfx = tsval(mk[px[0]:px[1]]) or "{?}"
+        rs = {}
+        for k, (s, z) in fields(m, b + 1, e).items():
+            s += len(m[s:z]) - len(m[s:z].lstrip())
+            if m[s:s + 1] != "{": continue
+            f = fields(m, s + 1, close_of(m, s))
+            mt, p = ((tsval(mk[slice(*f[n])]) if n in f else None) for n in ("method", "path"))
+            rs[k] = (mt.upper() if mt and mt.upper() in VERBS + ("HEAD", "OPTIONS") else None, None if p is None else pfx + p)
+        out[t[1]] = None if t[1] in out else rs
+    return out
+
+
+def ts_route(chain, srv):
+    """(METHOD, path) a ts-rest decorator argument names: `server.route.x` (server from initNestServer) or `c.x` (nestControllerContract, or the contract itself) looked up in TSRC;
+    a name defined twice, a nested key, a whole router or a non-literal path reads route `contract:<key>`, a non-literal method `ANY` (method unknown, so a state change is not ruled out). Never guessed by key alone.
+    Limit: the lookup is by contract name, not by import, so a same-named contract from an unscanned package binds by name to the scanned one."""
+    ns = re.split(r"\s*\.\s*", chain)
+    s = srv.get(ns[0])
+    name, keys = (s[1], ns[2:] if s[0] == "initNestServer" and ns[1:2] == ["route"] else ns[1:]) if s else (ns[0], ns[1:])
+    mt, p = (TSRC.get(name) or {}).get(keys[0], (None, None)) if len(keys) == 1 else (None, None)
+    return mt or "ANY", p if p is not None else "contract:" + ".".join(keys or ns)
 
 
 def nest_deco_end(m, i, j):
@@ -492,8 +553,9 @@ def nest_hs(m, mk, hs, gone, glob=False):
     decorator reads `public`; else, when the repo wires an auth-looking global guard (`APP_GUARD`, `useGlobalGuards(`), `global guard, unverified`.
     ponytail: guards are matched by presence, never by what the guard class checks; a guard built inline or by a factory reads by its first identifier. `setGlobalPrefix(...)` and URI versioning
     (`enableVersioning`, `version:` in `@Controller`/`@Version`) are not applied: a row's path is the controller prefix plus the member path only.
-    A global guard reaches only controllers of its own app (see app_of)."""
-    prev = 0
+    A global guard reaches only controllers of its own app (see app_of). A ts-rest member decorator (`@Api|TsRest|TsRestHandler(ref)`) is one row with the same evidence, its METHOD and path from ts_route();
+    a `contract:<key>` row is not joined to the controller prefix."""
+    prev, srv = 0, {t[1]: t.groups()[1:] for t in TSRSRV.finditer(m)}
     for t in NEST.finditer(m):
         op = t.end() - 1; cl = close_of(m, op)
         k = CLASSKW.search(m, cl)
@@ -514,14 +576,17 @@ def nest_hs(m, mk, hs, gone, glob=False):
                 d += (c in "([{") - (c in ")]}")
                 if d == 0 and c in ";}": break
                 j += 1
+            dj = nest_deco_end(m, i, j)
+            g, mp = nest_guard(m, i, dj), NESTPUB.search(m, i, dj)  # a member guard or member @Public beats the class guard
+            g = g or (None if mp else cg)
+            lab = "UseGuards(%s)" % g if g else "public" if cp or mp else "global guard, unverified" if glob else None
             for r in NESTM.finditer(m, i, j):
                 o = r.end() - 1; c2 = close_of(m, o)
-                dj = nest_deco_end(m, i, j)
-                g, mp = nest_guard(m, i, dj), NESTPUB.search(m, i, dj)  # a member guard or member @Public beats the class guard
-                g = g or (None if mp else cg)
-                lab = "UseGuards(%s)" % g if g else "public" if cp or mp else "global guard, unverified" if glob else None
                 for y in nest_paths(mk[o + 1:c2] if c2 > 0 else ""):
                     for p in pres: hs.append((r.start(), "ANY" if r[1] == "All" else r[1].upper(), join(p, y), [(i, j)], lab, None, None))
+            for r in TSR.finditer(m, i, dj):  # ts-rest applies Nest's own verb decorator, so the controller prefix joins as above
+                mt, y = ts_route(r[1], srv)
+                for p in [None] if y.startswith("contract:") else pres: hs.append((r.start(), mt, y if p is None else join(p, y), [(i, j)], lab, None, None))
             i = j + 1
 
 
@@ -752,6 +817,7 @@ def priv_ctx(ctx, rcv, route, pos, fn, mk):
 NESTSAFE = set()  # (file, line) of NestJS @Head/@Options members: a safe method, never HIGH; other frameworks keep the GET-only rule (none emits a HEAD/OPTIONS row today: Express/Fastify/Next/Flask read VERBS only, Go's HEAD|OPTIONS rows never reach scan())
 FWDROWS = set()  # (file, line) of handlers whose span forwards an Authorization/Bearer credential
 BODY = {}  # (file, line) -> the handler's own and helper text with strings kept, filled by analyze() for --privileged
+SKIPPED = []  # (file, first line) of each JS/TS file with a route-like decorator on a line no row came from, filled by scan()
 
 
 def analyze(rel, raw, mws, sites=None, hooks=None, glob=False):
@@ -824,7 +890,8 @@ def scan(root):
             if f.endswith(EXT) and not TEST.search(rel): files.append(rel)
     known = set(files)
     NESTSAFE.clear(); FWDROWS.clear()
-    glob, mws, rows, todo, cov, own = set(), {}, [], [], {}, {}  # todo: files with handlers; cov: file -> wiring() sites that wire it; own: file -> its own wiring() hooks
+    TSRC.clear()
+    glob, mws, rows, todo, cov, own, deco = set(), {}, [], [], {}, {}, {}  # todo: files with handlers; cov: file -> wiring() sites that wire it; own: file -> its own wiring() hooks; deco: file -> route-like decorator lines
     for rel in files:
         raw = read(root, rel) if MWF.fullmatch(os.path.basename(rel)) else None
         if raw is not None: mws[os.path.dirname(rel)] = mw_pats(mask(raw), mask(raw, True))
@@ -832,12 +899,24 @@ def scan(root):
         raw = read(root, rel)
         if raw is None: continue
         if NESTGLOBAL.search(raw) and nest_global(mask(raw, True)): glob.add(app_of(rel, mf))
+        if not rel.endswith(".py") and ".router" in raw:
+            for n, v in ts_contracts(mask(raw), mask(raw, True)).items(): TSRC[n] = None if n in TSRC else v
+        if not rel.endswith(".py") and ROUTEDECO.search(raw):
+            mm = mask(raw)
+            deco[rel] = sorted({lineno(mm, x.start()) for x in ROUTEDECO.finditer(mm)})
         if ".register" in raw or "addHook" in raw:
             own[rel], sites = wiring(rel, raw, known)
             for f, site in sites: cov.setdefault(f, []).append(site)
         if NAPP.match(rel) or NAPI.match(rel) or (PYDEC if rel.endswith(".py") else JSPRE).search(raw) or not rel.endswith(".py") and (NEST.search(raw) or SRV.search(raw)): todo.append((rel, raw))
     for rel, raw in todo: rows += analyze(rel, raw, mws, cov.get(rel), own.get(rel), app_of(rel, mf) in glob)
+    got = {(r[0], r[1]) for r in rows}
+    SKIPPED[:] = [(f, l[0]) for f, ls in sorted(deco.items()) for l in [[x for x in ls if (f, x) not in got]] if l]
     return sorted(rows), len(todo)
+
+
+def coverage():
+    """The coverage line for the last scan(): how many JS/TS files hold a route-like decorator (`@Get|Post|...(`, a ts-rest `@Api|TsRest|TsRestHandler(ref)`) on a line with no row, and the first few."""
+    return "coverage: %d file(s) with route-like decorators this scan skipped%s" % (len(SKIPPED), "".join(" %s:%d" % x for x in SKIPPED[:3]) + (" ..." if len(SKIPPED) > 3 else ""))
 
 
 GOCH = r'((?:\.(?:With|Use)\((?:[^()]|\([^()]*\))*\)|\.(?:Group|PathPrefix)\(\s*"[^"]*"\s*\)|\.Subrouter\(\))*)'  # a call chain between receiver and route call: x.With(mw).Group("/a").Get(...)
@@ -1067,6 +1146,7 @@ def main(argv):
     if {"--paths", "--all"} & set(argv[1:]):
         inv = inventory(a[0])
         print("heuristic; %d routes; silence is not proof of authentication" % len(inv), file=sys.stderr)
+        print(coverage(), file=sys.stderr)
         if "--all" in argv[1:]:
             from attempt_limit_map import units  # lazy: it imports this module
             texts = {}
@@ -1085,6 +1165,7 @@ def main(argv):
         for r, why in pv: print("%s:%d: PRIV: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why))
         return 0
     print("heuristic; scanned %d files with %d handlers; silence is not proof of authentication" % (files, len(rows)), file=sys.stderr)
+    print(coverage(), file=sys.stderr)
     out = [(r, "HIGH" if (r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|")) else "INFO") for r in rows]
     for r, s in out: print("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))
     hi = [(r, s) for r, s in out if s == "HIGH"]
