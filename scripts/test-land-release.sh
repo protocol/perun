@@ -43,5 +43,7 @@ grep -q 'lane a change' "$R/CHANGELOG.md" && grep -q 'lane b change' "$R/CHANGEL
   && python3 scripts/skill_index.py --check >/dev/null && bash scripts/write-checksums.sh "$WORK/sums" >/dev/null && cmp -s "$WORK/sums" SHA256SUMS); ok $? "version, size, index, checksum gates green"
 grep -q '^README.md	' "$R/scripts/size-budgets.tsv"; ok $? "hand-kept README.md size row survives regen"
 (cd "$R" && bash scripts/ci-gates.sh size-ratchet --base $BASE --config scripts/size-budgets.tsv . >/dev/null); ok $? "size-ratchet green on the landed tree"
+mkdir "$R/.git/land-release.lock"; (cd "$R" && bash scripts/land-release.sh --regen) >/dev/null 2>&1; rc=$?; rmdir "$R/.git/land-release.lock"
+ok $rc "--regen runs while a land holds the lock (a rebuild writes only its own worktree; a land never blocks a pre-push)"
 (cd "$R" && bash scripts/land-release.sh) >/dev/null 2>&1; [ $? -ne 0 ]; ok $? "land with no fragment refuses"
 exit $fail
