@@ -1,0 +1,2 @@
+### Fixed
+- Nine `scripts/test-*.sh` tests no longer leave their `mktemp -d` temp dirs behind: each now removes its own dir in an EXIT trap, so the dir goes away whether the test passes, fails or stops early. Their rows are deleted from `scripts/mktemp-trap-baseline.tsv`, which is now empty, so the existing `bg_admit.py untrapped` lint fails CI on any shipped shell script that calls `mktemp` without an EXIT trap.

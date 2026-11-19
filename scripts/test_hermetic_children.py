@@ -99,7 +99,7 @@ class T(unittest.TestCase):
 
     def test_baseline_is_shrink_only(self):
         rows = [l for l in (ROOT / "scripts/mktemp-trap-baseline.tsv").read_text().splitlines() if l.strip() and not l.startswith("#")]
-        self.assertLessEqual(len(rows), 10, "baseline may only shrink: fix the script instead of adding a row")
+        self.assertEqual(rows, [], "baseline is empty: fix the script instead of adding a row")
 
     def test_admit_rejects_gamed_declarations(self):
         with tempfile.TemporaryDirectory() as d:

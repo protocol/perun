@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Auto-context-reset tests: the operating layer sets autoCompactWindow (never over a user value) and wires the
-# SessionStart handoff re-inject hook. Fixture repos under TMPDIR; nothing is deleted or killed.
+# SessionStart handoff re-inject hook. Fixture repos under TMPDIR, removed on exit; nothing else is deleted or killed.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SC="$ROOT/.claude/skills/agentic-delivery/scripts"
 command -v jq >/dev/null 2>&1 || { echo "SKIP  jq missing"; exit 0; }
 W="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-acr.XXXXXX")"
+trap '[ -n "$W" ] && rm -rf "$W"' EXIT
 export DCR_NO_PROBE=1 CLAUDE_CONFIG_DIR="$W/home"  # an empty user-global dir: the owner's real settings never leak in
 mkdir -p "$W/home"
 fail=0; n=0

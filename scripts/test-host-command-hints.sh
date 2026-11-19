@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Host command hints: context_nudge.py names the running agent host's own session commands at the context threshold,
 # and a model/effort tier when the prompt's work kind changes, in two lines at most, never listing a command the
-# vendor docs do not show. Runs the real hook per host with a scrubbed env; fixtures under TMPDIR; nothing is deleted
-# or killed. The expected commands below are written from the vendor docs (docs/standards-index.md), not from the
+# vendor docs do not show. Runs the real hook per host with a scrubbed env; fixtures under TMPDIR, removed on
+# exit; nothing else is deleted or killed. The expected commands below are written from the vendor docs (docs/standards-index.md), not from the
 # script's table, so a table edit that adds an undocumented command fails here.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NUDGE="$ROOT/.claude/skills/agentic-delivery/scripts/context_nudge.py"
 TIER_DOC="$ROOT/.claude/skills/deep-code-review/references/model-tiering.md"
 W="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-hch.XXXXXX")"
+trap '[ -n "$W" ] && rm -rf "$W"' EXIT
 fail=0; n=0; pass=0
 ok() { n=$((n+1)); if [ "$1" -eq 0 ]; then pass=$((pass+1)); echo "PASS  $2"; else echo "FAIL  $2"; fail=1; fi; }
 
