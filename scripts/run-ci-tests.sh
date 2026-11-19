@@ -18,10 +18,12 @@
 #   working-tree tree hash taken before the suites run, base, each selected suite's rc, overall rc; a failure records too, with the suites
 #   fail-fast skipped as "-"; the runner's own blob; none when the suites changed the tree), which handback.py --body-file checks a
 #   "run-ci-tests/affected pass" claim against. No changed files: runs nothing, exit 0.
-#   Before the suites it runs `scripts/regen-unlanded.sh origin/main`, the ref CI rebuilds against before any gate (lane PRs do not commit
-#   INDEX*.md, SHA256SUMS or size rows, so a new script is missing from a stale committed index); after them it restores exactly the files
-#   that rebuild changed to their pre-run bytes (an already-dirty one keeps its edit, one it created is removed; one edited since the rebuild
-#   is kept, with a note), also on an early exit or a TERM/INT (deferred until the rebuild ends, so it cannot write after the restore).
+#   Before the suites it runs `scripts/regen-unlanded.sh` against the merge-base of HEAD and origin/main (origin/main when there is none):
+#   CI rebuilds before any gate on its merge ref, whose VERSION is origin/main's, so a branch behind origin/main must compare at its merge-base
+#   (lane PRs do not commit INDEX*.md, SHA256SUMS or size rows, so a new script is missing from a stale committed index); after them it
+#   restores the derived files (land-release.sh's GENERATED) that rebuild changed to their pre-run bytes (an already-dirty one keeps its
+#   edit, one it created is removed; one edited since the rebuild is kept, with a note; any other file is never touched), also on an early
+#   exit or a TERM/INT (deferred until the rebuild ends, so it cannot write after the restore).
 #   Selection, privacy and the receipt's tree hash use the tree as it was before the rebuild. No regen-unlanded.sh or no tree hash: no rebuild.
 # --list-affected [BASE]: the dry form of --affected: prints "affected: N of M tests" and one "selected: <suite>" line per suite it would run,
 #   then exits 0 without the privacy/trigger gates, any suite or any receipt (lkg.py affected-check re-derives the selection with it).
@@ -44,11 +46,14 @@ if [ "$affected" -eq 1 ]; then
   [ -n "$base" ] || { echo "affected: NOT RUN (no base)"; exit 0; }  # no base to diff against: never block a push
   chg="$(mktemp "${TMPDIR:-/tmp}/run-ci-tests.XXXXXX")" tsv="$(mktemp "${TMPDIR:-/tmp}/run-ci-tests.XXXXXX")" pats="$(mktemp "${TMPDIR:-/tmp}/run-ci-tests.XXXXXX")" || exit 1
   regened=0 post=  # regened=1 from the moment the rebuild below starts; post = the tree it left (hashed here when a signal cut it short)
-  unregen() {  # put back every file the rebuild changed ($tree → $post) whose bytes are still the rebuild's; idempotent
-    local f cur; [ "$regened" -eq 1 ] || return 0; regened=0
+  unregen() {  # put back every derived file the rebuild changed ($tree → $post) whose bytes are still the rebuild's; idempotent
+    local f cur gen; [ "$regened" -eq 1 ] || return 0; regened=0
+    gen="$(sed -n "s/^GENERATED='\(.*\)'\$/\1/p" scripts/land-release.sh 2>/dev/null)"  # its one source, read as train_land.sh reads it
+    [ -n "$gen" ] || { echo "run-ci-tests: rebuilt derived files not restored (no GENERATED in land-release.sh); check git status" >&2; return 0; }
     [ -n "$post" ] || post="$(python3 .claude/skills/agentic-delivery/scripts/lkg.py tree 2>/dev/null)" \
       || { echo "run-ci-tests: rebuilt derived files not restored (no tree hash); check git status" >&2; return 0; }
     git diff-tree -r --no-renames --name-only -z "$tree" "$post" | while IFS= read -r -d '' f; do
+      [[ "$f" =~ ^($gen)$ ]] || continue  # not a rebuild output: any change to it in the window is someone else's, never reverted
       cur=; [ ! -e "$f" ] || cur="$(git hash-object -- "$f")"
       [ "$cur" = "$(git rev-parse -q --verify "$post:$f")" ] || { echo "run-ci-tests: kept $f (changed after the rebuild)" >&2; continue; }
       if git cat-file -e "$tree:$f" 2>/dev/null; then git show "$tree:$f" >"$f"; else rm -f -- "$f"; fi
@@ -146,9 +151,10 @@ if [ "$affected" -eq 1 ]; then
   printf '%s%s' "$why_all" "$unc"
   if [ "$list" -eq 1 ]; then for t in $sel; do echo "selected: $t"; done; exit 0; fi
   tree="$(python3 .claude/skills/agentic-delivery/scripts/lkg.py tree 2>/dev/null)" || tree=  # the scanned state, before any suite can touch the tree
-  if [ -f scripts/regen-unlanded.sh ] && [ -n "$tree" ]; then  # rebuild derived files against CI's ref (ci.yml: regen-unlanded.sh origin/main)
+  if [ -f scripts/regen-unlanded.sh ] && [ -n "$tree" ]; then  # rebuild derived files as CI does (ci.yml: regen-unlanded.sh on the merge ref)
+    rb="$(git merge-base HEAD origin/main 2>/dev/null)" || rb=origin/main  # a land on origin/main after the branch point must not read as "landed"
     trap 'exit 143' TERM; trap 'exit 130' INT  # deferred until the rebuild exits, then the EXIT trap restores
-    regened=1; bash scripts/regen-unlanded.sh origin/main || { echo "run-ci-tests: FAIL regen-unlanded.sh origin/main (derived files)" >&2; exit 1; }
+    regened=1; bash scripts/regen-unlanded.sh "$rb" || { echo "run-ci-tests: FAIL regen-unlanded.sh $rb (derived files)" >&2; exit 1; }
     post="$(python3 .claude/skills/agentic-delivery/scripts/lkg.py tree 2>/dev/null)" || { echo "run-ci-tests: FAIL --affected: cannot hash the rebuilt tree" >&2; exit 1; }
     trap - TERM INT
   fi

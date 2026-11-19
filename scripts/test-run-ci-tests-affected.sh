@@ -134,8 +134,8 @@ cp "$ROOT/scripts/run-ci-tests.sh" "$ROOT/scripts/regen-unlanded.sh" "$R/scripts
 cp "$ROOT/.claude/skills/agentic-delivery/scripts/scrub_env.sh" "$ROOT/.claude/skills/agentic-delivery/scripts/lkg.py" "$ROOT/.claude/skills/agentic-delivery/scripts/landing_watchdog.py" "$R/.claude/skills/agentic-delivery/scripts/"
 cp "$WORK/repo/scripts/ci-gates.sh" "$R/scripts/"; echo '# none' >"$R/.banlist.txt"; echo 0.9.0 >"$R/.claude/skills/deep-code-review/VERSION"
 # stub land-release.sh --regen: rebuilds the tracked derived idx.md, overwrites the user-edited notes.md, creates gen.md; with REGEN_HOLD
-# set it then touches that file and sleeps (the window the TERM case signals in)
-printf '%s\n' '[ "$1" = --regen ] || exit 2' 'echo fresh >idx.md; echo regen >notes.md; echo new >gen.md' \
+# set it then touches that file and sleeps (the window the TERM case signals in); GENERATED names those three paths
+printf '%s\n' "GENERATED='idx\.md|notes\.md|gen\.md'" '[ "$1" = --regen ] || exit 2' 'echo fresh >idx.md; echo regen >notes.md; echo new >gen.md' \
   '[ -z "${REGEN_HOLD:-}" ] || { : >"$REGEN_HOLD"; sleep 1; }' >"$R/scripts/land-release.sh"
 dsh() { printf '%s\n' '# covers foo.txt' "$@" 'grep -qx fresh idx.md && [ -f gen.md ] && echo d >>ran.log' >"$R/scripts/ci-tests.d/d.sh"; }  # fails on a stale idx.md
 dsh
@@ -161,6 +161,20 @@ for _ in $(seq 200); do [ -e "$hold" ] && break; sleep 0.05; done
 kill -TERM "$pid"; wait "$pid"; RC=$?
 [ -e "$hold" ] && [ "$RC" -eq 143 ] && [ "$(git -C "$R" status --porcelain)" = "$st0" ] && [ ! -e "$R/gen.md" ] && grep -qx mine "$R/notes.md"
 ok $? "a TERM during the rebuild still restores the tree: no rebuilt or created derived file is left behind"
+# a later land moves origin/main to VERSION 1.1.0 (this branch is still 1.0.0); CI's merge ref carries 1.1.0, so it still rebuilds
+ix="$WORK/land2.index"; GIT_INDEX_FILE="$ix" git -C "$R" read-tree HEAD
+GIT_INDEX_FILE="$ix" git -C "$R" update-index --cacheinfo "100644,$(echo 1.1.0 | git -C "$R" hash-object -w --stdin),.claude/skills/deep-code-review/VERSION"
+git -C "$R" update-ref refs/remotes/origin/main "$(git -C "$R" -c user.email=t@example.com -c user.name=T commit-tree -p HEAD -m land2 "$(GIT_INDEX_FILE="$ix" git -C "$R" write-tree)")"
+run "$OLD"
+[ "$RC" -eq 0 ] && [ "$RAN" = "d " ] && grep -q 'regen-unlanded: derived files rebuilt' <<<"$OUT" && [ "$(git -C "$R" status --porcelain)" = "$st0" ]
+ok $? "origin/main moved past the branch point by a land: still rebuilt (compared at the merge-base, as CI's merge ref is)"
+git -C "$R" update-ref refs/remotes/origin/main "$BASE"
+hold="$WORK/regen.hold2"; REGEN_HOLD="$hold" bash "$R/scripts/run-ci-tests.sh" --affected "$OLD" >"$WORK/y3.out" 2>&1 & pid=$!
+for _ in $(seq 200); do [ -e "$hold" ] && break; sleep 0.05; done
+echo mine >"$R/user.txt"; wait "$pid"; RC=$?
+[ "$RC" -eq 0 ] && grep -qx mine "$R/user.txt" && [ "$(cat "$R/idx.md")" = stale ] && [ ! -e "$R/gen.md" ]
+ok $? "a non-derived file written while the rebuild runs keeps that write: only land-release.sh GENERATED paths are restored"
+rm -f "$R/user.txt"
 
 hook="$(cat "$ROOT/.githooks/pre-push")"
 grep -qF 'DCR_PREPUSH_CMD="${DCR_PREPUSH_CMD:-bash scripts/run-ci-tests.sh --affected}"' <<<"$hook"

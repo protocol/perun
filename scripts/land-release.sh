@@ -96,10 +96,6 @@ if [ "$mode" = tag ] || [ "$mode" = publish ]; then
   exit 0
 fi
 
-LOCK="$(git rev-parse --git-common-dir)/land-release.lock"
-mkdir "$LOCK" 2>/dev/null || { echo "land-release: lock held ($LOCK); another land is running" >&2; exit 1; }
-trap 'rmdir "$LOCK"' EXIT
-
 GENERATED='SHA256SUMS|scripts/size-budgets.tsv|docs/INDEX\.md|\.claude/skills/(.*/)?INDEX(-scripts)?\.md'
 SKILLS="deep-code-review agentic-delivery idea-critic"
 
@@ -119,7 +115,11 @@ regen() {
   bash scripts/write-checksums.sh >/dev/null   # pin LAST, after every skill-tree edit
 }
 
-if [ "$mode" = regen ]; then regen; exit 0; fi
+if [ "$mode" = regen ]; then regen; exit 0; fi   # before the lock: a rebuild writes only its own worktree, so a land elsewhere never blocks a pre-push
+
+LOCK="$(git rev-parse --git-common-dir)/land-release.lock"
+mkdir "$LOCK" 2>/dev/null || { echo "land-release: lock held ($LOCK); another land is running" >&2; exit 1; }
+trap 'rmdir "$LOCK"' EXIT
 
 [ -z "$(git status --porcelain)" ] || { echo "land-release: dirty tree" >&2; exit 1; }
 git fetch -q "$REMOTE" "$BASE_BRANCH"
