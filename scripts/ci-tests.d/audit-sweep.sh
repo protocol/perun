@@ -8,3 +8,4 @@ python3 scripts/test_audit_sweep_v6.py
 python3 scripts/test_audit_sweep_v7.py
 python3 scripts/test_audit_sweep_v8.py
 python3 scripts/test_audit_sweep_v9.py
+python3 scripts/test_audit_sweep_gaps.py

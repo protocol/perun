@@ -233,8 +233,8 @@ if [ -n "$py_files" ]; then
   lint=()
   if command -v ruff >/dev/null; then lint=(ruff check --output-format concise --no-cache) ln=ruff
   elif command -v pyflakes >/dev/null; then lint=(pyflakes) ln=pyflakes
-  # -P (Python 3.11+): no cwd on sys.path, so a repo pyflakes.py cannot shadow the linter; site-packages stay. Older Python rejects -P: not installed.
-  elif python3 -P -m pyflakes --version >/dev/null 2>&1; then lint=(python3 -P -m pyflakes) ln=pyflakes
+  # the cwd entry ('') leaves sys.path before the import, so a repo pyflakes.py cannot shadow the linter; site-packages stay. Unlike -P, works before Python 3.11.
+  elif pf=(python3 -c 'import sys; sys.path[:] = [p for p in sys.path if p]; from pyflakes.api import main; main(prog="pyflakes")') && "${pf[@]}" --version >/dev/null 2>&1; then lint=("${pf[@]}") ln=pyflakes
   else skip "ruff/pyflakes" "not installed"; ln=; fi
   wiredx+=" ${ln:-ruff/pyflakes}"
   if [ -n "$ln" ]; then

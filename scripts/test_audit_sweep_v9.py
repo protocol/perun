@@ -171,7 +171,7 @@ def test_same_name_repos_apart(t):
         paths.append(p)
     env = dict(os.environ, AUDIT_SWEEP_CHECKS=wrap)
     rows = lambda p: [l.split("\t") for l in subprocess.run([sys.executable, S, "--local", p, "--state", state], capture_output=True, text=True,
-                                                             env=env).stdout.splitlines()[1:]]
+                                                             env=env).stdout.splitlines()[1:] if "\tCOVERAGE\t" not in l]  # host-dependent CORE row
     first = [rows(p) for p in paths]
     check(all(len(x) == 1 and x[0][1] == "first" and x[0][3] == "r" for x in first), f"each same-named local repo reports its own finding: {first}")
     check(first[0][0][0] != first[1][0][0] and first[0][0][5] != first[1][0][5], f"repo column and fingerprint differ: {first}")
@@ -185,7 +185,7 @@ def test_same_name_repos_apart(t):
                 check(a.main() == 0, f"--org {org} swept")
     finally:
         a.list_repos, sys.argv, a.CHECKS = real_list, real_argv, real_checks
-    got = [l.split("\t")[:2] for l in out.getvalue().splitlines() if not l.startswith("repo\t")]
+    got = [l.split("\t")[:2] for l in out.getvalue().splitlines() if not l.startswith("repo\t") and "\tCOVERAGE\t" not in l]
     check(got == [["o1/acme", "first"], ["o2/acme", "first"]], f"two orgs with one repo name keep separate state: {got}")
 
 

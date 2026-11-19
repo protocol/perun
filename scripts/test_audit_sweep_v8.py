@@ -112,7 +112,7 @@ def test_config_changed_rows_are_envgap_then_one_full_rescan():
         out = e.sweep()
         assert e.st()["sha"] == h and f"\tENVGAP\t\t\t{tool}\t" in out, f"{tool}: listed, not blocking: {e.st()} {out}"
         n = len(e.calls()); e.sweep()
-        assert e.calls()[n:] == ["--full"], f"{tool} never read that range: the next run must rescan --full: {e.calls()[n:]}"
+        assert e.calls()[n:] == [f"--timeout {a.FULL_TIMEOUT} --full"], f"{tool} never read that range: the next run must rescan --full: {e.calls()[n:]}"
         n = len(e.calls()); e.sweep()
         assert len(e.calls()) == n, f"{tool}: one rescan, then idle"
 
@@ -130,7 +130,7 @@ def test_missing_ruby_advisory_db_is_a_missing_tool():
     os.makedirs(e.t + "/db"); open(e.t + "/db/gems", "w").close()
     e.env["BUNDLER_AUDIT_DB"] = e.t + "/db"; e.cfg({})
     n = len(e.calls()); e.sweep()
-    assert e.calls()[n:] == ["--full"] and e.st()["missing"] == [], f"a provisioned DB rescans the old range once: {e.calls()[n:]} {e.st()}"
+    assert e.calls()[n:] == [f"--timeout {a.FULL_TIMEOUT} --full"] and e.st()["missing"] == [], f"a provisioned DB rescans the old range once: {e.calls()[n:]} {e.st()}"
 
 
 def test_real_hub_full_scan_then_incremental():
@@ -140,7 +140,7 @@ def test_real_hub_full_scan_then_incremental():
     e.bin("node", "#!/bin/sh\necho \"SyntaxError: Unexpected token '<'\" >&2\nexit 1\n")  # node --check fails on JSX: the hub's JSX row
     h = e.commit({"fixtures/a.py": "x = 1\n", "package-lock.json": '{"lockfileVersion": 3, "packages": {}}\n', "app.js": "const a = <div/>;\n"})
     out = e.sweep()
-    assert e.calls() == ["--full"] and e.st().get("sha") == h, f"run 1 (--full: guarddog, noise and JSX rows) must store the sha: {e.st()} {out}"
+    assert e.calls() == [f"--timeout {a.FULL_TIMEOUT} --full"] and e.st().get("sha") == h, f"run 1 (--full: guarddog, noise and JSX rows) must store the sha: {e.st()} {out}"
     assert "\tENVGAP\t\t\tnode-check\t" in out, f"the JSX row is an ENVGAP row: {out}"
     h = e.commit({"b.txt": "b\n"})
     e.sweep()

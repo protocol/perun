@@ -35,7 +35,7 @@ NA = {"tenant-scope": "SKIPPED: no *.prisma", "route-auth": "SKIPPED: no HTTP ha
 
 
 def modes(r):
-    return [l.split("\t")[1] for l in r.stdout.splitlines()[1:] if "\tCOVERAGE\t" not in l and "\tENVGAP\t" not in l]  # COVERAGE (missing tool) is no finding
+    return [l.split("\t")[1] for l in r.stdout.splitlines()[1:] if "\tCOVERAGE\t" not in l and "\tENVGAP\t" not in l and "\tGAP\t" not in l]  # gap rows are no finding
 
 
 def check(gap, tool="faketool", advances=True, file="", env=None):
@@ -46,6 +46,7 @@ def check(gap, tool="faketool", advances=True, file="", env=None):
     assert ("\tENVGAP\t" in r1.stdout) == bool(env) and (not env or f"\t{env}\t" in r1.stdout), r1.stdout
     if not advances:
         assert "sha" not in list(json.load(open(state)).values())[0], "real miss must hold the sha"
+        assert r1.returncode == 1 and f"\tGAP\t\t\t{tool}\t" in r1.stdout, f"real miss must alert: {r1.returncode} {r1.stdout}"
         return
     calls = lambda: open(os.path.join(t, "calls.log")).read().splitlines()
     n = len(calls())

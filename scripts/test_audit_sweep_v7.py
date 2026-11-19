@@ -76,7 +76,7 @@ def env(cfg=None):
         open(t + "/bin/" + n, "w").write(""); os.chmod(t + "/bin/" + n, 0o755)
 
     e.commit, e.raw, e.inst = commit, raw, inst
-    e.run = lambda: [tuple(l.split("\t")[1:5]) for l in raw().stdout.splitlines()[1:] if "\tCOVERAGE\t" not in l and "\tENVGAP\t" not in l]
+    e.run = lambda: [tuple(l.split("\t")[1:5]) for l in raw().stdout.splitlines()[1:] if "\tCOVERAGE\t" not in l and "\tENVGAP\t" not in l and "\tGAP\t" not in l]
     e.st = lambda: list(json.load(open(state)).values())[0]
     e.calls = lambda: open(t + "/calls.log").read().splitlines() if os.path.exists(t + "/calls.log") else []
     return e

@@ -10,7 +10,7 @@ Per repo the `--state` JSON keeps the last scanned HEAD sha and the fingerprints
   last sha is an ancestor of HEAD       -> two scans, rows merged: plain diff mode `--repo R --base LAST` (rows with `new: false`, not on a line
                                            added since LAST, are dropped) and `--base LAST --history` (the real scanner emits `new` only in plain
                                            diff mode, so history rows are all kept). mode `delta`.
-  no last sha (first run)               -> `--full` scan. mode `first`.
+  no last sha (first run)               -> `--full` scan (with `--timeout FULL_TIMEOUT`, as every --full scan). mode `first`.
   last sha missing or not an ancestor   -> history was rewritten: `--full` rescan. mode `rewrite`.
   tool stamp changed (HEAD same or a descendant) -> `--full` rescan, mode `rescan`, even on an idle repo, plus a plain diff scan `--base LAST`
                                            when HEAD moved (only to mark re-added lines, see below). The stamp hashes review_checks.sh, the
@@ -23,8 +23,8 @@ same-named repos never share state; a state entry keyed by a bare name, from bef
 (fingerprint = first 12 hex chars). No finding text, message or secret value is ever printed or stored; the state
 holds hashes only (repo names are hashed too; the stored sha is a public git object id; `full` is the epoch second of the last --full scan), so it is safe to keep next to
 the cron job. Exit 0 = swept (findings or not, they are the TSV);
-exit 1 = at least one repo failed to clone or scan (an `ERROR` row, the alert) -- a failed repo keeps its old state
-so the next run rescans the same range; exit 2 = usage; exit 3 = the sweep could not start (unreadable or corrupt
+exit 1 = at least one repo failed to clone or scan (an `ERROR` row, the alert) or ended with a blocking gap (a `GAP` row, see below)
+-- a failed repo keeps its old state and a blocked one its old sha, so the next run rescans the same range; exit 2 = usage; exit 3 = the sweep could not start (unreadable or corrupt
 --state, or the org listing failed) or the new state could not be written (OSError, fsync'd temp file then atomic
 rename): one `ERROR` row, state untouched. Repos are listed with `org_leak_sweep.list_repos`.
 Edge cases: empty org = header-only TSV; an empty repo (no commit, no ref) is skipped (no row, not an error); a fingerprint reported once is not reported again unless its row sits on a line added since the
@@ -35,9 +35,11 @@ from the org keeps its (hashed) state entry; a rewrite rescan reports only findi
 `repo|tool|rule|file|text` with the volatile parts of the text normalized (see `norm`); rows with the same tool, rule, file and text in
 one scan get an occurrence index, so the same text on two lines stays two alerts. `not-checked` rows (a missing tool or an unread file)
 are coverage gaps, never findings: counted on stderr, never fingerprinted, reported as one `COVERAGE` row (`repo COVERAGE  N
-not-checked`). While a repo has a gap other than a not-installed tool (see `not_installed`), a design, config or provisioning gap a rescan
-cannot close (see `ENV`; one `ENVGAP` row per tool) or a noise path a --full scan never reads (see `NOISE`) its sha and tool stamp are not
-advanced, so the next run rescans the same range (new findings are still recorded as seen); a "config changed in this diff" ENV row
+not-checked`). The `CORE` scanners the hub skips without any row when missing are named in a second `COVERAGE` row (`repo COVERAGE
+not installed  <tools>`) on every scan of a host that lacks them. While a repo has a gap other than a not-installed tool (see
+`not_installed`), a design, config or provisioning gap a rescan cannot close (see `ENV`; one `ENVGAP` row per tool) or a noise path a
+--full scan never reads (see `NOISE`) -- a blocking gap: a timeout, crash or unread file, one `GAP` row per tool -- its sha and tool stamp
+are not advanced, so the next run rescans the same range (new findings are still recorded as seen); a "config changed in this diff" ENV row
 advances the sha but not the tool stamp, so the next run rescans --full. The missing-tool list (binary from `BIN`, else the tool name; dep-scan records the missing
 auditor) is replaced by a full scan and merged by a delta, since the hub names a missing tool only when a file it routes to is in
 range; a listed tool that appears on PATH is rescanned once, then dropped even if the hub still reports it. A scanner that exits 0 with
@@ -77,14 +79,17 @@ def fingerprint(repo, row, occ=0):
 
 # seconds between forced --full rescans: a new advisory against an unchanged lockfile or a new built-in detector reaches idle code
 FULL_EVERY = 7 * 86400
+FULL_TIMEOUT = "600"  # per-tool seconds for a --full scan: the hub's 60 s default fits a diff, and a whole big repo's semgrep runs longer
+# review_checks.sh `have` skips these without a row when missing (stderr only): see `stamp` and the CORE COVERAGE row in `sweep_repo`
+CORE = ("shellcheck", "semgrep", "trivy", "osv-scanner", "ruff/pyflakes")
 HUB_SH = os.path.join(HERE, "review_checks.sh")  # the shipped hub: its hint table and tool list, even when AUDIT_SWEEP_CHECKS fakes the scan
 CHECKS = os.environ.get("AUDIT_SWEEP_CHECKS") or HUB_SH
 
 
 def stamp():
     """Hash of the scanner code (CHECKS, scripts/*.py, templates/semgrep-taint, templates/gitleaks.toml: the hub's allowlist template) and
-    of which `review_checks.sh --list-tools` tools are on PATH: shellcheck, semgrep, trivy, osv-scanner and ruff/pyflakes emit no row when
-    missing, so only this catches their install."""
+    of which `review_checks.sh --list-tools` tools are on PATH: the `CORE` tools emit no row when missing, so only this catches their
+    install."""
     h = hashlib.sha256()
     tpl = os.path.join(HERE, "..", "templates")
     py = sorted(glob.glob(os.path.join(HERE, "*.py")))
@@ -242,14 +247,14 @@ def tag(rows):
 
 
 def scan(repo, base, full):
-    """Returns (finding rows, fresh rows: plain diff rows with `new: true`, not-checked count, blocking count: gaps other than a tool that
-    is not installed, an `ENV` gap or a `NOISE` row, names of missing tools: see `not_installed`, dep-scan gives the auditor, tools with
+    """Returns (finding rows, fresh rows: plain diff rows with `new: true`, not-checked count, blocking tools: those with a gap other than
+    a tool that is not installed, an `ENV` gap or a `NOISE` row, names of missing tools: see `not_installed`, dep-scan gives the auditor, tools with
     an `ENV` gap, True when one of those is a config-changed row: that tool did not read this range).
     full: rows and gaps come from one `--full` scan, and a base adds a plain diff scan used only for its fresh rows; else a diff plus a
     history scan against base. `new` exists only in plain diff mode, so the filter applies only there."""
     diff = tag(scan1(repo, "--base", base)) if base else []
     if full:
-        raw = rows = tag(scan1(repo, "--full"))
+        raw = rows = tag(scan1(repo, "--timeout", FULL_TIMEOUT, "--full"))
     else:  # diff rows keep new is not False; history rows carry no `new` key
         hist = tag(scan1(repo, "--base", base, "--history"))
         raw = hist + diff
@@ -257,7 +262,7 @@ def scan(repo, base, full):
     raw = [x for x in raw if not (x.get("rule") == "not-checked" and NA.get(x.get("tool")) == msg(x))]  # checker does not apply: no gap
     gaps = sum(1 for x in raw if x.get("rule") == "not-checked")
     miss = {DEP_MISSING.fullmatch(msg(x))[1] if x.get("tool") == "dep-scan" else x.get("tool", "") for x in raw if not_installed(x)}
-    block = sum(1 for x in raw if x.get("rule") == "not-checked" and not not_installed(x) and not env_gap(x) and not (x.get("file") and msg(x) == NOISE))
+    block = sorted({x.get("tool", "") for x in raw if x.get("rule") == "not-checked" and not not_installed(x) and not env_gap(x) and not (x.get("file") and msg(x) == NOISE)})
     if gaps:  # a missing tool or unread file is a coverage gap, not a finding; its hint text varies by mode and install state
         print(f"audit_sweep: {gaps} not-checked row(s) skipped (tool missing or file unread)", file=sys.stderr)
     fresh = [x for x in diff if x.get("new") is True and x.get("rule") != "not-checked"]
@@ -303,7 +308,11 @@ def sweep_repo(name, path, st):
     st["seen"] = sorted(seen)
     if gaps:  # coverage rows list every gap, a missing tool included
         out.append((name, "COVERAGE", "", f"{gaps} not-checked", "", ""))
+    gone = [t for t in CORE if not installed(t)]
+    if gone:  # the hub names these only on stderr: without this row a host lacking semgrep sweeps "clean"
+        out.append((name, "COVERAGE", "", "not installed", " ".join(gone), ""))
     out += [(name, "ENVGAP", "", "", t, "") for t in env]  # design/config gaps a rescan cannot close, listed by tool
+    out += [(name, "GAP", "", "", t, "") for t in block]  # a timeout, crash or unread file: holds the sha, and main() exits 1
     # one rescan per install: a tool on PATH that the hub still calls not installed is dropped, so the next run does not rescan forever.
     # A delta reads only the changed files and the hub names a missing tool only for a file it routes to: keep the old names (back is empty).
     st["missing"] = sorted(set(miss) | set(st.get("missing", []))) if mode == "delta" else [m for m in miss if m not in back]
@@ -379,6 +388,7 @@ def main():
             for r in rows:
                 print("\t".join("".join(ch if ch.isprintable() else " " for ch in c) for c in r))  # a file name may hold a tab, newline or other break
             state[key] = st  # only once its rows are printed: a failed print keeps the old state
+            bad = bad or any(r[1] == "GAP" for r in rows)  # a blocked repo is an alert, not a clean sweep
         except Exception as e:
             print(f"{name}\tERROR\t\t{type(e).__name__}: {e}\t\t")
             bad = True

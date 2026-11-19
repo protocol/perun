@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # review_checks.sh runs from the repo root, and `python3 -`, `-c` and `-m` put the working directory first on sys.path, so a committed
 # json.py or pyflakes.py would shadow the stdlib or the linter and run with the operator's env. Every inline python3 call in the hub is
-# isolated (-I; the pyflakes probe uses -P to keep site-packages): planted modules never run in a diff review or a --full audit.
+# isolated (-I; the pyflakes probe drops the cwd entry from sys.path itself, to keep site-packages on any Python 3): planted modules never run in a diff review or a --full audit.
 # Stub scanners on a hermetic PATH with no ruff or pyflakes binary (no real tool, no network). REVIEW_CHECKS=<path> runs another copy
 # (used to prove the cases fail before the change).
 set -euo pipefail
@@ -36,13 +36,13 @@ for mode in "--base base" --full; do
   PATH="$T/base:$T/sys" bash "$RC" $mode 2>"$T/err" >"$T/out" || true
   [ -z "$(hits)" ] && ok "$mode: no planted module ran" || bad "$mode: planted modules ran: $(hits | tr '\n' ' ')"
   jq -e 'type == "array"' "$T/out" >/dev/null && ok "$mode: the closing step still wrote the JSON report" || bad "$mode: no JSON report: $(tail -n3 "$T/err")"
-  # the sites ran: py_compile (-c), semgrep's JSON through sjson (-), the pyflakes probe (-m) finding no linter
+  # the sites ran: py_compile (-c), semgrep's JSON through sjson (-), the pyflakes probe (-c) finding no linter
   grep -qE 'analyzers ran: py_compile, .*semgrep' "$T/err" && grep -qF 'not run: ruff/pyflakes (not installed)' "$T/err" \
     && ok "$mode: py_compile, sjson and the pyflakes probe ran" || bad "$mode: a python site did not run: $(grep 'analyzers ran\|ruff/pyflakes' "$T/err")"
   rm -f -- "$T"/hit/*
 done
 
 # every inline python3 call (-, -c, -m) in the hub is isolated; a script path (python3 "$here/x.py") puts only its own directory first
-grep -nE 'python3( +-[A-Za-z]+)* +(-c|-m|-)( |$)' "$RC" | grep -vE 'python3( +-[A-Za-z]+)* +-[A-Za-z]*[IP]' >"$T/raw" || true
-[ ! -s "$T/raw" ] && ok "every inline python3 call in the hub has -I or -P" || bad "unisolated python3 calls: $(cat "$T/raw")"
+grep -nE 'python3( +-[A-Za-z]+)* +(-c|-m|-)( |$)' "$RC" | grep -vE "python3( +-[A-Za-z]+)* +-[A-Za-z]*[IP]|python3 -c 'import sys; sys\\.path\\[:\\] = \\[p for p in sys\\.path if p\\]; " >"$T/raw" || true
+[ ! -s "$T/raw" ] && ok "every inline python3 call in the hub has -I or -P or first drops the cwd entry" || bad "unisolated python3 calls: $(cat "$T/raw")"
 exit "$fail"

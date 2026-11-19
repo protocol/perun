@@ -87,7 +87,7 @@ def test_tab_newline_in_file_name_keeps_tsv_columns():
     t, commit, run, rows = env()
     open(t + "/bin/latetool", "w").write("")
     commit({"bad\tname.py": "BAD\n"})
-    lines = run().stdout.splitlines()[1:]
+    lines = [l for l in run().stdout.splitlines()[1:] if "\tCOVERAGE\t" not in l]  # a host without a CORE scanner adds a COVERAGE row
     assert len(lines) == 1 and len(lines[0].split("\t")) == 6, lines
 
 

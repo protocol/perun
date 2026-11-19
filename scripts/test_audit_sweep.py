@@ -2,7 +2,7 @@
 """Tests: audit_sweep.py on temp git repos with a fake scanner (AUDIT_SWEEP_CHECKS). Run 1 reports every finding (mode
 first); run 2 reports only the delta since the stored sha and scans with plain `--base LAST` (the `new` filter) plus `--base LAST --history`; an unchanged HEAD
 is not scanned; a history rewrite forces a `--full` rescan marked `rewrite` that reports only unseen fingerprints; rows
-with `new: false` are dropped; `not-checked` rows (missing tool) are never reported but give a COVERAGE row, a stderr gap count and no sha advance; a scanner-file change forces a `rescan`; a failing scanner gives an ERROR row, exit 1, an unchanged state and no temp file; a corrupt state or failed listing gives an ERROR row and exit 3; a --org clone failure gives an ERROR row and exit 1; the REAL review_checks.sh (tiny temp repo) emits a JSON array with `new` only in plain diff mode. No network."""
+with `new: false` are dropped; `not-checked` rows (a crashed tool) are never reported but give a COVERAGE row, a GAP row, exit 1, a stderr gap count and no sha advance; a scanner-file change forces a `rescan`; a failing scanner gives an ERROR row, exit 1, an unchanged state and no temp file; a corrupt state or failed listing gives an ERROR row and exit 3; a --org clone failure gives an ERROR row and exit 1; the REAL review_checks.sh (tiny temp repo) emits a JSON array with `new` only in plain diff mode. No network."""
 import json
 import os
 import subprocess
@@ -84,7 +84,8 @@ def main():
         def sweep():
             r = subprocess.run([sys.executable, S, "--local", repo, "--state", state], capture_output=True, text=True, env=env)
             err[:] = [r.stderr]
-            rows = [l.split("\t") for l in r.stdout.splitlines()[1:]]
+            # the CORE "not installed" COVERAGE row depends on the host's PATH, not on the fake scanner (test_audit_sweep_gaps.py covers it)
+            rows = [l.split("\t") for l in r.stdout.splitlines()[1:] if "\tCOVERAGE\t\tnot installed\t" not in l]
             calls = open(log).read().splitlines() if os.path.exists(log) else []
             return r.returncode, rows, calls
 
@@ -124,16 +125,17 @@ def main():
         check(rc == 0 and rows == [] and len(calls) == n + 1 and calls[-1].endswith("--full"), f"idle stamp change: {calls[-1]} {rows}")
         rc, rows, calls = sweep()
         check(len(calls) == n + 1, "stamp now current: idle repo skipped again")
-        # coverage gap: COVERAGE row, stderr count, sha and tool stamp not advanced; once the gap closes the sha advances
+        # blocking coverage gap: COVERAGE and GAP rows, exit 1, stderr count, sha and tool stamp not advanced; once the gap closes the sha advances
         sha0 = list(json.load(open(state)).values())[0]["sha"]
         commit("m_g.txt")
         open(os.path.join(t, "gap"), "w").close()
         rc, rows, _ = sweep()
         st = list(json.load(open(state)).values())[0]
-        check(rc == 0 and [(r[1], r[2]) for r in rows] == [("delta", "m_g.txt"), ("COVERAGE", "")] and rows[1][3] == "2 not-checked", f"gap rows: {rc} {rows}")
+        check(rc == 1 and [(r[1], r[2]) for r in rows] == [("delta", "m_g.txt"), ("COVERAGE", ""), ("GAP", "")] and rows[1][3] == "2 not-checked"
+              and rows[2][4] == "devskim", f"gap rows: {rc} {rows}")
         check("2 not-checked row(s)" in err[0] and st["sha"] == sha0, f"gap must count on stderr and hold sha: {err} {st['sha']}")
         rc, rows, _ = sweep()  # same range rescanned: nothing new, gap still reported
-        check([r[1] for r in rows] == ["COVERAGE"], f"gap persists: {rows}")
+        check(rc == 1 and [r[1] for r in rows] == ["COVERAGE", "GAP"], f"gap persists: {rc} {rows}")
         os.remove(os.path.join(t, "gap"))
         rc, rows, _ = sweep()
         check(rc == 0 and rows == [] and list(json.load(open(state)).values())[0]["sha"] != sha0, f"closed gap must advance sha: {rows}")
