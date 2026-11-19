@@ -1,0 +1,134 @@
+# Bundled generic rules for CWE-20 (JavaScript) and CWE-200 (Python); both ids start with perun.
+# perun.js.unvalidated-size-or-qty (WARNING, taint): a req/request body, query or params value (also koa ctx.request.body and ctx.query) reaches an Array length (new Array(n), Array(n), Array.from({ length: n })), a Buffer.alloc/allocUnsafe size, a .repeat(n) count, or one side of a `*` whose other side is named like a price (price, cost, cents, rate, fee, unit, amount, total, tax, discount). parseInt, parseFloat, Number and unary + keep the taint (NaN, a negative, a fraction or a huge value all pass them). A Number.isInteger/Number.isSafeInteger check, a comparison with <, <=, > or >= (a range guard) or a Math.min/Math.max clamp on the value clears it from that point on in the same function. ponytail: any comparison counts as a range guard, including a lower-bound-only check, and a value validated by a schema library (zod, joi) before it is read is only followed when the validated copy is a new variable.
+# perun.py.exception-in-response (WARNING): a handler returns, in jsonify/Response/make_response/JsonResponse/HttpResponse/PlainTextResponse/HTMLResponse, traceback.format_exc()/format_exception()/format_exc() or the caught exception ($E of `except ... as $E`, bare or inside str/repr/%/f-string), so internals reach the client. Log the exception and return a generic message. ponytail: only a return is followed, not a response built into a variable first.
+# perun.py.secret-field-in-response (WARNING): jsonify(...)/JsonResponse(...) or a bare `return {...}` inside a route-decorated function with a key or keyword named password, passwd, password_hash, hashed_password, pwd_hash, api_key, apikey, secret, secret_key, client_secret or private_key (tokens are not listed: a login response returns one on purpose). Also os.environ in a response. ponytail: a record fetched whole and jsonify'd with no literal key (jsonify(USERS[uid])) is not followed; use an explicit field list.
+rules:
+- id: perun.js.unvalidated-size-or-qty
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A request value reaches an array length, buffer size, repeat count or price arithmetic with no Number.isInteger or range check. NaN, a negative, a fraction or a huge value can throw, exhaust memory or corrupt the total. Check Number.isInteger(n) and a min/max before use.
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.query.$P
+    - pattern: req.body.$P
+    - pattern: req.params.$P
+    - pattern: request.query.$P
+    - pattern: request.body.$P
+    - pattern: request.params.$P
+    - pattern: ctx.request.body.$P
+    - pattern: ctx.query.$P
+    - pattern: ctx.params.$P
+    - patterns:
+      - pattern-either:
+        - pattern: '{ ..., $K, ... } = req.body'
+        - pattern: '{ ..., $K, ... } = req.query'
+        - pattern: '{ ..., $K, ... } = req.params'
+        - pattern: '{ ..., $K, ... } = request.body'
+        - pattern: '{ ..., $K, ... } = request.query'
+        - pattern: '{ ..., $K, ... } = request.params'
+      - focus-metavariable: $K
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: new Array($S)
+      - pattern: Array($S)
+      - pattern: 'Array.from({ length: $S }, ...)'
+      - pattern: 'Array.from({ length: $S })'
+      - pattern: Buffer.alloc($S, ...)
+      - pattern: Buffer.allocUnsafe($S)
+      - pattern: $STR.repeat($S)
+    - focus-metavariable: $S
+  - patterns:
+    - pattern-either:
+      - pattern: $PRICE * $S
+      - pattern: $S * $PRICE
+      - pattern: $O.$PRICE * $S
+      - pattern: $S * $O.$PRICE
+    - metavariable-regex:
+        metavariable: $PRICE
+        regex: (?i)(price|cost|cents|rate|fee|unit|amount|total|tax|discount)
+    - focus-metavariable: $S
+  pattern-sanitizers:
+  - by-side-effect: true
+    patterns:
+    - pattern-either:
+      - pattern: Number.isInteger($X)
+      - pattern: Number.isSafeInteger($X)
+      - pattern: $X > $N
+      - pattern: $X >= $N
+      - pattern: $X < $N
+      - pattern: $X <= $N
+    - focus-metavariable: $X
+  - pattern: Math.min(...)
+  - pattern: Math.max(...)
+- id: perun.py.exception-in-response
+  languages: [python]
+  severity: WARNING
+  message: A traceback or exception text is returned to the client. It leaks file paths, queries and library versions. Log it and return a generic error message.
+  pattern-either:
+  - patterns:
+    - pattern-either:
+      - pattern: '$F(..., <... traceback.format_exc(...) ...>, ...)'
+      - pattern: '$F(..., <... traceback.format_exception(...) ...>, ...)'
+      - pattern: '$F(..., <... format_exc(...) ...>, ...)'
+      - pattern: '$F(..., $K=<... traceback.format_exc(...) ...>, ...)'
+      - pattern: '$F(..., $K=<... traceback.format_exception(...) ...>, ...)'
+      - pattern: '$F(..., $K=<... format_exc(...) ...>, ...)'
+      - patterns:
+        - pattern-inside: |
+            try:
+              ...
+            except $T as $E:
+              ...
+        - pattern-either:
+          - pattern: '$F(..., <... $E ...>, ...)'
+          - pattern: '$F(..., $K=<... $E ...>, ...)'
+    - metavariable-regex:
+        metavariable: $F
+        regex: ^(jsonify|Response|make_response|JsonResponse|HttpResponse|PlainTextResponse|HTMLResponse)$
+  - patterns:
+    - pattern-inside: |
+        try:
+          ...
+        except $T as $E:
+          ...
+    - pattern-either:
+      - pattern: 'return str($E)'
+      - pattern: 'return repr($E)'
+      - pattern: 'return (str($E), ...)'
+      - pattern: 'return (repr($E), ...)'
+      - pattern: 'return {..., $K: str($E), ...}'
+      - pattern: 'return traceback.format_exc()'
+      - pattern: 'return (traceback.format_exc(), ...)'
+- id: perun.py.secret-field-in-response
+  languages: [python]
+  severity: WARNING
+  message: A response carries a password, password hash, API key or secret, or the process environment. Return an explicit allowlist of public fields instead.
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern: 'jsonify(<... {..., $K: $V, ...} ...>)'
+        - pattern: 'jsonify(..., $KW=<... {..., $K: $V, ...} ...>, ...)'
+        - pattern: 'JsonResponse(<... {..., $K: $V, ...} ...>, ...)'
+        - pattern: 'jsonify(..., $K=$V, ...)'
+        - patterns:
+          - pattern-inside: |
+              @$A.$M(...)
+              def $FN(...):
+                ...
+          - pattern: 'return {..., $K: $V, ...}'
+      - metavariable-regex:
+          metavariable: $K
+          regex: ^["']?(password|passwd|password_hash|hashed_password|pwd_hash|api_key|apikey|secret|secret_key|client_secret|private_key)["']?$
+    - patterns:
+      - pattern-either:
+        - pattern: '$F(..., os.environ, ...)'
+        - pattern: '$F(..., <... dict(os.environ) ...>, ...)'
+        - pattern: '$F(..., <... os.environ.copy() ...>, ...)'
+        - pattern: '$F(..., <... str(os.environ) ...>, ...)'
+        - pattern: '$F(..., <... repr(os.environ) ...>, ...)'
+      - metavariable-regex:
+          metavariable: $F
+          regex: ^(jsonify|Response|make_response|JsonResponse|HttpResponse|PlainTextResponse|HTMLResponse)$

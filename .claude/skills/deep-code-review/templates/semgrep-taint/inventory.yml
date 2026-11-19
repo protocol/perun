@@ -1,0 +1,219 @@
+# Severity (security_verify.py maps WARNING to medium, INFO to low): API-docs and schema exposure (Swagger, FastAPI docs, flasgger, GraphQL introspection) is INFO; live debug or management surfaces (status monitor, debug toolbar, actuator) are WARNING.
+# Exposed debug and management surfaces (OWASP API9:2023 improper inventory management). Each rule skips test paths and reports only when the surface is not behind an environment or production check.
+# Already covered elsewhere, so not repeated here: Django/Flask DEBUG = True and app.run(debug=True) (defaults.yml perun.py.debug-enabled; scripts/insecure_defaults.py debug-on-default). Nothing in header_config.py or the other rule files covers Swagger, actuator, introspection, status-monitor or debug_toolbar.
+# ponytail: the gate is a lexical one - an enclosing `if` that reads process.env (JS) or DEBUG / settings (Python). A gate in another file (a conditional module import) is not seen; config files are gated only by a profile-named file (*-dev, *-local, *-test). A short-circuit (`isDev && ...`) or early return is not seen and is reported.
+rules:
+- id: perun.js.swagger-ui-ungated
+  languages: [javascript, typescript]
+  severity: INFO
+  message: Swagger UI is mounted with no environment or production check, so the full API inventory (every route, parameter and schema) is public. Mount it only when process.env says the environment is not production, or put it behind auth.
+  metadata:
+    cwe: ["CWE-1059: Insufficient Technical Documentation", "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+    owasp: "API9:2023 Improper Inventory Management"
+  patterns:
+  - pattern-either:
+    - pattern: SwaggerModule.setup(...)
+    - patterns:
+      - pattern: $APP.use(..., $S.serve, ...)
+      - metavariable-regex:
+          metavariable: $S
+          regex: (?i)^swagger.*
+  - pattern-not-inside: |
+      if (<... process.env.$X !== "production" ...>) { ... }
+  - pattern-not-inside: |
+      if (<... process.env.$X != "production" ...>) { ... }
+  - pattern-not-inside:
+      patterns:
+      - pattern: |
+          if (<... process.env.$X === $V ...>) { ... }
+      - metavariable-regex:
+          metavariable: $V
+          regex: ^["'](dev|development|local|test|1|true)["']$
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.graphql-introspection-playground
+  languages: [javascript, typescript]
+  severity: INFO
+  message: GraphQL introspection or the in-browser playground (GraphiQL) is hard-coded on, so anyone can download the whole schema and explore it. Set it from the environment (for example process.env.NODE_ENV !== "production"), not to a literal true.
+  metadata:
+    cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor", "CWE-489: Active Debug Code"]
+    owasp: "API9:2023 Improper Inventory Management"
+  patterns:
+  - pattern-either:
+    - pattern: '{..., introspection: true, ...}'
+    - pattern: '{..., playground: true, ...}'
+    - pattern: '{..., graphiql: true, ...}'
+  - pattern-not-inside: |
+      if (<... process.env.$X !== "production" ...>) { ... }
+  - pattern-not-inside: |
+      if (<... process.env.$X != "production" ...>) { ... }
+  - pattern-not-inside:
+      patterns:
+      - pattern: |
+          if (<... process.env.$X === $V ...>) { ... }
+      - metavariable-regex:
+          metavariable: $V
+          regex: ^["'](dev|development|local|test|1|true)["']$
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.js.status-monitor-ungated
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: express-status-monitor is mounted with no environment or production check. It publishes a live dashboard (CPU, memory, request rates, response codes) at /status to anyone. Mount it only outside production or behind auth.
+  metadata:
+    cwe: ["CWE-489: Active Debug Code", "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+    owasp: "API9:2023 Improper Inventory Management"
+  patterns:
+  - pattern-either:
+    - pattern: $APP.use(require("express-status-monitor")(...))
+    - patterns:
+      - pattern: $APP.use($M(...))
+      - pattern-inside: |
+          import $M from "express-status-monitor";
+          ...
+    - patterns:
+      - pattern: $APP.use($M(...))
+      - pattern-inside: |
+          const $M = require("express-status-monitor");
+          ...
+  - pattern-not-inside: |
+      if (<... process.env.$X !== "production" ...>) { ... }
+  - pattern-not-inside: |
+      if (<... process.env.$X != "production" ...>) { ... }
+  - pattern-not-inside:
+      patterns:
+      - pattern: |
+          if (<... process.env.$X === $V ...>) { ... }
+      - metavariable-regex:
+          metavariable: $V
+          regex: ^["'](dev|development|local|test|1|true)["']$
+  paths:
+    exclude: ["test", "tests", "__tests__", "spec", "fixtures", "mocks", "__mocks__", "e2e", "*.test.*", "*.spec.*"]
+- id: perun.py.debug-toolbar-urls-ungated
+  languages: [python]
+  severity: WARNING
+  message: The Django debug toolbar URLs are routed with no DEBUG check. The toolbar shows SQL, settings and request data to anyone who can reach /__debug__/. Add them only under `if settings.DEBUG:`.
+  metadata:
+    cwe: ["CWE-489: Active Debug Code", "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+    owasp: "API9:2023 Improper Inventory Management"
+  patterns:
+  - pattern-either:
+    - pattern: include(debug_toolbar.urls)
+    - pattern: include("debug_toolbar.urls")
+    - pattern: debug_toolbar_urls()
+  - pattern-not-inside:
+      patterns:
+      - pattern: |
+          if $C:
+              ...
+      - metavariable-regex:
+          metavariable: $C
+          regex: (?s)^(?:\w+\.)*DEBUG$|^(?:\w+\.)*DEBUG\s+and\s.*|^.*\sand\s+(?:\w+\.)*DEBUG$|^.*(?:environ|getenv).*(?:!=\s*["']production["']|==\s*["'](?:dev|development|local)["']).*
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.py.fastapi-docs-ungated
+  languages: [python]
+  severity: INFO
+  message: FastAPI is created with its interactive docs and OpenAPI schema on (they are on by default), so the full API inventory is public. Pass openapi_url=None (or docs_url=None and redoc_url=None) in production, or set the URLs from the environment, for example docs_url="/docs" if settings.DEBUG else None. Known limit - one conditional docs argument is trusted, so a gated docs_url with an ungated redoc_url is not reported.
+  metadata:
+    cwe: ["CWE-1059: Insufficient Technical Documentation", "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+    owasp: "API9:2023 Improper Inventory Management"
+  patterns:
+  - pattern-either:
+    - pattern: FastAPI(...)
+    - pattern: fastapi.FastAPI(...)
+  - pattern-not: $F(..., openapi_url=None, ...)
+  - pattern-not: $F(..., docs_url=None, ..., redoc_url=None, ...)
+  - pattern-not: $F(..., redoc_url=None, ..., docs_url=None, ...)
+  - pattern-not: $F(..., docs_url=$A if $C else $B, ...)
+  - pattern-not: $F(..., redoc_url=$A if $C else $B, ...)
+  - pattern-not: $F(..., openapi_url=$A if $C else $B, ...)
+  - pattern-not-inside:
+      patterns:
+      - pattern: |
+          if $C:
+              ...
+      - metavariable-regex:
+          metavariable: $C
+          regex: (?s)^(?:\w+\.)*DEBUG$|^(?:\w+\.)*DEBUG\s+and\s.*|^.*\sand\s+(?:\w+\.)*DEBUG$|^.*(?:environ|getenv).*(?:!=\s*["']production["']|==\s*["'](?:dev|development|local)["']).*
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.py.flasgger-swagger-ungated
+  languages: [python]
+  severity: INFO
+  message: flasgger Swagger(app) serves the Swagger UI at /apidocs and the full API spec with no environment or DEBUG check. Create it only under `if settings.DEBUG:` (or a non-production check), or put it behind auth.
+  metadata:
+    cwe: ["CWE-1059: Insufficient Technical Documentation", "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+    owasp: "API9:2023 Improper Inventory Management"
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern: Swagger(...)
+      - pattern-inside: |
+          from flasgger import Swagger
+          ...
+    - pattern: flasgger.Swagger(...)
+  - pattern-not-inside:
+      patterns:
+      - pattern: |
+          if $C:
+              ...
+      - metavariable-regex:
+          metavariable: $C
+          regex: (?s)^(?:\w+\.)*DEBUG$|^(?:\w+\.)*DEBUG\s+and\s.*|^.*\sand\s+(?:\w+\.)*DEBUG$|^.*(?:environ|getenv).*(?:!=\s*["']production["']|==\s*["'](?:dev|development|local)["']).*
+  paths:
+    exclude: ["test", "tests", "fixtures", "mocks", "e2e", "test_*", "*_test.py", "conftest.py"]
+- id: perun.yaml.actuator-expose-all
+  languages: [yaml]
+  severity: WARNING
+  message: Spring Boot actuator exposes every endpoint over the web (management.endpoints.web.exposure.include is "*"). That includes env, heapdump, beans and mappings, which leak secrets and the route inventory. List only the endpoints you need (health, info) and secure the rest.
+  metadata:
+    cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor", "CWE-489: Active Debug Code"]
+    owasp: "API9:2023 Improper Inventory Management"
+  pattern-either:
+  - pattern: |
+      management:
+        endpoints:
+          web:
+            exposure:
+              include: "*"
+  - pattern: |
+      management:
+        endpoints:
+          web:
+            exposure:
+              include: '*'
+  - pattern: |
+      management:
+        endpoints:
+          web:
+            exposure:
+              include: ["*"]
+  - pattern: |
+      management:
+        endpoints:
+          web:
+            exposure:
+              include: ['*']
+  - pattern: |
+      management.endpoints.web.exposure.include: "*"
+  - pattern: |
+      management.endpoints.web.exposure.include: '*'
+  - pattern: |
+      management.endpoints.web.exposure.include: ["*"]
+  - pattern: |
+      management.endpoints.web.exposure.include: ['*']
+  paths:
+    include: ["*.yml", "*.yaml"]
+    exclude: ["test", "tests", "fixtures", "*-dev.*", "*-local.*", "*-test.*", "*-development.*"]
+- id: perun.generic.actuator-expose-all
+  languages: [generic]
+  severity: WARNING
+  message: Spring Boot actuator exposes every endpoint over the web (management.endpoints.web.exposure.include=*). That includes env, heapdump, beans and mappings, which leak secrets and the route inventory. List only the endpoints you need (health, info) and secure the rest.
+  metadata:
+    cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor", "CWE-489: Active Debug Code"]
+    owasp: "API9:2023 Improper Inventory Management"
+  pattern-regex: '(?m)^[ \t]*management\.endpoints\.web\.exposure\.include[ \t]*[=:][ \t]*["'']?\*'
+  paths:
+    include: ["*.properties"]
+    exclude: ["test", "tests", "fixtures", "*-dev.*", "*-local.*", "*-test.*", "*-development.*"]
