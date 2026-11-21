@@ -3,7 +3,7 @@
 
 Read this when you review an API surface for missing authentication or run the anonymous GET sweep in security-appsec.md: a handler that
 mutates state and never touches an identity check is reachable by anyone, and generic linters do not see it. Run
-`python3 -I route_auth_map.py DIR` (add `--privileged` to list privileged routes guarded by authentication alone, with no role, permission or admin check in the handler: admin path segments, role or permission changes, PUT/PATCH/DELETE on `/users/:id` and kin; add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
+`python3 -I route_auth_map.py DIR` (add `--privileged` to list privileged routes guarded by authentication alone, with no role, permission or admin check in the handler: admin path segments, role or permission changes, PUT/PATCH/DELETE on `/users/:id` and kin; the same run prints `OWN:` rows, authenticated NestJS writes by client-sent id or of a client-sent owner id whose member and called service method never compare the requester to the owner, and `OWN-CHECKED:` rows naming the check read where they do, see ownership(); add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
 OF AUTHENTICATION: the scan only sees the call shapes listed below.
 
 1. Inventory every handler: Next.js app/**/route.(ts|tsx|js|jsx|mjs) exported GET/POST/PUT/PATCH/DELETE (function, const, destructured or re-exported),
@@ -417,6 +417,7 @@ NESTGLOBAL = re.compile(r"\bAPP_GUARD\b|\buseGlobalGuards\s*\(")
 NESTRATE = re.compile(r"(?![\w$.]*(?:auth|jwt|session|role|permission))[\w$.]*(?:throttl|rate_?limit)", re.I)  # `.match`: a rate-limit guard is no identity check, unless its name also says Auth, Jwt, Session, Role or Permission
 
 
+DECOCALL = re.compile(r"@[\w$.]+\s*\(")  # a decorator call `@Name(`: nest_hs keeps only these from the text before a class, so an import never reads as a class guard
 NESTDECO = re.compile(r"@[\w$.]+\s*(?:<[^()]*)?\s*\(?")  # `@Name`, optionally spaced, with a generic argument (nested `<A<B>>` too: skipped up to the next paren), and its opening paren
 TSR = re.compile(r"@(?:Api|TsRest|TsRestHandler)\s*\(\s*([\w$]+(?:\s*\.\s*[\w$]+)*)\s*[,)]")  # a ts-rest member decorator whose argument is a contract route reference; `@TsRest({ jsonQuery })` options are not
 TSRSRV = re.compile(r"\b([\w$]+)\s*=\s*(initNestServer|nestControllerContract)\s*\(\s*([\w$]+)\s*\)")  # `const server = initNestServer(contract)`: `server.route.x` names contract.x
@@ -492,12 +493,18 @@ def nest_deco_end(m, i, j):
         if t[0].endswith("("): p = max(close_of(m, p - 1), p) + 1
 
 
-def nest_guard(m, i, j):
-    """Name of the first `@UseGuards(...)` argument in masked m[i:j] that is not a rate-limit guard (`AuthGuard('jwt')` reads AuthGuard), else None."""
+def nest_guards(m, i, j):
+    """Names of the `@UseGuards(...)` arguments in masked m[i:j] that are not rate-limit guards, in order (`AuthGuard('jwt')` reads AuthGuard; `new X()` reads `new`, X)."""
+    out = []
     for t in NESTG.finditer(m, i, j):
         cl = close_of(m, t.end() - 1)
-        for n in re.findall(r"(?<![\w$.])[A-Za-z_$][\w$.]*", m[t.end():cl] if cl > 0 else ""):
-            if not NESTRATE.match(n): return n
+        out += [n for n in re.findall(r"(?<![\w$.])[A-Za-z_$][\w$.]*", m[t.end():cl] if cl > 0 else "") if not NESTRATE.match(n)]
+    return out
+
+
+def nest_guard(m, i, j):
+    """Name of the first nest_guards() argument in masked m[i:j], else None."""
+    return next(iter(nest_guards(m, i, j)), None)
 
 
 def app_roots(rel, raw):
@@ -554,8 +561,9 @@ def nest_hs(m, mk, hs, gone, glob=False):
     ponytail: guards are matched by presence, never by what the guard class checks; a guard built inline or by a factory reads by its first identifier. `setGlobalPrefix(...)` and URI versioning
     (`enableVersioning`, `version:` in `@Controller`/`@Version`) are not applied: a row's path is the controller prefix plus the member path only.
     A global guard reaches only controllers of its own app (see app_of). A ts-rest member decorator (`@Api|TsRest|TsRestHandler(ref)`) is one row with the same evidence, its METHOD and path from ts_route();
-    a `contract:<key>` row is not joined to the controller prefix."""
-    prev, srv = 0, {t[1]: t.groups()[1:] for t in TSRSRV.finditer(m)}
+    a `contract:<key>` row is not joined to the controller prefix.
+    Returns {route pos: (class decorator text, {member or parameter name: its type name})} for ownership()."""
+    prev, srv, ctx = 0, {t[1]: t.groups()[1:] for t in TSRSRV.finditer(m)}, {}
     for t in NEST.finditer(m):
         op = t.end() - 1; cl = close_of(m, op)
         k = CLASSKW.search(m, cl)
@@ -566,6 +574,7 @@ def nest_hs(m, mk, hs, gone, glob=False):
         pres = nest_paths(mk[op + 1:cl])
         w = max(m.rfind("\n}", 0, t.start()), m.rfind(";", 0, t.start()), prev)
         cg, cp = nest_guard(m, w, k), NESTPUB.search(m, w, k)
+        cx = ("\n".join(mk[d.start():close_of(m, d.end() - 1) + 1] for d in DECOCALL.finditer(m, w, k)), dict(reversed(re.findall(r"\b([\w$]+)\s*[?!]?:\s*([\w$]+)", m[b:e]))))  # the first `name: Type` wins: the constructor field, not a later parameter of the same name
         prev = e + 1
         gone.append((t.start(), e + 1))
         i = b + 1
@@ -577,6 +586,10 @@ def nest_hs(m, mk, hs, gone, glob=False):
                 if d == 0 and c in ";}": break
                 j += 1
             dj = nest_deco_end(m, i, j)
+            if NESTM.search(m, i, dj) or TSR.search(m, i, dj):  # a route member ends at its body's `}`, not at the one of a return type (`): Promise<{ ok: boolean }> {`)
+                p = m.find("(", dj); pc = close_of(m, p) if p >= 0 else -1
+                o = body_open(m, pc) if pc > 0 else -1
+                if 0 < o < e: j = max(j, close_of(m, o))
             g, mp = nest_guard(m, i, dj), NESTPUB.search(m, i, dj)  # a member guard or member @Public beats the class guard
             g = g or (None if mp else cg)
             lab = "UseGuards(%s)" % g if g else "public" if cp or mp else "global guard, unverified" if glob else None
@@ -584,10 +597,13 @@ def nest_hs(m, mk, hs, gone, glob=False):
                 o = r.end() - 1; c2 = close_of(m, o)
                 for y in nest_paths(mk[o + 1:c2] if c2 > 0 else ""):
                     for p in pres: hs.append((r.start(), "ANY" if r[1] == "All" else r[1].upper(), join(p, y), [(i, j)], lab, None, None))
+                ctx[r.start()] = cx
             for r in TSR.finditer(m, i, dj):  # ts-rest applies Nest's own verb decorator, so the controller prefix joins as above
                 mt, y = ts_route(r[1], srv)
                 for p in [None] if y.startswith("contract:") else pres: hs.append((r.start(), mt, y if p is None else join(p, y), [(i, j)], lab, None, None))
+                ctx[r.start()] = cx
             i = j + 1
+    return ctx
 
 
 def py_hs(m, mk, hs, gone):
@@ -817,6 +833,8 @@ def priv_ctx(ctx, rcv, route, pos, fn, mk):
 NESTSAFE = set()  # (file, line) of NestJS @Head/@Options members: a safe method, never HIGH; other frameworks keep the GET-only rule (none emits a HEAD/OPTIONS row today: Express/Fastify/Next/Flask read VERBS only, Go's HEAD|OPTIONS rows never reach scan())
 FWDROWS = set()  # (file, line) of handlers whose span forwards an Authorization/Bearer credential
 BODY = {}  # (file, line) -> the handler's own and helper text with strings kept, filled by analyze() for --privileged
+NESTCTX = {}  # (file, line) of a NestJS member -> (class decorator text, {name: type name}), filled by analyze() for --privileged's ownership rows
+CLS = {}  # @Injectable class name -> the files that define it (a name two files define reads both), filled by scan() for --privileged's ownership rows
 SKIPPED = []  # (file, first line) of each JS/TS file with a route-like decorator on a line no row came from, filled by scan()
 
 
@@ -843,7 +861,7 @@ def analyze(rel, raw, mws, sites=None, hooks=None, glob=False):
                 gone.append((t.end(), nextdecl(m, t.start())))
                 hs.append((t.start(), "ACTION", t.group(1) or t.group(2), [gone[-1]], None, None, None))
         n0 = len(hs)
-        nest_hs(m, mk, hs, gone, glob)
+        nctx = nest_hs(m, mk, hs, gone, glob)
         nestpos = {h[0] for h in hs[n0:] if h[1] in ("HEAD", "OPTIONS")}
         call_hs(m, mk, hs, uses, gone)
         raw_hs(m, mk, hs, gone)
@@ -860,6 +878,7 @@ def analyze(rel, raw, mws, sites=None, hooks=None, glob=False):
         EXTRA[(rel, ln)] = (pfx, gt, gate)
         if any(FWD.search(mk[a:b]) for a, b in spans): FWDROWS.add((rel, ln))
         if not py and pos in nestpos: NESTSAFE.add((rel, ln))
+        if not py and pos in nctx: NESTCTX[(rel, ln)] = nctx[pos]
         got = [(ident(m[a:b]), tok(mk[a:b])) for a, b in spans + [fn[w] for w in sorted(set(re.findall(r"[\w$]+", own))) if w in fn]] + [(mod, False)]
         use = next((u[3] for u in uses if u[0] == rcv and u[1] < pos and (route == u[2] or route.startswith(u[2] + "/"))), None)
         pats = mws.get(mwb) if mwb is not None else None
@@ -890,6 +909,7 @@ def scan(root):
             if f.endswith(EXT) and not TEST.search(rel): files.append(rel)
     known = set(files)
     NESTSAFE.clear(); FWDROWS.clear()
+    NESTCTX.clear(); CLS.clear()
     TSRC.clear()
     glob, mws, rows, todo, cov, own, deco = set(), {}, [], [], {}, {}, {}  # todo: files with handlers; cov: file -> wiring() sites that wire it; own: file -> its own wiring() hooks; deco: file -> route-like decorator lines
     for rel in files:
@@ -899,6 +919,8 @@ def scan(root):
         raw = read(root, rel)
         if raw is None: continue
         if NESTGLOBAL.search(raw) and nest_global(mask(raw, True)): glob.add(app_of(rel, mf))
+        if not rel.endswith(".py") and "@Injectable" in raw:
+            for n in set(INJ.findall(raw)): CLS.setdefault(n, []).append(rel)
         if not rel.endswith(".py") and ".router" in raw:
             for n, v in ts_contracts(mask(raw), mask(raw, True)).items(): TSRC[n] = None if n in TSRC else v
         if not rel.endswith(".py") and ROUTEDECO.search(raw):
@@ -1102,9 +1124,10 @@ ROLECHK = re.compile(  # check shapes, not words: `{role: req.body.role}` is the
     r"|Depends\(\s*\w*(?:admin|staff|superuser|moderator|role|perm|scope|privileg)|Security\([^)]*scopes\s*=|\w*(?:permission|role|admin|scope|staff|need)\w*\.(?:require|check|allow|enforce)\w*\("
     r"|" + CALLER + r"\.(?!\w*Id\b|\w*_id\b|id\b|pk\b|sub\b)\w+\s*(?:[!=]==?|\b(?:not\s+)?in\b)"
     r"|['\"`]\s*[!=]==?\s*" + CALLER + r"\.", re.I)
-OWNER = re.compile(  # the record written is the caller's own: an identifier comparison or a scoped lookup on the caller's id
-    r"" + CALLER + r"\.(?:\w*Id|\w*_id|id|pk|sub)\b\s*[!=]==?|[!=]==?\s*(?:" + CALLER + r"\.(?:\w*Id|\w*_id|id|pk|sub)\b)"
-    r"|\b(?:id|_id|pk|user_?id|owner\w*|\w*profile\w*|account_?id)\s*[:=]\s*" + CALLER + r"\.(?:\w*Id|\w*_id|id|pk|sub)\b", re.I)
+CID = CALLER + r"\.(?:\w*Id|\w*_id|id|pk|sub)\b"  # the caller's identifier
+OWNCMP = CID + r"\s*[!=]==?|[!=]==?\s*" + CID  # the caller's identifier compared
+OWNSET = r"\b(?:id|_id|pk|user_?id|owner\w*|\w*profile\w*|account_?id)\s*[:=]\s*" + CID  # an id or owner field set to the caller's identifier
+OWNER = re.compile(OWNCMP + "|" + OWNSET, re.I)  # the record written is the caller's own: an identifier comparison or a scoped lookup on the caller's id
 PRIVVERB = re.compile(r"/:\w+/(?:suspend|ban|unban|disable|enable|activate|deactivate|approve|reject|impersonate|refund|lock|unlock|status)(?:/|$)")
 PATHLIT = re.compile(r"""(['"`])/[^'"`]*\1""")
 
@@ -1128,6 +1151,183 @@ def privileged(rows):
                "write on another user's record" if PRIVREC.search(route) and {"PUT", "PATCH", "DELETE", "ANY"} & set(ms) else None)
         body = PATHLIT.sub("", BODY.get((rel, ln), "") + "\n" + gt)
         if why and not ROLECHK.search(body) and not (why.endswith("record") and OWNER.search(body)): out.append(((rel, ln, meth, route, lab), why))
+    return out
+
+
+INJ = re.compile(r"@Injectable\s*\([^)]*\)[\s\S]{0,300}?\bclass\s+([$\w]+)")  # a NestJS provider class: the service a controller member delegates to
+SVCCALL = re.compile(r"\bthis\.([\w$]+)\.([\w$]+)\s*\(")  # `this.things.update(` in a controller member: field `things`, method `update`
+# a write method call: `.update(`, `.deleteMany(`, Mongoose `.findByIdAndUpdate(` / `.replaceOne(` / `.bulkWrite(`, MikroORM `.nativeDelete(` / `.persistAndFlush(`, TypeORM `.increment(` / `.softRemove(`
+WMETH = r"\.(?:update|upsert|delete|remove|destroy|save|soft(?:Delete|Remove)|create|insert|find\w*And(?:Update|Delete|Remove|Replace)|replaceOne|bulk(?!Get)[A-Z]|native(?:Update|Delete)|persist(?!ence)|(?:in|de)crement(?!al))\w*\s*\("
+WRITE = re.compile(WMETH + r"|\bconnect\s*:")
+REQVAR = r"(?-i:requester|actor|caller|principal|current_?[uU]ser)"  # a variable named for the requester
+REQOBJ = r"(?-i:user|auth|session|req(?:uest)?\.user|me)"  # the signed-in object's usual names
+IDF = r"\.(?:id|uid|sub|user_?id|user_?uid)"  # an identifier field read off an object
+REQID = r"\b(?:" + REQVAR + r"\w*?(?:" + IDF + r"|Id|Uid|_id|_uid)|" + REQOBJ + IDF + r")\b"  # `requesterUid`, `user.id`, `me.uid`; a bare `userId`, `authorId` or `memberId` is any id
+
+
+def owner_checks(words):
+    """(BODYOWNER, OWNCHK) for ownership(), built from the owner-word alternation words (ownership_sibling_check.OWNER_WORDS, so the list has one home).
+    BODYOWNER: an owner id the client sends (`dto.ownerUid`). OWNCHK: a where opening the argument of `<model>.<method>({ where: {`, the model in group `a` or `b`
+    (ownership() keeps it only on a model the text writes, and on a path with a record id only when the where names that id: the write's own call or the lookup of the record written), that sets an owner-word key to the requester's id
+    (REQID or CID; a bare `id`, `uid` or `pk` names the requester's own row, so it is none), or names an owner-id key in shorthand (`where: { uid, ownerUid }`) declared from the
+    requester's id earlier by a statement of its own (`const ownerUid = requester.uid;`) and not assigned again before the where (`ownerUid = dto.ownerUid;`). A field set from the
+    requester's id is not one (an audit field), nor is a shorthand key passed in as a parameter or destructured with a default (`const { ownerUid = requester.uid } = dto`, on one
+    line or several: the client's value wins).
+    A comparison is requester_compare()'s, a decorator guard_decorator()'s."""
+    w = r"\b(?P<%s>[\w$]+)\s*\.\s*[\w$]+\s*\(\s*\{\s*where\s*:\s*\{"  # ponytail: the where must be the first key (`{ data, where: {` is missed, the row stays OWN); read any key if such rows show up
+    return (re.compile(r"\b[\w$]*(?:body|dto|input|payload|data)\.(?:" + words + r")\w*(?:Id|Uid|_id|_uid)\b", re.I), re.compile(
+        w % "a" + r"[^{}]*\b(?!uid\s*:)(?:" + words + r")\w*\s*:\s*(?:" + REQID + "|" + CID + ")" +
+        r"|\b(?:const|let|var)\s+(?P<k>(?:" + words + r")\w*?(?:Id|Uid|_id|_uid))\s*=\s*" + REQID + r"[ \t]*[;\n](?:(?!(?<![\w$.])(?P=k)\s*(?:\?\?|\|\||&&)?=(?![=>]))[\s\S])*?" + w % "b" + r"(?:[^{}]*,)?\s*(?P=k)\s*[,}]", re.I))
+
+
+OPND = r"[A-Za-z_$][\w$]*(?:\??\.[\w$]+)*"  # a name or member chain (`t?.ownerUid`); a literal, a masked string or a call result is none
+IDCMP = re.compile(r"(?<![\w$.?])(" + OPND + r")\s*[!=]==?\s*(" + OPND + r")(?![\w$?.]|\s*\()")
+REQWHOLE = re.compile(REQID + "|" + CID, re.I)  # the requester's id, read whole (fullmatch)
+LITERAL = re.compile(r"null|undefined|true|false|NaN|this|(?:[\w$]+\.)*[A-Z][A-Z\d_$]*")  # a literal or a named constant (`SYSTEM_UID`, `Acme.ROOT_ID`): no record's owner
+CLIENT = re.compile(r"[\w$]*(?:body|dto|input|payload|data)\.", re.I)  # a field of what the client sent
+CLIENTVAR = re.compile(r"\b(?:const|let|var)\s+(?:\{([^{}]*)\}|([\w$]+))\s*(?::[^=;\n]*)?=\s*(?:await\s+)?[\w$]*(?:body|dto|input|payload|data)\b", re.I)  # `const { ownerUid } = dto`, `const o = dto.ownerUid`
+
+
+def requester_compare(t, body_ok):
+    """The first `a === b` / `a != b` in t with one side the requester's id (REQWHOLE) and the other an owner-like field: a name or member chain (`t.holder`, `uid`) that is
+    no literal or named constant (`null`, `undefined`, `SYSTEM_UID`, a masked string), not the requester's id again and, unless body_ok (the path holds no record id: a create that writes a client-sent owner id),
+    no client body field, read directly or through a local declared from the body (CLIENTVAR: `const { ownerUid } = dto`, `const o = dto.ownerUid`).
+    `t.ownerUid === null`, `req.user.id == null`, `dto.ownerUid !== t.ownerUid` and, on a path with a record id, `dto.ownerUid !== requester.uid` or `ownerUid !== requester.uid` after
+    `const { ownerUid } = dto` (it checks the new owner, not the record's) are none. Else None. ponytail: such a local anywhere in t is the client's value everywhere in t."""
+    al = set() if body_ok else {n for v in CLIENTVAR.finditer(t) for n in (re.findall(r"([\w$]+)\s*(?:=[^,]*)?(?:,|$)", v[1].strip()) if v[1] is not None else [v[2]])}
+    for c in IDCMP.finditer(t):
+        a, b = (x.replace("?", "") for x in c.groups())
+        if any(REQWHOLE.fullmatch(x) and not REQWHOLE.fullmatch(y) and not LITERAL.fullmatch(y) and (body_ok or not CLIENT.match(y) and y.split(".")[0] not in al) for x, y in ((a, b), (b, a))): return c[0]
+
+
+REQDECO = re.compile(r"(?<=[(,])\s*@[\w$]*(?:User|Member|Requester|Principal|Actor|Caller|Account|Session)[\w$]*\s*\([^()]*\)\s*([\w$]+)")  # a `@CurrentUser() member` parameter
+
+
+def requester_text(own, t):
+    """Masked t with the requester's names made plain for REQWHOLE: a `@CurrentUser() member`-style parameter of the masked member own (REQDECO) reads `requester__member`,
+    and a REQOBJ or such name that t binds to a local from anything but the request (`const user = await this.prisma.user.findUnique(...)`: a record, not the requester)
+    reads `user__rec`, so REQID and CID no longer match it; plain() undoes both. A parameter (`requester: AcmeUser`, passed `req.user`) stays the requester.
+    ponytail: one such local anywhere in t un-requesters the name everywhere in t; a destructured, reassigned or callback-parameter rebinding is not seen."""
+    obj = ("user", "auth", "session", "me")
+    for n in dict.fromkeys(REQDECO.findall(own) + list(obj)):
+        gone = re.search(r"\b(?:const|let|var)\s+%s\s*(?::[^=;\n]*)?=(?![=>])(?!\s*(?:await\s+)?req(?:uest)?\b)" % re.escape(n), t)
+        if gone or n not in obj: t = re.sub(r"(?<![\w$.])%s(?![\w$])" % re.escape(n), n + "__rec" if gone else "requester__" + n, t)
+    return t
+
+
+def plain(s):
+    """Snippet s of requester_text() output with its renames undone, whitespace collapsed, at most 60 characters."""
+    return " ".join(re.sub(r"requester__([\w$]+)|([\w$]+?)__rec(?![\w$])", lambda x: x[1] or x[2], s).split())[:60]
+
+
+AUTHZDECO = re.compile(r"@(?!Api)(?:[\w$]*(?:Roles?|Permissions?|Admin|Staff|Superuser|Moderator|Owner)[\w$]*|CheckPolic\w*|CheckAbilit\w*|Scopes?|UseGuards|Auth\w*|Require\w*)\s*\(")
+PRIVWORD = re.compile(r"admin|staff|superuser|moderator|owner", re.I)  # a privileged role named
+OBJGUARD = re.compile(r"\b[\w$]*?(?:Polic(?:y|ies)|Abilit(?:y|ies)|Casl[\w$]*)Guard\b")  # an object-level policy guard class: `PoliciesGuard`, `AcmePolicyGuard`, `CaslAbilityGuard`, `AbilitiesGuard`; case-sensitive, so `AvailabilityGuard` and `CapabilityGuard` are none (an owner guard names a privileged role)
+
+
+def guard_decorator(t):
+    """Text of the first guard or role decorator in t (class decorators and the member span) that names a privileged role or an object-level policy check, else None.
+    Read: role decorators (`@Roles(...)`, `@RequirePermissions(...)`, `@Scopes(...)`, `@StaffOnly()`), `@CheckPolicies(...)`, `@CheckAbilit*(...)`, `@UseGuards(...)`, `@Auth*(...)`
+    and `@Require*(...)`. One counts when its name names a privileged role (PRIVWORD: `@StaffOnly()`), it is `@CheckPolicies`/`@CheckAbilit*`, an argument is an OBJGUARD class
+    (`PoliciesGuard`, `CaslAbilityGuard`), a `@UseGuards(...)` argument names one (`@UseGuards(AcmeOwnerGuard)`: every guard must pass), or every argument of any other (strings
+    kept, split at `,` and `|`) names one (`@Roles('admin')`, `@Auth(Role.Admin)`): any listed role may call, so `@Roles('user', 'admin')` and `@Roles(Role.User, Role.Admin)` are none.
+    `@Roles('user')`, `RolesGuard` and `@RequirePermissions('things:write')` say who may call, not whose record it is: none. No other decorator is read:
+    `@UseInterceptors(StaffAuditInterceptor)`, `@UsePipes(...)`, Swagger `@Api*(...)` and parameter decorators check nothing."""
+    m, k = mask(t), mask(t, True)
+    for d in AUTHZDECO.finditer(m):
+        if m[:d.start()].rstrip().endswith(("(", ",")): continue  # a parameter decorator (`@CurrentOwner() owner`) reads a value, it guards nothing
+        e = close_of(m, d.end() - 1)
+        s = k[d.start():e + 1 if e > 0 else d.end()]
+        ps = [x for x in re.split(r"[,|]", s[d.end() - d.start():-1] if e > 0 else "") if x.strip()]
+        if d[0].startswith(("@CheckPolic", "@CheckAbilit")) or PRIVWORD.search(d[0]) or OBJGUARD.search(s) or (
+                PRIVWORD.search(s) if d[0].startswith("@UseGuards") else ps and all(PRIVWORD.search(x) for x in ps)): return " ".join(t[d.start():d.start() + len(s)].split())[:60]
+
+
+MACHINE = re.compile(r"\b(?![\w$]*?(?:Jwt|User|Session|(?-i:Or[A-Z]))[\w$]*Guard\b)[\w$]*(?:Internal|Service|Integration|Machine|M2M)[\w$]*?(?:Auth|Key|Token)[\w$]*Guard\b", re.I)  # a machine credential guard (a bare or org `ApiKeyGuard` is often a user's or an org's key, so it is none): no end user, so no requester to compare (`JwtOrApiKeyGuard` and other user, session or either-or guards have one)
+
+
+def body_open(m, pc):
+    """Index of the body `{` after the parameter list that closes at m[pc], past a return type such as `: Promise<{ ok: boolean }>` or `: { a: T } | null`.
+    -1 when a `;` comes first (an overload signature) or a brace does not close. Heuristic: a `{` inside open angle brackets or after `:`, `|`, `&`, `,`, `(`, `[` or `=>` is a type."""
+    s = pc + 1
+    while True:
+        o = m.find("{", s)
+        if o < 0 or ";" in m[s:o]: return -1
+        t = m[pc + 1:o]
+        if t.count("<") <= t.count(">") - t.count("=>") and not t.rstrip().endswith((":", "|", "&", ",", "(", "[", "=>")): return o
+        s = close_of(m, o) + 1
+        if s <= 0: return -1
+
+
+def service_text(root, own, types, cache):
+    """(text, names) of the @Injectable service methods a NestJS member calls as `this.<field>.<method>(` (field typed in its class), with the same-class helpers they call as
+    `this.<helper>(`; names lists `Class.method` per method read. ponytail: one hop, by class name (CLS: a name two files define reads both, the controller's import is not resolved), no inheritance or deeper repository layer; a method it cannot find adds nothing."""
+    out, names = [], []
+    for fld, meth, f in [(a, b, f) for a, b in dict.fromkeys(SVCCALL.findall(own)) for f in CLS.get(types.get(a, ""), ())]:
+        if f not in cache:
+            raw = read(root, f) or ""
+            cache[f] = (mask(raw), mask(raw, True))
+        m, mk = cache[f]
+        c = re.search(r"\bclass\s+%s\b[^{]*" % re.escape(types[fld]), m)
+        b = c.end() if c else -1
+        e = close_of(m, b) if b >= 0 and m[b:b + 1] == "{" else -1
+        if e < 0: continue
+        def body(n):
+            for t in re.finditer(r"^[ \t]*(?:(?:public|private|protected|static|async|override)\s+)*%s\s*(?:<[^>()]*>)?\s*\(" % re.escape(n), m[:e], re.M):
+                if t.start() < b: continue
+                pc = close_of(m, t.end() - 1); o = body_open(m, pc) if pc > 0 else -1
+                if o > 0: return mk[t.start():close_of(m, o) + 1]
+            return ""
+        t = body(meth)
+        if t: names.append("%s.%s" % (types[fld], meth))
+        out += [t] + [body(h) for h in dict.fromkeys(re.findall(r"\bthis\.([\w$]+)\s*\(", t)) if h != meth]
+    return "\n".join(out), list(dict.fromkeys(names))
+
+
+def ownership(rows, root, skip=()):
+    """[(row, why, cls, match)] for authenticated NestJS write routes (plain verb decorators and ts-rest) (CWE-639, OWASP API1:2023 BOLA). A row: PUT/PATCH/DELETE on a path with an `:id`
+    parameter, or POST/PUT/PATCH that writes an owner id the client sends (`dto.ownerUid`), with a write call (WMETH: `.update(`, `.delete(`, `.findByIdAndUpdate(`, `.nativeDelete(`, `connect:` ...) in the member or
+    the service methods it calls. Writes WMETH does not name make no row at all (MikroORM `em.flush()` after `wrap(t).assign(dto)`, Knex `.del()`, a CQRS `commandBus.execute(`), and a Mongoose or
+    MikroORM filter (`findOneAndUpdate({ _id: uid, owner: requester.uid }, dto)`) is no `where`, so its scope is not read and the row stays OWN.
+    cls None (an OWN row): nothing read ties the write to the requester. Else the row is OWN-CHECKED, kept with the first check read and match, its text (at most 60 characters):
+    `machine` (every class and member `@UseGuards` guard is a MACHINE credential guard: no end user; one user guard beside it keeps the row OWN), `decorator-guard` (guard_decorator() on the class
+    decorators and the member span), or `requester-compare` (requester_compare(), OWNCHK from owner_checks in the guard label, class decorators, member or followed service text, all masked,
+    with requester_text() names; an OWNCHK where counts only on a model the text writes and, on a path with a record id, only when it names that id). Nothing else counts: a role word, guard-helper call or 403/Forbidden throw in a body (`this.policies`, `hasOwner(t)`, a closed-status ForbiddenException), a string literal,
+    a field set from the requester's id outside a where (`updatedBy: requester.uid`, `data: { ownerId: user.id }`) and a service taking a requester argument and never comparing it all keep the row OWN.
+    Auth none or public is route-auth's row, not this one; rows in skip (already PRIV) are dropped. A public or unauthenticated GET on the collection path is named in why, since it hands out the ids.
+    ponytail: text scan, one hop into the service (service_text); a check in a guard class body, a base class or a deeper repository is missed (lead, not proof)."""
+    from ownership_sibling_check import OWNER_WORDS  # lazy: only --privileged needs it, and scripts that import this module may ship without it
+    bodyowner, ownchk = owner_checks(OWNER_WORDS)
+    lists = {r[3]: r[4] for r in rows if r[2] in ("GET", "ANY") and r[4] in ("public", "none")}
+    out, cache = [], {}
+    for r in rows:
+        rel, ln, meth, route, lab = r
+        if (rel, ln) not in NESTCTX or (rel, ln) in skip or lab in ("none", "public", "presence-check"): continue
+        hdr, types = NESTCTX[(rel, ln)]
+        own = BODY.get((rel, ln), "")
+        svc, names = service_text(root, own, types, cache)
+        txt = "\n".join((lab, hdr, own, svc))
+        ms = set(meth.split("|"))
+        why = ("client-sent owner id written" if ms & {"POST", "PUT", "PATCH", "ANY"} and bodyowner.search(txt) else
+               "write by client-sent id" if ms & {"PUT", "PATCH", "DELETE", "ANY"} and re.search(r"/:\w+", route) else None)
+        seen = SVCCALL.sub(lambda t: "" if CLS.get(types.get(t[1], "")) or types.get(t[1], "").endswith("Service") else t[0], own) + svc  # a service call is no write; its body is
+        if not why or not WRITE.search(seen): continue
+        dm = mask(hdr + "\n" + own)
+        gs = [n for n in nest_guards(dm, 0, len(dm)) if n != "new"]
+        bt = requester_text(mask(own), mask(txt))
+        cid = re.findall(r"/:(\w+)", route)  # the client id: a path parameter, read as a value (`{ uid }`, `id: uid`, `params.uid`), not a key or a member (`requester.uid`)
+        cv = cid and re.compile(r"(?<![\w$.])(?:params\.)?(?:%s)(?![\w$])(?!\s*:)" % "|".join(cid))
+        wr = set(re.findall(r"([\w$]+)\s*" + WMETH, bt))  # the models written
+        def where(x):  # the where object of an OWNCHK match (it opens its call's argument); with a path id it must name that id, so a where on another row of a written model
+            # (`notification.updateMany({ where: { userId: requester.uid } })`, a lookup without the id) scopes nothing, while a scoped lookup then `save(t)` or `update({ where: { id: t.id } })` keeps its check
+            o = bt.find("{", bt.find("{", x.start("a" if x["a"] else "b")) + 1)
+            return bt[o:close_of(bt, o) + 1]
+        rc = requester_compare(bt, not cid) or next((x[0] for x in ownchk.finditer(bt) if (x["a"] or x["b"]) in wr and (not cv or cv.search(where(x)))), None)
+        dg = guard_decorator(hdr + "\n" + own)
+        cls, hit = (("machine", ", ".join(gs)[:60]) if gs and all(MACHINE.search(n) for n in gs) else ("decorator-guard", dg) if dg else
+                    ("requester-compare", plain(rc)) if rc else (None, None))
+        lst = lists.get(re.sub(r"/:\w+$", "", route)) if why.startswith("write") else None
+        out.append((r, "%s; no requester-to-owner check in the member%s%s" % (why, "".join(" or " + n for n in names), "; ids listed by GET %s auth=%s" % (re.sub(r"/:\w+$", "", route), lst) if lst else ""), cls, hit))
     return out
 
 
@@ -1163,6 +1363,10 @@ def main(argv):
         pv = privileged(rows)
         print("heuristic; %d privileged routes with authentication but no role check; silence is not proof" % len(pv), file=sys.stderr)
         for r, why in pv: print("%s:%d: PRIV: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why))
+        ow = ownership(rows, a[0], {(r[0], r[1]) for r, _ in pv})
+        n = sum(1 for x in ow if x[2])
+        print("heuristic; %d NestJS write routes with authentication but no requester-to-owner check (OWN), %d with a check the scan read (OWN-CHECKED); silence is not proof" % (len(ow) - n, n), file=sys.stderr)
+        for r, why, cls, hit in ow: print("%s:%d: OWN: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why) if not cls else "%s:%d: OWN-CHECKED: %s %s auth=%s (class=%s; match=%s)" % (*r[:2], *r[2:], cls, hit))
         return 0
     print("heuristic; scanned %d files with %d handlers; silence is not proof of authentication" % (files, len(rows)), file=sys.stderr)
     print(coverage(), file=sys.stderr)
