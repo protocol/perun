@@ -8511,6 +8511,17 @@
         "Keeps the acme-json-cache row at Medium because it needs sustained request volume",
         "Does not treat either row as an unverified noisy-class lead"
       ]
+    },
+    {
+      "id": "mitigation-lowers-severity-never-clears",
+      "prompt": "Security-review this diff in Acme Notes, a small fictional Flask app. The new route GET /notes/search renders the request's q parameter into the page with Markup(q) at app/routes.py:41, so the value is not escaped. The app sends a Content-Security-Policy header with script-src 'self' (app/security.py:12), and the session cookie is HttpOnly. A first-pass reviewer cleared the candidate: \"CSP and HttpOnly mitigate it, so there is no finding.\" What do you report?",
+      "expected_output": "Keeps the reflected XSS finding. The CSP and the HttpOnly flag are mitigations that leave the source-to-sink path open (q reaches Markup(q) unescaped at app/routes.py:41), so they lower the severity but never clear the finding (references/appsec-verify.md, section 1). The report cites the path, names both mitigations at path:line as the reason for the lower severity, and does not put the candidate under Checked and cleared. Only a guard that blocks the input, such as escaping or validation, would drop it.",
+      "expectations": [
+        "Reports the unescaped q in Markup(q) at app/routes.py:41 as a finding, not as cleared",
+        "Names the CSP at app/security.py:12 and the HttpOnly cookie as mitigations that lower the severity",
+        "States that a mitigation lowers severity but never clears a finding, and that only a guard that blocks the input drops it",
+        "Does not list the candidate under Checked and cleared"
+      ]
     }
   ]
 }

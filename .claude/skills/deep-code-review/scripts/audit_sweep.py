@@ -17,7 +17,8 @@ Per repo the `--state` JSON keeps the last scanned HEAD sha and the fingerprints
                                            scripts/*.py, templates/semgrep-taint, templates/gitleaks.toml and which `review_checks.sh --list-tools`
                                            tools are on PATH, so a rule upgrade or a tool install re-reads old code (most tools emit no row when missing).
   last --full scan 7+ days old (`FULL_EVERY`) -> the same `rescan`: tool versions, advisory DBs and rule snapshots change outside the stamp.
-Only fingerprints not yet in the state are reported, as TSV on stdout: `repo mode file rule tool fingerprint`
+Only fingerprints not yet in the state are reported, as TSV on stdout: `repo mode file rule tool fingerprint`; rows the hub hinted
+`test-path` (a code-pattern scanner row in a test-only file) come last, as one `repo TESTPATH "<n> rows" rule tool` count line per tool and rule
 (repo = org/name with --org, the absolute path with --local: the state key and the fingerprint use it, so two orgs or two
 same-named repos never share state; a state entry keyed by a bare name, from before, is left unused and that repo gets a first run)
 (fingerprint = first 12 hex chars). No finding text, message or secret value is ever printed or stored; the state
@@ -62,8 +63,8 @@ from org_leak_sweep import list_repos, run  # noqa: E402
 def norm(t):
     """Row text without the parts that change between scans of the same finding: "<N> commits since", the count and first-3 line numbers
     of per-file and fixture summary rows (any path characters, up to "; names: ", " [likely-fixture]" or the end), a "; added: ..."
-    extension and the "[corroborated by: ...]" suffix. Other digits stay, so rows differing only by digits stay distinct."""
-    t = re.sub(r" \[corroborated by: [^\]]*\]", "", t)
+    extension, the "[corroborated by: ...]" suffix and the " [test-path]" hint. Other digits stay, so rows differing only by digits stay distinct."""
+    t = re.sub(r" \[corroborated by: [^\]]*\]| \[test-path\]", "", t)
     t = re.sub(r"; added: \d+(?:, \d+)*", "", t)
     t = re.sub(r"\d+ commits since", "# commits since", t)
     t = re.sub(r"^((?:\S+: )?)\d+ (?=\S+ hits )", r"\1# ", t)
@@ -298,13 +299,16 @@ def sweep_repo(name, path, st):
     # a row on a line added since the last scan is a new occurrence even when its fingerprint was seen (fixed, then re-added); `held`:
     # already reported for this same range (a blocking gap keeps the sha, so the next run rediffs it)
     fresh_fp = {fingerprint(name, x, x.get("_occ", 0)) for x in fresh} - held
-    out, out_fp = [], set()
+    out, out_fp, tp = [], set(), {}
     for x in rows + fresh:  # a rescan's fresh rows come from its diff scan; out_fp drops the copies
         fp = fingerprint(name, x, x.get("_occ", 0))
         if (fp not in seen or fp in fresh_fp) and fp not in out_fp:
             out_fp.add(fp)
             seen.add(fp)
-            out.append((name, mode, x.get("file", ""), x.get("rule", ""), x.get("tool", ""), fp[:12]))
+            if (x.get("hint") or "").startswith("test-path"):  # the hub's test-path hint: counted per (tool, rule) below, fingerprint still stored
+                k = (x.get("tool", ""), x.get("rule", "")); tp[k] = tp.get(k, 0) + 1
+            else:
+                out.append((name, mode, x.get("file", ""), x.get("rule", ""), x.get("tool", ""), fp[:12]))
     st["seen"] = sorted(seen)
     if gaps:  # coverage rows list every gap, a missing tool included
         out.append((name, "COVERAGE", "", f"{gaps} not-checked", "", ""))
@@ -313,6 +317,7 @@ def sweep_repo(name, path, st):
         out.append((name, "COVERAGE", "", "not installed", " ".join(gone), ""))
     out += [(name, "ENVGAP", "", "", t, "") for t in env]  # design/config gaps a rescan cannot close, listed by tool
     out += [(name, "GAP", "", "", t, "") for t in block]  # a timeout, crash or unread file: holds the sha, and main() exits 1
+    out += [(name, "TESTPATH", f"{n} rows", r, t, "") for (t, r), n in sorted(tp.items())]  # after every other row: code-pattern rows in test-only files
     # one rescan per install: a tool on PATH that the hub still calls not installed is dropped, so the next run does not rescan forever.
     # A delta reads only the changed files and the hub names a missing tool only for a file it routes to: keep the old names (back is empty).
     st["missing"] = sorted(set(miss) | set(st.get("missing", []))) if mode == "delta" else [m for m in miss if m not in back]

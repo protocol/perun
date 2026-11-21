@@ -1696,6 +1696,13 @@ rows = [t for i, t in enumerate(rows) if t[3:4] != ["not-checked"] or t not in r
 FXD = re.compile(r"(^|/)(fixtures?|samples?|examples?|tests?|__tests__|testdata|mocks?|__mocks__|docs?)/", re.I)  # whole directory segment
 FXB = re.compile(r"(^|[._-])(fixture|sample|example|mock|test)s?([._-]|$)", re.I)  # file name only, so test-runner/ or sample-service/ stay untagged
 def fx(p): return FXD.search(p) or FXB.search(p.rsplit("/", 1)[-1])
+# Test-path hint (triage order, not a verdict; the row stays): a code-pattern scanner row in a test-only file gets hint "test-path". Narrower than fx on purpose: docs/, examples/,
+# samples/ and fixtures/ can ship, and so can pod_spec.py, ab_test.py or a spec/ package (spec/ counts only for Ruby *_spec.rb). A secret-class rule is never hinted (a committed secret is live
+# anywhere): by name (TPS) or by numeric id (TPI: bandit and ruff hardcoded-password ids, gosec hardcoded credentials). A tool outside TPT is never hinted (fails closed).
+TPT = {"semgrep", "bandit", "ruff-security", "ruff", "pyflakes", "gosec", "eslint-security", "shellcheck"}
+TPP = re.compile(r"(^|/)(tests?|__tests__|testdata|__mocks__)/|(^|/)spec/(.+/)?[^/]*_spec\.rb$|(^|/)(test[_-][^/]*|[^/]*\.(test|spec)\.[a-z]+|[^/]*_test\.go|conftest\.py)$", re.I)
+TPS = re.compile(r"secret|token|credential|password|api[-_]?key|hmac-key|private-key|jwt", re.I)
+TPI = {"B105", "B106", "B107", "S105", "S106", "S107", "G101"}
 # Value-free shape of a secret hit, read from the flagged source line (the scanners redact their own value): one of env-ref, env-default (an env read with a quoted fallback literal), marker-word (names what was seen, not that the value is safe), localhost, real-looking,
 # appended as " [shape: X]". Only the class is emitted, never a byte of the line; an unreadable line gets no tag. A path never changes the class (the likely-fixture hint covers paths).
 # A line holding a real-looking token (a 12+ run of [A-Za-z0-9+/_=-] mixing 3+ of lower, upper, digit, other, or a 32+ run of hex digits) is always real-looking, whatever words sit nearby.
@@ -1742,6 +1749,8 @@ def row(t):
     lft = "[likely-fixture:" in t[4]  # a scanner-side demotion (lf in sjson): the message already says why
     if lft or (t[0] in ("gitleaks", "gitleaks-history", "trufflehog", "invisible-chars") and fx(t[1])):  # detect-secrets is hinted only by lf, never by path alone
         d.setdefault("hint", "likely-fixture"); d["text"] += "" if lft else " [likely-fixture]"
+    if "hint" not in d and t[0] in TPT and TPP.search(t[1]) and not TPS.search(t[3]) and t[3] not in TPI:
+        d["hint"] = "test-path"; d["message"] += " [test-path]"; d["text"] += " [test-path]"
     return d
 # Low-confidence buckets: generic-api-key (the low-signal rule) hits from gitleaks or gitleaks-history collapse when they are more than 3 in one group:
 # under a fixture DIRECTORY per (tool, top fixture dir), tagged likely-fixture; elsewhere per (tool, file), rule generic-api-key-summary, untagged unless the file is name-only fixture-like.
