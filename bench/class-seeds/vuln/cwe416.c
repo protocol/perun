@@ -1,12 +1,13 @@
-/* Fictional Acme seed: CWE-416 use after free. */
-#include <stdio.h>
+/* Fictional Acme seed: CWE-416 use after free, a read through the pointer right after free(). */
 #include <stdlib.h>
 #include <string.h>
 
-void acme_greet(const char *name) {
+int acme_first(const char *name) {
     char *msg = malloc(32);
+    if (!msg) return -1;
     strncpy(msg, name, 31);
     msg[31] = '\0';
     free(msg);
-    printf("hello %s\n", msg);
+    int first = *msg;
+    return first;
 }

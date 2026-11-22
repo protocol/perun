@@ -84,7 +84,7 @@ def cppcheck(path, c):
     """True when cppcheck (warning checks on, template prints ids to stderr) reports an id containing c["rule"], so a
     finding of another class in the same seed (2.22's nullPointerOutOfMemory, uninitdata) is not a hit. SKIPPED when
     not installed, or when the seed kind is in c["pin_only"] and the host cppcheck is not the version ci.yml pins;
-    the SKIP note then names both versions."""
+    the SKIP note then names both versions. A vuln or mutant miss prints the ids cppcheck did report, one line."""
     if not shutil.which("cppcheck"):
         return SKIPPED
     kind = os.path.basename(os.path.dirname(path))
@@ -94,8 +94,11 @@ def cppcheck(path, c):
         if host != pin:
             c["why"] = f"the {kind} seed counts only on CI's pinned cppcheck {pin}; this host has cppcheck {host}"
             return SKIPPED
-    ids = subprocess.run(["cppcheck", "--quiet", "--enable=warning", "--template={id}", path], capture_output=True, text=True).stderr
-    return any(c["rule"] in i for i in ids.split())
+    ids = subprocess.run(["cppcheck", "--quiet", "--enable=warning", "--template={id}", path], capture_output=True, text=True).stderr.split()
+    hit = any(c["rule"] in i for i in ids)
+    if not hit and kind != "clean":
+        print(f"cppcheck reported for {kind}/{os.path.basename(path)}: {' '.join(sorted(set(ids))) or 'no ids'}")
+    return hit
 
 
 GUARD = os.path.join(SKILL, "agentic-delivery", "scripts", "destructive_guard.py")
@@ -120,7 +123,7 @@ def build(name, dst, kind):
     m.build(dst, kind)
 
 
-NOTE_C = "vuln and mutant fire on cppcheck 2.22.0, the CWE-416 mutant excepted (pin_only); the CI-pinned run is unverified here"
+NOTE_C = "vuln and mutant fire on cppcheck 2.22.0; the run on CI's pinned version is not verifiable on this host"
 
 
 def case(cls, seed, tool, rule, expect, why=""):
@@ -128,7 +131,7 @@ def case(cls, seed, tool, rule, expect, why=""):
 
 
 CASES = [
-    dict(case("CWE-416", "cwe416.c", "cppcheck", "deallocuse", [True, True], NOTE_C), pin_only=["mutant"]),
+    case("CWE-416", "cwe416.c", "cppcheck", "deallocuse", [True, True], NOTE_C),
     case("CWE-125", "cwe125.c", "cppcheck", "arrayIndexOutOfBounds", [True, True], NOTE_C),
     case("CWE-476", "cwe476.c", "cppcheck", "nullPointer", [True, True], NOTE_C),
     case("CWE-20", "cwe20.js", "semgrep", "perun.js.unvalidated-size-or-qty", [True, True], "observed with the whole semgrep-taint/ dir: the rule fires on vuln and mutant; the earlier miss came from loading only js/py/defaults.yml"),

@@ -1,12 +1,13 @@
-/* Fictional Acme seed: CWE-416 fixed twin, use happens before free. */
-#include <stdio.h>
+/* Fictional Acme seed: CWE-416 fixed twin, the read happens before free(). */
 #include <stdlib.h>
 #include <string.h>
 
-void acme_greet(const char *name) {
+int acme_first(const char *name) {
     char *msg = malloc(32);
+    if (!msg) return -1;
     strncpy(msg, name, 31);
     msg[31] = '\0';
-    printf("hello %s\n", msg);
+    int first = *msg;
     free(msg);
+    return first;
 }
