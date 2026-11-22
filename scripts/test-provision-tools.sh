@@ -8,7 +8,7 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 S=$ROOT/.claude/skills/deep-code-review/scripts
-T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-prov.XXXXXX") && [ -n "$T" ] && [ -d "$T" ] || { echo "no temp dir" >&2; exit 1; }
+D=${TMPDIR:-/tmp}; T=$(mktemp -d "${D%/}/dcr-test-prov.XXXXXX") && [ -n "$T" ] && [ -d "$T" ] || { echo "no temp dir" >&2; exit 1; }
 trap '[ -n "$T" ] && rm -rf "$T"' EXIT; fail=0
 ok() { echo "ok - $1"; }; bad() { echo "FAIL - $1"; fail=1; }
 BASH_BIN=$(type -P bash)
