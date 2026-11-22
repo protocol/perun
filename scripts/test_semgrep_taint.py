@@ -92,7 +92,9 @@ router.get("/ok", async (ctx) => { exec("convert logo.png"); });
     # (file, line) pairs, not rows: two rules on one line count once. Refreshed from a real run of the whole bundled
     # dir (semgrep 1.183.0, 2026-11-18): bare function parameters are not sources, so v.py a-e and n2 stay silent.
     hits = sorted({(x["path"][-4:], x["start"]["line"]) for x in r["results"]})
-    want = sorted([("v.py", 3), ("v.py", 15), ("v.py", 16), ("v.js", 1), ("v.js", 2), ("v.js", 3), ("v.js", 11), ("k.js", 1), ("k.js", 2), ("n.ts", 2), ("n.ts", 3), ("n.ts", 4)])
+    # v.js 13: perun.js.express4-async-throw (new URL on req.query in an async handler, outside try). Raw semgrep has no
+    # package.json gate; review_checks.sh keeps that row only under Express 4 (test_semgrep_js_parser_express4.py).
+    want = sorted([("v.py", 3), ("v.py", 15), ("v.py", 16), ("v.js", 1), ("v.js", 2), ("v.js", 3), ("v.js", 11), ("v.js", 13), ("k.js", 1), ("k.js", 2), ("n.ts", 2), ("n.ts", 3), ("n.ts", 4)])
     assert hits == want, hits
     shutil.rmtree(d)
 print("ok")
