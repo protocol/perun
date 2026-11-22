@@ -237,7 +237,7 @@ def run(a, st=None) -> dict:
         raise Stop("--lenses needs 2 to 8 distinct lens names")
     if a.chair and a.chair not in lenses:
         raise Stop("--chair must be one of --lenses")
-    crit = parse_criteria(a.criteria) if a.criteria else {}
+    crit = parse_criteria(",".join(a.criteria)) if a.criteria else {}  # repeats join: --criteria a:3 --criteria b:2
     names = [o.strip() for o in (a.option or []) if o.strip() and o.strip() != DO_NOTHING]
     for o in names:
         if not TOKEN.fullmatch(o):
@@ -252,6 +252,10 @@ def run(a, st=None) -> dict:
     if a.packet:
         # numbered, with its path under --root when it has one, so a model with no file tools can still cite path:line
         src = Path(a.packet)
+        if not src.is_file() and not src.is_absolute():  # relative: a file in cwd first, then under --root
+            src = root / src
+        if not src.is_file():
+            raise Stop(f"--packet not found: tried {os.path.abspath(a.packet)} and {os.path.abspath(root / a.packet)}")
         try:  # abspath, not resolve: a symlinked packet must not gain a path cite_state would then reject
             name = f" (file {Path(os.path.abspath(src)).relative_to(os.path.abspath(root)).as_posix()})"
         except ValueError:
@@ -491,7 +495,7 @@ def main(argv=None) -> int:
     ap.add_argument("--root", default=".")
     ap.add_argument("--lenses", default=HATS, help="comma list of lens files; seats: cpo,cto,cfo,ciso,user-advocate")
     ap.add_argument("--option", action="append", help=f"an option to score, a short token ({TOKEN_RULE}) since every seat repeats it as a JSON key, e.g. ship (repeat the flag; do-nothing is always added; include the claim)")
-    ap.add_argument("--criteria", help="name:weight,... fixed before scoring; required with --option")
+    ap.add_argument("--criteria", action="append", help="name:weight,... fixed before scoring; required with --option; repeat the flag or comma-separate")
     ap.add_argument("--chair", help="a lens name: breaks ties in the verdict tally and the option scores")
     ap.add_argument("--twin", action="store_true", help="add the evil twin: pre-mortem and strongest dissent")
     ap.add_argument("--stakes", choices=("low", "medium", "high"),
