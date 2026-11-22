@@ -49,7 +49,7 @@ def semgrep_hits(cfg, d):
     r = subprocess.run(["semgrep", "--config", str(TAINT / cfg), "--metrics=off", "--disable-version-check", "--json", "-q", str(d)],
                        capture_output=True, text=True, timeout=300, env=tool_env())
     assert r.returncode in (0, 1), r.stderr
-    return {(Path(x["path"]).name, x["start"]["line"], x["check_id"].split("perun.", 1)[-1]) for x in json.loads(r.stdout)["results"]}
+    return {(Path(x["path"]).name, x["start"]["line"], x["check_id"].rsplit("perun.", 1)[-1]) for x in json.loads(r.stdout)["results"]}
 
 
 class Case(unittest.TestCase):

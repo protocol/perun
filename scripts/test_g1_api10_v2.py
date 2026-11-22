@@ -7,6 +7,8 @@ Path/send_file/popen sinks, and near-miss negatives (coercion helper, hash, cons
 helper that does not call an API, literal wrapper argument). A line ending in the HIT marker must be flagged by the
 named rule; every other line must stay silent. Fictional names only. A missing semgrep skips, never passes.
 A SQL string built with % from a parameter of the enclosing def is left to perun.py.sqli (n_pct_param.py), so no line gets two reports.
+API data in a string-built SQL query is left to the CWE-89 rule: perun.py.raw-sql-format at execute(), perun.js.raw-sql-concat at
+query()/raw()/$queryRawUnsafe (lines tagged `HIT raw-sql-format` / `HIT raw-sql-concat`).
 Known uncovered: a helper defined in another file of the same case (OSS semgrep taint is single-file), a helper
 defined after its caller in the same block, a response that arrives through an unnamed client.
 """
@@ -20,12 +22,12 @@ from test_g1_api_pilot_a import semgrep_hits, tree  # noqa: E402
 UAC, TLS = "unsafe-api-consumption", "tls-verify-off"
 
 PY_POS = {
-    "h_plain.py": 'def load(n):\n    r = requests.get(f"https://api.acme.example/p/{n}")\n    r.raise_for_status()\n    return r.json()\n\ndef go(cur):\n    p = load(3)\n    cur.execute("DELETE FROM t WHERE k = \'%s\'" % p["key"])  # HIT\n',
-    "h_pct_local.py": 'def go(cur):\n    d = requests.get("https://api.acme.example/p").json()\n    k = d["key"]\n    cur.execute("DELETE FROM t WHERE k = \'%s\'" % k)  # HIT\n',
+    "h_plain.py": 'def load(n):\n    r = requests.get(f"https://api.acme.example/p/{n}")\n    r.raise_for_status()\n    return r.json()\n\ndef go(cur):\n    p = load(3)\n    cur.execute("DELETE FROM t WHERE k = \'%s\'" % p["key"])  # HIT raw-sql-format\n',
+    "h_pct_local.py": 'def go(cur):\n    d = requests.get("https://api.acme.example/p").json()\n    k = d["key"]\n    cur.execute("DELETE FROM t WHERE k = \'%s\'" % k)  # HIT raw-sql-format\n',
     "n_pct_param.py": 'def go(cur, n):\n    d = requests.get("https://api.acme.example/p").json()\n    cur.execute("DELETE FROM t WHERE k = \'%s\'" % n)\n',
     "h_text.py": 'import os\ndef body():\n    r = httpx.get("https://api.acme.example/script")\n    return r.text\n\ndef go():\n    os.system("sh -c " + body())  # HIT\n',
     "h_async.py": 'import httpx\nasync def cfg():\n    async with httpx.AsyncClient() as c:\n        r = await c.get("https://api.acme.example/cfg")\n        return r.json()\n\nasync def go():\n    d = await cfg()\n    return open(d["path"])  # HIT\n',
-    "h_method.py": 'import requests\nclass Feed:\n    def __init__(self):\n        self.session = requests.Session()\n    def items(self):\n        r = self.session.get("https://api.acme.example/items")\n        return r.json()["items"]\n    def save(self, cur):\n        for it in self.items():\n            cur.execute("INSERT INTO t VALUES (\'" + it["name"] + "\')")  # HIT\n',
+    "h_method.py": 'import requests\nclass Feed:\n    def __init__(self):\n        self.session = requests.Session()\n    def items(self):\n        r = self.session.get("https://api.acme.example/items")\n        return r.json()["items"]\n    def save(self, cur):\n        for it in self.items():\n            cur.execute("INSERT INTO t VALUES (\'" + it["name"] + "\')")  # HIT raw-sql-format\n',
     "w_shell.py": 'import subprocess\ndef run(cmd):\n    return subprocess.run(cmd, shell=True)\n\ndef go():\n    j = requests.get("https://api.acme.example/job").json()\n    run("make " + j["target"])  # HIT\n',
     "w_sql.py": 'def q(cur, sql):\n    cur.execute(sql)\n\ndef go(cur):\n    j = requests.get("https://api.acme.example/f").json()\n    q(cur, f"SELECT * FROM {j[\'table\']}")  # HIT\n',
     "k_client_url.py": 'import httpx\ndef go():\n    with httpx.Client() as client:\n        d = client.get("https://api.acme.example/p").json()\n        return client.get(d["next"])  # HIT\n',
@@ -54,12 +56,12 @@ PY_TLS = {
     "t_httpx_ctor.py": 'import httpx\nc = httpx.AsyncClient(timeout=5, verify=False)  # HIT\n',
 }
 JS_POS = {
-    "h_fetch.js": 'async function load(id) {\n  const res = await fetch(`https://api.acme.example/p/${id}`);\n  if (!res.ok) throw new Error("x");\n  return res.json();\n}\nasync function go(db, id) {\n  const p = await load(id);\n  await db.query("DELETE FROM t WHERE k = \'" + p.key + "\'");  // HIT\n}\n',
+    "h_fetch.js": 'async function load(id) {\n  const res = await fetch(`https://api.acme.example/p/${id}`);\n  if (!res.ok) throw new Error("x");\n  return res.json();\n}\nasync function go(db, id) {\n  const p = await load(id);\n  await db.query("DELETE FROM t WHERE k = \'" + p.key + "\'");  // HIT raw-sql-concat\n}\n',
     "h_destructure.js": 'const fs = require("fs");\nasync function load() {\n  const { data } = await axios.get("https://api.acme.example/f");\n  return data;\n}\nasync function go() {\n  const d = await load();\n  fs.writeFileSync(d.target, "x");  // HIT\n}\n',
     "h_arrow.js": 'const load = async () => {\n  const r = await axios.get("https://api.acme.example/f");\n  return r.data;\n};\nasync function go(db) {\n  const d = await load();\n  await db.execute(`SELECT * FROM ${d.table}`);  // HIT\n}\n',
     "h_method.js": 'const { exec } = require("child_process");\nclass Jobs {\n  async load() {\n    const r = await this.client.get("https://api.acme.example/j");\n    return r.data;\n  }\n  async run() {\n    const j = await this.load();\n    exec("make " + j.target);  // HIT\n  }\n}\n',
     "h_then.js": 'function load() {\n  return axios.get("https://api.acme.example/j").then((r) => r.data);\n}\nasync function go() {\n  const j = await load();\n  return fetch(j.callback);  // HIT\n}\n',
-    "h_expr.js": 'async function load() {\n  return (await axios.get("https://api.acme.example/j")).data;\n}\nasync function go(db) {\n  const j = await load();\n  await db.query(`SELECT ${j.col}`);  // HIT\n}\n',
+    "h_expr.js": 'async function load() {\n  return (await axios.get("https://api.acme.example/j")).data;\n}\nasync function go(db) {\n  const j = await load();\n  await db.query(`SELECT ${j.col}`);  // HIT raw-sql-concat\n}\n',
     "w_shell.js": 'const { exec } = require("child_process");\nfunction sh(cmd) {\n  return new Promise((ok, bad) => {\n    exec(cmd, (e, out) => (e ? bad(e) : ok(out)));\n  });\n}\nasync function go() {\n  const { data } = await axios.get("https://api.acme.example/j");\n  return sh(`tar xf ${data.file}`);  // HIT\n}\n',
     "w_arrow.js": 'const { execSync } = require("child_process");\nconst run = (c) => execSync(c);\nasync function go() {\n  const { data } = await axios.get("https://api.acme.example/j");\n  run("make " + data.target);  // HIT\n}\n',
     "k_instance.js": 'const { exec } = require("child_process");\nconst api = axios.create({ baseURL: "https://api.acme.example" });\nasync function go() {\n  const { data } = await api.get("/j");\n  exec("make " + data.target);  // HIT\n}\n',
@@ -85,8 +87,9 @@ JS_TLS = {
 }
 
 
-def marked(files):
-    return {(n, i + 1) for n, b in files.items() for i, ln in enumerate(b.splitlines()) if ln.rstrip().endswith("# HIT") or ln.rstrip().endswith("// HIT")}
+def marked(files, tag="HIT"):
+    """Lines ending in `# <tag>` or `// <tag>`; tag "HIT raw-sql-format" / "HIT raw-sql-concat" marks string-built SQL that rule owns."""
+    return {(n, i + 1) for n, b in files.items() for i, ln in enumerate(b.splitlines()) if ln.rstrip().endswith(("# " + tag, "// " + tag))}
 
 
 class Api10V2(unittest.TestCase):
@@ -96,6 +99,15 @@ class Api10V2(unittest.TestCase):
 
     def test_py_unsafe_consumption(self):
         self.check("py.yml", PY_POS, PY_NEG, UAC)
+
+    def test_string_built_sql_reported_by_raw_sql_rule(self):
+        """API data in a string-built SQL query: one report, by the CWE-89 raw-SQL rule, not by the API10 rule."""
+        for cfg, pos, rule, n in (("py.yml", PY_POS, "raw-sql-format", 3), ("js.yml", JS_POS, "raw-sql-concat", 2)):
+            sql = marked(pos, "HIT " + rule)
+            self.assertEqual(len(sql), n, cfg)
+            rows = semgrep_hits(cfg, tree(pos))
+            self.assertEqual({(f, line) for f, line, r in rows if r.endswith(rule) and (f, line) in sql}, sql, cfg)
+            self.assertEqual({(f, line) for f, line, r in rows if r.endswith(UAC) and (f, line) in sql}, set(), cfg)
 
     def test_py_tls_verify_off(self):
         self.check("py.yml", PY_TLS, PY_NEG, TLS)

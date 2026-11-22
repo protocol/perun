@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, kubescape (NSA and CIS frameworks, local artifacts only), tflint, tfsec (Terraform, SARIF, no module download), ansible-lint (Ansible, offline, SARIF), pmd (Java security ruleset, offline, SARIF) and solhint (Solidity, built-in recommended rules only, SARIF), staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), detect-secrets (changed files, no baseline, no verification, values never printed), njsscan (Node.js), sobelow (Elixir Phoenix, local source, no update check), flawfinder, cppcheck (C/C++, no build) and devskim (multi-language), eslint-security (the project's own local eslint only), kics (IaC), retire (retire.js: vulnerable vendored JS libraries, local advisory repo only), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (skillspector: SKILL.md, static --no-llm, SARIF; mcp-scanner and snyk-agent-scan are unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, kubescape (NSA and CIS frameworks, local artifacts only), tflint, tfsec (Terraform, SARIF, no module download), ansible-lint (Ansible, offline, SARIF), pmd (Java security ruleset, offline, SARIF) and solhint (Solidity, built-in recommended rules only, SARIF), slither (Solidity, SARIF, forced plain solc, needs solc on PATH, never a project build), scorecard (never run, NOT CHECKED under --full or --hygiene: no offline mode), staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), detect-secrets (changed files, no baseline, no verification, values never printed), njsscan (Node.js), sobelow (Elixir Phoenix, local source, no update check), flawfinder, cppcheck (C/C++, no build) and devskim (multi-language), eslint-security (the project's own local eslint only), kics (IaC), retire (retire.js: vulnerable vendored JS libraries, local advisory repo only), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (skillspector: SKILL.md, static --no-llm, SARIF; mcp-scanner and snyk-agent-scan are unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -130,12 +130,16 @@ skip() {
   case " $missing " in *" $1 "*) return 0 ;; esac
   failed+=" $1"; case ", $nr, " in *", $1 ($2), "*) ;; *) nr+="${nr:+, }$1 ($2)" ;; esac
 }
-# Run "$@" under a timebox; stdout+stderr -> $out. perl alarm when no timeout(1) (stock macOS); a failed exec exits 127 (never a silent 0).
-tbox() {
-  if command -v timeout >/dev/null; then timeout "$tmo" "$@" >"$out" 2>&1
-  elif command -v gtimeout >/dev/null; then gtimeout "$tmo" "$@" >"$out" 2>&1
-  else perl -e 'alarm shift; exec @ARGV or exit 127' "$tmo" "$@" >"$out" 2>&1; fi
+# Run "$@" under a $tmo-second timebox (tbox: stdout+stderr -> $out). With no timeout(1) or gtimeout (stock macOS) perl forks it into its own
+# process group and sends SIGTERM to that group at the deadline (exit 124), as timeout(1) does, so a grandchild that still holds the output pipe
+# dies too: a SIGALRM kept across exec does not stop a Go binary (gh, gosec, actionlint), the Go runtime ignores it.
+# A TERM, INT or HUP sent to perl is passed on to the group. A failed exec exits 127 and a child killed by a signal exits 128+N, never a silent 0.
+tlim() {
+  if command -v timeout >/dev/null; then timeout "$tmo" "$@"
+  elif command -v gtimeout >/dev/null; then gtimeout "$tmo" "$@"
+  else perl -e '$t=shift; $p=fork // exit 127; unless ($p) { setpgrp(0,0); exec @ARGV or exit 127 } setpgrp($p,$p); $SIG{ALRM}=sub{kill "TERM",-$p; exit 124}; $SIG{$_}=sub{kill "TERM",-$p; exit 143} for qw(TERM INT HUP); alarm $t; waitpid $p,0; exit($? & 127 ? 128 + ($? & 127) : $? >> 8)' "$tmo" "$@"; fi
 }
+tbox() { tlim "$@" >"$out" 2>&1; }
 # have TOOL: 0 when installed, else prints the not-run line.
 # Heavy scanners take the machine-wide heavy lease (held by this shell) lazily, only once installed and about to run, so
 # concurrent sessions queue instead of piling on; lease_drop frees it after the last one. Waits REVIEW_LEASE_WAIT s
@@ -393,7 +397,7 @@ if kind == "cppcheck":  # XML, not JSON: <results version="2"><cppcheck/><errors
         if not ls or not ls[0].get("file") or not (ls[0].get("line") or "").isdigit(): sys.exit("sjson: cppcheck finding has no file and line")
         print("\t".join((nf(ls[0].get("file")), ls[0].get("line"), cl(e.get("id")), cl(f"{e.get('severity')}: {e.get('msg', '')}")[:200])))
     sys.exit(0)
-m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny", "mobsfscan", "njsscan", "detect-secrets", "sobelow", "flawfinder", "devskim", "tfsec", "ansible-lint", "pmd", "solhint", "skillspector") else r"^\[\s*[\{\]]" if kind == "psalm" else r"^[\[{]", t, re.M)  # cargo-audit, cargo-deny and mobsfscan, njsscan and detect-secrets: stderr log lines can start with "[", the report is an object; psalm: the report is a list, so "[" must be followed by an issue or "]" (a "[INFO] ..." log line is skipped)
+m = re.search(r"^\{" if kind in ("cargo-audit", "cargo-deny", "mobsfscan", "njsscan", "detect-secrets", "sobelow", "flawfinder", "devskim", "tfsec", "ansible-lint", "pmd", "solhint", "slither", "skillspector") else r"^\[\s*[\{\]]" if kind == "psalm" else r"^[\[{]", t, re.M)  # cargo-audit, cargo-deny and mobsfscan, njsscan and detect-secrets: stderr log lines can start with "[", the report is an object; psalm: the report is a list, so "[" must be followed by an issue or "]" (a "[INFO] ..." log line is skipped)
 okl = kind == "cargo-deny" and re.search(r"^(advisories|bans|licenses|sources) ok\b", t, re.M)  # a clean cargo-deny run prints only its text summary
 if not m and not okl and not (kind == "staticcheck" and not t.strip()):  # staticcheck prints nothing when clean (the shell tells that exit 0 from an exit 1 crash)
     sys.exit("sjson: no JSON in scanner output")
@@ -516,7 +520,7 @@ elif kind == "checkov":
         sys.exit("sjson: checkov output has no results object")
     if any(x["results"].get("parsing_errors") for x in ds):  # an unparsed file must not read as clean
         sys.exit("sjson: checkov could not parse the file")
-elif kind in ("trufflehog", "codeql", "flawfinder", "devskim", "tfsec", "ansible-lint", "pmd", "solhint", "skillspector"):  # SARIF: runs[].results[]; a clean scan still prints the document with "results": []
+elif kind in ("trufflehog", "codeql", "flawfinder", "devskim", "tfsec", "ansible-lint", "pmd", "solhint", "slither", "skillspector"):  # SARIF: runs[].results[]; a clean scan still prints the document with "results": []
     if not isinstance(d, dict) or not isinstance(d.get("runs"), list) or not d["runs"] or not all(isinstance(x, dict) and isinstance(x.get("results"), list) for x in d["runs"]):
         sys.exit(f"sjson: {kind} output has no SARIF runs[].results list")
 elif kind == "guarddog":  # results: rule -> hits; errors: rule -> why it did not run (its key stays in results, empty). A rule error costs that rule only: the other hits stay and a not-checked row names it
@@ -703,11 +707,13 @@ elif kind == "semgrep":
     ps = sorted({pfx(f) for f in fs} - {""}, key=len, reverse=True)
     cid = lambda i: next((i[len(q):] for q in ps if isinstance(i, str) and i.startswith(q)), i)
     rows = [(r["path"], r["start"]["line"], cid(r.get("check_id")), (r.get("extra") or {}).get("message", "") + cw(((r.get("extra") or {}).get("metadata") or {}).get("cwe"), (r.get("extra") or {}).get("severity"))) for r in d["results"]]
-elif kind in ("codeql", "flawfinder", "devskim", "tfsec", "ansible-lint", "pmd", "solhint", "skillspector"):  # SARIF: ruleId, uri, startLine and the query's message text (never source); results with no location raise: unparseable, never dropped
+elif kind in ("codeql", "flawfinder", "devskim", "tfsec", "ansible-lint", "pmd", "solhint", "slither", "skillspector"):  # SARIF: ruleId, uri, startLine and the query's message text (never source); results with no location raise: unparseable, never dropped
     for run in d["runs"]:
         for r in run["results"]:
             p = r["locations"][0]["physicalLocation"]
-            rows.append((nf(p["artifactLocation"]["uri"]), p.get("region", {}).get("startLine", 0), cl(r["ruleId"]), cl((r.get("message") or {}).get("text", ""))[:200]))
+            u = p["artifactLocation"]["uri"]
+            if kind == "slither": u = os.path.relpath(os.path.join(os.path.realpath(os.environ["SL_CWD"]), u))  # slither ran from the temp dir (never the repo): its uri is relative to that dir, so map it to a repo path
+            rows.append((nf(u), p.get("region", {}).get("startLine", 0), cl(r["ruleId"]), cl((r.get("message") or {}).get("text", ""))[:200]))
 elif kind == "trufflehog":  # only ruleId (the detector), uri and startLine are read; the message is ours. A result with no location raises: unparseable, never dropped
     for run in d["runs"]:
         for r in run["results"]:
@@ -841,6 +847,15 @@ EOT
     if run_one gitleaks-history gitleaks detect ${hc[@]+"${hc[@]}"} --no-banner --exit-code 0 -f json -r "$rep" ${lo[@]+"${lo[@]}"} -s . && scan_ok gitleaks-history; then
       [ -s "$rep" ] || echo '[]' >"$rep"
       if sjson gitleaks "$rep" >"$tsv"; then while IFS=$'\t' read -r f l r m; do [[ $f =~ $XRE ]] || add gitleaks-history "$f" "$l" "$r" "$m"; done <"$tsv"
+        # exposure triage of the same raw report (never prints a secret value; offline): one rotate-first row per distinct secret
+        if [ -s "$tsv" ]; then # public or unknown visibility makes a default-branch secret "assume compromised" (gh missing, failing or past its 10 s bound = unknown)
+          vis=$(tmo=10 tlim gh repo view --json visibility -q .visibility 2>/dev/null | tr '[:upper:]' '[:lower:]') || vis=
+          case $vis in public|private) ;; internal) vis=private ;; *) vis=unknown ;; esac
+          # likely-fixture rows are not triaged: only the last column (the message) carries the tag, so a path containing the text is not skipped
+          awk -F'\t' '$NF !~ /\[likely-fixture:/' "$tsv" >"$td/keep.tsv"; if python3 -I "$here/secret_exposure_triage.py" "$rep" . --tsv --keep "$td/keep.tsv" --visibility "$vis" >"$td/exposure.tsv" 2>"$td/exposure.err"; then
+            while IFS=$'\t' read -r f l r m; do [[ $f =~ $XRE ]] || add secret-exposure "$f" "$l" "$r" "$m"; done <"$td/exposure.tsv"
+          else add secret-exposure "" 0 not-checked "exposure triage failed: $(head -c 200 "$td/exposure.err" | tr '\n' ' ')"; fi
+        fi
       else skip gitleaks-history "unparseable report"; fi
     fi
   fi
@@ -1071,6 +1086,8 @@ hub=(
   'tfsec;verified;each;\.tf$;route-only;brew install tfsec' # one directory per run (it scans directories, not files): run from the file's directory with --no-module-downloads, SARIF, --soft-fail; only rows for the changed file are kept. Winding down upstream in favour of trivy, still shipped
   'pmd;verified;each;\.java$;route-only;brew install pmd' # one file per run, the built-in category/java/security.xml ruleset only (a project ruleset can name custom classes and is never loaded), --no-cache, SARIF on stdout; exit 4 = violations, 5 = recoverable error (not run)
   'solhint;verified;each;\.sol$;route-only;npm install -g solhint' # one file per run with a throwaway config of solhint:recommended only (a project .solhint.json can load plugins = code and is never read), SARIF on stdout, --disc (no update check)
+  'slither;verified;each;\.sol$;route-only;pipx install slither-analyzer' # one file per run, SARIF written to a file, run from the temp dir with an absolute target and --solc-working-dir set to the repo root (so solc still resolves imports there), because crytic-compile, even with --compile-force-framework solc, walks up from its process working directory to a foundry.toml or hardhat config and runs the solc binary that config names (crytic-compile 0.4.2 _locate_framework_root and _configure_solc; observed with slither 0.11.6 and a stub forge: from the repo root a foundry.toml solc = "./evil" runs ./evil, from the temp dir it never does; a temp dir inside the repo, or a framework marker in any ancestor of the temp dir, is NOT CHECKED); SARIF uris, relative to that temp dir, are mapped back to repo paths and only the changed file's rows are kept, by design: a finding slither places in an imported or inherited file, even one this change triggers, is dropped (only that file's own run, as under --full, reports there, and a finding that needs the importing contract may not recur in it), --compile-force-framework solc and --config-file naming an empty {} in the temp dir (else slither loads ./slither.config.json, whose solc, solc_args or compile_custom_build keys run what the repo picks); exit 255 = findings or error, so a non-zero exit with no row is not run; needs solc on PATH (else NOT CHECKED: solc-select would download compilers)
+  'scorecard;unverified;each;^\.github/workflows/[^/]+\.ya?ml$;route-only;brew install scorecard' # never run: `scorecard --local` still calls api.osv.dev and oss-fuzz-build-logs.storage.googleapis.com (observed 2026-11-18); named NOT CHECKED under --full or --hygiene only
   'ansible-lint;verified;batch;\.ya?ml$;route-only;pipx install ansible-lint' # only Ansible-looking YAML (roles/tasks/handlers/playbooks paths, or hosts: with tasks:/roles:); --offline (no requirements.yml install, no schema refresh), SARIF
   'skillspector;verified;each;(^|/)SKILL\.md$;route-only;uv tool install git+https://github.com/NVIDIA/skillspector.git' # one SKILL.md per run, static analysis only (--no-llm: file contents never go to an LLM provider), SARIF written to a file; exit 1 = risk score over 50, exit 2 = error
   'snyk-agent-scan;unverified;each;(^|/)(\.mcp\.json|mcp[^/]*\.json|SKILL\.md)$;route-only;uvx snyk-agent-scan'
@@ -1093,6 +1110,7 @@ hubcmd() {
     syft) sb=$(mktemp "${TMPDIR:-/tmp}/review_sbom.XXXXXX"); cmd=(env SYFT_CHECK_FOR_APP_UPDATE=false syft "$1" -o "syft-json=$sb") ;; # the update check phones home; the SBOM outlives the run
     staticcheck) cmd=(env GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly GOWORK=off staticcheck -f json ./...); okrc="1" ;; # exit 1 = a problem found, but also a setup failure (lintcmd/cmd.go): empty output with exit 1 is not run, and a missing module cache fails offline; one JSON object per line
     # cargo-deny: --offline is global (docs: no network for cargo or cargo-deny; fetch policy Disallow); --format json prints one JSON object per line on stderr (merged into $out); exit is a bitset of failed checks (advisories 1, bans 2, licenses 4, sources 8), so 1-15 are findings, but 1 is also a plain crash: sjson and the guard below need an error diagnostic
+    slither) jf=$rep; rm -f "$rep"; printf '{}\n' >"$td/slither.json"; local sp; sp=$(pwd -P); cmd=(bash -c 'cd "$1" && shift && exec "$@"' _ "$td" slither "$sp/${1#./}" --sarif "$rep" --compile-force-framework solc --config-file "$td/slither.json" --solc-working-dir "$sp"); okrc="255" ;; # slither exits -1 (255) on any finding at its default --fail-pedantic and on an error: only a row makes 255 a finding
     skillspector) jf=$rep; : >"$rep"; cmd=(skillspector scan "$1" --no-llm -f sarif -o "$rep"); okrc="1" ;; # exit 1 = score > 50 (README), 2 = error; SARIF-to-file shape unverified: a result with no location is unparseable, never dropped
     cargo-deny) local w=(bans licenses sources); [ -d "${CARGO_HOME:-$HOME/.cargo}/advisory-dbs" ] && w+=(advisories); cmd=(cargo-deny --offline --format json check "${w[@]}"); okrc="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15" ;;
     # cargo-audit: --no-fetch never touches the network, --stale accepts an old local DB; exit 1 = vulnerabilities found (also failure: the guard needs a row), 2 = error; the JSON report goes to stdout
@@ -1155,13 +1173,28 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     brakeman) grep -qiE "^[[:space:]]*gem[[:space:]]+['\"]rails['\"]" Gemfile 2>/dev/null || hf= ;;
   esac
   [ -n "$hf" ] || continue
-  [ "$hs" != verified ] || case $hn in syft|licensee|detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim|kubescape|retire|tfsec|ansible-lint|pmd|solhint|skillspector) ;; *) wired+=" $hn" ;; esac # syft and licensee are inventories, not scanners: never wired or ran; detect-secrets (matches every file) and njsscan are wired only once installed (below), as provision_tools.sh does not install them, so a missing one is NOT CHECKED, never "fixable"
+  [ "$hs" != verified ] || case $hn in syft|licensee|detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim|kubescape|retire|tfsec|ansible-lint|pmd|solhint|slither|skillspector) ;; *) wired+=" $hn" ;; esac # syft and licensee are inventories, not scanners: never wired or ran; detect-secrets (matches every file) and njsscan are wired only once installed (below), as provision_tools.sh does not install them, so a missing one is NOT CHECKED, never "fixable"
   nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
+  [ "$hn" != scorecard ] || { [ "$full$hyg" = 00 ] || nc "OpenSSF Scorecard has no offline mode: --local still calls api.osv.dev and the oss-fuzz build-log bucket, so it is never run"; continue; }
   if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
   hb=$hn; [ "$hn" != ruff-security ] || hb=ruff; [ "$hn" != bundler-audit ] || hb=bundle-audit; [ "$hn" != eslint-security ] || hb=./node_modules/.bin/eslint
   command -v "$hb" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
+  [ "$hn" != slither ] || { command -v solc >/dev/null && tmo=5 tlim solc --version >/dev/null 2>&1; } || { nc "no working solc on PATH (a solc-select shim with no compiler installed would download one)"; continue; }
+  [ "$hn" != slither ] || case "$(cd "$td" && pwd -P)/" in "$(pwd -P)"/*) nc "the temp dir is inside the repository, so crytic-compile would read the repository's foundry or hardhat config from slither's working directory"; continue ;; esac
+  # crytic-compile walks every ancestor of slither's working directory up to / and builds with the first framework it detects (a shared /tmp
+  # when TMPDIR is unset): any marker of a directory-detected platform in crytic-compile 0.4.2's platform/*.py is_supported is NOT CHECKED
+  if [ "$hn" = slither ]; then ad=$(cd "$td" && pwd -P) cm=
+    while [ -z "$cm" ]; do
+      for mk in foundry.toml hardhat.config.js hardhat.config.ts hardhat.config.cjs buidler.config.js buidler.config.ts truffle.js truffle-config.js embark.json brownie-config.json brownie-config.yaml brownie-config.yml waffle.json .waffle.json; do [ ! -e "$ad/$mk" ] || cm=$mk; done
+      ! grep -qs 'dapp ' "$ad/Makefile" || cm="a Makefile naming dapp"
+      ! grep -qsE 'etherlime|ethereum-waffle' "$ad/package.json" || cm="a package.json naming etherlime or ethereum-waffle"
+      case ${ad##*/} in *_export.json|*_export_archive.json) cm="a directory named *_export.json" ;; esac # standard and archive match the directory name itself
+      [ -n "$ad" ] || break; ad=${ad%/*}
+    done
+    [ -z "$cm" ] || { nc "a crytic-compile framework marker ($cm) is in an ancestor of the temp dir, so slither would build with that framework's config"; continue; }
+  fi
   hubtool=$hn
-  case $hn in detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim|tfsec|ansible-lint|pmd|solhint|skillspector) wired+=" $hn" ;; esac
+  case $hn in detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim|tfsec|ansible-lint|pmd|solhint|slither|skillspector) wired+=" $hn" ;; esac
   if [ "$hn" = rubocop ] && [ "$full" = 0 ] && [ -n "$(changed '(^|/)\.rubocop[^/]*\.yml$')" ]; then nc ".rubocop*.yml changed in this diff: its config can require code, not run"; continue; fi
   if [ "$hn" = sobelow ] && [ "$full" = 0 ] && [ -n "$(changed '(^|/)(mix\.exs|\.sobelow-conf)$')" ]; then nc "mix.exs or .sobelow-conf changed in this diff: its config is code, not run"; continue; fi
   # checkov reads .checkov.yaml or .checkov.yml from its working directory (the repo root), and its external-checks-dir runs Python from the repo:
@@ -1237,7 +1270,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
     # rubocop may skip an explicit file (excludes, unparseable): its inspected count must equal the files passed, else findings may be missing
     if [ "$hn" = rubocop ] && ! python3 -I -c 'import json,sys;sys.exit(0 if json.load(open(sys.argv[1]))["summary"]["inspected_file_count"]==int(sys.argv[2]) else 1)' "$jf" "$(printf '%s\n' "$hf" | grep -c .)" 2>/dev/null; then skip rubocop "inspected file count differs from the changed Ruby files"; break; fi
     # a failing exit with no row is a crash (cargo-deny exit 1 is also its advisories bit): not a finding, never clean
-    if sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan|retire|ansible-lint|pmd|solhint|skillspector) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; rubocop) [ "$rc" = 0 ] ;; sobelow|bundler-audit) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
+    if SL_CWD=$td sjson "$hn" "$jf" >"$tsv" && { case $hn in cargo-deny|cargo-audit|mobsfscan|retire|ansible-lint|pmd|solhint|slither|skillspector) [ "$rc" = 0 ] || [ -s "$tsv" ] ;; rubocop) [ "$rc" = 0 ] ;; sobelow|bundler-audit) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; njsscan) if [ "$rc" = 0 ]; then ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; else grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR: ' "$tsv"; fi ;; psalm) case "$([ "$rc" = 0 ] && echo z)$([ -s "$tsv" ] && echo r)" in z|r) ;; *) false ;; esac ;; esac; }; then
       case " $ran " in *" $hn "*) ;; *) ran+=" $hn" ;; esac
       if [ "$hm" = batch ]; then
         printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0
@@ -1259,11 +1292,15 @@ while IFS=';' read -r hn hs hm hre _ hh; do
           unm=$(while IFS=$'\t' read -r p _; do p=${p#"$PWD"/}; p=${p#./}; case $p in (/*|..|../*|*/../*) echo x ;; esac; done <"$tsv" | wc -l | tr -d '[:space:]')
           [ "$unm" = 0 ] || { skip tfsec "$f: $unm row(s) with a path outside the scanned directory; findings may be missing"; continue; }
           while IFS=$'\t' read -r p l r m; do p=${p#"$PWD"/}; p=${p#./}; [ "$d" = . ] || p=$d/$p; [ "$p" != "$f" ] || add tfsec "$f" "$l" "$r" "$m"; done <"$tsv"
+        elif [ "$hn" = slither ]; then # sjson mapped each uri to a repo path: keep the changed file's rows (others name files it imports); a path outside the repo means the mapping is off: fail closed, never a false clean
+          unm=$(while IFS=$'\t' read -r p _; do case $p in (/*|..|../*) echo x ;; esac; done <"$tsv" | wc -l | tr -d '[:space:]')
+          [ "$unm" = 0 ] || { skip slither "$f: $unm row(s) with a path outside the repository; findings may be missing"; continue; }
+          while IFS=$'\t' read -r p l r m; do [ "$p" != "$f" ] || add slither "$f" "$l" "$r" "$m"; done <"$tsv"
         else
           while IFS=$'\t' read -r _ l r m; do add "$hn" "$f" "$l" "$r" "$m"; done <"$tsv"
         fi
       fi
-    elif case $hn in ansible-lint|pmd|solhint|skillspector) [ "$rc" != 0 ] ;; *) false ;; esac; then skip "$hn" "exit $rc with no row, or unparseable output"
+    elif case $hn in ansible-lint|pmd|solhint|slither|skillspector) [ "$rc" != 0 ] ;; *) false ;; esac; then skip "$hn" "exit $rc with no row, or unparseable output"
     else skip "$hn" "unparseable output"; fi
     [ "$hm" != batch ] || break
   done <<<"$([ "$hm" = batch ] && echo x || printf '%s\n' "$hf")"
@@ -1903,10 +1940,10 @@ for r in out:
             try: dsc[r["file"]] = dsm.dev_only(r["file"])
             except Exception: dsc[r["file"]] = set()
         if m[2] in dsc[r["file"]]: r["message"] += " (scope: dev)"; r["text"] += " (scope: dev)"
-# Corroboration: when different tools flag the same normalized file:line, every such row gets a "tools" list and a " [corroborated by: ...]" suffix. No row is dropped or merged. not-checked, summary, line<=0 and per-file-summary rows are skipped.
+# Corroboration: when different tools flag the same normalized file:line, every such row gets a "tools" list and a " [corroborated by: ...]" suffix. No row is dropped or merged. secret-exposure (derived from the gitleaks report, not an independent scan), not-checked, summary, line<=0 and per-file-summary rows are skipped.
 cg = {}
 for r in out:
-    if r["rule"] != "not-checked" and not r["rule"].endswith("-summary") and r["line"] > 0 and r["file"] not in ("", "-") and "_lines" not in r: cg.setdefault((os.path.normpath(r["file"]), r["line"]), []).append(r)
+    if r["rule"] != "not-checked" and not r["rule"].endswith("-summary") and r["line"] > 0 and r["file"] not in ("", "-") and "_lines" not in r and r["tool"] != "secret-exposure": cg.setdefault((os.path.normpath(r["file"]), r["line"]), []).append(r)
 for g in cg.values():
     ts = sorted({r["tool"].removesuffix("-history") for r in g})  # gitleaks and gitleaks-history are one scanner
     if len(ts) > 1:

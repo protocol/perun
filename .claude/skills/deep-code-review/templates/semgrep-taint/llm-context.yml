@@ -1,0 +1,298 @@
+# Bundled generic rules (LLM context). Two families, both search-mode heuristics, not proofs; a hit is a lead to verify.
+# (1) System/developer prompt leakage (owasp-llm LLM07:2025):
+#     a system prompt that interpolates a credential, or a system prompt sent back to the client. Covers OpenAI messages ({role: system|developer}, instructions=) and Anthropic (system=).
+#     Credential detection is by name/shape: secret|token|api key|password|credential|private key, minus limit/count/policy/ttl/length names (token_limit, password_policy_text; account is not a count, so account_secret still reports).
+# (2) Vector-store reads with no tenant/user/namespace filter (owasp-llm LLM08:2025, CWE-639). Same idea as scripts/tenant_scope_check.py: a read that carries no scope key is a cross-tenant lead.
+#     An explicit None/null/undefined/empty-dict filter counts as no filter, and a Pinecone namespace of None/null/undefined/empty string counts as no namespace; a positional filter argument is read only on similarity_search* (third) and max_marginal_relevance_search* (fifth). A store that isolates tenants by index/collection name or a pre-scoped client (`with_tenant`, `.namespace(x)`) is not seen and will be flagged: silence is not proof, and a hit is not proof either.
+# ponytail: pattern-level only (no taint). Upgrade to taint if a measured miss shows up.
+rules:
+- id: perun.llm.system-prompt-secret-py
+  languages: [python]
+  severity: ERROR
+  message: A system/developer prompt embeds a credential (env secret, key-shaped literal or credential variable). The model can be coaxed into repeating it, so treat it as exposed (CWE-200). Keep secrets in server-side tool code, not in prompt text.
+  metadata: {cwe: CWE-200, owasp-llm: "LLM07:2025", category: security, confidence: MEDIUM}
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern: '{..., "role": $R, ..., "content": $C, ...}'
+      - metavariable-regex: {metavariable: $R, regex: '^["''](system|developer)["'']$'}
+    - pattern: $CLIENT.messages.create(..., system=$C, ...)
+    - pattern: $CLIENT.responses.create(..., instructions=$C, ...)
+  - metavariable-pattern:
+      metavariable: $C
+      pattern-either:
+      - pattern-regex: '(?<![A-Za-z0-9])(sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|AIza[0-9A-Za-z_-]{35})'
+      - patterns:
+        - pattern-either:
+          - pattern: f"...{$X}..."
+          - pattern: '"..." + $X'
+          - pattern: '$X + "..."'
+          - pattern: '"...".format(..., $X, ...)'
+          - pattern: '"...".format(..., $K=$X, ...)'
+          - pattern: '"..." % $X'
+        - metavariable-regex: {metavariable: $X, regex: '(?is)^(?!.*(limit|(?<!ac)count|policy|ttl|expir|length)).*(secret|token(?!s|iz)|api[_-]?key|passw|credential|private[_-]?key).*$'}
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "test_*.py", "*_test.py"]
+- id: perun.llm.system-prompt-secret-js
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: A system/developer prompt embeds a credential (env secret, key-shaped literal or credential variable). The model can be coaxed into repeating it, so treat it as exposed (CWE-200). Keep secrets in server-side tool code, not in prompt text.
+  metadata: {cwe: CWE-200, owasp-llm: "LLM07:2025", category: security, confidence: MEDIUM}
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern: '{..., role: $R, ..., content: $C, ...}'
+      - metavariable-regex: {metavariable: $R, regex: '^["''](system|developer)["'']$'}
+    - pattern: '$CLIENT.messages.create({..., system: $C, ...})'
+    - pattern: '$CLIENT.responses.create({..., instructions: $C, ...})'
+  - metavariable-pattern:
+      metavariable: $C
+      pattern-either:
+      - pattern-regex: '(?<![A-Za-z0-9])(sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|AIza[0-9A-Za-z_-]{35})'
+      - patterns:
+        - pattern-either:
+          - pattern: '`...${$X}...`'
+          - pattern: '"..." + $X'
+          - pattern: '$X + "..."'
+          - pattern: '"...".concat(..., $X, ...)'
+        - metavariable-regex: {metavariable: $X, regex: '(?is)^(?!.*(limit|(?<!ac)count|policy|ttl|expir|length)).*(secret|token(?!s|iz)|api[_-]?key|passw|credential|private[_-]?key).*$'}
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "__tests__", "*.test.*", "*.spec.*"]
+- id: perun.llm.system-prompt-response-py
+  languages: [python]
+  severity: WARNING
+  message: A system/developer prompt variable is returned in an HTTP response. Hidden instructions become readable by every caller (CWE-200); return only the model output.
+  metadata: {cwe: CWE-200, owasp-llm: "LLM07:2025", category: security, confidence: MEDIUM}
+  patterns:
+  - pattern-either:
+    - pattern: $F($P)
+    - pattern: '$F({..., $K: $P, ...})'
+    - pattern: $F(..., $K=$P, ...)
+  - metavariable-regex: {metavariable: $P, regex: '(?i)^([A-Za-z_]\w*\.)*(system|developer)_?(prompt|instructions?|message)$'}
+  - metavariable-regex: {metavariable: $F, regex: '^(jsonify|JsonResponse|JSONResponse|HttpResponse|PlainTextResponse|HTMLResponse|Response|make_response|ORJSONResponse)$'}
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "test_*.py", "*_test.py"]
+- id: perun.llm.system-prompt-response-js
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A system/developer prompt variable is sent in an HTTP response. Hidden instructions become readable by every caller (CWE-200); send only the model output.
+  metadata: {cwe: CWE-200, owasp-llm: "LLM07:2025", category: security, confidence: MEDIUM}
+  patterns:
+  - pattern-either:
+    - pattern: $R.$M($P)
+    - pattern: '$R.$M({..., $K: $P, ...})'
+    - pattern: '$R.$M({..., $P, ...})'
+    - pattern: new Response($P, ...)
+  - metavariable-regex: {metavariable: $P, regex: '(?i)^([A-Za-z_]\w*\.)*(system|developer)_?(prompt|instructions?|message)$'}
+  - metavariable-regex: {metavariable: $M, regex: '^(json|send|end|write)$'}
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "__tests__", "*.test.*", "*.spec.*"]
+- id: perun.llm.system-prompt-client-export
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A system/developer prompt is exported from a client module ("use client"), so it ships to every browser (CWE-200). Keep prompts in server-only code.
+  metadata: {cwe: CWE-200, owasp-llm: "LLM07:2025", category: security, confidence: MEDIUM}
+  patterns:
+  - pattern-inside: |
+      "use client";
+      ...
+  - pattern-either:
+    - pattern: export const $P = ...
+    - pattern: export let $P = ...
+    - pattern: export default $P
+    - pattern: export { $P }
+  - metavariable-regex: {metavariable: $P, regex: '(?i)^(system|developer)_?(prompt|instructions?|message)$'}
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "__tests__", "*.test.*", "*.spec.*"]
+- id: perun.llm.vector-pinecone-py
+  languages: [python]
+  severity: WARNING
+  message: Pinecone query with no filter and no namespace. In a multi-tenant app any caller can retrieve another tenant's vectors (CWE-639); scope by tenant/user filter or namespace. Ignore if the index is single-tenant or the client is pre-scoped.
+  metadata: {cwe: CWE-639, owasp-llm: "LLM08:2025", category: security, confidence: LOW}
+  patterns:
+  - pattern: $I.query(..., top_k=$K, ...)
+  - pattern-not:
+      patterns:
+      - pattern: $I.query(..., namespace=$N, ...)
+      - metavariable-regex: {metavariable: $N, regex: '^(?!None$|""$|''''$)'}
+  - pattern-not: $I.query(..., **$X)
+  - pattern-either:
+    - patterns:
+      - pattern: $I.query(..., top_k=$K, ...)
+      - pattern-not: $I.query(..., filter=$F, ...)
+    - pattern: $I.query(..., filter=None, ...)
+    - patterns:
+      - pattern: $I.query(..., filter=$F, ...)
+      - metavariable-regex: {metavariable: $F, regex: '^\{\s*\}$'}
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "test_*.py", "*_test.py"]
+- id: perun.llm.vector-pinecone-js
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: Pinecone query with no filter and no namespace. In a multi-tenant app any caller can retrieve another tenant's vectors (CWE-639); scope by tenant/user filter or namespace. Ignore if the index is single-tenant or the client is pre-scoped.
+  metadata: {cwe: CWE-639, owasp-llm: "LLM08:2025", category: security, confidence: LOW}
+  patterns:
+  - pattern: '$I.query({..., topK: $K, ...})'
+  - pattern-not: '$I.query({..., ...$X, ...})'
+  - pattern-not:
+      patterns:
+      - pattern: $X.namespace($N).query(...)
+      - metavariable-regex: {metavariable: $N, regex: '^(?!undefined$|null$|""$|''''$)'}
+  - pattern-either:
+    - patterns:
+      - pattern: '$I.query({..., topK: $K, ...})'
+      - pattern-not: '$I.query({..., filter: $F, ...})'
+    - pattern: '$I.query({..., filter: undefined, ...})'
+    - pattern: '$I.query({..., filter: null, ...})'
+    - patterns:
+      - pattern: '$I.query({..., filter: $F, ...})'
+      - metavariable-regex: {metavariable: $F, regex: '^\{\s*\}$'}
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "__tests__", "*.test.*", "*.spec.*"]
+- id: perun.llm.vector-chroma-py
+  languages: [python]
+  severity: WARNING
+  message: Chroma collection.query with no where filter. In a multi-tenant app any caller can retrieve another tenant's documents (CWE-639); add a where tenant/user filter. Ignore if the collection itself is per-tenant.
+  metadata: {cwe: CWE-639, owasp-llm: "LLM08:2025", category: security, confidence: LOW}
+  patterns:
+  - pattern-either:
+    - pattern: $C.query(..., query_texts=$Q, ...)
+    - pattern: $C.query(..., query_embeddings=$Q, ...)
+  - pattern-not: $C.query(..., **$X)
+  - pattern-either:
+    - patterns:
+      - pattern: $C.query(...)
+      - pattern-not: $C.query(..., where=$W, ...)
+    - pattern: $C.query(..., where=None, ...)
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "test_*.py", "*_test.py"]
+- id: perun.llm.vector-chroma-js
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: Chroma collection.query with no where filter. In a multi-tenant app any caller can retrieve another tenant's documents (CWE-639); add a where tenant/user filter. Ignore if the collection itself is per-tenant.
+  metadata: {cwe: CWE-639, owasp-llm: "LLM08:2025", category: security, confidence: LOW}
+  patterns:
+  - pattern-either:
+    - pattern: '$C.query({..., queryTexts: $Q, ...})'
+    - pattern: '$C.query({..., queryEmbeddings: $Q, ...})'
+  - pattern-not: '$C.query({..., ...$X, ...})'
+  - pattern-either:
+    - patterns:
+      - pattern: '$C.query({...})'
+      - pattern-not: '$C.query({..., where: $W, ...})'
+    - pattern: '$C.query({..., where: undefined, ...})'
+    - pattern: '$C.query({..., where: null, ...})'
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "__tests__", "*.test.*", "*.spec.*"]
+- id: perun.llm.vector-langchain-py
+  languages: [python]
+  severity: WARNING
+  message: LangChain similarity_search* / max_marginal_relevance_search* with no filter. In a multi-tenant app any caller can retrieve another tenant's documents (CWE-639); pass filter= (or namespace=) with the tenant/user. Ignore if the store is per-tenant.
+  metadata: {cwe: CWE-639, owasp-llm: "LLM08:2025", category: security, confidence: LOW}
+  patterns:
+  - pattern: $S.$M(...)
+  - metavariable-regex: {metavariable: $M, regex: '^(similarity_search\w*|max_marginal_relevance_search\w*|asimilarity_search\w*)$'}
+  - pattern-not: $S.$M(..., namespace=$F, ...)
+  - pattern-not: $S.$M(..., where=$F, ...)
+  - pattern-not: $S.$M(..., **$X)
+  - pattern-not: $S.$M(..., *$X)
+  - pattern-not:
+      patterns:
+      - pattern: $S.$M($A, $B, $C, ...)
+      - metavariable-regex: {metavariable: $M, regex: '^a?similarity_search\w*$'}
+  - pattern-not:
+      patterns:
+      - pattern: $S.$M($A, $B, $C, $D, $E, ...)
+      - metavariable-regex: {metavariable: $M, regex: '^max_marginal_relevance_search\w*$'}
+  - pattern-either:
+    - patterns:
+      - pattern: $S.$M(...)
+      - pattern-not: $S.$M(..., filter=$F, ...)
+    - pattern: $S.$M(..., filter=None, ...)
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "test_*.py", "*_test.py"]
+- id: perun.llm.vector-langchain-js
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: LangChain similaritySearch* with no filter argument. In a multi-tenant app any caller can retrieve another tenant's documents (CWE-639); pass the filter (third argument) with the tenant/user. Ignore if the store is per-tenant.
+  metadata: {cwe: CWE-639, owasp-llm: "LLM08:2025", category: security, confidence: LOW}
+  patterns:
+  - pattern-either:
+    - pattern: $S.$M($Q)
+    - pattern: $S.$M($Q, $K)
+    - pattern: $S.$M($Q, $K, undefined)
+    - pattern: $S.$M($Q, $K, null)
+  - metavariable-regex: {metavariable: $M, regex: '^(similaritySearch|similaritySearchWithScore|similaritySearchVectorWithScore|maxMarginalRelevanceSearch)$'}
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "__tests__", "*.test.*", "*.spec.*"]
+- id: perun.llm.vector-weaviate-py
+  languages: [python]
+  severity: WARNING
+  message: Weaviate collection.query read with no filters=. In a multi-tenant app any caller can retrieve another tenant's objects (CWE-639); add filters= or use collection.with_tenant(...). Ignore if the client is pre-scoped.
+  metadata: {cwe: CWE-639, owasp-llm: "LLM08:2025", category: security, confidence: LOW}
+  patterns:
+  - pattern: $C.query.$M(...)
+  - metavariable-regex: {metavariable: $M, regex: '^(near_text|near_vector|near_object|near_image|hybrid|bm25|fetch_objects)$'}
+  - pattern-not: $C.query.$M(..., **$X)
+  - pattern-not: $X.with_tenant(...).query.$M(...)
+  - pattern-either:
+    - patterns:
+      - pattern: $C.query.$M(...)
+      - pattern-not: $C.query.$M(..., filters=$F, ...)
+    - pattern: $C.query.$M(..., filters=None, ...)
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "test_*.py", "*_test.py"]
+- id: perun.llm.vector-weaviate-js
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: Weaviate collection.query read with no filters. In a multi-tenant app any caller can retrieve another tenant's objects (CWE-639); add filters or use collection.withTenant(...). Ignore if the client is pre-scoped.
+  metadata: {cwe: CWE-639, owasp-llm: "LLM08:2025", category: security, confidence: LOW}
+  patterns:
+  - pattern: $C.query.$M(...)
+  - metavariable-regex: {metavariable: $M, regex: '^(nearText|nearVector|nearObject|nearImage|hybrid|bm25|fetchObjects)$'}
+  - pattern-not: '$C.query.$M(..., {..., ...$X, ...})'
+  - pattern-not: $X.withTenant(...).query.$M(...)
+  - pattern-either:
+    - patterns:
+      - pattern: $C.query.$M(...)
+      - pattern-not: '$C.query.$M(..., {..., filters: $F, ...})'
+    - pattern: '$C.query.$M(..., {..., filters: undefined, ...})'
+    - pattern: '$C.query.$M(..., {..., filters: null, ...})'
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "__tests__", "*.test.*", "*.spec.*"]
+- id: perun.llm.vector-qdrant-py
+  languages: [python]
+  severity: WARNING
+  message: Qdrant search with no query_filter. In a multi-tenant app any caller can retrieve another tenant's points (CWE-639); add a query_filter on the tenant/user payload field. Ignore if the collection is per-tenant.
+  metadata: {cwe: CWE-639, owasp-llm: "LLM08:2025", category: security, confidence: LOW}
+  patterns:
+  - pattern-either:
+    - pattern: $C.$M(..., collection_name=$N, ...)
+    - pattern: $C.$M(..., query_vector=$V, ...)
+  - metavariable-regex: {metavariable: $M, regex: '^(search|query_points|search_groups|search_batch|query_points_groups)$'}
+  - pattern-not: $C.$M(..., **$X)
+  - pattern-either:
+    - patterns:
+      - pattern: $C.$M(...)
+      - pattern-not: $C.$M(..., query_filter=$F, ...)
+    - pattern: $C.$M(..., query_filter=None, ...)
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "test_*.py", "*_test.py"]
+- id: perun.llm.vector-qdrant-js
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: Qdrant search/query with no filter. In a multi-tenant app any caller can retrieve another tenant's points (CWE-639); add a filter on the tenant/user payload field. Ignore if the collection is per-tenant.
+  metadata: {cwe: CWE-639, owasp-llm: "LLM08:2025", category: security, confidence: LOW}
+  patterns:
+  - pattern-either:
+    - pattern: '$C.search($N, {..., vector: $V, ...})'
+    - pattern: '$C.query($N, {..., query: $V, ...})'
+  - pattern-not: '$C.$M($N, {..., ...$X, ...})'
+  - pattern-either:
+    - patterns:
+      - pattern: '$C.$M($N, {...})'
+      - pattern-not: '$C.$M($N, {..., filter: $F, ...})'
+    - pattern: '$C.$M($N, {..., filter: undefined, ...})'
+    - pattern: '$C.$M($N, {..., filter: null, ...})'
+  paths:
+    exclude: ["test", "tests", "spec", "fixtures", "mocks", "e2e", "__tests__", "*.test.*", "*.spec.*"]

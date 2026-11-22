@@ -18,7 +18,7 @@ KINDS.update({k: ("ruleid",) for k in FWNAMES})
 IDS = {"js.ts": ["perun.js.raw-sql-concat", "perun.js.orm-where-unchecked-input", "perun.js.guard-allows-missing-token"],
        "app.py": ["perun.py.raw-sql-format", "perun.py.guard-allows-missing-token"], "db.go": ["perun.go.raw-sql-sprintf"],
        "entry.py": ["perun.py." + c for c in "sqli command-injection path-traversal ssrf deserialize ssti xss open-redirect".split()],
-       "nofw.py": ["perun.py.path-traversal"], **{k: ["perun.py.path-traversal"] for k in FWNAMES},
+       "nofw.py": ["perun.py.path-traversal", "perun.py.deserialize"], **{k: ["perun.py.path-traversal"] for k in FWNAMES},
        "cli.py": ["perun.py." + c for c in "sqli command-injection path-traversal ssrf deserialize ssti xss open-redirect".split()]}
 
 TS = '''
@@ -335,8 +335,8 @@ NOTMIG = {"src/routes/migrations/run.ts": MIG["migrations/001.ts"], "src/routes/
 
 # Entry-point sources: route-decorated handler params and Django view params are sources; a plain helper/CLI parameter is not.
 ENTRY = '''
-import os, pickle, subprocess, requests
-from flask import redirect, render_template_string
+import os, json, yaml, marshal, pickle, subprocess, requests
+from flask import redirect, render_template_string, request
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.safestring import mark_safe
 from jinja2 import Template
@@ -365,6 +365,39 @@ class WidgetView(View):
         # ruleid: perun.py.deserialize
         return pickle.loads(blob)
 
+@app.route("/r1", methods=["POST"])
+def body_get_data():
+    # ruleid: perun.py.deserialize
+    return pickle.loads(request.get_data())
+
+@app.route("/r2", methods=["POST"])
+def body_data():
+    # ruleid: perun.py.deserialize
+    return yaml.load(request.data)
+
+@app.route("/r3", methods=["POST"])
+def body_stream():
+    # ruleid: perun.py.deserialize
+    return marshal.loads(request.stream.read())
+
+def django_body(request):
+    # ruleid: perun.py.deserialize
+    return pickle.loads(request.body)
+
+@router.post("/r5")
+async def starlette_body(request):
+    # ruleid: perun.py.deserialize
+    return pickle.loads(await request.body())
+
+@app.route("/r6", methods=["POST"])
+def flask_seeds():
+    # ruleid: perun.py.deserialize
+    a = pickle.loads(flask.request.get_data())
+    # ruleid: perun.py.deserialize
+    b = yaml.load(flask.request.data)
+    # ruleid: perun.py.deserialize
+    return pickle.load(flask.request.stream.read())
+
 @api.route("/t", methods=["POST"])
 def flask_ssti(tpl):
     # ruleid: perun.py.ssti
@@ -385,7 +418,7 @@ def plain_helper_in_framework_module(target):
     return requests.get(target)
 '''
 CLI = '''
-import os, pickle, requests
+import os, json, yaml, pickle, requests
 def cli_sqli(cur, q):
     # ok: perun.py.sqli
     cur.execute("SELECT * FROM widgets WHERE name = '" + q + "'")
@@ -401,6 +434,22 @@ def cli_path(name):
 def cli_ssrf(target):
     # ok: perun.py.ssrf
     return requests.get(target)
+
+def body_clean():
+    # ok: perun.py.deserialize
+    a = json.loads(request.get_data())
+    # ok: perun.py.deserialize
+    b = yaml.safe_load(request.data)
+    # ok: perun.py.deserialize
+    return json.loads(request.stream.read())
+
+def django_body_clean(request):
+    # ok: perun.py.deserialize
+    return json.loads(request.body)
+
+async def starlette_body_clean(request):
+    # ok: perun.py.deserialize
+    return json.loads(await request.body())
 
 def cli_deserialize(blob):
     # ok: perun.py.deserialize
@@ -430,6 +479,158 @@ def not_a_route(e):
 '''
 # No framework import anywhere: the entry branches must fire on their own, and a plain helper must not.
 NOFW = '''
+from pickle import loads
+
+def body_flask():
+    # ruleid: perun.py.deserialize
+    return pickle.loads(request.get_data())
+
+def body_bare_data():
+    # ruleid: perun.py.deserialize
+    return yaml.load(request.data)
+
+async def body_aiohttp():
+    # ruleid: perun.py.deserialize
+    return pickle.loads(await request.read())
+
+async def body_starlette():
+    # ruleid: perun.py.deserialize
+    return marshal.loads(await request.body())
+
+def body_django():
+    # ruleid: perun.py.deserialize
+    return pickle.loads(request.body)
+
+def body_clean():
+    # ok: perun.py.deserialize
+    a = json.loads(request.get_data())
+    # ok: perun.py.deserialize
+    b = yaml.safe_load(request.data)
+    # ok: perun.py.deserialize
+    return json.loads(request.body)
+
+def src_get_json():
+    # ruleid: perun.py.deserialize
+    return pickle.loads(request.get_json(force=True))
+
+def src_json():
+    # ruleid: perun.py.deserialize
+    return pickle.loads(request.json)
+
+def src_stream():
+    # ruleid: perun.py.deserialize
+    return pickle.load(request.stream)
+
+def src_post():
+    # ruleid: perun.py.deserialize
+    return yaml.load(request.POST)
+
+def src_form():
+    # ruleid: perun.py.deserialize
+    return pickle.loads(request.form)
+
+def src_files():
+    # ruleid: perun.py.deserialize
+    return pickle.load(request.files)
+
+async def src_await_json():
+    # ruleid: perun.py.deserialize
+    return pickle.loads(await request.json())
+
+async def src_await_post():
+    # ruleid: perun.py.deserialize
+    return yaml.load(await request.post())
+
+class Handler:
+    def src_self_body(self):
+        # ruleid: perun.py.deserialize
+        return pickle.loads(self.request.body)
+
+    def src_self_data(self):
+        # ruleid: perun.py.deserialize
+        return yaml.load(self.request.data)
+
+def src_flask_prefixed():
+    # ruleid: perun.py.deserialize
+    a = pickle.loads(flask.request.get_json(force=True))
+    # ruleid: perun.py.deserialize
+    b = pickle.loads(flask.request.json)
+    # ruleid: perun.py.deserialize
+    c = pickle.loads(flask.request.form)
+    # ruleid: perun.py.deserialize
+    d = pickle.loads(flask.request.files)
+    # ruleid: perun.py.deserialize
+    return pickle.load(flask.request.stream)
+
+async def src_intermediate_var():
+    d = await request.post()
+    # ruleid: perun.py.deserialize
+    return pickle.loads(d["x"])
+
+def sink_variants():
+    # ruleid: perun.py.deserialize
+    a = dill.loads(request.data)
+    # ruleid: perun.py.deserialize
+    b = dill.load(request.stream)
+    # ruleid: perun.py.deserialize
+    d = marshal.load(request.stream)
+    # ruleid: perun.py.deserialize
+    e = pickle.Unpickler(request.stream)
+    # ruleid: perun.py.deserialize
+    return yaml.load(request.data, Loader=yaml.Loader)
+
+def load_all_and_aliases():
+    # ruleid: perun.py.deserialize
+    a = yaml.load_all(request.data)
+    # ruleid: perun.py.deserialize
+    b = yaml.unsafe_load_all(request.data)
+    # ruleid: perun.py.deserialize
+    c = _pickle.loads(request.data)
+    # ruleid: perun.py.deserialize
+    d = cPickle.loads(request.data)
+    # ruleid: perun.py.deserialize
+    e = loads(request.data)
+    # ruleid: perun.py.deserialize
+    g = yaml.full_load(request.data)
+    # ruleid: perun.py.deserialize
+    h = yaml.full_load_all(request.data)
+    # ok: perun.py.deserialize
+    f = yaml.load_all(request.data, Loader=yaml.SafeLoader)
+    # ok: perun.py.deserialize
+    return yaml.load_all(request.data, yaml.CSafeLoader)
+
+def safe_variants():
+    # ok: perun.py.deserialize
+    a = yaml.safe_load(request.data)
+    # ok: perun.py.deserialize
+    b = yaml.load(request.data, yaml.SafeLoader)
+    # ok: perun.py.deserialize
+    c = yaml.load(request.data, SafeLoader)
+    # ok: perun.py.deserialize
+    d = yaml.load(request.data, yaml.CSafeLoader)
+    # ok: perun.py.deserialize
+    return yaml.load(request.data, CSafeLoader)
+
+def yaml_safe_loaders():
+    # ok: perun.py.deserialize
+    a = yaml.load(request.data, Loader=yaml.SafeLoader)
+    # ok: perun.py.deserialize
+    b = yaml.load(request.data, Loader=SafeLoader)
+    # ok: perun.py.deserialize
+    c = yaml.load(request.data, Loader=CSafeLoader)
+    # ok: perun.py.deserialize
+    return yaml.load(request.data, Loader=yaml.CSafeLoader)
+
+def deserialize_param_not_source(blob):
+    # ok: perun.py.deserialize
+    return pickle.loads(blob)
+
+def full_load_param_not_source(blob):
+    # ok: perun.py.deserialize
+    a = yaml.full_load(blob)
+    # ok: perun.py.deserialize
+    return yaml.full_load_all(blob)
+
 @app.route("/a")
 def route_h(p):
     # ruleid: perun.py.path-traversal
