@@ -315,6 +315,7 @@ saw_ref=0
 # answer mid-loop.
 current_head="$(git rev-parse HEAD 2>/dev/null || true)"
 tree_is_dirty=1
+git update-index -q --refresh >/dev/null 2>&1
 if git diff-index --quiet HEAD -- 2>/dev/null && [ -z "$(git status --porcelain 2>/dev/null)" ]; then
   tree_is_dirty=0
 fi
