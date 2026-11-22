@@ -293,7 +293,7 @@ if shutil.which("semgrep"):
         if not re.search(r"\.perun\.\w+\.upload-", x["check_id"]):
             continue  # another bundled rule firing on a fixture line is not this file's concern
         assert x["extra"]["metadata"]["cwe"] in ("CWE-434", ["CWE-434"]), x["extra"]["metadata"]
-        got[x["path"]][x["start"]["line"]] = re.sub(r"^.*?(perun\.)", r"\1", x["check_id"])
+        got[x["path"]][x["start"]["line"]] = re.search(r"perun\.\w+\.upload-[\w-]+$", x["check_id"]).group(0)  # the id is prefixed by the rules path, which can itself start with perun.
     norm = got
     assert norm == want, ("got", norm, "want", want)
     print("semgrep-upload: live ok")

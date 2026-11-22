@@ -41,8 +41,8 @@ def semgrep(path, c):
 def hub(path, c):
     """True when review_checks.sh, run on a fresh git repo holding only the seed at its root, emits a row from tool
     c["tool"][4:] (whose rule contains c["rule"]). diff mode against an empty base commit (a seed with its own .git runs --full); c["flags"]
-    adds review_checks.sh flags (e.g. --history). SKIPPED when the tool's only rows are not-checked or stderr lists it
-    under "skipped (not installed)". A seed with its own .git (a builder's history) is used as is."""
+    adds review_checks.sh flags (e.g. --history). SKIPPED when the tool's only rows are not-checked or stderr lists it,
+    or the binary c["needs"] names (a tool such as gitleaks-history runs the gitleaks binary), under "skipped (not installed)". A seed with its own .git (a builder's history) is used as is."""
     name = c["tool"][4:]
     with tempfile.TemporaryDirectory() as t:
         repo, home = os.path.join(t, "repo"), os.path.join(t, "home")
@@ -67,7 +67,8 @@ def hub(path, c):
     mine = [x for x in rows if x["tool"] == name]
     hits = [x for x in mine if x["rule"] != "not-checked" and c.get("rule", "") in x["rule"]]
     skipped = re.search(r"skipped \(not installed\): ([^\n]*)", r.stderr)
-    if not hits and (any(x["rule"] == "not-checked" for x in mine) or (skipped and name in skipped.group(1).split(", "))):
+    absent = skipped.group(1).split(", ") if skipped else []
+    if not hits and (any(x["rule"] == "not-checked" for x in mine) or name in absent or c.get("needs") in absent):
         return SKIPPED
     return bool(hits)
 

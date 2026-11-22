@@ -17,6 +17,8 @@ in-file cases. No Python edit needed.
   `vuln|clean|mutant`; it fills the empty dir `dst` at test time (secrets assembled from split parts, or a temp git
   history with `git` calls). With a builder, `seed` is unused. If `dst` has a `.git`, it is used as is.
 - `flags` (optional): extra `review_checks.sh` flags for hub cases, e.g. `["--history"]`.
+- `needs` (optional, hub cases): the binary a hub tool runs when its name differs, e.g. `"gitleaks"` for
+  `hub:gitleaks-history`. When `review_checks.sh` lists that binary under "skipped (not installed)", the case prints `SKIP`.
 - `pin_only` (optional, `cppcheck` only): seed kinds, e.g. `["mutant"]`, that count only on the cppcheck version
   `.github/workflows/ci.yml` pins. On any other version the case prints `SKIP` naming both versions.
 - A tool that did not run (not installed, or only `not-checked` rows) prints `SKIP` and counts as skipped, never ok.
