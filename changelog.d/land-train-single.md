@@ -1,2 +1,3 @@
 ### Changed
 - `agentic-delivery/scripts/train_land.sh` accepts a one-PR train (usage `train_land.sh <tag> <pr> [pr...]`). It used to refuse any train of fewer than two PRs, so the merge queue sat idle whenever only one change was ready. Any batch-size floor now belongs to the launcher as a wait policy (wait a few minutes for a second PR whose checks are about to finish, then launch with what is ready); deep-code-review `references/merge-operations.md` ("Merge-train fast path") states it, and the coordinator loop template links there. Every other lander guard is unchanged. New test: `scripts/test-land-train-single.sh`.
+size-budget-raise: .claude/skills/deep-code-review/references/merge-operations.md 79430→79541 one-PR train fast-path note in "Merge-train fast path"
