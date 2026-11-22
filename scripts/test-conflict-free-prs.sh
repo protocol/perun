@@ -96,7 +96,9 @@ def body(name):
     return "\n".join(out)
 print(body("Start background per-PR tests") + "\n(\n" + body("Per-PR tests (scripts/ci-tests.d)") + "\n)")
 ' "$ROOT/.github/workflows/ci.yml" >"$BG/steps.sh"
-mkdir -p "$BG/bin"; command -v timeout >/dev/null || printf '#!/bin/sh\nshift; exec "$@"\n' >"$BG/bin/timeout"; chmod +x "$BG/bin/"* 2>/dev/null  # macOS has no coreutils timeout
+mkdir -p "$BG/bin"; command -v timeout >/dev/null || printf '#!/bin/sh\nshift; exec "$@"\n' >"$BG/bin/timeout"  # macOS has no coreutils timeout
+nohup true >/dev/null 2>&1 || printf '#!/bin/sh\nexec "$@"\n' >"$BG/bin/nohup"  # a sandboxed host's nohup can fail to detach (exit 127); run the command as-is
+chmod +x "$BG/bin/"* 2>/dev/null
 bgrun() { echo "$1" >"$BG/scripts/ci-tests.d/z.bg.sh"; rt="$(mktemp -d "$BG/rt.XXXXXX")"; (cd "$BG" && env -u SHARD PATH="$BG/bin:$PATH" RUNNER_TEMP="$rt" BG_WAIT_S="${2:-30}" bash "$BG/steps.sh") >"$BG/log" 2>&1; }
 bgrun 'echo bg-ran'; { [ $? -eq 0 ] && grep -q bg-ran "$BG/log" && grep -q fast "$BG/log"; }; ok $? "a *.bg.sh test runs from the background slot, its log printed, serial tests still run"
 bgrun 'echo bg-failed; exit 3'; { [ $? -ne 0 ] && grep -q bg-failed "$BG/log"; }; ok $? "a failing *.bg.sh test fails the Per-PR step with its log"
