@@ -229,7 +229,7 @@ def annotations(body):
 
 
 def short(cid):
-    return "perun." + cid.split("perun.", 1)[1]
+    return "perun." + cid.rsplit("perun.", 1)[1]  # the id is prefixed by the rules path, which can itself contain perun.
 
 
 ids = set()
