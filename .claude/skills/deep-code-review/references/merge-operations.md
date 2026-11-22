@@ -815,9 +815,12 @@ A merge preflight (receipt, changelog, clean tree) reads the current working dir
 
 Three scripts in agentic-delivery's `scripts/` (paths and refs come only from args or env) package the loop;
 `merge_train.py` stays the verifier and the scripts wrap what comes after it. Read each script's header for its env.
-- `train_land.sh <tag> <pr> <pr>…` union-verifies via `VERIFY_CMD`, then lands only if the verdict is `GREEN`.
-  It refuses a **single-PR train** (one PR takes the normal merge path; a train's cost is amortized only over a batch)
-  and a RED union lands nothing.
+- `train_land.sh <tag> <pr> [pr…]` union-verifies via `VERIFY_CMD`, then lands only if the verdict is `GREEN`;
+  a RED union lands nothing. It accepts a **one-PR train**: any batch-size floor is the launcher's wait policy (wait a
+  few minutes for a second PR whose checks are about to finish, then launch with what is ready), never a lander
+  refusal that idles the queue. Under the default `TRAIN_UNION=auto`, PRs on pairwise-disjoint paths skip the union
+  proof and `VERIFY_CMD` (CI on each exact head is their gate); one PR always qualifies when its file list and the
+  generated-file list can be read. `TRAIN_UNION=always` forces the proof.
 - `land_train.sh <base-sha> <union-sha>` lands each member **pinned to the head SHA the union proved**
   (`gh pr merge --match-head-commit`). A member whose head moved is skipped, never merged unproven; it waits out
   `mergeable=UNKNOWN` instead of treating it as a conflict; it readies a draft; and a PR with no changelog fragment

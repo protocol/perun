@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# train_land.sh <tag> <pr> <pr> [pr...] — union-verify a train from the fresh base, then land every PR of a
-# GREEN union via land_train.sh. Never a single-PR train: one PR goes through the normal merge path.
+# train_land.sh <tag> <pr> [pr...] — union-verify a train from the fresh base, then land every PR of a
+# GREEN union via land_train.sh. A one-PR train is accepted; any batch-size floor is the launcher's wait policy
+# (deep-code-review references/merge-operations.md, "Merge-train fast path"), never a refusal here.
 #
 # Stacked children of each member are retargeted to the base by land_train.sh before the merge.
 #
@@ -10,7 +11,9 @@
 # Union proof only when it can find something (path overlap only: a semantic clash between PRs touching different files is left to CI on the
 # exact heads; TRAIN_UNION=always restores the proof): PRs that touch pairwise-disjoint paths and at most one generated file (GEN_RE) are
 # drained back-to-back via land_train.sh (LAND_PRS), no VERIFY_CMD/BROWSER_CMD; CI on each exact head is their gate. Any overlap or gh failure
-# falls through to the union below; TRAIN_UNION=always forces the union.
+# falls through to the union below; TRAIN_UNION=always forces the union. A one-PR train always passes this check (nothing to overlap), so under
+# the default TRAIN_UNION=auto it lands with no VERIFY_CMD run unless GEN_RE is unknown or gh fails; a lone innocent PR left after a culprit
+# drop is re-gated as a one-PR train inside the union loop (zero left is CANT).
 #
 # Run it from a detached tools worktree on the base branch; it re-detaches that worktree onto the fresh base.
 # Env: VERIFY_CMD (required; run via bash -c as `$VERIFY_CMD <tag> <pr...>`, must print a final line
@@ -63,7 +66,7 @@ if [ -z "${TRAIN_LAND_COPY:-}" ]; then
 fi
 SELF=${TRAIN_LAND_ORIG:-$0}; trap 'rm -f "$TRAIN_LAND_COPY"' EXIT
 unset PERUN_HOLDER_PID  # an inherited value must never name the lease holder; only renew() sets it, for one call
-[ $# -ge 3 ] || { echo "usage: train_land.sh <tag> <pr> <pr> [pr...] (a train is >= 2 PRs)" >&2; exit 2; }
+[ $# -ge 2 ] || { echo "usage: train_land.sh <tag> <pr> [pr...]" >&2; exit 2; }
 : "${VERIFY_CMD:?set VERIFY_CMD}" "${UNION_DIRS:?set UNION_DIRS}"
 T=$1; shift
 BASE_BRANCH=${BASE_BRANCH:-main} REMOTE=${REMOTE:-origin} LOG=${LOG_DIR:-.}/train$T.log
@@ -181,8 +184,8 @@ if [ -n "$sol" ]; then
   cat "$LOG.land"; landed="$landed $(sed -nE '/: FAILED rc=/!s/^#([0-9]+)\(.*/\1/p' "$LOG.land" | paste -sd' ' -)"
   lock_drop "$PQ"; [ "$lrc" -eq 0 ] || exit "$lrc"
   rest=(); for n in "$@"; do [[ " $landed " == *" $n "* ]] || rest+=("$n"); done  # a pinned PR that moved is SKIPped, not landed: it stays
-  if [ "${#rest[@]}" -lt 2 ]; then  # a lone leftover is reported as left, not landed: the caller lands it through the normal merge path
-    lft=${rest[*]:-}; echo "train_land: ${#rest[@]} PR(s) left (not landed)${lft:+: #$lft}; fewer than 2 is not a train, land them through the normal merge path" >&2; exit 0
+  if [ "${#rest[@]}" -lt 2 ]; then  # a lone leftover is reported as left, not landed: the next launch takes it
+    lft=${rest[*]:-}; echo "train_land: ${#rest[@]} PR(s) left (not landed)${lft:+: #$lft; the next launch takes them}" >&2; exit 0
   fi
   set -- "${rest[@]}"; take_lease || { echo "DEFER: another gate holds the exclusive heavy lease; the rest (#$*) not built, retry later" >&2; exit 4; }
   git fetch -q "$REMOTE" "$BASE_BRANCH"; git checkout -q --detach "$REMOTE/$BASE_BRANCH"
@@ -197,7 +200,8 @@ disjoint() { local n f all= gen=0  # 0 = no shared path and <= 1 PR touches a ge
 stage queued "" "$@"
 if [ "${TRAIN_UNION:-auto}" != always ] && disjoint "$@"; then
   PQ=$(git rev-parse --git-common-dir)/train-push.lock
-  echo "train_land: #$* touch disjoint paths and share no generated file; landing back-to-back, no union proof (CI on each exact head is the gate; TRAIN_UNION=always forces one)" >&2
+  if [ $# -eq 1 ]; then echo "train_land: #$1 is a one-PR train; landing it with no union proof and no VERIFY_CMD (CI on its exact head is the gate; TRAIN_UNION=always forces one)" >&2
+  else echo "train_land: #$* touch disjoint paths and share no generated file; landing back-to-back, no union proof (CI on each exact head is the gate; TRAIN_UNION=always forces one)" >&2; fi
   lock_take "$PQ" "${PUSH_WAIT_SECS:-$((LT * 60))}" "$LT" || exit 1
   python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true
   lrc=0; LAND_PRS="$*" bash "$HERE/land_train.sh" "$(git rev-parse HEAD)" - || lrc=$?
@@ -383,8 +387,8 @@ unp=$(grep -vxFf "$LOG.pinned" "$LOG.real" || true)  # REAL ids no PR was pinned
 # train_yield.py solo, which lands a PR that keeps riding them alone on all-green CI. The "may be an intermittent regression" CANT above is ledgered as neither.
 [ "${#keep[@]}" -lt "${#PRS[@]}" ] || { { [ -n "$unp" ] && echo unpinned || echo flaky; } >"$LOG.flaky"; split_or_cant "no culprit pinned for the real failures"; }
 [ -z "$unp" ] || split_or_cant "real failure(s) not pinned to any PR: $(tr '\n' ' ' <<<"$unp")"
-[ "${#keep[@]}" -ge 2 ] || cant "<2 PRs left after dropping culprits"
-PRS=("${keep[@]}")
+[ "${#keep[@]}" -ge 1 ] || cant "no PR left after dropping culprits"
+PRS=("${keep[@]}")  # the innocent rest, even one PR, is re-gated as its own train
 done
 }
 # Split queue: items "<depth left>:<pr list>", newline-separated. A half lands only when its own full gate (train) is GREEN, stacked on the
