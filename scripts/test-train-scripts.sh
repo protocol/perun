@@ -63,8 +63,7 @@ grep -q "^RETARGET #77: br1 -> main" <<<"$out" && grep -qx "pr edit 77 --base ma
 grep -q "STDIN-IS-TTY" "$STUB/calls.log"; [ $? -ne 0 ]; ok $? "land_train: every gh call has stdin redirected from /dev/null"
 UNION_DIRS="/nonexistent" bash "$SC/land_train.sh" "$B" "$U" >/dev/null 2>&1; [ $? -eq 2 ]; ok $? "land_train: no worktree holds the union -> exit 2"
 
-# --- train_land: refuses a single-PR train; lands only a GREEN union ---
-bash "$SC/train_land.sh" t1 9 >/dev/null 2>&1; [ $? -eq 2 ]; ok $? "train_land: single-PR train refused"
+# --- train_land: lands only a GREEN union (the one-PR train is covered by test-land-train-single.sh) ---
 : >"$STUB/calls.log"
 out=$(VERIFY_CMD='echo "GREEN base='"$B"' union='"$U"'"' UNION_DIRS="$R" LOG_DIR="$WORK" BACKFILL_FILE="$WORK/b2.txt" WAIT_SECS=0 \
   bash "$SC/train_land.sh" t1 1 2 3 2>&1); grep -q "^GREEN" <<<"$out" && grep -q "merged 1" <<<"$out"; ok $? "train_land: GREEN union is landed via land_train"

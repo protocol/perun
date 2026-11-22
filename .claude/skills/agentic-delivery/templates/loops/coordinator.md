@@ -18,9 +18,9 @@ Token policy (`python3 perun_policy.py get tokens`): `efficient` (default) means
    `lane:<machine>` issues wait is a finding: label or assign, per the pull-queue doctrine
    (references/multi-session-coordination.md). Host: `python3 .claude/skills/agentic-delivery/scripts/host_probe.py
    --lane-type cpu --live-lanes "$(python3 .claude/skills/agentic-delivery/scripts/perun_policy.py heavy-load)" --max-lanes "$(python3 .claude/skills/agentic-delivery/scripts/perun_policy.py lanes)"` (add `--lane-type heavy` before a heavy local command: same verdicts; slots = `perun_policy.py heavy-slots`); `HOLD` or `COULD_NOT_CHECK` means start no new lane this wake, and say so on the board.
-3. Trains: for 2 or more green, reviewed PRs on one base, run
-   `bash .claude/skills/agentic-delivery/scripts/train_land.sh <tag> <pr> <pr> ...`. A single PR takes the
-   normal merge path.
+3. Trains: for the green, reviewed PRs on one base, run
+   `bash .claude/skills/agentic-delivery/scripts/train_land.sh <tag> <pr> [pr...]`. One PR is a valid train; any
+   wait for a second PR is launcher policy (deep-code-review references/merge-operations.md, "Merge-train fast path").
 4. Cleanup: `ROOT=<repo-root> bash .claude/skills/agentic-delivery/scripts/reap_own.sh` then
    `ROOT=<repo-root> bash .claude/skills/agentic-delivery/scripts/clean_finished.sh`. Verify servers are dead
    (`reap_own.sh --report` prints orphans=0), worktrees removed, merged branches deleted.
