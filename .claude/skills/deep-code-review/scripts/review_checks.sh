@@ -1831,6 +1831,7 @@ def fsumm(k, g):  # k = (tool, file, "", rule): the rule names the message and t
         nm = list(dict.fromkeys(x for t in g for x in re.findall(r"`([^`]+)`", t[4])[:1])); m += f"; names: {', '.join(nm[:5])}{'…' if len(nm) > 5 else ''}"
     d = {"file": k[1], "line": L[0], "rule": f"{R}-summary", "message": m, "text": f"{k[0]}: {m}", "tool": k[0], "_lines": L}  # _lines: every member line, popped before printing
     if k[0] in ("gitleaks", "gitleaks-history") and fx(k[1]): d["hint"] = "likely-fixture"; d["text"] += " [likely-fixture]"
+    elif k[0] in TPT and TPP.search(k[1]): d["hint"] = "test-path"; d["message"] += " [test-path]"; d["text"] += " [test-path]"  # B101/F821 are never secret-class: same hint as row()
     return d
 data = [t for t in rows if len(t) == 5]
 data = list(dict.fromkeys(map(tuple, data)))  # a scanner emitting the same (tool, file, line, rule, message) twice is one row
