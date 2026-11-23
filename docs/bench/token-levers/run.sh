@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Offline, free, deterministic: run token_report.py on the synthetic fixture and assert the levers it finds, their order and amounts.
 # Pinned numbers come from the fixture arithmetic (see gen.py, overlay.py); if token_report's estimators change on purpose, rerun and update them here.
-# The "250" in the lane-cap lever name is read from this repo's shipped template (agentic-delivery/templates/operating-layer.settings.json, LANE_TOOL_CAP); run from a checkout that has it.
+# The "150" in the lane-cap lever name is read from this repo's shipped template (agentic-delivery/templates/operating-layer.settings.json, LANE_TOOL_CAP); run from a checkout that has it.
 # Part 1 is the frozen session alone. Part 2 uses overlay.py variants: `fire` (big Bash/Read/MCP results, 112 KB CLAUDE.md) and `quiet` (results at the 10000-char floor, 2 KB CLAUDE.md).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -25,14 +25,14 @@ with tempfile.TemporaryDirectory() as tmp:
     r = json.loads(run(f"{here}/session.jsonl", empty, "--json"))
     rank = levers(r)
     want = [("pin main cache to 1h", 1284000.0, 0.3526),
-            ("lower LANE_TOOL_CAP below 250", 475606.25, 0.1306),
+            ("lower LANE_TOOL_CAP below 150", 611493.75, 0.1679),
             ("auto-compact at 200000", 217575.0, 0.0597),
             ("orchestrator tier", None, None)]
     assert rank == want, f"lever ranking drifted:\n got  {rank}\n want {want}"
     i, a, t = r["idle_rewrites"], r["auto_compact"], r["lane_tail"]
     assert (i["idle_rewrite_share"], i["idle_rewrite_saving_share_of_main_ie"]) == (0.8514, 0.5069), i
     assert (a["compactions"], a["saving_share_of_main_ie"]) == (1, 0.0859), a
-    assert (t["lanes_over_shipped_cap"], t["tail_share_over_shipped_cap"], t["p90_tool_calls"]) == (1, 0.4289, 600), t
+    assert (t["lanes_over_shipped_cap"], t["tail_share_over_shipped_cap"], t["p90_tool_calls"]) == (1, 0.5515, 600), t
     assert r["orchestration_flag"] and r["subagents_count"] == 4, "orchestration flag or lane count drifted"
     assert r["tool_results"]["count"] == 0 and r["startup_files"] == [], "frozen session must have no tool results or startup files"
     assert "Top levers (est. upper-bound saving, not a bill" in run(f"{here}/session.jsonl", empty), "frozen session text report lost its Top levers block"
@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert {k: (v["count"], v["chars"]) for k, v in ft["by_tool"].items()} == {"bash": (1, 150000), "read": (1, 20000), "other": (1, 15000)}, ft
     assert (ft["by_tool"]["bash"]["carry_ie_upper"], ft["bash_share_of_session_ie"], ft["clamped"]) == (203000.0, 0.0557, False), ft
     assert (qt["count"], qt["by_tool"]["bash"]["carry_ie_upper"]) == (0, 0.0), qt  # results at or below 10000 chars are not over the floor
-    assert levers(f) == [("pin main cache to 1h", 1284000.0, 0.3526), ("lower LANE_TOOL_CAP below 250", 475606.25, 0.1306),
+    assert levers(f) == [("pin main cache to 1h", 1284000.0, 0.3526), ("lower LANE_TOOL_CAP below 150", 611493.75, 0.1679),
                          ("auto-compact at 200000", 217575.0, 0.0597), ("cap Bash output with bashOutputMaxChars", 203000.0, 0.0557),
                          ("trim CLAUDE.md (estimate: 50% of its cost)", 190400.0, 0.0523), ("orchestrator tier", None, None)], levers(f)
     assert levers(q) == want, levers(q)

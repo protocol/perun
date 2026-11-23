@@ -100,7 +100,7 @@ pruned. Set caps per lane type at the measured p90 after a week of
 
 ```json
 { "hooks": { "PostToolUse": [ { "hooks": [ { "type": "command",
-    "command": "LANE_TOOL_CAP=250 python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/agentic-delivery/scripts/lane_cap.py\"" } ] } ] } }
+    "command": "LANE_TOOL_CAP=150 python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/agentic-delivery/scripts/lane_cap.py\"" } ] } ] } }
 ```
 
 The enforcing half is at the handback. With `HANDBACK_REQUIRE_STATUS=1`,

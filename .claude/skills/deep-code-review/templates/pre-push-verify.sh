@@ -342,8 +342,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     default_branch="$(resolve_default_branch)"
     default_ref="refs/remotes/${remote_name}/${default_branch}"
     base_sha=""
+    # A missing local copy of a default branch the remote has would make the fallback below scan the whole history
+    # (30 min once): fail fast with the fetch that fixes it. An empty remote, or one without that branch, keeps the fallback.
     if git rev-parse --verify -q "${default_ref}" >/dev/null 2>&1; then
       base_sha="$(git merge-base "${default_ref}" "${local_sha}" 2>/dev/null || true)"
+    elif git ls-remote --exit-code --heads "${remote_name}" "${default_branch}" >/dev/null 2>&1; then
+      die "${default_ref} is missing, so a new branch has no base to verify against. Run: git fetch ${remote_name} ${default_branch}"
     fi
     if [ -z "${base_sha}" ]; then
       printf 'pre-push-verify: %s is a new branch with no merge-base against %s -- verifying its full local history\n' \
