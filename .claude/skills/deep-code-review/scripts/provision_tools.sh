@@ -51,14 +51,14 @@ semgrep pipx semgrep==1.186.0
 trivy brew trivy
 osv-scanner brew osv-scanner
 actionlint brew actionlint
-zizmor pipx zizmor==1.32.0
+zizmor pipx zizmor==1.33.1
 bandit pipx bandit==1.9.4
 scorecard brew scorecard
 gosec brew gosec
 grype brew grype
-checkov pipx checkov==3.4.5
+checkov pipx checkov==3.4.6
 hadolint brew hadolint
-ruff pipx ruff==0.17.5
+ruff pipx ruff==0.17.6
 syft brew syft
 kube-linter brew kube-linter
 kube-score brew kube-score

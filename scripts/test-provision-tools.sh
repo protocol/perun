@@ -38,7 +38,7 @@ PA=; rc=0; o=$(PT 2>&1) || rc=$?
 PA=; o=$(PT --print 2>"$T/e")
 [ "$(wc -l <<<"$o")" -eq 1 ] && ! grep -q 'MISSING' <<<"$o" && grep -q 'MISSING  gitleaks' "$T/e" && ok "--print: one stdout line, listing on stderr" || { bad "--print shape"; echo "$o"; }
 for want in "for f in pipx ruby gitleaks trufflehog trivy osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kube-score terraform-linters/tap/tflint staticcheck kics licensee cosign nuclei" \
-  "for f in semgrep==1.186.0 zizmor==1.32.0 bandit==1.9.4 checkov==3.4.5 ruff==0.17.5 ansible-lint==26.11.0" \
+  "for f in semgrep==1.186.0 zizmor==1.33.1 bandit==1.9.4 checkov==3.4.6 ruff==0.17.6 ansible-lint==26.11.0" \
   'mkdir -p '"$(q "$T/cache/dcr-tools/docker-config-empty")"' && DOCKER_CONFIG='"$(q "$T/cache/dcr-tools/docker-config-empty")"' trivy --cache-dir '"$(q "$T/cache/trivy")"' fs --download-db-only' \
   "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$(q "$T/cache") osv-scanner --offline-vulnerabilities --download-offline-databases $(q "$PHYS")" \
   "curl -fsSL https://semgrep.dev/c/p/default -o $(q "$T/cache/dcr-tools/semgrep/p-default.yml.part") && mv " ; do
@@ -49,7 +49,7 @@ grep -qE '; bash [^ ]*/provision_tools\.sh$' <<<"$o" && ok "--print ends with a 
 # 3. present tools and warm caches are left out; pipx present means no `brew install pipx`
 PA=$(stubs gitleaks trufflehog trivy semgrep pipx); warm_trivy
 o=$(PT --print 2>/dev/null)
-grep -qF "for f in ruby osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kube-score terraform-linters/tap/tflint staticcheck kics licensee cosign nuclei flawfinder slither-analyzer cppcheck kubescape pmd shellcheck tfsec node go cargo-audit cargo-deny govulncheck uv; do brew install \"\$f\" || echo \"FAILED \$f\"; done; if [ \"\$(uname)\" = Darwin ]; then for f in codeql; do brew install --cask \"\$f\" || echo \"FAILED \$f\"; done; fi; for f in zizmor==1.32.0" <<<"$o" && ! grep -q 'semgrep==\|download-db-only' <<<"$o" && ok "--print omits present tools and the warm trivy DB" || { bad "partial"; echo "$o"; }
+grep -qF "for f in ruby osv-scanner actionlint scorecard gosec grype hadolint syft kube-linter kube-score terraform-linters/tap/tflint staticcheck kics licensee cosign nuclei flawfinder slither-analyzer cppcheck kubescape pmd shellcheck tfsec node go cargo-audit cargo-deny govulncheck uv; do brew install \"\$f\" || echo \"FAILED \$f\"; done; if [ \"\$(uname)\" = Darwin ]; then for f in codeql; do brew install --cask \"\$f\" || echo \"FAILED \$f\"; done; fi; for f in zizmor==1.33.1" <<<"$o" && ! grep -q 'semgrep==\|download-db-only' <<<"$o" && ok "--print omits present tools and the warm trivy DB" || { bad "partial"; echo "$o"; }
 : >"$T/cache/trivy/db/trivy.db"; o=$(PT --print 2>/dev/null); grep -q 'download-db-only' <<<"$o" && ok "an empty trivy.db is cold" || bad "empty db warm"
 
 # 4. a tool only in ~/.local/bin (pipx, uv tool) counts as installed; DCR_USER_BIN= (empty) turns that off
@@ -196,7 +196,7 @@ st '.not_run == ["trivy","osv-scanner"] and .fixable == ["trivy","osv-scanner"]'
 cmd=$(sed -n 's/.*(run: \(.*\))$/\1/p' "$T/err" | tail -n1); line=$(run DCR_CACHE_ROOT="$C2" "$BASH_BIN" -c "$cmd" 2>/dev/null)
 run DCR_CACHE_ROOT="$C2" "$BASH_BIN" -c "$line" >"$T/prov.out" 2>&1 || true
 cold=; for n in trivy osv semgrep; do run DCR_CACHE_ROOT="$C2" "$BASH_BIN" "$S/provision_tools.sh" --cache "$n" >/dev/null || cold+=" $n"; done
-[ -z "$cold" ] && grep -qx 'pipx install zizmor==1.32.0' "$PL" && ok "the printed owner line installs and warms every cache" || { bad "owner line left cold:$cold"; cat "$T/prov.out" "$PL"; }
+[ -z "$cold" ] && grep -qx 'pipx install zizmor==1.33.1' "$PL" && ok "the printed owner line installs and warms every cache" || { bad "owner line left cold:$cold"; cat "$T/prov.out" "$PL"; }
 rc_run DCR_CACHE_ROOT="$C2" TV_NEEDDB=1 # trivy must find the DB the owner line warmed: no loop of NOT RUN after a provision
 e "review_checks: ran 5 / wired 5 scanners" && ! e "fixable:" && st '.not_run == [] and .fixable == [] and .partial == []' && ok "after the owner line: ran 5 / wired 5, nothing fixable" || { bad "e2e re-run"; cat "$T/err"; }
 PA=$SCN
