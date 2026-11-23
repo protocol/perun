@@ -95,7 +95,7 @@ class Waste(TmpCase):
     def test_fixture_levers_ranked_with_share_and_change(self):
         w = report(self.projects)["waste"]
         self.assertEqual([r["lever"] for r in w["levers"]], ["pin main cache", "lower LANE_TOOL_CAP", "auto-compact"])
-        self.assertEqual([round(r["share"], 3) for r in w["levers"]], [0.353, 0.131, 0.060])
+        self.assertEqual([round(r["share"], 3) for r in w["levers"]], [0.353, 0.168, 0.060])
         self.assertIn('"promptCacheTtl": "1h"', w["levers"][0]["change"])
         self.assertIn("LANE_TOOL_CAP", w["levers"][1]["change"])
         self.assertEqual({r["state"] for r in w["levers"]}, {"unset"})

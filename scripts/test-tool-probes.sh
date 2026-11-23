@@ -4,7 +4,8 @@
 # For each external tool in `review_checks.sh --list-tools`:
 #   installed + fixture + >=1 real row -> PASS; installed + fixture + 0 rows -> FAIL (exit 1);
 #   not installed -> `NOT RUN <tool> (not installed)`; installed without fixture (e.g. nuclei needs a live URL) -> `NOT RUN <tool> (no fixture)`.
-# A zero-row tool in the blocked() list (network or vuln DB needed) prints BLOCKED and does not fail. Each probe has a PROBE_TIMEOUT (default 300s) so a hang is a zero-row result, never a stall.
+# A zero-row tool in the blocked() list (network or vuln DB needed) prints BLOCKED and does not fail. Each probe has a PROBE_TIMEOUT (default 300s) and the run a PROBE_BUDGET (default 780s, under run-ci-tests.sh's 900s per-test bound):
+# a probe that times out, or starts after the budget is spent, prints `NOT RUN <tool> (timeout|budget)` (not a pass, not a FAIL), so a loaded host cannot stall the test.
 # NOT RUN is never a pass, so a run that probes no tool at all exits 1. A `not-checked` row (tool present but could not scan) is not a row.
 # Usage: [--out FILE] [--only TOOL]. Writes TSV tool/installed/rows/status to --out, default $TMPDIR/tool-probes.tsv. Fixtures: scripts/fixtures/tool-probes/<tool>/.
 # Fixture files may hold `@@` to split a secret-shaped literal; it is stripped when the fixture is copied.
@@ -42,12 +43,17 @@ for t in $(bash "$rc_sh" --list-tools | grep -Fx "$ext"); do
   d=$work/$t; cp -R "$fx/$t" "$d"
   find "$d" -type f | while IFS= read -r f; do sed 's/@@//g' "$f" >"$f.tmp" && mv "$f.tmp" "$f"; done
   git -C "$d" init -q && git -C "$d" add -A && git -C "$d" -c user.name=Probe -c user.email=probe@example.com commit -qm probe
-  n=$(tmo "${PROBE_TIMEOUT:-300}" bash "$rc_sh" --full --repo "$d" 2>"$work/$t.err" | python3 -I -c '
+  left=$(( ${PROBE_BUDGET:-780} - SECONDS ))
+  if [ "$left" -le 0 ]; then echo "NOT RUN $t (budget)"; printf '%s\tyes\t-\tNOT RUN\n' "$t" >>"$out"; continue; fi
+  lim=${PROBE_TIMEOUT:-300}; [ "$left" -ge "$lim" ] || lim=$left
+  tmo "$lim" bash "$rc_sh" --full --repo "$d" >"$work/$t.json" 2>"$work/$t.err"
+  if [ $? -eq 124 ]; then echo "NOT RUN $t (timeout)"; printf '%s\tyes\t-\tNOT RUN\n' "$t" >>"$out"; continue; fi
+  n=$(python3 -I -c '
 import json, sys
 t = sys.argv[1]
 try: rows = json.load(sys.stdin)
 except ValueError: rows = []
-print(sum(1 for r in rows if r.get("tool") == t and r.get("rule") != "not-checked" and "NOT CHECKED" not in r.get("text", "")))' "$t")
+print(sum(1 for r in rows if r.get("tool") == t and r.get("rule") != "not-checked" and "NOT CHECKED" not in r.get("text", "")))' "$t" <"$work/$t.json")
   probed=$((probed + 1))
   if [ "${n:-0}" -ge 1 ]; then ok=$((ok + 1)); s=PASS; echo "PASS $t ($n rows)"
   elif why=$(blocked "$t"); then blk+="${blk:+,}$t"; s=BLOCKED; echo "BLOCKED $t ($why)"

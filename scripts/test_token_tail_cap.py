@@ -68,7 +68,7 @@ class LaneTail(unittest.TestCase):
         self.assertEqual(json.loads(json.dumps(big))["lane_tail"]["tail_share_over_cap"], 0.3333)
         text = tr.render_text(big)
         self.assertIn("Lane tail (upper bound, redo cost ignored): 33.3% of lane input-eq is spent beyond the reference cap of 150", text)
-        self.assertIn("Lever: lower LANE_TOOL_CAP (shipped 250) toward p90 300", text)
+        self.assertIn("Lever: lower LANE_TOOL_CAP (shipped 150) toward p90 300", text)
         self.assertIn("lane_cap.py", text)
         small = tr.render_text(report([lane(160, 100), lane(20, 5000)]))  # tail ~0.1%
         self.assertIn("Lane tail", small)
@@ -76,19 +76,19 @@ class LaneTail(unittest.TestCase):
         self.assertNotIn("Lane tail", tr.render_text(report([])))
 
     def test_shipped_cap_read_from_template_and_reported_separately(self):
-        self.assertEqual(tr.shipped_lane_cap(), 250)  # fixtures below assume the template ships 250; update both together
+        self.assertEqual(tr.shipped_lane_cap(), 150)  # the installed default; fixtures below assume it, update both together
         r = report([lane(300, 1000), lane(20, 500)])["lane_tail"]
-        self.assertEqual((r["shipped_cap"], r["tail_share_over_shipped_cap"], r["lanes_over_shipped_cap"]), (250, 0.1111, 1))  # 1000*50/300 / 1500
+        self.assertEqual((r["shipped_cap"], r["tail_share_over_shipped_cap"], r["lanes_over_shipped_cap"]), (150, 0.3333, 1))  # 1000*150/300 / 1500
         self.assertEqual(r["tail_share_over_cap"], 0.3333)
         text = tr.render_text(report([lane(300, 1000), lane(20, 500)]))
-        self.assertIn("11.1% beyond the shipped hook cap of 250 (1 lane over)", text)
+        self.assertIn("33.3% beyond the shipped hook cap of 150 (1 lane over)", text)
 
     def test_lever_keys_on_shipped_cap_not_reference_cap(self):
-        # 200 calls: over the reference cap 150 (25% tail) but under the shipped 250 -> no lever
-        text = tr.render_text(report([lane(200, 1000)]))
-        self.assertIn("25.0% of lane input-eq is spent beyond the reference cap", text)
-        self.assertIn("0.0% beyond the shipped hook cap of 250", text)
+        # the lever keys on the shipped cap: a lane under the shipped 150 gives no lever
+        text = tr.render_text(report([lane(120, 1000)]))
+        self.assertIn("0.0% beyond the shipped hook cap of 150", text)
         self.assertNotIn("Lever: lower LANE_TOOL_CAP", text)
+        self.assertIn("Lever: lower LANE_TOOL_CAP (shipped 150)", tr.render_text(report([lane(200, 1000)])))
 
     def test_unreadable_template_degrades_to_reference_only(self):
         self.assertIsNone(tr.shipped_lane_cap("/nonexistent/settings.json"))
