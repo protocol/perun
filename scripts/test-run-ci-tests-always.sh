@@ -18,9 +18,9 @@ ok $? "runner defines one non-empty always= list"
 case " $ALWAYS " in *" scripts/test-mktemp-tmpdir.sh "*) c=0 ;; *) c=1 ;; esac
 ok $c "the list holds scripts/test-mktemp-tmpdir.sh (the gate the missed failure came from)"
 cheap="$(awk '/^  cheap:/{f=1; next} f && /^  [A-Za-z0-9_-]+:/{exit} f' "$ROOT/.github/workflows/ci.yml")"
-miss=; for t in $ALWAYS; do [ -f "$ROOT/$t" ] && grep -qF "$t" <<<"$cheap" || miss="$miss $t"; done
+miss=; for t in $ALWAYS; do [ -f "$ROOT/$t" ] && { grep -qF "$t" <<<"$cheap" || case "$t" in scripts/ci-tests.d/*) true ;; *) false ;; esac; } || miss="$miss $t"; done
 [ -n "$ALWAYS" ] && [ -n "$cheap" ] && [ -z "$miss" ]
-ok $? "every always entry exists and is run by the cheap job of ci.yml${miss:+ (not:$miss)}"
+ok $? "every always entry exists and is run by the cheap job of ci.yml (or is a ci-tests.d test)${miss:+ (not:$miss)}"
 
 n="$(printf '%s\n' $ALWAYS | wc -l | tr -d ' ')"
 EXP="$(printf '%s\n' $ALWAYS | sort -u | tr '\n' ' ')"       # what ran.log holds when only the always entries ran
