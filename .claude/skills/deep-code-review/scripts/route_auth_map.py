@@ -3,7 +3,7 @@
 
 Read this when you review an API surface for missing authentication or run the anonymous GET sweep in security-appsec.md: a handler that
 mutates state and never touches an identity check is reachable by anyone, and generic linters do not see it. Run
-`python3 -I route_auth_map.py DIR` (add `--privileged` to list privileged routes guarded by authentication alone, with no role, permission or admin check in the handler: admin path segments, role or permission changes, PUT/PATCH/DELETE on `/users/:id` and kin; the same run prints `OWN:` rows, authenticated NestJS writes by client-sent id or of a client-sent owner id whose member and called service method never compare the requester to the owner, and `OWN-CHECKED:` rows naming the check read where they do, see ownership(); add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
+`python3 -I route_auth_map.py DIR` (add `--privileged` to list privileged routes guarded by authentication alone, with no role, permission or admin check in the handler: admin path segments, role or permission changes, PUT/PATCH/DELETE on `/users/:id` and kin; the same run prints `OWN:` rows, authenticated NestJS writes by client-sent id or of a client-sent owner id whose member and called service method never compare the requester to the owner, and `OWN-CHECKED:` rows naming the check read where they do, see ownership(), and a `NOT-CHECKED:` row per file whose route-like decorator gave no route (the handlers under such decorators were not judged; other routes in the file were); add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
 OF AUTHENTICATION: the scan only sees the call shapes listed below.
 
 1. Inventory every handler: Next.js app/**/route.(ts|tsx|js|jsx|mjs) exported GET/POST/PUT/PATCH/DELETE (function, const, destructured or re-exported),
@@ -938,7 +938,7 @@ def scan(root):
 
 def coverage():
     """The coverage line for the last scan(): how many JS/TS files hold a route-like decorator (`@Get|Post|...(`, a ts-rest `@Api|TsRest|TsRestHandler(ref)`) on a line with no row, and the first few."""
-    return "coverage: %d file(s) with route-like decorators this scan skipped%s" % (len(SKIPPED), "".join(" %s:%d" % x for x in SKIPPED[:3]) + (" ..." if len(SKIPPED) > 3 else ""))
+    return "coverage: %d file(s) with route-like decorators this scan skipped%s" % (len(SKIPPED), "".join(" %s:%d" % (cl(f), ln) for f, ln in SKIPPED[:3]) + (" ..." if len(SKIPPED) > 3 else ""))
 
 
 GOCH = r'((?:\.(?:With|Use)\((?:[^()]|\([^()]*\))*\)|\.(?:Group|PathPrefix)\(\s*"[^"]*"\s*\)|\.Subrouter\(\))*)'  # a call chain between receiver and route call: x.With(mw).Group("/a").Get(...)
@@ -1155,9 +1155,10 @@ def privileged(rows):
 
 
 INJ = re.compile(r"@Injectable\s*\([^)]*\)[\s\S]{0,300}?\bclass\s+([$\w]+)")  # a NestJS provider class: the service a controller member delegates to
+TSPARAM = re.compile(r"\bparams\s*(?:\??\.\s*([\w$]+)|:\s*\{\s*([\w$]+)(?=\s*[,}]))")  # a path parameter a ts-rest member reads: `params.uid`, `{ params: { uid } }`
 SVCCALL = re.compile(r"\bthis\.([\w$]+)\.([\w$]+)\s*\(")  # `this.things.update(` in a controller member: field `things`, method `update`
-# a write method call: `.update(`, `.deleteMany(`, Mongoose `.findByIdAndUpdate(` / `.replaceOne(` / `.bulkWrite(`, MikroORM `.nativeDelete(` / `.persistAndFlush(`, TypeORM `.increment(` / `.softRemove(`
-WMETH = r"\.(?:update|upsert|delete|remove|destroy|save|soft(?:Delete|Remove)|create|insert|find\w*And(?:Update|Delete|Remove|Replace)|replaceOne|bulk(?!Get)[A-Z]|native(?:Update|Delete)|persist(?!ence)|(?:in|de)crement(?!al))\w*\s*\("
+# a write method call: `.update(`, `.deleteMany(`, Mongoose `.findByIdAndUpdate(` / `.replaceOne(` / `.bulkWrite(`, MikroORM `.nativeDelete(` / `.persistAndFlush(`, TypeORM `.increment(` / `.softRemove(`, Knex `.del(`, CQRS `commandBus.execute(`
+WMETH = r"\.(?:update|upsert|delete|del(?![\w$])|(?<=commandBus\.)execute|remove|destroy|save|soft(?:Delete|Remove)|create|insert|find\w*And(?:Update|Delete|Remove|Replace)|replaceOne|bulk(?!Get)[A-Z]|native(?:Update|Delete)|persist(?!ence)|(?:in|de)crement(?!al))\w*\s*\("
 WRITE = re.compile(WMETH + r"|\bconnect\s*:")
 REQVAR = r"(?-i:requester|actor|caller|principal|current_?[uU]ser)"  # a variable named for the requester
 REQOBJ = r"(?-i:user|auth|session|req(?:uest)?\.user|me)"  # the signed-in object's usual names
@@ -1286,15 +1287,17 @@ def service_text(root, own, types, cache):
 
 def ownership(rows, root, skip=()):
     """[(row, why, cls, match)] for authenticated NestJS write routes (plain verb decorators and ts-rest) (CWE-639, OWASP API1:2023 BOLA). A row: PUT/PATCH/DELETE on a path with an `:id`
-    parameter, or POST/PUT/PATCH that writes an owner id the client sends (`dto.ownerUid`), with a write call (WMETH: `.update(`, `.delete(`, `.findByIdAndUpdate(`, `.nativeDelete(`, `connect:` ...) in the member or
-    the service methods it calls. Writes WMETH does not name make no row at all (MikroORM `em.flush()` after `wrap(t).assign(dto)`, Knex `.del()`, a CQRS `commandBus.execute(`), and a Mongoose or
+    parameter, or POST/PUT/PATCH that writes an owner id the client sends (`dto.ownerUid`), with a write call
+    (WMETH: `.update(`, `.delete(`, `.findByIdAndUpdate(`, `.nativeDelete(`, Knex `.del(`, a CQRS `commandBus.execute(`, `connect:` ...) in the member or the service methods it calls; a service call whose body service_text() could not read (an inherited
+    base-class method, a generic class whose type has braces, a decorator on the method's line) stays in the member text, so `this.things.update(` is the write. An unresolved ts-rest member (`contract:<key>`)
+    is by id when it reads a path parameter (`params.uid`, `{ params: { uid } }`). Writes WMETH does not name make no row at all (MikroORM `em.flush()` after `wrap(t).assign(dto)`), and a Mongoose or
     MikroORM filter (`findOneAndUpdate({ _id: uid, owner: requester.uid }, dto)`) is no `where`, so its scope is not read and the row stays OWN.
     cls None (an OWN row): nothing read ties the write to the requester. Else the row is OWN-CHECKED, kept with the first check read and match, its text (at most 60 characters):
     `machine` (every class and member `@UseGuards` guard is a MACHINE credential guard: no end user; one user guard beside it keeps the row OWN), `decorator-guard` (guard_decorator() on the class
     decorators and the member span), or `requester-compare` (requester_compare(), OWNCHK from owner_checks in the guard label, class decorators, member or followed service text, all masked,
     with requester_text() names; an OWNCHK where counts only on a model the text writes and, on a path with a record id, only when it names that id). Nothing else counts: a role word, guard-helper call or 403/Forbidden throw in a body (`this.policies`, `hasOwner(t)`, a closed-status ForbiddenException), a string literal,
     a field set from the requester's id outside a where (`updatedBy: requester.uid`, `data: { ownerId: user.id }`) and a service taking a requester argument and never comparing it all keep the row OWN.
-    Auth none or public is route-auth's row, not this one; rows in skip (already PRIV) are dropped. A public or unauthenticated GET on the collection path is named in why, since it hands out the ids.
+    Auth none or public is route-auth's row, not this one; rows in skip ((file, line, route) already PRIV) are dropped, so a member's other paths keep theirs. A public or unauthenticated GET on the collection path is named in why, since it hands out the ids.
     ponytail: text scan, one hop into the service (service_text); a check in a guard class body, a base class or a deeper repository is missed (lead, not proof)."""
     from ownership_sibling_check import OWNER_WORDS  # lazy: only --privileged needs it, and scripts that import this module may ship without it
     bodyowner, ownchk = owner_checks(OWNER_WORDS)
@@ -1302,21 +1305,21 @@ def ownership(rows, root, skip=()):
     out, cache = [], {}
     for r in rows:
         rel, ln, meth, route, lab = r
-        if (rel, ln) not in NESTCTX or (rel, ln) in skip or lab in ("none", "public", "presence-check"): continue
+        if (rel, ln) not in NESTCTX or (rel, ln, route) in skip or lab in ("none", "public", "presence-check"): continue
         hdr, types = NESTCTX[(rel, ln)]
         own = BODY.get((rel, ln), "")
         svc, names = service_text(root, own, types, cache)
         txt = "\n".join((lab, hdr, own, svc))
         ms = set(meth.split("|"))
+        cid = re.findall(r"/:(\w+)", route) or ([a or b for a, b in TSPARAM.findall(mask(own))] if route.startswith("contract:") else [])  # the client id: a path parameter, or what an unresolved ts-rest member reads off `params`
         why = ("client-sent owner id written" if ms & {"POST", "PUT", "PATCH", "ANY"} and bodyowner.search(txt) else
-               "write by client-sent id" if ms & {"PUT", "PATCH", "DELETE", "ANY"} and re.search(r"/:\w+", route) else None)
-        seen = SVCCALL.sub(lambda t: "" if CLS.get(types.get(t[1], "")) or types.get(t[1], "").endswith("Service") else t[0], own) + svc  # a service call is no write; its body is
+               "write by client-sent id" if ms & {"PUT", "PATCH", "DELETE", "ANY"} and cid else None)
+        seen = SVCCALL.sub(lambda t: "" if "%s.%s" % (types.get(t[1], ""), t[2]) in names else t[0], own) + svc  # a service call whose body was read is no write; its body is
         if not why or not WRITE.search(seen): continue
         dm = mask(hdr + "\n" + own)
         gs = [n for n in nest_guards(dm, 0, len(dm)) if n != "new"]
         bt = requester_text(mask(own), mask(txt))
-        cid = re.findall(r"/:(\w+)", route)  # the client id: a path parameter, read as a value (`{ uid }`, `id: uid`, `params.uid`), not a key or a member (`requester.uid`)
-        cv = cid and re.compile(r"(?<![\w$.])(?:params\.)?(?:%s)(?![\w$])(?!\s*:)" % "|".join(cid))
+        cv = cid and re.compile(r"(?<![\w$.])(?:params\.)?(?:%s)(?![\w$])(?!\s*:)" % "|".join(map(re.escape, cid)))
         wr = set(re.findall(r"([\w$]+)\s*" + WMETH, bt))  # the models written
         def where(x):  # the where object of an OWNCHK match (it opens its call's argument); with a path id it must name that id, so a where on another row of a written model
             # (`notification.updateMany({ where: { userId: requester.uid } })`, a lookup without the id) scopes nothing, while a scoped lookup then `save(t)` or `update({ where: { id: t.id } })` keeps its check
@@ -1337,6 +1340,11 @@ def unjudged(root):
     for m, p, f, ln in other_routes(root):
         if any(x not in ("GET", "HEAD", "OPTIONS") for x in m.split("|")): by.setdefault(f, []).append((ln, m, p))
     return [(f, first[0], len(x), first[1], first[2]) for f, x in sorted(by.items()) for first in [min(x)]]
+
+
+def cl(s):
+    """s with every control character (a tab, newline or carriage return in a file name or route) as `?`: review_checks.sh splits a row at tabs and lines, so one would cut it."""
+    return "".join(c if c.isprintable() else "?" for c in s)
 
 
 def main(argv):
@@ -1362,19 +1370,20 @@ def main(argv):
     if "--privileged" in argv[1:]:
         pv = privileged(rows)
         print("heuristic; %d privileged routes with authentication but no role check; silence is not proof" % len(pv), file=sys.stderr)
-        for r, why in pv: print("%s:%d: PRIV: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why))
-        ow = ownership(rows, a[0], {(r[0], r[1]) for r, _ in pv})
+        for r, why in pv: print(cl("%s:%d: PRIV: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why)))
+        ow = ownership(rows, a[0], {(r[0], r[1], r[3]) for r, _ in pv})
         n = sum(1 for x in ow if x[2])
         print("heuristic; %d NestJS write routes with authentication but no requester-to-owner check (OWN), %d with a check the scan read (OWN-CHECKED); silence is not proof" % (len(ow) - n, n), file=sys.stderr)
-        for r, why, cls, hit in ow: print("%s:%d: OWN: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why) if not cls else "%s:%d: OWN-CHECKED: %s %s auth=%s (class=%s; match=%s)" % (*r[:2], *r[2:], cls, hit))
+        for r, why, cls, hit in ow: print(cl("%s:%d: OWN: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why) if not cls else "%s:%d: OWN-CHECKED: %s %s auth=%s (class=%s; match=%s)" % (*r[:2], *r[2:], cls, hit)))
+        for f, ln in SKIPPED: print(cl("%s:%d: NOT-CHECKED: a route-like decorator here gave no route, so the handler under it (and any other unparsed one in this file) was not judged for privilege or ownership; read them" % (f, ln)))
         return 0
     print("heuristic; scanned %d files with %d handlers; silence is not proof of authentication" % (files, len(rows)), file=sys.stderr)
     print(coverage(), file=sys.stderr)
     out = [(r, "HIGH" if (r[4] == "none" or r[4] == "presence-check" and (r[0], r[1]) not in FWDROWS) and any(x != "GET" and (x not in ("HEAD", "OPTIONS") or (r[0], r[1]) not in NESTSAFE) for x in r[2].split("|")) else "INFO") for r in rows]
-    for r, s in out: print("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4]))
+    for r, s in out: print(cl("%s:%d: %s: %s %s auth=%s" % (r[0], r[1], s, r[2], r[3], r[4])))
     hi = [(r, s) for r, s in out if s == "HIGH"]
     uj = unjudged(a[0])
-    for f, ln, n, m, p in uj: print("%s:%d: UNJUDGED: %d route(s) accept state-changing methods here (first %s %s); route-auth does not judge auth for this language, read the handlers" % (f, ln, n, m, p))
+    for f, ln, n, m, p in uj: print(cl("%s:%d: UNJUDGED: %d route(s) accept state-changing methods here (first %s %s); route-auth does not judge auth for this language, read the handlers" % (f, ln, n, m, p)))
     print(json.dumps({"tool": "route_auth_map", "handlers": len(rows), "files": files, "high": len(hi), "unjudged": sum(u[2] for u in uj),
                       "findings": [{"file": r[0], "line": r[1], "severity": s, "message": "%s %s auth=%s" % r[2:]} for r, s in hi]}))
     return 0
