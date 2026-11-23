@@ -3,6 +3,22 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.662.0] — 2026-11-23
+
+### Changed
+- The shipped default `LANE_TOOL_CAP` is now 150 (was 250). In one measured 13-day session the p90 lane was 97 tool calls, and 30 of 682 lanes went past 150 calls and held 13.5% of lane input tokens; the checkpoint fires at 80% (120 calls). An existing `LANE_TOOL_CAP` value is still kept on merge.
+
+### Fixed
+- `pre-push-verify.sh` now stops with one line (`git fetch <remote> <branch>`) when a new branch is pushed, the remote has its default branch, and the local copy of that branch is missing, instead of verifying the branch's whole history, which once took 30 minutes. An empty remote, or one without that branch, still gets the full-history check.
+
+### Fixed
+- `review_checks.sh`: the per-file `B101-summary` and `F821-summary` rows of a test file now carry the `test-path` hint and the ` [test-path]` suffix, as the per-row findings already did.
+- `run-ci-tests.sh --affected`: an always-run `scripts/ci-tests.d` test that a changed file also selects prints its reason once, not twice; the `always=` comment now states the replay it came from.
+- `scripts/test-review-checks-full.sh` runs `review_checks.sh` on a minimal `PATH` (stub scanners, `/usr/bin`, `/bin`), so locally installed scanners no longer run on the stub repo and stall the test.
+
+### Fixed
+- `test-tool-probes.sh` no longer stalls past the 900 s per-test bound on a loaded workstation. A probe that exceeds `PROBE_TIMEOUT`, or starts after the new `PROBE_BUDGET` (default 780 s) is spent, prints `NOT RUN <tool> (timeout)` or `NOT RUN <tool> (budget)` instead of a zero-row FAIL.
+
 ## [1.661.0] — 2026-11-23
 
 ### Added
