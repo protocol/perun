@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import re
 import sys
 import unicodedata
 from pathlib import Path
@@ -111,6 +112,20 @@ def check_findings(data: dict, artifact: Path | None, council: bool) -> None:
         die(1, f"an independent {data['verdict']} requires at least one real finding")
 
 
+_WINDOW = re.compile(r"\d|\b(?:day|week|month|quarter|sprint|release)s?\b", re.I)
+_GO = re.compile(r"\s*go(?:-if)?(?![-\w])", re.I)
+
+
+def is_go(decision) -> bool:
+    """True if a Veche decision starts with the word go or go-if (any case, leading space, ':' ',' '(' or tab after it)."""
+    return bool(_GO.match(str(decision)))
+
+
+def measurable(kills) -> bool:
+    """True if some kill criterion has a digit (number, ISO date) or a window word (day, week, month, quarter, sprint, release) and is not UNVERIFIED."""
+    return any(isinstance(k, str) and _WINDOW.search(k) and not k.lstrip().upper().startswith("UNVERIFIED") for k in kills)
+
+
 def main(argv: list[str]) -> int:
     usage = "usage: validate_verdict.py --file <verdict.json> [--artifact <file>]"
     opts: dict[str, str] = {}
@@ -160,6 +175,8 @@ def main(argv: list[str]) -> int:
         if "decision" in data and verdict in VERDICTS:  # a Veche option decision carries its closers
             if not isinstance(data.get("kill_criteria"), list) or not data["kill_criteria"]:
                 die(1, "a Veche decision requires a non-empty kill_criteria list")
+            if is_go(data["decision"]) and not measurable(data["kill_criteria"]):
+                die(1, "a go or go-if decision requires a measurable kill_criteria entry (a digit, date or window word, not UNVERIFIED)")
             try:
                 datetime.date.fromisoformat(str(data.get("review_date")))
             except ValueError:
