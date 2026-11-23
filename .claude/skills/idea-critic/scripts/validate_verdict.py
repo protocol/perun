@@ -113,7 +113,7 @@ def check_findings(data: dict, artifact: Path | None, council: bool) -> None:
 
 
 _WINDOW = re.compile(r"\d|\b(?:day|week|month|quarter|sprint|release)s?\b", re.I)
-_GO = re.compile(r"\s*go(?:-if)?\b", re.I)
+_GO = re.compile(r"\s*go(?:-if)?(?![-\w])", re.I)
 
 
 def is_go(decision) -> bool:

@@ -117,6 +117,25 @@ class Closers(unittest.TestCase):
         p = subprocess.run([sys.executable, str(SK / "veche.py"), "--due", str(e)], capture_output=True, text=True)
         self.assertEqual((p.returncode, json.loads(p.stdout)), (0, []))
 
+    def test_bad_twin_cmd_quote_fails_before_any_seat_runs(self):
+        d = Path(tempfile.mkdtemp())
+        mark = d / "seat-ran"
+        (d / "seat.py").write_text(f"open({str(mark)!r}, 'w').close()")
+        r = subprocess.run([sys.executable, str(SK / "veche.py"), "--cmd", f"{sys.executable} {d / 'seat.py'}", "--twin",
+                            "--twin-cmd", "echo 'x", "--claim", "c", "--steelman", "s", "--root", str(d),
+                            "--review-date", "2030-01-31", "--option", "go", "--criteria", "impact:1"],
+                           capture_output=True, text=True)
+        rec = json.loads(r.stdout)
+        self.assertEqual((r.returncode, rec["verdict"]), (3, "COULD_NOT_DECIDE"))
+        self.assertIn("--twin-cmd", rec["reason"])
+        self.assertFalse(mark.exists())
+
+    def test_is_go_word_boundary(self):
+        sys.path.insert(0, str(SK))
+        from validate_verdict import is_go
+        self.assertFalse(any(map(is_go, ("go-live", "goal", "go_x"))))
+        self.assertTrue(all(map(is_go, ("go", "go-if x", "Go: y", " go, z", "go (a)", "go\tq"))))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -287,8 +287,11 @@ def run(a, st=None) -> dict:
     cmds = [c for c in a.cmd if c.strip()]
     if not cmds:
         raise Stop("empty --cmd")
-    for c in cmds:
-        shlex.split(c)
+    for flag, c in [("--cmd", c) for c in cmds] + [("--twin-cmd", a.twin_cmd)] * bool(a.twin_cmd):
+        try:
+            shlex.split(c)
+        except ValueError as e:  # fail before any seat runs
+            raise Stop(f"bad {flag} quoting ({e}): {c!r}")
     review = a.review_date or (datetime.date.today() + datetime.timedelta(days=a.review_days)).isoformat()
     datetime.date.fromisoformat(review)
     body = f"CLAIM:\n{a.claim}\n\nSTEELMAN:\n{a.steelman}\n\nPACKET{name}:\n{packet}\n\n"
