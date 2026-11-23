@@ -1,0 +1,2 @@
+### Changed
+- Veche decisions: `validate_verdict.py` now rejects a `go` or `go-if` decision whose `kill_criteria` has no measurable entry (a digit or a window word such as day, week, month, quarter, sprint or release, not `UNVERIFIED`); `veche.py` downgrades such a decision to `flag` and records `decision_downgraded_from`. New `--twin-cmd` and record key `twin_cmd_distinct` show whether the evil twin ran on a different command than every seat, and `veche.py --due DIR` lists records past `review_date` with no `outcome` (no model calls).
