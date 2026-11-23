@@ -445,8 +445,9 @@ class Dropped(unittest.TestCase):
         # a PUT on the collection path takes no record id from the path, and its service writes no client-sent owner id
         self.assertEqual(tiers(controller=CONTROLLER.replace("@Put(':uid')", "@Put()")), (NOPUT, {}))
 
-    def test_unscanned_service_reads_nothing(self):
-        self.assertEqual(all_rows({"src/things/things.controller.ts": CONTROLLER}), {})
+    def test_unscanned_service_call_is_the_write(self):
+        # with no service body to read, the member's `this.things.update(` is the write; the create sends no owner id
+        self.assertEqual(sorted(k[2] for k in own_rows({"src/things/things.controller.ts": CONTROLLER})), ["DELETE", "PUT"])
 
     def test_priv_row_is_not_repeated(self):
         self.assertEqual(tiers(controller=CONTROLLER.replace("@Put(':uid')", "@Put('users/:uid')")), (NOPUT, {}))
