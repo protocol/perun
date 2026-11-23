@@ -24,6 +24,9 @@ neither and it convenes (legacy behavior), so declare them.
 | Pre-mortem | every seat answers `premortem`, `kill_criterion`, `leading_metric` (recorded in `premortems`), then the twin's |
 | Deterministic aggregate; the chair breaks ties | decision = highest weighted mean of seat scores (0-5 per option and criterion); a tie goes to `--chair`'s own top option, then to option order (`do-nothing` first). The verdict tally ties go to the chair, else `HOLD` > `REVISE` > `PASS_TO_USER` |
 | Output: decision, kill criteria, metric, review date | record keys `decision`, `kill_criteria`, `kill_criteria_by_lens` (`{lens: text}`), `leading_metric`, `review_date` (`--review-date`, else today + `--review-days`, default 30). A closer no seat supplied is `UNVERIFIED`, never invented |
+| A go needs a measurable tripwire | a Veche `go`/`go-if ...` needs a `kill_criteria` entry with a digit or window word (day, week, month, quarter, sprint, release) not starting `UNVERIFIED`, else `validate_verdict.py` rejects it and veche.py downgrades it to `flag`, original in `decision_downgraded_from` |
+| Distinct twin | `--twin-cmd <cmd>` (needs `--twin`, not blank) sets the twin command; `twin_cmd_distinct` is true when its `shlex.split` argv differs from every seat command: a different command, not necessarily model |
+| Follow-through | `veche.py --due DIR` lists records with ISO `review_date` <= today and no outcome (`null` = none); bad files get `error`; non-dir exits 2; no model calls |
 | Convene only when it matters | the gate above |
 
 ## Run
