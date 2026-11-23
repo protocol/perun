@@ -707,6 +707,24 @@ elif kind == "semgrep":
     ps = sorted({pfx(f) for f in fs} - {""}, key=len, reverse=True)
     cid = lambda i: next((i[len(q):] for q in ps if isinstance(i, str) and i.startswith(q)), i)
     rows = [(r["path"], r["start"]["line"], cid(r.get("check_id")), (r.get("extra") or {}).get("message", "") + cw(((r.get("extra") or {}).get("metadata") or {}).get("cwe"), (r.get("extra") or {}).get("severity"))) for r in d["results"]]
+    def ex4(f):
+        """True when the nearest package.json at or above f (inside the repo) that names express pins major 4 and no manifest on the way lists
+        express-async-errors, express-promise-router or @awaitjs/express. Express 5 and those three forward a rejected async handler to the error
+        middleware; an unknown spec (latest, *, workspace) or no manifest: False."""
+        q, top = os.path.dirname(os.path.realpath(f)), os.path.realpath(os.getcwd())  # realpath: /tmp and /private/tmp are one dir
+        while q == top or q.startswith(top + os.sep):
+            try: j = json.load(open(os.path.join(q, "package.json"), encoding="utf-8"))
+            except (OSError, ValueError): j = {}
+            dep = {}
+            for k in ("devDependencies", "dependencies"):
+                v = j.get(k) if isinstance(j, dict) else None
+                dep.update(v if isinstance(v, dict) else {})
+            if {"express-async-errors", "express-promise-router", "@awaitjs/express"} & dep.keys(): return False
+            if "express" in dep: return bool(re.match(r"\D*4(\D|$)", str(dep["express"])))
+            if q == top: break
+            q = os.path.dirname(q)
+        return False
+    rows = [x for x in rows if x[2] != "perun.js.express4-async-throw" or ex4(x[0])]  # semgrep cannot read package.json: the rule's rows stand only under Express 4
 elif kind in ("codeql", "flawfinder", "devskim", "tfsec", "ansible-lint", "pmd", "solhint", "slither", "skillspector"):  # SARIF: ruleId, uri, startLine and the query's message text (never source); results with no location raise: unparseable, never dropped
     for run in d["runs"]:
         for r in run["results"]:
