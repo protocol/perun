@@ -125,12 +125,13 @@ if [ "$affected" -eq 1 ]; then
   done <<<"$changed" >"$tsv"
   pick "$tsv" 1
   # Gates CI's "cheap" job runs on every PR over the whole tree, so no test names the file one of them flags (a line ending in a bare mktemp in
-  # comms_lint.py failed CI after a 59/59 affected pass). Seconds each, need no regenerated file; the scripts/ci-tests.d entries are repo-invariant tests (<=1 s) that failed 27 of 30 recent per-PR runs on PRs that never touched them (skill_index.py --check does: left to CI).
+  # comms_lint.py failed CI after a 59/59 affected pass). Seconds each, need no regenerated file; the scripts/ci-tests.d entries are repo-invariant tests (<=1 s) that were the 5 selector misses of a replay of recent per-PR CI failures (10 sampled escapes, 6 resolved; skill_index.py --check does: left to CI).
   always='scripts/test-mktemp-tmpdir.sh scripts/check_section_pointers.py .claude/skills/deep-code-review/scripts/derived_numbers.py scripts/ci-tests.d/tests-wired.sh scripts/ci-tests.d/skill-index-split.sh scripts/ci-tests.d/review-appsec-split.sh scripts/ci-tests.d/perpr-shard-balance.sh scripts/ci-tests.d/wave-ak-mechanisms.sh'
   al=
   for t in $always; do
     [ -f "$t" ] || continue  # absent (a fixture repo): skipped
-    al="$al $t" why_all="$why_all  always→${t}"$'\n'
+    case " $sel " in *" $t "*) ;; *) why_all="$why_all  always→${t}"$'\n' ;; esac  # already selected by name: that reason is the one printed
+    al="$al $t"
     case "$t" in  # a ci-tests.d entry is already in total, and may be selected by name too: run it once, in the always slot
       scripts/ci-tests.d/*) sel=" $(printf '%s\n' $sel | grep -vxF "$t" | tr '\n' ' ')" ;;
       *) total=$((total + 1)) ;;

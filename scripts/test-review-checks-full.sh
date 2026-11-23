@@ -27,7 +27,7 @@ chmod +x "$T/bin/gitleaks"; export STUB_LOG="$T/log"
 cd "$T"; mkdir r; cd r; g init -q .
 echo old >old.txt; g add -A; g commit -q -m base; git branch -f base
 echo new >new.txt; g add -A; g commit -q -m change
-run() { PATH="$T/bin:$PATH" bash "$RC" "$@" 2>"$T/err" || true; }
+run() { PATH="$T/bin:/usr/bin:/bin" bash "$RC" "$@" 2>"$T/err" || true; }
 has() { grep -q "\"file\": \"$1\"" <<<"$out"; }
 : >"$T/log"; out=$(run --base base); has new.txt && ! has old.txt; chk $? "diff mode scans only changed files"
 : >"$T/log"; out=$(run --full); has new.txt && has old.txt; chk $? "--full scans an untouched file"

@@ -65,6 +65,14 @@ git -C "$R" checkout -q zzz.txt; echo 2 >"$R/foo.txt"; run "$BASE"
 [ "$RC" -eq 0 ] && [ "$RAN" = "$EXP2" ] && [ "$(tail -1 "$R/ran.log")" = a ]
 ok $? "a file a ci-test names selects that test; the always entries run beside it, first"
 
+# an always entry under ci-tests.d that a changed file also selects by name: runs once, reason printed once
+CT="$(printf '%s\n' $ALWAYS | grep '^scripts/ci-tests\.d/' | head -1)"
+if [ -n "$CT" ]; then printf '%s\n' '# covers foo.txt' "echo $CT >>ran.log" >"$R/$CT"; fi
+run "$BASE"
+[ -n "$CT" ] && [ "$RC" -eq 0 ] && [ "$(grep -cxF "$CT" "$R/ran.log")" -eq 1 ] && [ "$(grep -cF "→$CT" <<<"$OUT")" -eq 1 ]
+ok $? "an always ci-tests.d entry also selected by name runs once and its reason prints once"
+git -C "$R" checkout -q -- "$CT"
+
 git -C "$R" checkout -q foo.txt; run "$BASE"
 [ "$RC" -eq 0 ] && [ -z "$RAN" ] && grep -q 'affected: 0 of .* tests (no changed files' <<<"$OUT"
 ok $? "nothing changed: the always entries do not run either"

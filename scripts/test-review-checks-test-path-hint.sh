@@ -12,13 +12,13 @@ chk() { total=$((total + 1)); if [ "$1" -eq 0 ]; then pass=$((pass + 1)); echo "
 g() { git -c user.email=t@example.com -c user.name=t "$@"; }
 mkdir "$T/bin"
 printf '#!/usr/bin/env bash\ncat "$STUB_SG_JSON"\n' >"$T/bin/semgrep"
-printf '#!/usr/bin/env bash\necho %s\n' "'{\"results\":[{\"filename\":\"tests/conf.py\",\"line_number\":1,\"test_id\":\"B105\"},{\"filename\":\"tests/b.py\",\"line_number\":1,\"test_id\":\"B307\"}],\"errors\":[]}'" >"$T/bin/bandit"
+printf '#!/usr/bin/env bash\necho %s\n' "'{\"results\":[{\"filename\":\"tests/conf.py\",\"line_number\":1,\"test_id\":\"B105\"},{\"filename\":\"tests/b.py\",\"line_number\":1,\"test_id\":\"B307\"},{\"filename\":\"tests/test_x.py\",\"line_number\":1,\"test_id\":\"B101\"},{\"filename\":\"tests/test_x.py\",\"line_number\":2,\"test_id\":\"B101\"},{\"filename\":\"tests/test_x.py\",\"line_number\":3,\"test_id\":\"B101\"},{\"filename\":\"tests/test_x.py\",\"line_number\":4,\"test_id\":\"B101\"},{\"filename\":\"src/x.py\",\"line_number\":1,\"test_id\":\"B101\"},{\"filename\":\"src/x.py\",\"line_number\":2,\"test_id\":\"B101\"},{\"filename\":\"src/x.py\",\"line_number\":3,\"test_id\":\"B101\"},{\"filename\":\"src/x.py\",\"line_number\":4,\"test_id\":\"B101\"}],\"errors\":[]}'" >"$T/bin/bandit"
 printf '#!/usr/bin/env bash\necho %s\n' "'[{\"file\":\"tests/Dockerfile\",\"line\":1,\"code\":\"DL3007\",\"level\":\"warning\",\"message\":\"latest tag\"}]'" >"$T/bin/hadolint"
 chmod +x "$T/bin/"*; export PATH="$T/bin:$PATH" STUB_SG_JSON="$T/sg.json"
 mkdir "$T/r"; cd "$T/r"; g init -q .; g commit -q --allow-empty -m base; git branch -f base
 FILES=(tests/a.py src/a.py tests/s.py tests/f.py test-x.mjs src/foo.test.js spec/models/user_spec.rb docs/a.py examples/a.py lib/contest.py
   app/pod_spec.py svc/ab_test.py openapi/spec/schema.py src/latest/a.py lib/latest_x.py)
-for f in "${FILES[@]}" tests/Dockerfile tests/conf.py tests/b.py; do mkdir -p "$(dirname "$f")"; case "$f" in *Dockerfile) echo 'FROM alpine:latest' ;; *) echo 'x = 1' ;; esac >"$f"; done
+for f in "${FILES[@]}" tests/Dockerfile tests/conf.py tests/b.py tests/test_x.py src/x.py; do mkdir -p "$(dirname "$f")"; case "$f" in *Dockerfile) echo 'FROM alpine:latest' ;; *) echo 'x = 1' ;; esac >"$f"; done
 g add -A; g commit -q -m files
 # One semgrep row per file at line 1; tests/s.py carries a secret-class rule and tests/f.py a message an earlier hint already claimed.
 python3 - "$STUB_SG_JSON" "${FILES[@]}" <<'PY'
@@ -41,6 +41,8 @@ for f in src/a.py docs/a.py examples/a.py lib/contest.py app/pod_spec.py svc/ab_
 r=0; q semgrep tests/s.py - || r=$?; chk $r "secret-class rule in tests/ is not hinted"
 r=0; q bandit tests/conf.py - || r=$?; chk $r "numeric secret id (bandit B105) in tests/ is not hinted"
 r=0; q bandit tests/b.py test-path || r=$?; chk $r "a non-secret bandit id in tests/ is hinted"
+r=0; q bandit tests/test_x.py test-path || r=$?; chk $r "a B101-summary row for a test file is hinted"
+r=0; q bandit src/x.py - || r=$?; chk $r "a B101-summary row for a shipped path is not hinted"
 r=0; q hadolint tests/Dockerfile - || r=$?; chk $r "non-code-pattern tool (hadolint) in tests/ is not hinted"
 r=0; q semgrep tests/f.py likely-fixture || r=$?; chk $r "an already-hinted row keeps its first hint"
 r=0; python3 -c 'import json,sys; sys.exit(0 if sum(x["tool"] == "semgrep" for x in json.loads(sys.stdin.read())) == int(sys.argv[1]) else 1)' "${#FILES[@]}" <<<"$out" || r=$?
