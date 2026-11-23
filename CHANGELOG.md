@@ -3,6 +3,21 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.661.0] — 2026-11-23
+
+### Added
+- `perun.js.parser-code-engine` (ERROR, CWE-94 and CWE-502) reports text the code did not write itself (a function argument, a request value or an uploaded file) reaching a front-matter or YAML parser that can run code: gray-matter unless its `engines` option replaces the `javascript` engine (front matter opened with `---js` is evaluated, and gray-matter merges any other engine keys over its defaults), yaml-front-matter `loadFront`, front-matter with `allowUnsafe: true`, and js-yaml `load` or `safeLoad` with a full or js-types schema. `yaml.load` and `jsyaml.load` stay with `perun.js.deserialize-eval`, so one call is reported once. Text read from a repository file is not reported; a file read from an upload's temporary path is.
+- `perun.js.express4-async-throw` (WARNING, CWE-248 and CWE-755) reports `decodeURIComponent`, `decodeURI`, `JSON.parse` or `new URL` on request input outside `try` in an async Express handler or middleware, or in a same-file helper one calls outside `try`. Next.js route handler exports (`GET`, `POST` and the other method names) and `pages/api` routes are skipped. Express 4 does not catch the rejected promise, so one malformed request can stop the process. `review_checks.sh` keeps these rows only where the nearest `package.json` that names express pins major 4 and no manifest lists `express-async-errors`, `express-promise-router` or `@awaitjs/express`.
+- Fixtures, a held-out yaml-front-matter case and the gate check live in `scripts/test_semgrep_js_parser_express4.py`.
+
+### Fixed
+- `route_auth_map.py --privileged` now prints an `OWN:` row for three kinds of authenticated NestJS write by client-sent id that used to print nothing. A Knex `.del()` or a CQRS `commandBus.execute(...)` now counts as a write call. When the scan cannot read the service method a controller member calls (a method inherited from a base class, a class declared with a generic whose type has braces, or a decorator on the same line as the method), the member's own call, such as `this.things.update(...)`, now counts as the write, where it used to be dropped as a service call. An unresolved ts-rest member (`contract:<key>`) that reads a path parameter (`params.uid` or `{ params: { uid } }`) is now treated as a write by id. A MikroORM `em.flush()` after `wrap(t).assign(dto)` still makes no row.
+- A member that serves a privileged path and a plain one, such as `@Put(['users/:uid', ':uid'])`, no longer loses its `OWN:` row for the plain path because the privileged path has a `privileged-route` row.
+- A tab, newline or carriage return in a file name or route printed raw and split the row where `review_checks.sh` reads it. Row output now prints those characters as `?`.
+
+### Added
+- `route_auth_map.py --privileged` prints a `NOT-CHECKED:` row for each file with a route-like decorator that gave no route (for example an abstract base controller with no `@Controller`), so its unparsed handlers were not judged (other routes in the file still are). `review_checks.sh --full` reports it as a tool `privileged-route`, rule `not-checked` row. Before, such a file was silent.
+
 ## [1.660.0] — 2026-11-22
 
 ### Added
