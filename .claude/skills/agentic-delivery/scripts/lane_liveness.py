@@ -275,11 +275,20 @@ def process_ancestors(pid=None, ps_bin="ps"):
     hangs or fabricates a parent. Bounded to 10_000 hops as a cycle guard; any
     `ps` failure, a blank/unparseable ppid, or reaching pid <= 1 stops the walk
     and returns whatever ancestors were already found — it never invents one.
+    With `pid=None` only the direct parent is seeded from `os.getppid()` (no
+    `ps` needed), so the caller's parent is excluded even when the sandbox
+    denies `ps`. With `ps` denied, an intermediate process (make/npm/driver)
+    between the worktree shell and the guard still makes the guard refuse (safe
+    side), so start the guard directly from the worktree shell.
     """
     if pid is None:
         pid = os.getpid()
-    seen = {pid}
-    current = pid
+        parent = os.getppid()
+        seen = {pid, parent} if parent > 1 else {pid}
+        current = parent if parent > 1 else pid
+    else:
+        seen = {pid}
+        current = pid
     for _ in range(10_000):
         try:
             proc = subprocess.run([ps_bin, "-o", "ppid=", "-p", str(current)],
@@ -647,16 +656,22 @@ def _selftest() -> int:
             _module.cwd_pids = _orig_cwd_pids
 
         # process_ancestors: always includes the caller's own pid, and a
-        # broken `ps_bin` fails closed (returns just the seed pid) instead of
-        # hanging or fabricating a parent.
+        # broken `ps_bin` fails closed (returns the seed pid plus its getppid
+        # parent) instead of hanging or fabricating a parent.
         me = process_ancestors()
         total[0] += 1
         if os.getpid() not in me:
             failures.append(f"process-ancestors-includes-self: {me!r}")
         broken = process_ancestors(ps_bin=os.path.join(tmp, "no-such-ps"))
         total[0] += 1
-        if broken != {os.getpid()}:
+        pp = os.getppid()
+        expected = {os.getpid(), pp} if pp > 1 else {os.getpid()}
+        if broken != expected:
             failures.append(f"process-ancestors-broken-ps-fails-closed: {broken!r}")
+        explicit = process_ancestors(pid=os.getpid(), ps_bin=os.path.join(tmp, "no-such-ps"))
+        total[0] += 1
+        if explicit != {os.getpid()}:
+            failures.append(f"process-ancestors-explicit-pid-no-ppid-seed: {explicit!r}")
 
         # QUIET: a live process, but no recent product signal — quiet-minutes
         # set to 0 so even a just-written file does not count as "recent",
