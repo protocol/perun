@@ -1,2 +1,0 @@
-### Added
-- `route_auth_map.py --privileged` prints three more report-only lead classes for authenticated NestJS write routes: `MASS` / `MASS-CHECKED` (client body reaches an ORM write with a privileged field and no strip or pick, CWE-915), `IDMIX` (access check uses the path id while the write's `where` uses a body id) and `CHILD` (child row's parent key comes from the body with no tie to the path parent, CWE-639). Leads, not proof; each class has a positive and a fixed-negative fixture in `scripts/test_route_authz_leads.py`.
