@@ -2055,3 +2055,34 @@ LLM01:2026 Prompt Injection; LLM02:2026 Sensitive Information Disclosure; LLM03:
 URL: https://genai.owasp.org/llm-top-10/ (on 2026-11-18 this landing page still headlines 2025 and does not mention the 2026 edition as official).
 
 LLM01:2025 Prompt Injection; LLM02:2025 Sensitive Information Disclosure; LLM03:2025 Supply Chain; LLM04:2025 Data and Model Poisoning; LLM05:2025 Improper Output Handling; LLM06:2025 Excessive Agency; LLM07:2025 System Prompt Leakage; LLM08:2025 Vector and Embedding Weaknesses; LLM09:2025 Misinformation; LLM10:2025 Unbounded Consumption.
+
+## Verified by direct fetch (2026-11-24) — standards coverage table (`references/standards-coverage.md`)
+
+IDs, names and the mapped or referenced CWEs the coverage table cites as "via CWE-n". Each URL below was fetched and verified on 2026-11-24.
+
+- https://top10.owasp.org/2025 — OWASP Top 10:2025, A01:2025 to A10:2025 names. Fetched + verified 2026-11-24.
+- https://top10.owasp.org/2025/A01_2025-Broken_Access_Control/ — mapped CWEs include CWE-639, CWE-862, CWE-863, CWE-284. Fetched + verified 2026-11-24.
+- https://top10.owasp.org/2025/A02_2025-Security_Misconfiguration/ — mapped CWEs include CWE-611. Fetched + verified 2026-11-24.
+- https://top10.owasp.org/2025/A03_2025-Software_Supply_Chain_Failures — six mapped CWEs, including CWE-1395 Dependency on Vulnerable Third-Party Component. Fetched + verified 2026-11-24.
+- https://top10.owasp.org/2025/A05_2025-Injection/ — mapped CWEs include CWE-78. Fetched + verified 2026-11-24.
+- https://top10.owasp.org/2025/A06_2025-Insecure_Design/ — 39 mapped CWEs, including CWE-434. Fetched + verified 2026-11-24.
+- https://top10.owasp.org/2025/A07_2025-Authentication_Failures/ — mapped CWEs include CWE-306 and CWE-798. Fetched + verified 2026-11-24.
+- https://top10.owasp.org/2025/A08_2025-Software_or_Data_Integrity_Failures/ — mapped CWEs include CWE-502. Fetched + verified 2026-11-24.
+- https://top10.owasp.org/2025/A04_2025-Cryptographic_Failures/ — mapped CWEs include CWE-327 and CWE-347. Fetched + verified 2026-11-24.
+- https://top10.owasp.org/2025/A09_2025-Security_Logging_and_Alerting_Failures/ — mapped CWEs include CWE-532. Fetched + verified 2026-11-24.
+- https://top10.owasp.org/2025/A10_2025-Mishandling_of_Exceptional_Conditions/ — mapped CWEs include CWE-636. Fetched + verified 2026-11-24.
+- https://api-security.owasp.org/editions/2023/en/0x11-t10 — OWASP API Security Top 10 2023, API1:2023 to API10:2023 names. Fetched + verified 2026-11-24.
+- https://api-security.owasp.org/editions/2023/en/0xa2-broken-authentication/ — references CWE-204 Observable Response Discrepancy and CWE-307 Improper Restriction of Excessive Authentication Attempts. Fetched + verified 2026-11-24.
+- https://api-security.owasp.org/editions/2023/en/0xa3-broken-object-property-level-authorization/ — references CWE-915. Fetched + verified 2026-11-24.
+- https://api-security.owasp.org/editions/2023/en/0xa4-unrestricted-resource-consumption/ — references CWE-770. Fetched + verified 2026-11-24.
+- https://api-security.owasp.org/editions/2023/en/0xa8-security-misconfiguration/ — references CWE-942. Fetched + verified 2026-11-24.
+- https://api-security.owasp.org/editions/2023/en/0xa9-improper-inventory-management/ — references CWE-1059. Fetched + verified 2026-11-24.
+- https://api-security.owasp.org/editions/2023/en/0xaa-unsafe-consumption-of-apis/ — references CWE-20. Fetched + verified 2026-11-24.
+- https://cwe.mitre.org/data/definitions/20.html — CWE-20 Improper Input Validation, abstraction Class. Fetched + verified 2026-11-24.
+- https://cwe.mitre.org/data/definitions/77.html — CWE-77 Improper Neutralization of Special Elements used in a Command, abstraction Class. Fetched + verified 2026-11-24.
+- https://cwe.mitre.org/data/definitions/200.html — CWE-200 Exposure of Sensitive Information to an Unauthorized Actor, abstraction Class. Fetched + verified 2026-11-24.
+- https://cwe.mitre.org/data/definitions/862.html — CWE-862 Missing Authorization, abstraction Class. Fetched + verified 2026-11-24.
+- https://cwe.mitre.org/data/definitions/863.html — CWE-863 Incorrect Authorization, abstraction Class. Fetched + verified 2026-11-24.
+- https://cwe.mitre.org/data/definitions/284.html — CWE-284 Improper Access Control, abstraction Pillar. Fetched + verified 2026-11-24.
+- https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html — CWE Top 25 2025 (page last updated 2025-12-15), all 25 IDs and names in rank order. Fetched + verified 2026-11-24.
+- https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/ — OWASP Top 10 for LLM Applications 2026; the page text does not list the titles, so LLM01:2026 to LLM10:2026 come from the table of contents of the PDF it links. Fetched + verified 2026-11-24.

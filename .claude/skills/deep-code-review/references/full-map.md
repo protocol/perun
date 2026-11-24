@@ -148,7 +148,7 @@ Lazy phase files: `method-diff.md` on `DIFF`/`FILE`; `method-lenses.md` when a c
 | 5 Report | Chat BLUF ≤30 lines + full table out-of-tree; in-repo `code-review/` only on confirmation | `method-report.md`, `report-format.md`, `example-review-report.md` |
 | 6 Imprint | Opt-in `AGENTS.md` + gates; detect-and-stop if present; pair each standard with a gate | `docs-and-dx.md` |
 
-Scanners: `tool-hub.md`; NOT RUN: `scripts/provision_tools.sh`.
+Scanners: `tool-hub.md`; NOT RUN: `scripts/provision_tools.sh`. Read `standards-coverage.md` when asked which OWASP, API, CWE Top 25 or LLM class a hub scanner checks.
 
 Phase 6 imprints **this project's review bar**, never delivery (an overlay
 below, on the owner's yes).
