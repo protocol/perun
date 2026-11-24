@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# review_checks.sh hub routing for slither (Solidity) and the scorecard NOT CHECKED row, with stub binaries on a hermetic PATH
+# review_checks.sh hub routing for slither (Solidity) and the scorecard --list-tools row, with stub binaries on a hermetic PATH
 # (no real tool, no network): slither rows are kept, a missing slither is "NOT CHECKED", a crash, a missing or wrong-shape SARIF file
 # and a non-zero exit with no row are "not run", never clean; a committed slither.config.json is never loaded (the stub applies slither's
-# own lookup: no --config-file means ./slither.config.json); scorecard is never executed, only named under --full or --hygiene.
+# own lookup: no --config-file means ./slither.config.json).
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh}
@@ -75,12 +75,6 @@ printf '#!/bin/sh\nexit 0\n' >"$T/bin/solc"; chmod +x "$T/bin/solc"
 printf '{"compile_custom_build": "touch pwned"}\n' >slither.config.json; printf 'pragma solidity ^0.8.1;\n' >contracts/T.sol; G add . && G commit -q -m cfg
 : >"$HUB_LOG"; SL_RC=0 run
 ran slither && [ ! -e "$T/pwned" ] && grep -q -- '--config-file /' "$HUB_LOG" && ! grep -q -- '--config-file [^/]' "$HUB_LOG" && ok "slither: a repo slither.config.json is never loaded (empty temp config passed)" || bad "slither config: pwned=$([ -e "$T/pwned" ] && echo yes || echo no) $(grep '^slither' "$HUB_LOG")"
-# scorecard: never executed, named only under --full or --hygiene
-: >"$HUB_LOG"; run
-! grep -q 'NOT CHECKED: scorecard' "$T/err" && ! grep -q '^scorecard' "$HUB_LOG" && ok "scorecard: silent in a plain diff run" || bad "plain: $(grep scorecard "$T/err")"
-run --hygiene
-grep -q 'NOT CHECKED: scorecard (OpenSSF Scorecard has no offline mode' "$T/err" && jq -e 'any(.[]; .tool=="scorecard" and .rule=="not-checked")' "$T/out" >/dev/null && ! grep -q '^scorecard' "$HUB_LOG" && ok "scorecard --hygiene: NOT CHECKED row, binary never run" || bad "hygiene: $(grep scorecard "$T/err")"
-run --full
-grep -q 'NOT CHECKED: scorecard' "$T/err" && ! grep -q '^scorecard' "$HUB_LOG" && ok "scorecard --full: NOT CHECKED, binary never run" || bad "full"
+# scorecard routing lives in test-review-checks-scorecard-local.sh
 bash "$RC" --list-tools | grep -qx slither && bash "$RC" --list-tools | grep -qx scorecard && ok "--list-tools names slither and scorecard" || bad "list-tools"
 [ "$fail" = 0 ]
