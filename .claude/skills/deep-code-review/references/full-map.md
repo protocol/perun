@@ -136,7 +136,7 @@ Principles 4-6, 10 and 11 (do no harm, respect the existing design, rank, outcom
 Work phases in order. Skip only when it provably does not apply, and say so.
 **Full procedure:** `method.md` — **read it when** executing a
 review after the first-response block.
-Lazy phase files: `method-diff.md` on `DIFF`/`FILE`; `method-lenses.md` when a call site may bypass or re-derive a shared helper or predicate, or a changed unit lacks a covering test.
+Lazy phase files: `method-diff.md` on `DIFF`/`FILE`; `method-lenses.md` when a call site may bypass/re-derive a shared helper/predicate, or no test covers a changed unit.
 
 | Phase | Does | Load |
 |---|---|---|
@@ -189,7 +189,7 @@ applicable domains. Language footguns:
 | T | Multi-tenancy & isolation | `domain-t.md` (multi-tenant; Prisma: `tenant_scope_check`) |
 | W | Workflows, jobs & scheduling | `domain-w.md` (when the target runs cron, queues, or multi-step workflows) |
 
-Also: `app-pentest.md` (live app), `supply-chain-check.md` (advisories, Actions), `dynamic-probe.md`.
+Also: `app-pentest.md` (live), `supply-chain-check.md` (advisories, Actions), `dynamic-probe.md`; `standards-coverage.md` (OWASP/CWE class).
 
 ---
 
@@ -217,13 +217,13 @@ Google eng-practices: approve once the change **definitely improves overall
 code health** — never wave a Blocker/Critical, never approve a regression on
 another axis (principle 4).
 
-Report templates (also `machine-report.md`, `whole-project-report.md`): `full-map-report.md` — **read** at Phase 5.
+Report templates (also `machine-report.md`, `whole-project-report.md`): `full-map-report.md`: **read** at Phase 5.
 
 ---
 
 ## Project stage (calibrates urgency, not severity)
 
-Stage never relaxes the next rule. Model, table and guardrails 1 and 3: `full-map-principles.md` — **read** when setting or reading `STAGE`.
+Stage never relaxes the next rule. Model, table, guardrails 1, 3: `full-map-principles.md`, **read** when setting/reading `STAGE`.
 
 2. **Security, secret-exposure, and data-loss/integrity findings never relax** (nor safety) — a
    `prototype` with an exposed credential is still Critical. These have no "relax"
@@ -235,7 +235,7 @@ Stage never relaxes the next rule. Model, table and guardrails 1 and 3: `full-ma
 
 Two checklists; they fail independently.
 
-(a) Review method complete: `full-map-report.md` — **read** when closing a review.
+(a) Review method complete: `full-map-report.md`, **read** when closing.
 
 **(b) Target ship-ready**
 - Builds and runs with the documented one-command setup.
