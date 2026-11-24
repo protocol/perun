@@ -3,7 +3,7 @@
 never hold the sha, so the next run is an incremental delta, end to end on the real review_checks.sh too; ansible-lint and psalm
 "changed in this diff" rows are ENVGAP rows, and every such row forces one --full rescan because that tool never read the range; a
 missing ruby-advisory-db is a missing tool, and provisioning the DB rescans once; a rescan reports a noise-path finding that only its
-diff scan sees. Every sweep runs with an isolated environment (PATH t/bin:/usr/bin:/bin, HOME in the temp dir)."""
+diff scan sees; the CodeQL license-gate row is an ENVGAP row and REVIEW_CODEQL is scrubbed from the scanner env. Every sweep runs with an isolated environment (PATH t/bin:/usr/bin:/bin, HOME in the temp dir)."""
 import atexit, json, os, shutil, subprocess, sys, tempfile, types
 
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".claude", "skills", "deep-code-review", "scripts")
@@ -15,6 +15,7 @@ NOISE = "noise path excluded by REVIEW_NOISE_RE, not scanned"
 GUARDDOG = "SKIPPED: --full has no base to find newly added packages against"
 JSX = "2 .js files hold JSX or markup that node --check cannot parse (first 3: a.js, b (1).js); a JSX-aware linter or the project build judges them"
 RUBY_DB = "no local ruby-advisory-db: bundler-audit would download one"
+CODEQL = "off by default (license: OSI-licensed code only); set REVIEW_CODEQL=1"
 CONFIG = {"ansible-lint": ".ansible-lint or ansible.cfg changed in this diff: its config is code, not run",
           "psalm": "psalm.xml or composer.json changed in this diff: its config is code, not run",
           "eslint-security": "eslint config or package.json changed in this diff: not run",
@@ -115,6 +116,13 @@ def test_config_changed_rows_are_envgap_then_one_full_rescan():
         assert e.calls()[n:] == [f"--timeout {a.FULL_TIMEOUT} --full"], f"{tool} never read that range: the next run must rescan --full: {e.calls()[n:]}"
         n = len(e.calls()); e.sweep()
         assert len(e.calls()) == n, f"{tool}: one rescan, then idle"
+
+
+def test_codeql_license_gate_is_scrubbed_and_envgap():
+    assert "REVIEW_CODEQL" in a.SCRUB, "an operator REVIEW_CODEQL=1 must never reach a sweep of private repos"
+    assert f'not-checked "{CODEQL}"' in HUB_SRC, "text drifted from the hub"
+    assert a.env_gap(gap("codeql", CODEQL)) and not a.env_gap(gap("codeql", CODEQL, "a.py")) and not a.env_gap(gap("cosign", CODEQL))
+    assert not a.env_gap(gap("codeql", "install: brew install codeql")), "a missing codeql is a missing tool, not a license gap"
 
 
 def test_missing_ruby_advisory_db_is_a_missing_tool():
