@@ -9,7 +9,7 @@ RC=${REVIEW_CHECKS:-$ROOT/.claude/skills/deep-code-review/scripts/review_checks.
 T=$(mktemp -d "${TMPDIR:-/tmp}/scrisk.XXXXXX") && [ -n "$T" ] && [ -d "$T" ] || { echo "no temp dir" >&2; exit 1; }
 trap 'cd /; rm -r -- "$T"' EXIT; fail=0
 ok() { echo "ok - $1"; }; bad() { echo "FAIL - $1"; fail=1; }
-export HTTPS_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 PERUN_HEAVY_DIR="$T/heavy" CQ_LOG="$T/cq.log" DCR_CACHE_ROOT="$T/nocache" DCR_USER_BIN=
+export REVIEW_CODEQL=1 HTTPS_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 PERUN_HEAVY_DIR="$T/heavy" CQ_LOG="$T/cq.log" DCR_CACHE_ROOT="$T/nocache" DCR_USER_BIN=
 mkdir -p "$T/repo" "$T/bin" "$T/base" "$T/sys" && cd "$T/repo"
 git init -q . && case "$(git rev-parse --show-toplevel)" in "$(cd "$T" && pwd -P)"/*) ;; *) echo "refusing: repo not under temp dir" >&2; exit 1 ;; esac
 G() { git -c user.email=t@example.com -c user.name=t "$@"; }

@@ -8,7 +8,7 @@
 # Tools (linters, gitleaks, trufflehog, osv-scanner, semgrep, trivy): see references/method-situational.md. Each runs only when
 # installed and only on matching changed files. Secrets are redacted and never printed; trufflehog runs offline (`--no-verification --no-update`) over the changed files (every tracked file under --full),
 # 200 per call, with `--sarif`: unlike `--json` that output has no Raw, RawV2, Redacted or SecretParts, so a row carries the detector, file and line only; it skips the same template paths as gitleaks (no repo .gitleaks.toml) and retries a failed call file by file (a file that still fails is a not-checked row); osv-scanner runs offline on a warm DB (env REVIEW_OSV_DB_DIR, an exported OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY that already holds a seeded database,
-# else the cache provision_tools.sh --print warms; no flag needed), or against the OSV API with env REVIEW_OSV=1 (network), and is not run with neither;
+# else the cache provision_tools.sh --print warms; no flag needed), or against the OSV API with env REVIEW_OSV=1 (network), and is not run with neither (exit 128, no package sources: skipped); codeql runs only with env REVIEW_CODEQL=1 (its license allows OSI-licensed code only), else one not-checked row;
 # a lockfile with no osv-scanner/trivy result falls back to npm/pnpm/pip-audit (opt-in: REVIEW_OSV=1 or REVIEW_OSV_DB_DIR; it queries the registry), else a not-checked row; trivy is offline (TRIVY_DISABLE_TELEMETRY=true stops its telemetry ping).
 # semgrep uses repo rules, else the bundled taint rules plus the p/default pack (never `--config auto`; the local snapshot provision_tools.sh --print warms stands in for the registry pack when present).
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
@@ -947,6 +947,7 @@ elif have osv-scanner; then
   while IFS= read -r f; do
     run_one osv-scanner osv-scanner ${osvx[@]+"${osvx[@]}"} --format json -L "./$f" || continue
     if [ "$rc" = 127 ] && grep -q 'no offline version' "$out"; then case "$gap" in *"osv-scanner ("*) ;; *) miss osv-scanner "no offline DB for the ecosystem of $f: run bash $here/provision_tools.sh --print $PWD" ;; esac; fi
+    [ "$rc" != 128 ] || { skip osv-scanner "no package sources"; continue; } # exit 128: osv-scanner found nothing to scan in this file
     scan_ok osv-scanner 1 || continue # exit 1 = vulnerabilities found
     sjson osv "$out" >"$tsv" || { skip osv-scanner "unparseable output for $f"; continue; }
     cov+="$f"$'\n'; while IFS=$'\t' read -r _ l r m i; do add osv-scanner "$f" "$l" "$r" "$m" "$i"; done <"$tsv"
@@ -1150,7 +1151,8 @@ hubcmd() {
     tflint) cmd=(tflint --format=json --no-color --call-module-type=none "--chdir=${1%/*}" "--filter=${1##*/}"); okrc="2" ;; # exit 2 = issues found, 1 = error (cmd/cli.go); no --init: plugins are never downloaded
     kube-linter) cmd=(kube-linter lint --format json "$@"); okrc="1" ;; # exit 1 = lint reports (command.go returns "found N lint errors")
     # the report goes to a fresh dir under $td; --disable-secrets (gitleaks owns secrets); DISABLE_CRASH_REPORT=false stops the only documented phone-home; exit 20-60 = results by severity (docs.kics.io/latest/results)
-    kics) mkdir -p "$td/kics"; jf=$td/kics/results.json; okrc="20 30 40 50 60"; cmd=(env DISABLE_CRASH_REPORT=false kics scan -p "$(IFS=,; echo "$*")" --no-progress --disable-secrets --report-formats json -o "$td/kics") ;;
+    kics) mkdir -p "$td/kics"; jf=$td/kics/results.json; okrc="20 30 40 50 60"; kq=(); kr=$(realpath "$(command -v kics)" 2>/dev/null) && [ -n "$kr" ] && kd=$(dirname "$kr")/../share/kics/assets/queries && [ -d "$kd" ] && kq=(-q "$kd") # no realpath: no -q (never a "." path relative to the scanned repo); brew kics exits 126 "unable to find queries" outside its install dir; -q only when the brew share dir exists
+      cmd=(env DISABLE_CRASH_REPORT=false kics scan ${kq[@]+"${kq[@]}"} -p "$(IFS=,; echo "$*")" --no-progress --disable-secrets --report-formats json -o "$td/kics") ;;
     # exit 1 = lint errors; the project's own binary only (never npx, no network); -f json is the built-in formatter
     eslint-security) cmd=(./node_modules/.bin/eslint -f json "$@"); okrc="1" ;;
     licensee) cmd=(licensee detect --json "$1") ;;
@@ -1674,12 +1676,13 @@ if [ -n "$drf" ]; then
   fi
 fi
 
-# CodeQL (route-only, never bundled): Python and JavaScript/TypeScript need no build. One database per language over the whole repo, analyzed with the language's default queries and --no-download
+# CodeQL (route-only, never bundled; opt-in with REVIEW_CODEQL=1 because its license allows OSI-licensed code only): Python and JavaScript/TypeScript need no build. One database per language over the whole repo, analyzed with the language's default queries and --no-download
 # (a cold query-pack cache is a "not run", never clean); in diff mode only rows on changed files are kept. Not installed: NOT CHECKED, only when a changed file matches. Heavy, so it takes the lease.
 # Flags verified against the CodeQL CLI manual (database create / analyze) on 2026-11-12; --format=sarifv2.1.0, not sarif-latest (whose version drifts per release).
 for cqp in 'python;\.py$' 'javascript-typescript;\.(js|jsx|mjs|cjs|ts|tsx)$'; do
   cql=${cqp%%;*}; cqf=$(changed "${cqp#*;}"); [ -n "$cqf" ] || continue
   hubtool=codeql
+  if [ "${REVIEW_CODEQL:-}" != 1 ]; then echo "NOT CHECKED: codeql (off by default (license: OSI-licensed code only); set REVIEW_CODEQL=1)" >&2; add codeql "" 0 not-checked "off by default (license: OSI-licensed code only); set REVIEW_CODEQL=1"; hubtool=; break; fi
   if ! command -v codeql >/dev/null; then echo "NOT CHECKED: codeql (install: brew install codeql)" >&2; add codeql "" 0 not-checked "install: brew install codeql"; missing+=" codeql"; miss codeql "install: brew install codeql"; hubtool=; break; fi
   lease_take || { skip codeql "heavy lease full"; hubtool=; break; }
   case " $wired " in *" codeql "*) ;; *) wired+=" codeql" ;; esac # counted only when installed: a missing tool is NOT CHECKED above, so it never skews the ran/wired ratio of repos that do not use it

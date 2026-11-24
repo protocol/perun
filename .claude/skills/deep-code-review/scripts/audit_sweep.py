@@ -110,8 +110,9 @@ def git(repo, *a):
 
 
 # env never passed to the scanner: tokens (main() adds the --token-env variable), the opt-ins that make the hub run repo code, and
-# REVIEW_SCORECARD (it needs GITHUB_TOKEN, which is scrubbed, so it could only ever add a blocking "needs GITHUB_TOKEN" gap)
-SCRUB = {"GH_TOKEN", "GITHUB_TOKEN", "REVIEW_TEST_CMD", "REVIEW_FUZZ", "REVIEW_SCORECARD"}
+# REVIEW_SCORECARD (it needs GITHUB_TOKEN, which is scrubbed, so it could only ever add a blocking "needs GITHUB_TOKEN" gap), and
+# REVIEW_CODEQL (its license allows OSI-licensed code only, so an operator shell opt-in must never reach a sweep of private repos)
+SCRUB = {"GH_TOKEN", "GITHUB_TOKEN", "REVIEW_TEST_CMD", "REVIEW_FUZZ", "REVIEW_SCORECARD", "REVIEW_CODEQL"}
 
 
 def scan1(repo, *flags):
@@ -228,7 +229,9 @@ ENV = {"osv-scanner": (lit("REVIEW_OSV not set; osv-scanner queries the OSV API"
        "staticcheck": (lit("no go.mod at repo root", "go toolchain missing"), True),
        "retire": (lit("REVIEW_RETIRE_JSREPO names no local jsrepository.json (never fetched)"), True),
        "cargo-deny": (lit("cargo toolchain missing"), True),
-       "cargo-audit": (re.compile(re.escape("no local advisory DB at ") + ".+" + re.escape("/advisory-db (never fetched)")), True)}
+       "cargo-audit": (re.compile(re.escape("no local advisory DB at ") + ".+" + re.escape("/advisory-db (never fetched)")), True),
+       # license gate: codeql runs only with REVIEW_CODEQL=1 (OSI-licensed code only); a rescan cannot close it
+       "codeql": (lit("off by default (license: OSI-licensed code only); set REVIEW_CODEQL=1"), True)}
 ENV.update({n: (lit(f"{st} flags: skipped by default"), True) for n, (st, _) in HUB.items() if st != "verified" and n not in ENV})  # hub `nc "$hs flags: ..."`
 
 
