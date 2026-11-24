@@ -1,0 +1,2 @@
+Tool hub: `scorecard` now runs offline (`--local`, four checks: Binary-Artifacts, Dangerous-Workflow, Token-Permissions, Pinned-Dependencies) and gives one row per check scoring below 10 (whole-repo, not diff-scoped; all checks inconclusive is not run); a missing binary stays a NOT CHECKED row with an install hint.
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 71643→72095 scorecard offline wiring docs
