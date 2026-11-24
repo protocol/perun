@@ -3,7 +3,7 @@
 
 Read this when you review an API surface for missing authentication or run the anonymous GET sweep in security-appsec.md: a handler that
 mutates state and never touches an identity check is reachable by anyone, and generic linters do not see it. Run
-`python3 -I route_auth_map.py DIR` (add `--privileged` to list privileged routes guarded by authentication alone, with no role, permission or admin check in the handler: admin path segments, role or permission changes, PUT/PATCH/DELETE on `/users/:id` and kin; the same run prints `OWN:` rows, authenticated NestJS writes by client-sent id or of a client-sent owner id whose member and called service method never compare the requester to the owner, and `OWN-CHECKED:` rows naming the check read where they do, see ownership(), and a `NOT-CHECKED:` row per file whose route-like decorator gave no route (the handlers under such decorators were not judged; other routes in the file were); add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
+`python3 -I route_auth_map.py DIR` (add `--privileged` to list privileged routes guarded by authentication alone, with no role, permission or admin check in the handler: admin path segments, role or permission changes, PUT/PATCH/DELETE on `/users/:id` and kin; the same run prints `OWN:` rows, authenticated NestJS writes by client-sent id or of a client-sent owner id whose member and called service method never compare the requester to the owner, and `OWN-CHECKED:` rows naming the check read where they do, see ownership(), and a `NOT-CHECKED:` row per file whose route-like decorator gave no route (the handlers under such decorators were not judged; other routes in the file were), then `MASS:` / `MASS-CHECKED:` rows (client body reaches an ORM write with a privileged field and no strip or pick, CWE-915), `IDMIX:` rows (access check on the path id, write `where` on a body id) and `CHILD:` rows (child row parent key from the body, no tie to the path parent), see authz_leads(); add `--paths` to list the GET and ANY routes, one per line, or `--all` to list every route and method as `METHOD /path file:line`). A row is a lead to verify, and SILENCE IS NOT PROOF
 OF AUTHENTICATION: the scan only sees the call shapes listed below.
 
 1. Inventory every handler: Next.js app/**/route.(ts|tsx|js|jsx|mjs) exported GET/POST/PUT/PATCH/DELETE (function, const, destructured or re-exported),
@@ -1260,6 +1260,9 @@ def body_open(m, pc):
         if s <= 0: return -1
 
 
+SVC_CACHE = {}  # file -> (masked, masked keeping strings), shared by ownership() and authz_leads() so each service file is masked once
+
+
 def service_text(root, own, types, cache):
     """(text, names) of the @Injectable service methods a NestJS member calls as `this.<field>.<method>(` (field typed in its class), with the same-class helpers they call as
     `this.<helper>(`; names lists `Class.method` per method read. ponytail: one hop, by class name (CLS: a name two files define reads both, the controller's import is not resolved), no inheritance or deeper repository layer; a method it cannot find adds nothing."""
@@ -1274,11 +1277,12 @@ def service_text(root, own, types, cache):
         e = close_of(m, b) if b >= 0 and m[b:b + 1] == "{" else -1
         if e < 0: continue
         def body(n):
+            if (f, types[fld], n) in cache: return cache[f, types[fld], n]
             for t in re.finditer(r"^[ \t]*(?:(?:public|private|protected|static|async|override)\s+)*%s\s*(?:<[^>()]*>)?\s*\(" % re.escape(n), m[:e], re.M):
                 if t.start() < b: continue
                 pc = close_of(m, t.end() - 1); o = body_open(m, pc) if pc > 0 else -1
-                if o > 0: return mk[t.start():close_of(m, o) + 1]
-            return ""
+                if o > 0: cache[f, types[fld], n] = mk[t.start():close_of(m, o) + 1]; return cache[f, types[fld], n]
+            cache[f, types[fld], n] = ""; return ""
         t = body(meth)
         if t: names.append("%s.%s" % (types[fld], meth))
         out += [t] + [body(h) for h in dict.fromkeys(re.findall(r"\bthis\.([\w$]+)\s*\(", t)) if h != meth]
@@ -1302,7 +1306,7 @@ def ownership(rows, root, skip=()):
     from ownership_sibling_check import OWNER_WORDS  # lazy: only --privileged needs it, and scripts that import this module may ship without it
     bodyowner, ownchk = owner_checks(OWNER_WORDS)
     lists = {r[3]: r[4] for r in rows if r[2] in ("GET", "ANY") and r[4] in ("public", "none")}
-    out, cache = [], {}
+    out, cache = [], SVC_CACHE
     for r in rows:
         rel, ln, meth, route, lab = r
         if (rel, ln) not in NESTCTX or (rel, ln, route) in skip or lab in ("none", "public", "presence-check"): continue
@@ -1332,6 +1336,104 @@ def ownership(rows, root, skip=()):
         lst = lists.get(re.sub(r"/:\w+$", "", route)) if why.startswith("write") else None
         out.append((r, "%s; no requester-to-owner check in the member%s%s" % (why, "".join(" or " + n for n in names), "; ids listed by GET %s auth=%s" % (re.sub(r"/:\w+$", "", route), lst) if lst else ""), cls, hit))
     return out
+
+
+PRIVF = r"(?:[Ii]s_?)?(?:roles?|[Aa]dmin|[Vv]erified|[Ss]uperuser|[Ss]taff)|is[A-Z]\w*Admin|(?:owner|creator|author)\w*(?:Uid|Id)|createdBy\w*"  # a field a client must not set on its own record
+DEADGATE = re.compile(r"\bif\s*\((?:(?!\bif\b)[^;{]){0,200}?\bisEmpty\(\s*[\w$.?]+\.(?:(?:[Ii]s_?)?(?:[Aa]dmin|[Vv]erified|[Ss]uperuser|[Ss]taff)|is[A-Z]\w*Admin)\s*\)[^;{]*")  # lodash isEmpty on a boolean/number is always true: a gate on it never fires
+PRIVSTR = re.compile(r"""['"](%s)['"]""" % PRIVF)  # the field named in a string: an allowlist (`allowed = [..., 'role']`)
+STRIP = re.compile(r"\bdelete\s+[\w$.?]+\.(?:%s)\b|\b(?:omit|pick|pickBy|plainToInstance|plainToClass)\s*\(|\b(?:%s)\s*:\s*undefined\b|\{[^{}]*\b(?:%s)\b[^{}]*\.\.\.[\w$]+\s*\}\s*=" % (PRIVF, PRIVF, PRIVF))  # the field removed (`delete x.role`, `{ role, ...rest } = dto`), or only chosen fields kept
+BCALL = re.compile(r"@Body\s*\(([^)]*)\)\s*([\w$]+)\s*\??\s*(?::\s*([\w$]+))?")  # `@Body() dto: CreateThingDto`: (argument, name, type)
+PCALL = re.compile(r"@Param\s*\([^)]*\)\s*([\w$]+)")
+AUTHFN = re.compile(r"\b[\w$]*(?:[Aa]uthori[sz]|[Aa]llowed|[Pp]ermit|[Vv]alidate|[Vv]erify|[Ee]nsure|[Cc]heck|[Aa]ssert|can[A-Z]|is\w*(?:Member|Admin|Owner|Editor|Lead))[\w$]*\s*\(([^()]*)\)")  # a call named for an access check, with its arguments
+SINK = re.compile(r"(?:data\s*:\s*|\.\.\.\s*)([\w$]+)\b(?![\w$.(\[])")  # a whole name passed as write data: `data: dto`, `...dto`
+DTOS = {}  # type name -> property names of a class of that name, filled lazily by dto_props()
+
+
+def roots(e):
+    """The identifier an expression starts from (`await`, `(`, `{ ...` skipped): `data?.uid` -> data."""
+    m = re.match(r"[\s(]*(?:await\s+)?(?:\{\s*\.\.\.\s*)?([\w$]+)", e)
+    return m[1] if m else ""
+
+
+def taint(txt, seeds, loose=False):
+    """Names that hold the seed data, a set: seeds, then every name assigned, destructured, looped or mapped from one, and every parameter a call passes one to (by position, signatures read from txt). loose: an assignment whose right side merely uses a seed counts (`const row = await this.find(pathId)`, the record the path id loads). ponytail: names are global in txt, no scopes."""
+    s, sigs = set(seeds), {}
+    if not s: return s
+    hit = (lambda e: re.search(r"(?<![\w$.])(?:%s)\b" % "|".join(map(re.escape, s)), e)) if loose else (lambda e: roots(e) in s)
+    for m in re.finditer(r"(?<![\w$.])([\w$]+)\s*\(([^()]*)\)\s*(?::[^{;=]*)?\{", txt):
+        if m[1] not in ("if", "for", "while", "switch", "catch"): sigs[m[1]] = [re.split(r"[:=?]", a)[0].strip() for a in m[2].split(",")]
+    for _ in range(3):
+        n = len(s)
+        for m in re.finditer(r"(?:const|let|var)\s+(\w[\w$]*)\s*(?::[^=\n]+)?=\s*([^;\n]*)", txt):
+            if hit(m[2]): s.add(m[1])
+        for m in re.finditer(r"(?:const|let|var)\s+\{([^}]*)\}\s*=\s*([^;\n]*)", txt):
+            if roots(m[2]) in s: s |= {x.split(":")[-1].split("=")[0].strip().lstrip(".") for x in m[1].split(",")}
+        for m in re.finditer(r"for\s*\(\s*(?:const|let|var)\s+(\w[\w$]*)\s+of\s+([^)]*)\)", txt):
+            if roots(m[2]) in s: s.add(m[1])
+        for m in re.finditer(r"([\w$]+)(?:\?\.|\.)(?:map|forEach|filter|flatMap|some|every)\(\s*(?:async\s*)?\(?\s*([\w$]+)", txt):
+            if m[1] in s: s.add(m[2])
+        for m in re.finditer(r"(?<![\w$])(?:this\.)?(?:[\w$]+\.)?([\w$]+)\s*\(([^()]*)\)", txt):
+            for i, a in enumerate(m[2].split(",")):
+                if m[1] in sigs and i < len(sigs[m[1]]) and roots(a) in s and sigs[m[1]][i]: s.add(sigs[m[1]][i])
+        if len(s) == n: break
+    return s - {""}
+
+
+def dto_props(root, name):
+    """Property names declared in `class <name> {` anywhere under root (the tree is walked once, then cached). Empty for a name no class has."""
+    if not DTOS:
+        DTOS[None] = set()
+        for d, ds, fs in os.walk(root):
+            ds[:] = [x for x in ds if x not in SKIP_DIR]
+            for f in fs:
+                if not f.endswith((".ts", ".js")) or TEST.search(f): continue
+                t = read(root, os.path.relpath(os.path.join(d, f), root)) or ""
+                for m in re.finditer(r"\bclass\s+(\w[\w$]*)\b[^{]*\{", t):
+                    DTOS[m[1]] = DTOS.get(m[1], set()) | set(re.findall(r"^\s*(?:readonly\s+)?([\w$]+)\s*[?!]?\s*[:=]", t[m.end():close_of(t, m.end() - 1)], re.M))
+    return DTOS.get(name, set())
+
+
+def authz_leads(rows, root):
+    """[(row, kind, why)] for authenticated NestJS write routes (CWE-915 mass assignment, CWE-639, CWE-863; OWASP API3:2023, API1:2023). Report-only leads, never proof: a text scan of the member and one hop into the service (service_text), client names followed by taint().
+    MASS: the client body reaches a write as data (`data: dto`, `...dto`, or a name tainted by it) and can carry a privileged field (PRIVF: role, admin, verified, owner or createdBy ids) that the @Body type declares, a string allowlist names or the code reads off the body, with no removal or pick of it (STRIP). MASS-CHECKED: the same, but an `if` naming the field throws Forbidden or 401/403 (the check is read, not judged: a wrong one still passes, except a gate on lodash `isEmpty(x.<boolean field>)`, which never fires and counts as no check).
+    IDMIX: an access-check call (AUTHFN) takes a path value while a write's `where` keys id/uid on a client body value and names no path value, so the check covers another record than the write.
+    CHILD: a write sets a parent key (`teamUid`, `projectId`) from a client body value on a route with a path parameter, no path value sits in that write and no statement compares the body key to the path value, so the child can land under a parent the requester was never checked against.
+    ponytail: names are global per route, one service hop, no inheritance; silence is not proof."""
+    out, cache = [], SVC_CACHE
+    for r in rows:
+        rel, ln, meth, route, lab = r
+        if (rel, ln) not in NESTCTX or lab in ("none", "public", "presence-check") or not set(meth.split("|")) & {"POST", "PUT", "PATCH", "DELETE", "ANY"}: continue
+        types = NESTCTX[(rel, ln)][1]
+        own = BODY.get((rel, ln), "")
+        txt = own + "\n" + service_text(root, own, types, cache)[0]
+        bs = BCALL.findall(txt)
+        body = taint(txt, {b[1] for b in bs})
+        path = taint(txt, set(PCALL.findall(txt)) or set(re.findall(r"/:(\w+)", route)), True)
+        wr = [(m.end(), close_of(txt, m.end() - 1)) for m in re.finditer(WMETH, txt)]
+        if not body or not wr: continue
+        pp = "|".join(map(re.escape, sorted(path))) or "\0"
+        def pathy(t): return re.search(r"(?<![\w$.])(?:%s)\b(?!\s*:)" % pp, t)  # a path value used, not a key of that name
+        priv = {p for b in bs for p in dto_props(root, b[2]) if re.fullmatch(PRIVF, p)} | set(PRIVSTR.findall(txt)) | set(re.findall(r"\b(?:%s)\.(%s)\b" % ("|".join(map(re.escape, sorted(body))), PRIVF), txt))
+        if priv and any(m[1] in body for a, e in wr for m in SINK.finditer(txt[a:e])) or priv and re.search(r"\b(?:copyObj|assign)\w*\(\s*(?:%s)\b" % "|".join(map(re.escape, sorted(body))), txt):
+            if not STRIP.search(txt):
+                chk = re.search(r"\bif\s*\((?:(?!\bif\b)[\s\S]){0,200}?\b(?:%s)\b(?:(?!\bif\b)[\s\S]){0,200}?(?:Forbidden|40[13]|[Uu]nauthori)" % "|".join(map(re.escape, sorted(priv))), DEADGATE.sub("if (DEADGATE)", txt))
+                out.append((r, "MASS-CHECKED" if chk else "MASS", "client body reaches a write with %s unfiltered%s" % ("/".join(sorted(priv)), "; a check naming it is read" if chk else "")))
+        authed = {a for m in AUTHFN.finditer(txt) for a in re.findall(r"[\w$]+", m[1]) if a in path}
+        for a, e in wr:
+            w = re.search(r"where\s*:\s*\{", txt[a:e])
+            if w and authed:
+                o = a + w.end() - 1
+                wt = txt[o:close_of(txt, o) + 1]
+                for k, v in re.findall(r"([\w$]+)\s*:\s*([^,{}]+)", wt):
+                    if k in ("id", "uid", "_id") and roots(v) in body and not pathy(wt):
+                        out.append((r, "IDMIX", "access check on path value %s but the write's where %s is client body value %s" % ("/".join(sorted(authed)), k, v.strip())))
+                        break
+            ks = [(k, v.replace("?.", ".")) for k, v in re.findall(r"\b([\w$]*(?:Uid|Id))\s*:\s*([\w$]+(?:\??\.[\w$]+)+)", txt[a:e]) if k not in ("id", "uid")]
+            ks = [x for x in ks if roots(x[1]) in body]
+            if ks and path and not pathy(txt[a:e]) and not any(re.search(r"[\w$]+\.%s\s*[!=]==?\s*(?:%s)\b|(?<![\w$.])(?:%s)\s*[!=]==?\s*[\w$]+\.%s\b" % (k, pp, pp, k), txt.replace("?.", ".")) for k, _ in ks):
+                out.append((r, "CHILD", "write sets parent key %s from client body value %s; no path value in the write and no comparison to one" % ks[-1]))  # the last key: a composite where lists the parent last
+    seen = set()
+    return [x for x in out if not (x[:2] in seen or seen.add(x[:2]))]
 
 
 def unjudged(root):
@@ -1375,6 +1477,9 @@ def main(argv):
         n = sum(1 for x in ow if x[2])
         print("heuristic; %d NestJS write routes with authentication but no requester-to-owner check (OWN), %d with a check the scan read (OWN-CHECKED); silence is not proof" % (len(ow) - n, n), file=sys.stderr)
         for r, why, cls, hit in ow: print(cl("%s:%d: OWN: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why) if not cls else "%s:%d: OWN-CHECKED: %s %s auth=%s (class=%s; match=%s)" % (*r[:2], *r[2:], cls, hit)))
+        az = authz_leads(rows, a[0])
+        print("heuristic; %d NestJS write routes with a client-writable privileged field, a path-vs-body id mismatch or a body-set parent key (MASS, IDMIX, CHILD); silence is not proof" % len(az), file=sys.stderr)
+        for r, k, why in az: print(cl("%s:%d: %s: %s %s auth=%s (%s)" % (*r[:2], k, *r[2:], why)))
         for f, ln in SKIPPED: print(cl("%s:%d: NOT-CHECKED: a route-like decorator here gave no route, so the handler under it (and any other unparsed one in this file) was not judged for privilege or ownership; read them" % (f, ln)))
         return 0
     print("heuristic; scanned %d files with %d handlers; silence is not proof of authentication" % (files, len(rows)), file=sys.stderr)
