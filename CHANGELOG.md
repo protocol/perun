@@ -3,6 +3,12 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.664.0] — 2026-11-24
+
+### Added
+- `route_auth_map.py --privileged` prints three more report-only lead classes for authenticated NestJS write routes: `MASS` / `MASS-CHECKED` (client body reaches an ORM write with a privileged field and no strip or pick, CWE-915), `IDMIX` (access check uses the path id while the write's `where` uses a body id) and `CHILD` (child row's parent key comes from the body with no tie to the path parent, CWE-639). Leads, not proof; each class has a positive and a fixed-negative fixture in `scripts/test_route_authz_leads.py`.
+- Bench (before 1.663.0 → after): seeded fixtures 0/14 → 14/14 positive leads, 0/12 on fixed negatives; private regression set (counts only) 0/3 → 3/3 vulnerable flagged, 0/3 fixed; 27-repo corpus +9 leads (4 known true positives, 5 noise), 0 true positives lost, p90 runtime 1.0006x.
+
 ## [1.663.0] — 2026-11-23
 
 ### Changed
