@@ -3,6 +3,11 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.666.0] — 2026-11-24
+
+Tool hub: `scorecard` now runs offline (`--local`, four checks: Binary-Artifacts, Dangerous-Workflow, Token-Permissions, Pinned-Dependencies) and gives one row per check scoring below 10 (whole-repo, not diff-scoped; all checks inconclusive is not run); a missing binary stays a NOT CHECKED row with an install hint.
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 71643→72095 scorecard offline wiring docs
+
 ## [1.665.0] — 2026-11-24
 
 ### Added
