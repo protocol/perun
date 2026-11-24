@@ -3,6 +3,11 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.665.0] — 2026-11-24
+
+### Added
+- `route_auth_map.py --privileged` MASS / MASS-CHECKED / IDMIX / CHILD leads now also cover Express handlers (`router|app.post|put|patch`, `req.body` / `req.params`) and Next.js route handlers and `pages/api` (`await req.json()`, `params`) feeding Prisma, Sequelize, TypeORM or Mongoose writes. Precision: a `pick`/`omit`/`delete` of another object no longer hides a MASS lead; MASS-CHECKED needs the Forbidden throw inside the `if` that names the field, or inside an `if` that calls an access check (`isMemberAllowedToEdit(...)`) before the write; a one-statement `if` ends at `;` or a newline; a body value in `where:` is not written data; Express `req.query` counts as client-chosen (only `pages/api` maps it to a path segment); a bare `req.params` passed to a validator is no access check; CHILD singularizes plurals (`categories`/`categoryId`, `people`/`personId`, `team-members`/`teamMemberId`), fires only on a body key naming a path parent (not a sibling reference like `memberUid`), and reads shorthand and destructured keys; a positional filter object (Mongoose `findOneAndUpdate`, TypeORM `update` first argument) is not written data; MASS-CHECKED also reads a throw in the `else` branch, and a check before the write that does not name the field says so in the row; NestJS MASS also fires on an owner-id field (`authorMemberUid`, `ownerId`) read off the body inside a `data:` object, never from `where:` and silent behind an Admin guard. New class MASS-ADMIN (info) replaces MASS behind a class- or method-level `@UseGuards(...Admin...)` on NestJS. Limits: Express/Next `data: req.body` with no privileged field named anywhere stays silent; Mongoose/Sequelize coverage is partial: `create`/`save`/`upsert` with a trailing options argument are not flagged, and a whole `req.body` passed positionally is not flagged (Prisma `data: req.body` is); the owner-id path also matches any `*MemberUid`/`*TeamUid`/`userId` reference. Tests are in `scripts/test_route_authz_leads.py`: a positive and a fixed negative for MASS, IDMIX and CHILD on Express and Next.js, MASS-CHECKED and MASS-ADMIN on the cases above, and three regression pins.
+
 ## [1.664.0] — 2026-11-24
 
 ### Added
