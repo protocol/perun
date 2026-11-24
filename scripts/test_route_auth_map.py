@@ -1701,7 +1701,7 @@ MUTANTS = [
     (r'login)\w*", re.I)', r'login)", re.I)'), (r'login)\w*", re.I)', r'login)\w*")'),
     # REQ: the request's user, not a mere import of the name
     (r'"\b((?:req', r'"((?:req'), (r'g\.user)\b")', r'g\.user)")'),
-    (r"(?:req|request)", "(?:request)"), (r"(?:req|request)", "(?:req)"),
+    (r"((?:req|request)\.(?:user", r"((?:request)\.(?:user"), (r"((?:req|request)\.(?:user", r"((?:req)\.(?:user"),
     (r"(?:user|auth|member(?!\s*=(?!=)))", "(?:user)"), (r"(?:user|auth|member(?!\s*=(?!=)))", "(?:auth)"), (r"member(?!\s*=(?!=))", "member"),
     (r"|current_user(?=\.)", ""), (r"current_user(?=\.)", "current_user"), (r"|g\.user)", ")"),
     # token: a header read plus a secret comparison on one line
@@ -1832,7 +1832,7 @@ MUTANTS = [
     ("sc = refusing_ifs(m, mk)", "sc = []"), ("sc = refusing_ifs(m, mk)", "sc = refusing_ifs(m, m)"),
     ("if not any(a < g.start() < b for a, b in sc)", "if not sc"), ("if not any(a < g.start() < b for a, b in sc)", "if any(a < g.start() < b for a, b in sc)"),
     ("a < g.start() < b", "a < g.start()"), ("a < g.start() < b", "g.start() < b"), ("a < g.start() < b", "a < g.end() < b"),
-    (r'r"\bif\s*\("', r'r"\bif\("'), (r'r"\bif\s*\("', r'r"\bif\s+\("'), (r'r"\bif\s*\("', r'r"\bif \("'),
+    (r'r"\bif\s*\(", m)', r'r"\bif\(", m)'), (r'r"\bif\s*\(", m)', r'r"\bif\s+\(", m)'), (r'r"\bif\s*\(", m)', r'r"\bif \(", m)'),
     ("a = t.end() - 1", "a = t.end()"), ("b = close_of(m, a)", "b = close_of(mk, a)"), ("[(a, b) for a, b, s, e in ifs(m)", "[(a, e) for a, b, s, e in ifs(m)"),
     # the body: where it starts, a braced block (not its else) or one statement that ends at `;` or a line break outside brackets
     ("s = b + 1", "s = b"), ("while m[s:s + 1].isspace(): s += 1", 'while m[s:s + 1] == " ": s += 1'),
