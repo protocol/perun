@@ -148,7 +148,7 @@ rc_run DCR_USER_BIN=; ! grep -q '^osv ' "$LOG" && e "osv-scanner" && e "not run:
 
 mkdir -p .github/workflows; echo 'on: push' >.github/workflows/ci.yml; git add . && git -c user.email=t@example.com -c user.name=t commit -q -m wf
 mv "$T/ub/osv-scanner" "$SCN/osv-scanner"; rc_run # hub tools with work but not installed are wired, not run, fixable
-e "NOT CHECKED: zizmor" && e "NOT CHECKED: actionlint" && e "ran 5 / wired 7 scanners; not run: zizmor, actionlint; fixable: zizmor, actionlint" && st '.fixable == ["zizmor", "actionlint"] and (.wired | index("zizmor"))' && ok "hub tools missing (workflow file routes zizmor and actionlint): wired 7, not run, fixable" || { bad "hub summary"; cat "$T/err"; }
+e "NOT CHECKED: zizmor" && e "NOT CHECKED: actionlint" && e "NOT CHECKED: scorecard" && e "ran 5 / wired 8 scanners; not run: zizmor, actionlint, scorecard; fixable: zizmor, actionlint, scorecard" && st '.fixable == ["zizmor", "actionlint", "scorecard"] and (.wired | index("zizmor"))' && ok "hub tools missing (workflow file routes zizmor, actionlint and scorecard): wired 8, not run, fixable" || { bad "hub summary"; cat "$T/err"; }
 
 # 7b. fresh repos: trivy's cache dir, secret-only and partial runs, scanners provisioning cannot install, the owner line end to end
 mkrepo() { R=$T/$1; mkdir "$R"; cd "$R"; RP=$(pwd -P); git init -q . && git -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m base && git branch base; }
