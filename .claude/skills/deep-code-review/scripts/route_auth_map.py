@@ -1340,8 +1340,15 @@ def ownership(rows, root, skip=()):
 
 PRIVF = r"(?:[Ii]s_?)?(?:roles?|[Aa]dmin|[Vv]erified|[Ss]uperuser|[Ss]taff)|is[A-Z]\w*Admin|(?:owner|creator|author)\w*(?:Uid|Id)|createdBy\w*"  # a field a client must not set on its own record
 DEADGATE = re.compile(r"\bif\s*\((?:(?!\bif\b)[^;{]){0,200}?\bisEmpty\(\s*[\w$.?]+\.(?:(?:[Ii]s_?)?(?:[Aa]dmin|[Vv]erified|[Ss]uperuser|[Ss]taff)|is[A-Z]\w*Admin)\s*\)[^;{]*")  # lodash isEmpty on a boolean/number is always true: a gate on it never fires
+OWNID = r"\w+(?:MemberUid|TeamUid)|(?:owner|author|creator)\w*(?:Uid|Id)|userId|createdBy\w*"  # an owner/author id a client must not set on a record (the NestJS `data:` path; free-text role fields are PRIVF only)
 PRIVSTR = re.compile(r"""['"](%s)['"]""" % PRIVF)  # the field named in a string: an allowlist (`allowed = [..., 'role']`)
-STRIP = re.compile(r"\bdelete\s+[\w$.?]+\.(?:%s)\b|\b(?:omit|pick|pickBy|plainToInstance|plainToClass)\s*\(|\b(?:%s)\s*:\s*undefined\b|\{[^{}]*\b(?:%s)\b[^{}]*\.\.\.[\w$]+\s*\}\s*=" % (PRIVF, PRIVF, PRIVF))  # the field removed (`delete x.role`, `{ role, ...rest } = dto`), or only chosen fields kept
+def stripped(txt, body):
+    """True when txt removes a privileged field from, or keeps only chosen fields of, one of the client body names (`delete data.role`, `{ role, ...rest } = dto`, `pick(dto, [...])`, `plainToInstance(T, dto)`, `role: undefined`);
+    the same call on another object (`pick(req.query, ...)`) hides nothing."""
+    b = "|".join(map(re.escape, sorted(body)))
+    # ponytail: handler-global: a pick/omit of the body anywhere in the handler hides a MASS lead, even if its result is not the name written; track the result name if that misses
+    return bool(re.search(r"\bdelete\s+(?:%s)\??\.(?:%s)\b|\b(?:omit|pick|pickBy)\s*\(\s*(?:%s)\b|\b(?:plainToInstance|plainToClass)\s*\(\s*[\w$.]+\s*,\s*(?:%s)\b|\b(?:%s)\s*:\s*undefined\b|\{[^{}]*\b(?:%s)\b[^{}]*\.\.\.[\w$]+\s*\}\s*=\s*(?:await\s+)?(?:%s)\b" % (b, PRIVF, b, b, PRIVF, PRIVF, b), txt))
+JSREQ = ((re.compile(r"\bawait\s+(?:req|request)\.(?:json|formData)\(\s*\)|\b(?:req|request)\.body\b"), "__body"), (re.compile(r"\b(?:req|request)\.params\b"), "__params"), (re.compile(r"\b(?:req|request)\.query\b"), "__query"))  # Express/Next request reads renamed so taint() can follow them
 BCALL = re.compile(r"@Body\s*\(([^)]*)\)\s*([\w$]+)\s*\??\s*(?::\s*([\w$]+))?")  # `@Body() dto: CreateThingDto`: (argument, name, type)
 PCALL = re.compile(r"@Param\s*\([^)]*\)\s*([\w$]+)")
 AUTHFN = re.compile(r"\b[\w$]*(?:[Aa]uthori[sz]|[Aa]llowed|[Pp]ermit|[Vv]alidate|[Vv]erify|[Ee]nsure|[Cc]heck|[Aa]ssert|can[A-Z]|is\w*(?:Member|Admin|Owner|Editor|Lead))[\w$]*\s*\(([^()]*)\)")  # a call named for an access check, with its arguments
@@ -1393,32 +1400,92 @@ def dto_props(root, name):
     return DTOS.get(name, set())
 
 
+def guarded(txt, priv, before=-1):
+    """True when an `if` throws Forbidden/401/403 in its own consequent or its `else` (a `{}` block, or one statement ended at `;` or a newline) and its condition names a privileged field (`if (ok || m.uid === p.createdBy) { return true } else { throw new ForbiddenException() }`), or, with `before` set, calls an access check (AUTHFN: `isMemberAllowedToEdit(...)`) and sits before `before` (the first write). The AUTHFN form does not read the field: it only says some access check ran first. A Forbidden elsewhere in the handler is no check on the field."""
+    p = "|".join(map(re.escape, sorted(priv)))
+    end = lambda t, at: close_of(t, at) if t[at] == "{" else min([i for i in (t.find(";", at), t.find("\n", at)) if i >= 0] or [-1])
+    for m in re.finditer(r"\bif\s*\(", txt):
+        c = close_of(txt, m.end() - 1)
+        if c < 0 or not (re.search(r"\b(?:%s)\b" % p, txt[m.end():c]) or m.start() < before and AUTHFN.search(txt[m.end():c])): continue
+        s = txt[c + 1:].lstrip()
+        if not s: continue
+        at = len(txt) - len(s)
+        e = end(txt, at)
+        if e > 0 and re.search(r"Forbidden|40[13]|[Uu]nauthori", txt[at:e + 1]): return True
+        s = txt[e + 1:].lstrip() if e > 0 else ""
+        if s.startswith("else") and s[4:].strip():  # the throw may sit in the else branch of a pass-through consequent
+            a2 = len(txt) - len(s) + 4 + len(s[4:]) - len(s[4:].lstrip())
+            e2 = end(txt, a2)
+            if e2 > 0 and re.search(r"Forbidden|40[13]|[Uu]nauthori", txt[a2:e2 + 1]): return True
+    return False
+
+
+def sing(s):
+    """Lowercase singular of a route segment or key base, separators dropped: `team-members` -> teammember, `categories` -> category, `addresses` -> address, `people` -> person."""
+    s = re.sub(r"[-_]", "", s.lower())
+    s = {"people": "person", "children": "child"}.get(s, s)
+    return s[:-3] + "y" if s.endswith("ies") else s[:-2] if re.search(r"(?:ss|x|ch|sh)es$", s) else s[:-1] if s.endswith("s") and not s.endswith("ss") else s
+
+
 def authz_leads(rows, root):
-    """[(row, kind, why)] for authenticated NestJS write routes (CWE-915 mass assignment, CWE-639, CWE-863; OWASP API3:2023, API1:2023). Report-only leads, never proof: a text scan of the member and one hop into the service (service_text), client names followed by taint().
-    MASS: the client body reaches a write as data (`data: dto`, `...dto`, or a name tainted by it) and can carry a privileged field (PRIVF: role, admin, verified, owner or createdBy ids) that the @Body type declares, a string allowlist names or the code reads off the body, with no removal or pick of it (STRIP). MASS-CHECKED: the same, but an `if` naming the field throws Forbidden or 401/403 (the check is read, not judged: a wrong one still passes, except a gate on lodash `isEmpty(x.<boolean field>)`, which never fires and counts as no check).
+    """[(row, kind, why)] for authenticated NestJS write routes and Express / Next.js (app route handlers, pages/api) write handlers (req.body, req.params, `await req.json()`; one hop, no service layer) (CWE-915 mass assignment, CWE-639, CWE-863; OWASP API3:2023, API1:2023). Report-only leads, never proof: a text scan of the member and one hop into the service (service_text), client names followed by taint().
+    MASS: the client body reaches a write as data (`data: dto`, `...dto`, or a name tainted by it) and can carry a privileged field (PRIVF: role, admin, verified, owner or createdBy ids) that the @Body type declares, a string allowlist names or the code reads off the body, with no removal or pick of the body (stripped(): a pick or omit of another object hides nothing). MASS-CHECKED: the same, but an `if` naming the field throws Forbidden or 401/403 in its consequent or `else` branch, or an `if` that calls an access check (AUTHFN) before the write throws (that form does not read the field: the row says so; the check is read, not judged: a wrong one still passes, except a gate on lodash `isEmpty(x.<boolean field>)`, which never fires and counts as no check). NestJS also has a narrow path: an owner-id field (`*MemberUid`, `*TeamUid`, `ownerId`, `authorId`, `userId`, `createdBy*`) read off the body inside a `data:` object, never from `where:` or free-text role fields; silent behind an Admin guard.
     IDMIX: an access-check call (AUTHFN) takes a path value while a write's `where` keys id/uid on a client body value and names no path value, so the check covers another record than the write.
-    CHILD: a write sets a parent key (`teamUid`, `projectId`) from a client body value on a route with a path parameter, no path value sits in that write and no statement compares the body key to the path value, so the child can land under a parent the requester was never checked against.
+    CHILD: a write sets a parent key (`teamUid`, `projectId`: a path parameter's name or the collection above one, not any `*Id`) from a client body value on a route with a path parameter, no path value sits in that write and no statement compares the body key to the path value, so the child can land under a parent the requester was never checked against.
+    MASS-ADMIN: a MASS lead on a NestJS handler behind a class- or method-level `@UseGuards(...Admin...)`: info only. Limit: Express/Next `data: req.body` with no privileged field named anywhere (no DTO) stays silent; the privileged field must be named in the handler. Mongoose/Sequelize coverage is partial: `create`/`save`/`upsert` with a trailing options argument are not flagged, and a whole `req.body` passed positionally is not flagged (Prisma `data: req.body` is). The owner-id path also matches any `*MemberUid`/`*TeamUid`/`userId` reference.
     ponytail: names are global per route, one service hop, no inheritance; silence is not proof."""
     out, cache = [], SVC_CACHE
     for r in rows:
         rel, ln, meth, route, lab = r
-        if (rel, ln) not in NESTCTX or lab in ("none", "public", "presence-check") or not set(meth.split("|")) & {"POST", "PUT", "PATCH", "DELETE", "ANY"}: continue
-        types = NESTCTX[(rel, ln)][1]
+        nest = (rel, ln) in NESTCTX
+        if not (nest or (rel, ln) in BODY and rel.endswith(tuple(x for x in EXT if x != ".py"))) or lab in ("none", "public", "presence-check") or not set(meth.split("|")) & {"POST", "PUT", "PATCH", "DELETE", "ANY"}: continue
         own = BODY.get((rel, ln), "")
-        txt = own + "\n" + service_text(root, own, types, cache)[0]
-        bs = BCALL.findall(txt)
-        body = taint(txt, {b[1] for b in bs})
-        path = taint(txt, set(PCALL.findall(txt)) or set(re.findall(r"/:(\w+)", route)), True)
+        if nest:
+            types = NESTCTX[(rel, ln)][1]
+            txt = own + "\n" + service_text(root, own, types, cache)[0]
+            bs = BCALL.findall(txt)
+            body = taint(txt, {b[1] for b in bs})
+            path = taint(txt, set(PCALL.findall(txt)) or set(re.findall(r"/:(\w+)", route)), True)
+        else:  # Express / Next.js handler: ponytail: the handler text and the same-file helpers it calls, no service hop
+            txt, bs = own, []
+            for rx, nm in JSREQ: txt = rx.sub({"__query": "__params" if re.search(r"(?:^|/)pages/api/", rel) else "__body"}.get(nm, nm), txt)  # pages/api gets its dynamic segments in req.query; elsewhere the query string is client-chosen
+            body = taint(txt, {"__body"})
+            path = taint(txt, {"__params", "params"} if re.search(r"/:\w+", route) else set(), True)
         wr = [(m.end(), close_of(txt, m.end() - 1)) for m in re.finditer(WMETH, txt)]
         if not body or not wr: continue
         pp = "|".join(map(re.escape, sorted(path))) or "\0"
+        bn = "|".join(map(re.escape, sorted(body)))
         def pathy(t): return re.search(r"(?<![\w$.])(?:%s)\b(?!\s*:)" % pp, t)  # a path value used, not a key of that name
-        priv = {p for b in bs for p in dto_props(root, b[2]) if re.fullmatch(PRIVF, p)} | set(PRIVSTR.findall(txt)) | set(re.findall(r"\b(?:%s)\.(%s)\b" % ("|".join(map(re.escape, sorted(body))), PRIVF), txt))
-        if priv and any(m[1] in body for a, e in wr for m in SINK.finditer(txt[a:e])) or priv and re.search(r"\b(?:copyObj|assign)\w*\(\s*(?:%s)\b" % "|".join(map(re.escape, sorted(body))), txt):
-            if not STRIP.search(txt):
-                chk = re.search(r"\bif\s*\((?:(?!\bif\b)[\s\S]){0,200}?\b(?:%s)\b(?:(?!\bif\b)[\s\S]){0,200}?(?:Forbidden|40[13]|[Uu]nauthori)" % "|".join(map(re.escape, sorted(priv))), DEADGATE.sub("if (DEADGATE)", txt))
-                out.append((r, "MASS-CHECKED" if chk else "MASS", "client body reaches a write with %s unfiltered%s" % ("/".join(sorted(priv)), "; a check naming it is read" if chk else "")))
-        authed = {a for m in AUTHFN.finditer(txt) for a in re.findall(r"[\w$]+", m[1]) if a in path}
+        fields = lambda rx: {p for b in bs for p in dto_props(root, b[2]) if re.fullmatch(rx, p)} | set(re.findall(r"\b(?:%s)\.(%s)\b" % (bn, rx), txt)) | {p for m in re.finditer(r"\{([^{}]*)\}\s*=\s*(?:await\s+)?(?:%s)\b" % bn, txt) for p in re.findall(r"[\w$]+", m[1]) if re.fullmatch(rx, p)}  # names a DTO declares, the code reads off the body, or destructures from it
+        priv = fields(PRIVF) | set(PRIVSTR.findall(txt))
+        ownp = fields(OWNID)  # NestJS: an owner/author id written in a `data:` object, the narrow path (no free-text role fields)
+        # direct(): a field read off the body into a name, then written as data (`{ name, role }`) or read in place (`role: body.role`)
+        def blank(t, o, c): return t[:o] + " " * (c + 1 - o) + t[c + 1:]
+        def nowhere(t):  # the write call with its filter blanked: `where: {..}`, and a first positional object followed by a second argument (Mongoose `findOneAndUpdate(filter, update)`, TypeORM `update(criteria, data)`; Sequelize `update(values, { where })` keeps its values)
+            f, first = re.match(r"\s*\{", t), None
+            if f:
+                c = close_of(t, f.end() - 1)
+                if c > 0 and t[c + 1:].lstrip().startswith(",") and not re.match(r",\s*\{[^{}]*\bwhere\b", t[c + 1:].lstrip()): first = (f.end() - 1, c)
+            for w in list(re.finditer(r"where\s*:\s*\{", t))[::-1]:
+                c = close_of(t, w.end() - 1)
+                if c > 0: t = blank(t, w.start(), c)
+            return blank(t, *first) if first else t
+        def dspan(t):  # only the `data: {..}` objects of a write call
+            return " ".join(t[w.end() - 1:close_of(t, w.end() - 1) + 1] for w in re.finditer(r"\bdata\s*:\s*\{", t))
+        def direct(t, fs):
+            pf, af = "|".join(map(re.escape, sorted(fs & body))) or "\0", "|".join(map(re.escape, sorted(fs))) or "\0"
+            return re.search(r"[{,]\s*(?:%s)\s*(?=[,}])|:\s*(?:%s)\b(?![\w$.(\[])|\b(?:%s)\??\.(?:%s)\b" % (pf, pf, bn, af), t)
+        adm = re.search(r"@UseGuards\s*\([^)]*Admin", NESTCTX[(rel, ln)][0] + "\n" + own) if nest else None  # behind an admin guard the privileged write is the intended caller's: info only
+        wide = priv and any(m[1] in body for a, e in wr for m in SINK.finditer(txt[a:e])) or priv and re.search(r"\b(?:copyObj|assign)\w*\(\s*(?:%s)\b" % bn, txt) or not nest and priv and any(direct(nowhere(txt[a:e]), priv) for a, e in wr)
+        narrow = nest and ownp and any(direct(dspan(txt[a:e]), ownp) for a, e in wr) and not adm  # an admin sets owners by design: the narrow path stays silent there
+        if wide or narrow:
+            if not stripped(txt, body):
+                fl = priv | ownp if nest else priv
+                dtxt = DEADGATE.sub("if (DEADGATE)", txt)
+                named = guarded(dtxt, fl)
+                chk = named or guarded(dtxt, fl, min(a for a, _ in wr))
+                out.append((r, "MASS-CHECKED" if chk else "MASS-ADMIN" if adm else "MASS", "client body reaches a write with %s unfiltered%s" % ("/".join(sorted(fl)), "; a check naming it is read" if named else "; an access check before the write is read (it does not name the field)" if chk else "")))
+        authed = {a for m in AUTHFN.finditer(txt) for a in re.findall(r"[\w$]+", m[1] if nest else re.sub(r"\b(?:__params|params)\b(?!\s*\??\.\s*[\w$])", "", m[1])) if a in path}  # JS: a bare req.params (`schema.validate(req.params)`) is no access check on a path member
         for a, e in wr:
             w = re.search(r"where\s*:\s*\{", txt[a:e])
             if w and authed:
@@ -1426,12 +1493,13 @@ def authz_leads(rows, root):
                 wt = txt[o:close_of(txt, o) + 1]
                 for k, v in re.findall(r"([\w$]+)\s*:\s*([^,{}]+)", wt):
                     if k in ("id", "uid", "_id") and roots(v) in body and not pathy(wt):
-                        out.append((r, "IDMIX", "access check on path value %s but the write's where %s is client body value %s" % ("/".join(sorted(authed)), k, v.strip())))
+                        out.append((r, "IDMIX", ("access check on path value %s but the write's where %s is client body value %s" % ("/".join(sorted(authed)), k, v.strip())).replace("__body", "req.body").replace("__params", "req.params")))
                         break
-            ks = [(k, v.replace("?.", ".")) for k, v in re.findall(r"\b([\w$]*(?:Uid|Id))\s*:\s*([\w$]+(?:\??\.[\w$]+)+)", txt[a:e]) if k not in ("id", "uid")]
-            ks = [x for x in ks if roots(x[1]) in body]
+            ks = [(k, v.replace("?.", ".")) for k, v in re.findall(r"\b([\w$]*(?:Uid|Id))\s*:\s*([\w$]+(?:\??\.[\w$]+)+)", txt[a:e]) + [(k, k) for k in re.findall(r"[{,]\s*([\w$]*(?:Uid|Id))\s*(?=[,}])", txt[a:e])] + re.findall(r"\b([\w$]*(?:Uid|Id))\s*:\s*([\w$]+)\s*(?=[,}])", txt[a:e]) if k not in ("id", "uid")]  # dotted, shorthand (`{ teamId }`) or bare-name (`teamId: teamId`, destructured off the body) keys
+            segs = [s.lower() for s in re.findall(r"/([\w-]+)/:", route)]  # a body key is a parent key only when it names a path parameter or the collection above one (`teamId` under `/teams/:id`), not a sibling reference (`memberUid`)
+            ks = [x for x in ks if roots(x[1]) in body and (x[0] in path or x[0] in re.findall(r"/:(\w+)", route) or any(sing(s) == sing(re.sub(r"(?:Uid|Id)$", "", x[0])) for s in segs))]
             if ks and path and not pathy(txt[a:e]) and not any(re.search(r"[\w$]+\.%s\s*[!=]==?\s*(?:%s)\b|(?<![\w$.])(?:%s)\s*[!=]==?\s*[\w$]+\.%s\b" % (k, pp, pp, k), txt.replace("?.", ".")) for k, _ in ks):
-                out.append((r, "CHILD", "write sets parent key %s from client body value %s; no path value in the write and no comparison to one" % ks[-1]))  # the last key: a composite where lists the parent last
+                out.append((r, "CHILD", ("write sets parent key %s from client body value %s; no path value in the write and no comparison to one" % ks[-1]).replace("__body", "req.body").replace("__params", "req.params")))  # the last key: a composite where lists the parent last
     seen = set()
     return [x for x in out if not (x[:2] in seen or seen.add(x[:2]))]
 
@@ -1478,7 +1546,7 @@ def main(argv):
         print("heuristic; %d NestJS write routes with authentication but no requester-to-owner check (OWN), %d with a check the scan read (OWN-CHECKED); silence is not proof" % (len(ow) - n, n), file=sys.stderr)
         for r, why, cls, hit in ow: print(cl("%s:%d: OWN: %s %s auth=%s (%s)" % (*r[:2], *r[2:], why) if not cls else "%s:%d: OWN-CHECKED: %s %s auth=%s (class=%s; match=%s)" % (*r[:2], *r[2:], cls, hit)))
         az = authz_leads(rows, a[0])
-        print("heuristic; %d NestJS write routes with a client-writable privileged field, a path-vs-body id mismatch or a body-set parent key (MASS, IDMIX, CHILD); silence is not proof" % len(az), file=sys.stderr)
+        print("heuristic; %d write routes (NestJS, Express, Next.js) with a client-writable privileged field, a path-vs-body id mismatch or a body-set parent key (MASS, MASS-CHECKED, MASS-ADMIN, IDMIX, CHILD); silence is not proof" % len(az), file=sys.stderr)
         for r, k, why in az: print(cl("%s:%d: %s: %s %s auth=%s (%s)" % (*r[:2], k, *r[2:], why)))
         for f, ln in SKIPPED: print(cl("%s:%d: NOT-CHECKED: a route-like decorator here gave no route, so the handler under it (and any other unparsed one in this file) was not judged for privilege or ownership; read them" % (f, ln)))
         return 0
