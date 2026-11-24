@@ -3,6 +3,15 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.667.0] — 2026-11-24
+
+### Changed
+- `review_checks.sh`: CodeQL now runs only with `REVIEW_CODEQL=1`, because its license allows OSI-licensed code only and default-on would breach it in private repos. Without the env a Python or JavaScript/TypeScript change gets one not-checked row ("off by default (license: OSI-licensed code only); set REVIEW_CODEQL=1") plus the same NOT CHECKED line on stderr, and the binary is never run. osv-scanner exit 128 ("No package sources found") now reads not run: osv-scanner (no package sources) instead of (exit 128). Tests: `scripts/test-review-checks-codeql-optin.sh`; `test-review-checks-supply-chain.sh` sets `REVIEW_CODEQL=1` for its codeql cases.
+- `review_checks.sh` kics: adds `-q` (`--queries-path`, KICS commands doc) with `BINDIR/../share/kics/assets/queries`, BINDIR being the resolved binary's directory, only when that dir exists and the binary resolves; brew kics otherwise exits 126 "unable to find queries" when the working directory is not its install dir. Test: `scripts/test-review-checks-kics-queries.sh`.
+- `audit_sweep.py`: the CodeQL "off by default" not-checked row is an ENVGAP row (a license gate a rescan cannot close), so it no longer blocks the sweep from storing the scanned sha; `REVIEW_CODEQL` is scrubbed from the scanner env, so an operator opt-in never reaches a sweep of private repos. Test: `scripts/test_audit_sweep_v8.py`.
+- Bench (before 1.666.0 → after, seeded `bench/class-seeds` Dockerfile fixtures, local): kics on the vulnerable fixture 0 findings (exit 126, one not-checked row) → 6 findings; kics on the clean fixture 0 → 0 findings; CodeQL rows with no `REVIEW_CODEQL` set: by design, a not-checked row in place of a scan.
+size-budget-raise: .claude/skills/deep-code-review/references/tool-hub.md 72095→72655 CodeQL opt-in, osv exit 128 and kics -q docs
+
 ## [1.666.0] — 2026-11-24
 
 Tool hub: `scorecard` now runs offline (`--local`, four checks: Binary-Artifacts, Dangerous-Workflow, Token-Permissions, Pinned-Dependencies) and gives one row per check scoring below 10 (whole-repo, not diff-scoped; all checks inconclusive is not run); a missing binary stays a NOT CHECKED row with an install hint.
