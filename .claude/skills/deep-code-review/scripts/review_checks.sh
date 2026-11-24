@@ -14,7 +14,7 @@
 # If that pack errors or hangs to the timeout, that 200-file chunk reruns with the bundled rules alone (the later chunks too, unless an earlier pack run succeeded) and the run says so, so it never reads as a
 # full clean: `semgrep(bundled-only)` under analyzers ran (and under partial and fixable in the closing line), `semgrep p/default pack (<why>)` under NOT RUN and a not-checked row, with the fix named (a warm
 # snapshot: provision_tools.sh --print). That is the only report of the gap: no separate "missing tools" row.
-# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, kubescape (NSA and CIS frameworks, local artifacts only), tflint, tfsec (Terraform, SARIF, no module download), ansible-lint (Ansible, offline, SARIF), pmd (Java security ruleset, offline, SARIF) and solhint (Solidity, built-in recommended rules only, SARIF), slither (Solidity, SARIF, forced plain solc, needs solc on PATH, never a project build), scorecard (never run, NOT CHECKED under --full or --hygiene: no offline mode), staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), detect-secrets (changed files, no baseline, no verification, values never printed), njsscan (Node.js), sobelow (Elixir Phoenix, local source, no update check), flawfinder, cppcheck (C/C++, no build) and devskim (multi-language), eslint-security (the project's own local eslint only), kics (IaC), retire (retire.js: vulnerable vendored JS libraries, local advisory repo only), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (skillspector: SKILL.md, static --no-llm, SARIF; mcp-scanner and snyk-agent-scan are unverified, skipped) run from one registry
+# Tool hub: zizmor, actionlint, bandit, ruff-security (ruff check --select S), gosec, govulncheck, grype, syft (SBOM inventory, counted not scored), checkov, hadolint, kube-linter, kube-score, kubescape (NSA and CIS frameworks, local artifacts only), tflint, tfsec (Terraform, SARIF, no module download), ansible-lint (Ansible, offline, SARIF), pmd (Java security ruleset, offline, SARIF) and solhint (Solidity, built-in recommended rules only, SARIF), slither (Solidity, SARIF, forced plain solc, needs solc on PATH, never a project build), scorecard (local, four offline checks, counted not scored), staticcheck (Go, offline), cargo-deny and cargo-audit (Rust, offline, local advisory DB only), brakeman, mobsfscan (Android/iOS source), psalm (PHP taint, local psalm.xml only), detect-secrets (changed files, no baseline, no verification, values never printed), njsscan (Node.js), sobelow (Elixir Phoenix, local source, no update check), flawfinder, cppcheck (C/C++, no build) and devskim (multi-language), eslint-security (the project's own local eslint only), kics (IaC), retire (retire.js: vulnerable vendored JS libraries, local advisory repo only), licensee (license inventory, counted not scored), cosign (verify-blob offline against a repo cosign.pub) (skillspector: SKILL.md, static --no-llm, SARIF; mcp-scanner and snyk-agent-scan are unverified, skipped) run from one registry
 # (`hub=`); a matching changed file with the tool missing prints "NOT CHECKED: <tool> (install: <hint>)" on stderr, never a silent clean.
 # Built-in, always on, no install: invisible_chars.py flags NUL/C0 control characters and bidi/zero-width/tag characters in changed text files (tool `invisible-chars`, with line and col;
 # rows under fixture/test paths carry `[likely-fixture]`; third_party/, Pods/, bower_components/ and *.min.js are skipped; a `not-checked` row is unchecked surface).
@@ -424,6 +424,12 @@ elif kind == "audit":  # npm audit (vulnerabilities), pnpm audit (advisories), p
 elif kind in ("zizmor", "hadolint", "actionlint", "ruff-security"):
     if not isinstance(d, list):
         sys.exit(f"sjson: {kind} output is not a list")
+elif kind == "scorecard":
+    if not isinstance(d, dict) or not isinstance(d.get("checks"), list):
+        sys.exit("sjson: scorecard output has no checks list")
+    for c in d["checks"]:
+        if not (isinstance(c, dict) and isinstance(c.get("name"), str) and isinstance(c.get("score"), int) and not isinstance(c.get("score"), bool)):
+            sys.exit("sjson: scorecard check entry is not {name: str, score: int}")
 elif kind in ("gosec", "grype"):
     k = "Issues" if kind == "gosec" else "matches"
     if not isinstance(d, dict) or not (isinstance(d.get(k), list) or (kind == "gosec" and k in d and d[k] is None)):
@@ -690,6 +696,8 @@ elif kind == "hadolint":
     hl = lambda r: not show_hyg and r.get("level") in ("info", "style")
     hidden += sum(map(hl, d))
     rows = [(r.get("file"), r.get("line", 0), r.get("code"), r.get("message", "")) for r in d if not hl(r)]
+elif kind == "scorecard":  # one row per check below 10 (9 = one binary, still a hit); -1 = inconclusive, ignored; file "."
+    rows = [(".", 0, "scorecard-" + c["name"], f"score {c['score']}/10: {c.get('reason', '')}") for c in d["checks"] if 0 <= c["score"] < 10]
 elif kind == "actionlint":  # snippet is never read; the rule is actionlint's error kind
     rows = [(nf(r.get("filepath")), r.get("line", 0), r.get("kind"), r.get("message", "")) for r in d]
 elif kind == "semgrep":
@@ -1105,7 +1113,7 @@ hub=(
   'pmd;verified;each;\.java$;route-only;brew install pmd' # one file per run, the built-in category/java/security.xml ruleset only (a project ruleset can name custom classes and is never loaded), --no-cache, SARIF on stdout; exit 4 = violations, 5 = recoverable error (not run)
   'solhint;verified;each;\.sol$;route-only;npm install -g solhint' # one file per run with a throwaway config of solhint:recommended only (a project .solhint.json can load plugins = code and is never read), SARIF on stdout, --disc (no update check)
   'slither;verified;each;\.sol$;route-only;pipx install slither-analyzer' # one file per run, SARIF written to a file, run from the temp dir with an absolute target and --solc-working-dir set to the repo root (so solc still resolves imports there), because crytic-compile, even with --compile-force-framework solc, walks up from its process working directory to a foundry.toml or hardhat config and runs the solc binary that config names (crytic-compile 0.4.2 _locate_framework_root and _configure_solc; observed with slither 0.11.6 and a stub forge: from the repo root a foundry.toml solc = "./evil" runs ./evil, from the temp dir it never does; a temp dir inside the repo, or a framework marker in any ancestor of the temp dir, is NOT CHECKED); SARIF uris, relative to that temp dir, are mapped back to repo paths and only the changed file's rows are kept, by design: a finding slither places in an imported or inherited file, even one this change triggers, is dropped (only that file's own run, as under --full, reports there, and a finding that needs the importing contract may not recur in it), --compile-force-framework solc and --config-file naming an empty {} in the temp dir (else slither loads ./slither.config.json, whose solc, solc_args or compile_custom_build keys run what the repo picks); exit 255 = findings or error, so a non-zero exit with no row is not run; needs solc on PATH (else NOT CHECKED: solc-select would download compilers)
-  'scorecard;unverified;each;^\.github/workflows/[^/]+\.ya?ml$;route-only;brew install scorecard' # never run: `scorecard --local` still calls api.osv.dev and oss-fuzz-build-logs.storage.googleapis.com (observed 2026-11-18); named NOT CHECKED under --full or --hygiene only
+  'scorecard;verified;batch;^\.github/workflows/[^/]+\.ya?ml$;route-only;brew install scorecard' # whole repo, once: --local with only the four offline checks (Vulnerabilities and Fuzzing call api.osv.dev and the oss-fuzz bucket, observed 2026-11-18, so they are never selected; the four ran with every proxy dead on 2026-11-24); a row per check scoring below 10, counted not scored
   'ansible-lint;verified;batch;\.ya?ml$;route-only;pipx install ansible-lint' # only Ansible-looking YAML (roles/tasks/handlers/playbooks paths, or hosts: with tasks:/roles:); --offline (no requirements.yml install, no schema refresh), SARIF
   'skillspector;verified;each;(^|/)SKILL\.md$;route-only;uv tool install git+https://github.com/NVIDIA/skillspector.git' # one SKILL.md per run, static analysis only (--no-llm: file contents never go to an LLM provider), SARIF written to a file; exit 1 = risk score over 50, exit 2 = error
   'snyk-agent-scan;unverified;each;(^|/)(\.mcp\.json|mcp[^/]*\.json|SKILL\.md)$;route-only;uvx snyk-agent-scan'
@@ -1124,6 +1132,7 @@ hubcmd() {
     # CKV_SKIP_PACKAGE_UPDATE_CHECK=true: --skip-download leaves checkov's own-version lookup (pypi.org) on; env var, not a flag, so an older checkov ignores it
     checkov) cmd=(env CKV_SKIP_PACKAGE_UPDATE_CHECK=true checkov -f "$1" -o json --quiet --skip-download --soft-fail) ;;
     hadolint) cmd=(hadolint -f json --no-fail "$1") ;;
+    scorecard) cmd=(env -u GITHUB_AUTH_TOKEN -u GITHUB_TOKEN -u GH_TOKEN scorecard --local=. --checks=Binary-Artifacts,Dangerous-Workflow,Token-Permissions,Pinned-Dependencies --format=json) ;; # whole repo (cwd), no token
     ruff-security) cmd=(ruff check --select S --ignore S404 --output-format json --no-cache --exit-zero "$@") ;; # same rule id as bandit's B404 above
     syft) sb=$(mktemp "${TMPDIR:-/tmp}/review_sbom.XXXXXX"); cmd=(env SYFT_CHECK_FOR_APP_UPDATE=false syft "$1" -o "syft-json=$sb") ;; # the update check phones home; the SBOM outlives the run
     staticcheck) cmd=(env GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly GOWORK=off staticcheck -f json ./...); okrc="1" ;; # exit 1 = a problem found, but also a setup failure (lintcmd/cmd.go): empty output with exit 1 is not run, and a missing module cache fails offline; one JSON object per line
@@ -1193,7 +1202,6 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   [ -n "$hf" ] || continue
   [ "$hs" != verified ] || case $hn in syft|licensee|detect-secrets|njsscan|sobelow|flawfinder|cppcheck|devskim|kubescape|retire|tfsec|ansible-lint|pmd|solhint|slither|skillspector) ;; *) wired+=" $hn" ;; esac # syft and licensee are inventories, not scanners: never wired or ran; detect-secrets (matches every file) and njsscan are wired only once installed (below), as provision_tools.sh does not install them, so a missing one is NOT CHECKED, never "fixable"
   nc() { echo "NOT CHECKED: $hn ($1)" >&2; add "$hn" "" 0 not-checked "$1"; }
-  [ "$hn" != scorecard ] || { [ "$full$hyg" = 00 ] || nc "OpenSSF Scorecard has no offline mode: --local still calls api.osv.dev and the oss-fuzz build-log bucket, so it is never run"; continue; }
   if [ "$hs" != verified ]; then nc "$hs flags: skipped by default"; continue; fi
   hb=$hn; [ "$hn" != ruff-security ] || hb=ruff; [ "$hn" != bundler-audit ] || hb=bundle-audit; [ "$hn" != eslint-security ] || hb=./node_modules/.bin/eslint
   command -v "$hb" >/dev/null || { nc "install: $hh"; missing+=" $hn"; miss "$hn" "install: $hh"; continue; }
@@ -1218,7 +1226,7 @@ while IFS=';' read -r hn hs hm hre _ hh; do
   # checkov reads .checkov.yaml or .checkov.yml from its working directory (the repo root), and its external-checks-dir runs Python from the repo:
   # project code, the same class as REVIEW_TEST_CMD, so with such a file checkov runs only when REVIEW_TEST_CMD is set (any mode, --full too).
   if [ "$hn" = checkov ] && [ -z "${REVIEW_TEST_CMD:-}" ] && { [ -e .checkov.yaml ] || [ -e .checkov.yml ]; }; then nc "a .checkov.yaml or .checkov.yml in the repo root can load Python checks (external-checks-dir); set REVIEW_TEST_CMD to run it"; continue; fi
-  # zizmor, actionlint, bandit and hadolint are light (single-file static checks), so they are intentionally unleased.
+  # zizmor, actionlint, bandit, hadolint and scorecard (four offline local checks) are light static checks, so they are intentionally unleased (scorecard still runs under the per-tool timeout via run_one/tbox).
   case $hn in grype|checkov|gosec|govulncheck|staticcheck|kics) lease_take || { skip "$hn" "heavy lease full"; continue; } ;; esac
   case $hn in gosec|govulncheck|staticcheck) [ -f go.mod ] || { nc "no go.mod at repo root"; continue; } ;; esac
   case $hn in govulncheck|staticcheck) command -v go >/dev/null || { nc "go toolchain missing"; continue; } ;; esac
@@ -1293,12 +1301,12 @@ while IFS=';' read -r hn hs hm hre _ hh; do
       if [ "$hm" = batch ]; then
         printf '%s\n' "$hf" >"$td/hf"; nraw=0 nout=0
         while IFS=$'\t' read -r p l r m; do
-          nraw=$((nraw + 1)); grep -qxF -- "$p" "$td/hf" || continue
+          nraw=$((nraw + 1)); grep -qxF -- "$p" "$td/hf" || [ "$hn" = scorecard ] || continue
           nout=$((nout + 1)); add "$hn" "$p" "$l" "$r" "$m"
         done <"$tsv"
         # A tool given explicit files reports only those, so a row for any other file means the paths do not line up and findings may be lost:
         # name it instead of reading as clean. gosec and brakeman scan the whole project and legitimately report files outside the changed list.
-        case $hn in gosec|brakeman|staticcheck|psalm|sobelow|retire) ;; *) [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing" ;; esac
+        case $hn in gosec|brakeman|staticcheck|psalm|sobelow|retire|scorecard) ;; *) [ "$nraw" = "$nout" ] || skip "$hn" "$((nraw - nout)) of $nraw rows named a file outside the scanned list; findings may be missing" ;; esac
       else
         if [ "$hn" = kubescape ]; then # one target per run: every row path (relative to the scan root, or to the repo) must map back to it
           bad=$(while IFS=$'\t' read -r p _; do p=${p#./}; [ "$p" = "$f" ] || [ "$p" = "${f##*/}" ] || echo x; done <"$tsv")

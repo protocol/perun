@@ -1,0 +1,1 @@
+Tool hub: `scorecard` now runs offline (`--local`, four checks: Binary-Artifacts, Dangerous-Workflow, Token-Permissions, Pinned-Dependencies) and gives one counted row per check scoring below 10; a missing binary stays a NOT CHECKED row with an install hint.
