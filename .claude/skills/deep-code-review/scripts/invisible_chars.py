@@ -9,7 +9,7 @@ characters; ZWJ/ZWNJ/VS16 only beside ASCII so emoji and Persian text stay clean
 sequence are part of the glyph and skipped; a file NAME is scanned too, at line 0) or `not-checked` (surface this scan did not
 cover), and a message carrying the codepoint and 1-based column. At most 20 findings per rule and file then one count row, and
 at most 200 rows in all, then one `not-checked` row and the scan stops. Only the first 2 MB of a file is read; a larger file adds a
-`partially scanned` row. Path-based leniency (callers that want none, like audit_skills.py, use control_findings and
+`partially scanned` row; a symlink or a non-regular path (a submodule folder) is skipped without a row, and a regular file that cannot be opened or read adds an `unreadable: <reason>` row. Path-based leniency (callers that want none, like audit_skills.py, use control_findings and
 HIDDEN directly): locale files (.po .arb .xlf .xliff .properties .strings, or under locales/ i18n/ l10n/) report only bidi
 overrides and isolates, not RLM/LRM/embeds/ZWSP; prose and data files (.md .mdx .txt .rst .json .toml .yaml .yml)
 report everything in HIDDEN except an isolated U+200B, U+200D, U+FE0F or U+FEFF (no hidden character directly before or after it;
@@ -132,16 +132,19 @@ def main():
         if not rel:
             continue
         rows = [(0, "hidden-unicode", m.replace("hidden character", "hidden character in file name")) for _, m in hidden_hits(rel)[:1]]
-        if not os.path.islink(rel) and os.path.splitext(rel)[1].lower() not in BINARY_EXT:  # scan_file ignores a binary extension, so skip the read and the partial row
+        # skip a symlink or a non-regular path (a submodule folder, a dangling link) like committed_personal_data.py; scan_file ignores a binary extension, so skip the read and the partial row
+        if os.path.isfile(rel) and not os.path.islink(rel) and os.path.splitext(rel)[1].lower() not in BINARY_EXT:
             try:
                 with open(rel, "rb") as fh:
                     raw = fh.read(MAX_READ + 1)
-            except OSError:
-                raw = b""
-            if len(raw) > MAX_READ:
-                raw = raw[:MAX_READ]
-                rows.append((0, "not-checked", "partially scanned: file over %d MB, only the first %d MB were read" % (MAX_READ >> 20, MAX_READ >> 20)))
-            rows += scan_file(rel, raw)
+            except OSError as e:  # a regular file that cannot be read is surface nobody checked, never a silent pass
+                rows.append((0, "not-checked", "unreadable: %s" % e.strerror))
+                raw = None
+            if raw is not None:
+                if len(raw) > MAX_READ:
+                    raw = raw[:MAX_READ]
+                    rows.append((0, "not-checked", "partially scanned: file over %d MB, only the first %d MB were read" % (MAX_READ >> 20, MAX_READ >> 20)))
+                rows += scan_file(rel, raw)
         for n, rule, msg in rows:
             if sent == MAX_ROWS:
                 print("%s\t0\tnot-checked\toutput capped at %d rows; later findings and files were not scanned" % (rel, MAX_ROWS), flush=True)

@@ -112,7 +112,7 @@ def test_permanent_gaps_are_envgap():
     e = env({"gaps": [{"tool": "snyk-agent-scan", "m": "unverified flags: skipped by default"}]})
     e.commit({"SKILL.md": "x\n"})
     out = e.raw().stdout
-    assert e.st().get("sha") and "\tENVGAP\t\t\tsnyk-agent-scan\t" in out, f"unverified flags are listed, not blocking: {e.st()} {out}"
+    assert e.st().get("sha") and re.search(r"\tENVGAP\t[^\t]*\t[^\t]*\tsnyk-agent-scan\t", out), f"unverified flags are listed, not blocking: {e.st()} {out}"
 
 
 def test_rescan_reports_readded_finding():

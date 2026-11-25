@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests: a checker that does not apply ("SKIPPED: ...") or a tool with an "install: <hint>" row must not hold the sha back, so run 2 is
 `delta` (not `first`): unchanged repo = no scan, 0 new rows; one new commit = diff scan against the old HEAD only."""
+import re
 import atexit, json, os, shutil, subprocess, sys, tempfile
 
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".claude", "skills", "deep-code-review", "scripts")
@@ -46,7 +47,7 @@ def check(gap, tool="faketool", advances=True, file="", env=None):
     assert ("\tENVGAP\t" in r1.stdout) == bool(env) and (not env or f"\t{env}\t" in r1.stdout), r1.stdout
     if not advances:
         assert "sha" not in list(json.load(open(state)).values())[0], "real miss must hold the sha"
-        assert r1.returncode == 1 and f"\tGAP\t\t\t{tool}\t" in r1.stdout, f"real miss must alert: {r1.returncode} {r1.stdout}"
+        assert r1.returncode == 1 and re.search(rf"\tGAP\t[^\t]*\t[^\t]*\t{tool}\t", r1.stdout), f"real miss must alert: {r1.returncode} {r1.stdout}"
         return
     calls = lambda: open(os.path.join(t, "calls.log")).read().splitlines()
     n = len(calls())
