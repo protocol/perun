@@ -4,6 +4,7 @@ never hold the sha, so the next run is an incremental delta, end to end on the r
 "changed in this diff" rows are ENVGAP rows, and every such row forces one --full rescan because that tool never read the range; a
 missing ruby-advisory-db is a missing tool, and provisioning the DB rescans once; a rescan reports a noise-path finding that only its
 diff scan sees; the CodeQL license-gate row is an ENVGAP row and REVIEW_CODEQL is scrubbed from the scanner env. Every sweep runs with an isolated environment (PATH t/bin:/usr/bin:/bin, HOME in the temp dir)."""
+import re
 import atexit, json, os, shutil, subprocess, sys, tempfile, types
 
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".claude", "skills", "deep-code-review", "scripts")
@@ -88,7 +89,7 @@ def test_full_scan_design_rows_do_not_block():
         h = e.commit({"f.py": "ok\n", "fixtures/a.py": "x\n"})  # every run: one noise row (the fake's nskip)
         out = e.sweep()
         assert e.st().get("sha") == h and "\tCOVERAGE\t\t" in out, f"{g}: a by-design --full row must not hold the sha: {e.st()} {out}"
-        assert not envgap or f"\tENVGAP\t\t\t{envgap}\t" in out, out
+        assert not envgap or re.search(rf"\tENVGAP\t[^\t]*\t[^\t]*\t{envgap}\t", out), out
         h = e.commit({"g.py": "BAD\n"})
         got, calls = rows(e.sweep()), e.calls()
         assert got == [("delta", "g.py", "r", "fake")] and e.st()["sha"] == h and "--full" not in calls[-1], f"{g}: next run is a delta: {got} {calls}"
@@ -111,7 +112,7 @@ def test_config_changed_rows_are_envgap_then_one_full_rescan():
         e.commit({"f.py": "ok\n"}); e.sweep()
         h = e.commit({"g.py": "ok\n"})
         out = e.sweep()
-        assert e.st()["sha"] == h and f"\tENVGAP\t\t\t{tool}\t" in out, f"{tool}: listed, not blocking: {e.st()} {out}"
+        assert e.st()["sha"] == h and re.search(rf"\tENVGAP\t[^\t]*\t[^\t]*\t{tool}\t", out), f"{tool}: listed, not blocking: {e.st()} {out}"
         n = len(e.calls()); e.sweep()
         assert e.calls()[n:] == [f"--timeout {a.FULL_TIMEOUT} --full"], f"{tool} never read that range: the next run must rescan --full: {e.calls()[n:]}"
         n = len(e.calls()); e.sweep()
@@ -149,7 +150,7 @@ def test_real_hub_full_scan_then_incremental():
     h = e.commit({"fixtures/a.py": "x = 1\n", "package-lock.json": '{"lockfileVersion": 3, "packages": {}}\n', "app.js": "const a = <div/>;\n"})
     out = e.sweep()
     assert e.calls() == [f"--timeout {a.FULL_TIMEOUT} --full"] and e.st().get("sha") == h, f"run 1 (--full: guarddog, noise and JSX rows) must store the sha: {e.st()} {out}"
-    assert "\tENVGAP\t\t\tnode-check\t" in out, f"the JSX row is an ENVGAP row: {out}"
+    assert re.search(r"\tENVGAP\t[^\t]*\t[^\t]*\tnode-check\t", out), f"the JSX row is an ENVGAP row: {out}"
     h = e.commit({"b.txt": "b\n"})
     e.sweep()
     assert e.calls()[1:] and not any("--full" in c for c in e.calls()[1:]) and e.st()["sha"] == h, f"run 2 is a delta: {e.calls()} {e.st()}"

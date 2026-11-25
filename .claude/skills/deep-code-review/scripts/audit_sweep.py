@@ -41,7 +41,9 @@ not installed  <tools>`) on every scan of a host that lacks them. While a repo h
 `not_installed`), a design, config or provisioning gap a rescan cannot close (see `ENV`; one `ENVGAP` row per tool) or a noise path a
 --full scan never reads (see `NOISE`) -- a blocking gap: a timeout, crash or unread file, one `GAP` row per tool -- its sha and tool stamp
 are not advanced, so the next run rescans the same range (new findings are still recorded as seen); a "config changed in this diff" ENV row
-advances the sha but not the tool stamp, so the next run rescans --full. The missing-tool list (binary from `BIN`, else the tool name; dep-scan records the missing
+advances the sha but not the tool stamp, so the next run rescans --full. Every GAP and ENVGAP row names its
+cause without any message text: file = the first sorted file among the tool's rows of that kind, rule = `<n> not-checked: <class> <k>, ...` with
+every class present, sorted; the classes are the closed `CAUSES` list, anything else is `other`. The missing-tool list (binary from `BIN`, else the tool name; dep-scan records the missing
 auditor) is replaced by a full scan and merged by a delta, since the hub names a missing tool only when a file it routes to is in
 range; a listed tool that appears on PATH is rescanned once, then dropped even if the hub still reports it. A scanner that exits 0 with
 empty or whitespace-only stdout is a tool error (ERROR row, exit 1, state not advanced), never "0 findings" (a clean scan prints `[]`).
@@ -230,9 +232,57 @@ ENV = {"osv-scanner": (lit("REVIEW_OSV not set; osv-scanner queries the OSV API"
        "retire": (lit("REVIEW_RETIRE_JSREPO names no local jsrepository.json (never fetched)"), True),
        "cargo-deny": (lit("cargo toolchain missing"), True),
        "cargo-audit": (re.compile(re.escape("no local advisory DB at ") + ".+" + re.escape("/advisory-db (never fetched)")), True),
+       # built-in scanners: a per-file partial read or one-file container is a size limit a rescan cannot close (the file is named, so the row
+       # is a full match with a file); the output cap, unreadable, collapsed containers and per-file containers under the cap stay blocking
+       "invisible-chars": (re.compile(r"partially scanned: file over \d+ MB, only the first \d+ MB were read"), False),
+       "committed-data": (re.compile(r"compressed/columnar container \([^()]+\): addresses inside its pages may not be seen, so this is not a clean result"
+                                     r"; only the first \d+ bytes were read|partially scanned: file over \d+ bytes, only the first \d+ were read"), False),
        # license gate: codeql runs only with REVIEW_CODEQL=1 (OSI-licensed code only); a rescan cannot close it
        "codeql": (lit("off by default (license: OSI-licensed code only); set REVIEW_CODEQL=1"), True)}
 ENV.update({n: (lit(f"{st} flags: skipped by default"), True) for n, (st, _) in HUB.items() if st != "verified" and n not in ENV})  # hub `nc "$hs flags: ..."`
+
+
+# Closed list of cause classes for a GAP or ENVGAP row, first match wins, anything else is "other". A row names the class and its count,
+# never the message, so no finding text or secret can reach stdout (see the module docstring). Built from every not-checked emitter:
+# review_checks.sh (skip, nc, have, add ... not-checked), invisible_chars.py, committed_personal_data.py and the other Python scanners.
+CAUSES = tuple((n, re.compile(p, re.I)) for n, p in (
+    ("output-cap", r"^output capped at \d+ rows"), ("container-collapsed", r"containers not scanned \(first"),
+    ("container", r"^compressed/columnar container"), ("partial-read", r"^partially scanned"),
+    ("unreadable", r"unreadable|could not (fully )?read|cannot read"), ("timeout", r"timeout|timed out"), ("exit-code", r"\bexit \d+"),
+    ("lease", r"heavy lease full"), ("noise-path", r"^noise path excluded"), ("bad-config", r"must be an existing local path"),
+    ("partial-coverage", r"findings may be missing"), ("config-is-code", r"changed in this diff|executes project code|can load|its config is code"),
+    ("opt-in", r"skipped by default|off by default|not set;|set REVIEW_\w+=1"), ("lookup-failed", r"lookup failed"),
+    ("rule-not-run", r"did not run"), ("version-unknown", r"registry lists no stable|matches no .+ release cycle|no currency source|pinned by digest only|SHA pin without"),
+    ("unsupported-input", r"only a \.bundle is verified offline|docker:// action image|uses a variable that is not resolved"),
+    ("missing-file", r"signed file .+ is missing$"),
+    ("not-provisioned", r"never fetched|no local|not rendered|^no \S+ (at|beside) |toolchain missing|names no"),
+    ("missing-tool", r"not installed|install:|missing$"), ("unparseable", r"unparseable|could not parse|cannot parse|does not read"),
+    ("crash", r"crash|traceback|fail|error")))
+PATHISH = re.compile(r"[^\s:]*[./][^\s:]*: ")
+
+
+def cause(m, file=""):
+    """The class label of a not-checked message: the first `CAUSES` match, else "other". A leading "<file>: " (review_checks.sh `$f: ...` rows)
+    is dropped first, so a path like errors/x or timeout/y picks no class: when it equals the row's file, or the row has no file column
+    (those rows carry it only in the text) and it looks like a path (a "." or "/" in it); "unreadable: ..." and the like keep their text."""
+    p = m[:m.find(": ") + 2] if ": " in m else ""
+    if p and (p[:-2] == file or (not file and PATHISH.fullmatch(p))):
+        m = m[len(p):]
+    return next((n for n, q in CAUSES if q.search(m)), "other")
+
+
+def gap_rows(rows):
+    """{tool: (file, rule column)} for GAP/ENVGAP rows: file = the first sorted non-empty file among the tool's rows ("" if none), rule =
+    "<n> not-checked: <class> <k>, ..." with every class present, sorted. Class labels only, never message text."""
+    out = {}
+    for t in {x.get("tool", "") for x in rows}:
+        xs = [x for x in rows if x.get("tool", "") == t]
+        c = {}
+        for x in xs:
+            k = cause(msg(x), x.get("file", ""))
+            c[k] = c.get(k, 0) + 1
+        out[t] = (min((x["file"] for x in xs if x.get("file")), default=""), f"{len(xs)} not-checked: " + ", ".join(f"{k} {c[k]}" for k in sorted(c)))
+    return out
 
 
 def env_gap(x):
@@ -252,8 +302,8 @@ def tag(rows):
 
 def scan(repo, base, full):
     """Returns (finding rows, fresh rows: plain diff rows with `new: true`, not-checked count, blocking tools: those with a gap other than
-    a tool that is not installed, an `ENV` gap or a `NOISE` row, names of missing tools: see `not_installed`, dep-scan gives the auditor, tools with
-    an `ENV` gap, True when one of those is a config-changed row: that tool did not read this range).
+    a tool that is not installed, an `ENV` gap or a `NOISE` row, as `gap_rows`: tool -> (file, cause); names of missing tools: see `not_installed`,
+    dep-scan gives the auditor; tools with an `ENV` gap, as `gap_rows`; True when one of those is a config-changed row: that tool did not read this range).
     full: rows and gaps come from one `--full` scan, and a base adds a plain diff scan used only for its fresh rows; else a diff plus a
     history scan against base. `new` exists only in plain diff mode, so the filter applies only there."""
     diff = tag(scan1(repo, "--base", base)) if base else []
@@ -266,12 +316,12 @@ def scan(repo, base, full):
     raw = [x for x in raw if not (x.get("rule") == "not-checked" and NA.get(x.get("tool")) == msg(x))]  # checker does not apply: no gap
     gaps = sum(1 for x in raw if x.get("rule") == "not-checked")
     miss = {DEP_MISSING.fullmatch(msg(x))[1] if x.get("tool") == "dep-scan" else x.get("tool", "") for x in raw if not_installed(x)}
-    block = sorted({x.get("tool", "") for x in raw if x.get("rule") == "not-checked" and not not_installed(x) and not env_gap(x) and not (x.get("file") and msg(x) == NOISE)})
+    block = [x for x in raw if x.get("rule") == "not-checked" and not not_installed(x) and not env_gap(x) and not (x.get("file") and msg(x) == NOISE)]
     if gaps:  # a missing tool or unread file is a coverage gap, not a finding; its hint text varies by mode and install state
         print(f"audit_sweep: {gaps} not-checked row(s) skipped (tool missing or file unread)", file=sys.stderr)
     fresh = [x for x in diff if x.get("new") is True and x.get("rule") != "not-checked"]
     env = [x for x in raw if env_gap(x)]
-    return ([x for x in rows if x.get("rule") != "not-checked"], fresh, gaps, block, sorted(miss), sorted({x["tool"] for x in env}),
+    return ([x for x in rows if x.get("rule") != "not-checked"], fresh, gaps, gap_rows(block), sorted(miss), gap_rows(env),
             any(CONFIG_CHANGED in msg(x) for x in env))
 
 
@@ -318,8 +368,8 @@ def sweep_repo(name, path, st):
     gone = [t for t in CORE if not installed(t)]
     if gone:  # the hub names these only on stderr: without this row a host lacking semgrep sweeps "clean"
         out.append((name, "COVERAGE", "", "not installed", " ".join(gone), ""))
-    out += [(name, "ENVGAP", "", "", t, "") for t in env]  # design/config gaps a rescan cannot close, listed by tool
-    out += [(name, "GAP", "", "", t, "") for t in block]  # a timeout, crash or unread file: holds the sha, and main() exits 1
+    out += [(name, "ENVGAP", f, r, t, "") for t, (f, r) in sorted(env.items())]  # design/config gaps a rescan cannot close, one row per tool
+    out += [(name, "GAP", f, r, t, "") for t, (f, r) in sorted(block.items())]  # a timeout, crash or unread file: holds the sha, and main() exits 1
     out += [(name, "TESTPATH", f"{n} rows", r, t, "") for (t, r), n in sorted(tp.items())]  # after every other row: code-pattern rows in test-only files
     # one rescan per install: a tool on PATH that the hub still calls not installed is dropped, so the next run does not rescan forever.
     # A delta reads only the changed files and the hub names a missing tool only for a file it routes to: keep the old names (back is empty).

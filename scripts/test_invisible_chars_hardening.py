@@ -4,7 +4,6 @@ text extension, UTF-16 decodes without NUL rows, fixture paths are no longer dro
 is skipped, 2 MB read cap, 200-row cap, per-row flush, newline-only path split, file-name scan; audit_skills: known binary
 extension is `unscanned` unconditionally and fixtures are scanned. Hermetic: temp dirs only; special characters are built with chr()
 so this file stays plain ASCII."""
-import os
 import subprocess
 import sys
 import tempfile
@@ -142,9 +141,11 @@ class Limits(unittest.TestCase):
     def test_rows_are_flushed_per_file_so_a_hang_keeps_earlier_findings(self):
         with tempfile.TemporaryDirectory() as td:
             Path(td, "a.txt").write_bytes(ESC.encode())
-            os.mkfifo(os.path.join(td, "stuck"))  # open() for reading blocks until a writer appears
+            Path(td, "stuck").write_text("x")  # a regular file whose open() hangs (a FIFO is now skipped before the open)
+            hang = ("import builtins, sys, time\nsys.path.insert(0, %r)\nimport invisible_chars as ic\no = builtins.open\n"
+                    "def f(p, *a, **k):\n    time.sleep(60) if p == 'stuck' else None\n    return o(p, *a, **k)\nbuiltins.open = f\nsys.exit(ic.main())" % str(SCRIPT))
             with self.assertRaises(subprocess.TimeoutExpired) as cm:
-                subprocess.run([sys.executable, str(SCRIPT / "invisible_chars.py")], cwd=td, input="a.txt\nstuck\n", capture_output=True, text=True, timeout=3)
+                subprocess.run([sys.executable, "-c", hang], cwd=td, input="a.txt\nstuck\n", capture_output=True, text=True, timeout=3)
         out = cm.exception.stdout
         self.assertEqual((out.decode() if isinstance(out, bytes) else out), "a.txt\t1\tcontrol-char\tcontrol character U+001B at col 1\n")
 

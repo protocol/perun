@@ -58,7 +58,7 @@ def sweep(rows, path=None, checks=None):
 
 def test_blocking_gap_alerts():
     rc, rows, calls, st = sweep([nc("semgrep", "timeout 60s")])
-    check(rc == 1 and [x[1:5] for x in rows if x[1] == "GAP"] == [["GAP", "", "", "semgrep"]] and "sha" not in st,
+    check(rc == 1 and [x[1:5] for x in rows if x[1] == "GAP"] == [["GAP", "", "1 not-checked: timeout 1", "semgrep"]] and "sha" not in st,
           f"a timed-out scanner must get its own GAP row, exit 1 and hold the sha: {rc} {rows} {st}")
     rc, rows, _, st = sweep([nc("shellcheck", "not installed")])
     check(rc == 0 and not [x for x in rows if x[1] == "GAP"] and st.get("sha"), f"a missing tool is no GAP and no alert: {rc} {rows}")
