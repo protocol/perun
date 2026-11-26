@@ -2,7 +2,7 @@
 
 Read this when: wiring or tuning the issue-dedupe hook, the per-fix fitness check, or the delivery-flow alarms. Other files link here; they do not restate it.
 
-**Search before you file (`finding_guard.py`).** A hit on a closed issue or PR is a regression to reopen, not a new filing. The operating-layer PreToolUse hook runs `file_finding.py` on every `gh issue create --title` and denies a match. Override with `# finding-force: <reason>` in the command; a failed search fails open.
+**Search before you file (`finding_guard.py`).** A hit on a closed issue or PR is a regression to reopen, not a new filing. The operating-layer PreToolUse hook runs `file_finding.py` on every `gh issue create --title` and denies a match. Override with `# finding-force: <reason>` in the command; a failed search fails open. The same hook blocks a raw `gh issue create` unless env `PERUN_ISSUE_GATE=1`; file through `issue_gate.py` (`file_finding.py` dedupe, 3 per UTC day with critical/high exempt, low/nit refused, overflow queued).
 
 **Every fix ships one executable fitness check (`fitness_tick.py`).** Put it in `.perun/fitness/` (exit 1 plus a one-line reason on failure). The loop runs `python3 .claude/skills/agentic-delivery/scripts/fitness_tick.py` each tick and prints `ALARM name: reason`. Close the fix only when `fitness_tick.py closable NAME` passes: 2 consecutive real passing ticks and a real caller, meaning a hook/settings/package JSON, CI workflow, shell script or Makefile line that runs the tick, or a loop entry (`loop.md`, a `routines/` file) whose line starts with the command. A prose or comment mention is not a caller.
 

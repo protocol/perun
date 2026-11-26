@@ -20,6 +20,7 @@ Gated-delivery **pattern**, not a runtime or standing swarm. Does not replace `d
 | Task | Open (bare `*.md` = `references/`) |
 |---|---|
 | Land PRs as a train; red gate or union | `scripts/merge_train.py`, `scripts/train_land.sh`, `merge-queue-worktrees.md`; `gate-epistemology.md`, `red-gate-triage.md`; `flow-guards.md` (dedupe hook, fitness check, flow alarms, freeze) |
+| File an issue (agent-filed) | run `scripts/issue_gate.py file`: dedupe, 3/day cap, no low/nit; a raw `gh issue create` is blocked |
 | Start a lane; isolate its worktree | `templates/lane-preamble.md` in every brief; `worktree-isolation.md`, `roles.md`; `templates/loops/` |
 | Verify or relay a result; slow pipeline | `verification-handback.md`; `pipeline-optimizer.md` |
 | Long session, compaction, new session, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate, before a context-heavy step, before handback |
