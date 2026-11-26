@@ -23,7 +23,7 @@ stubs() { local d t; d=$(mktemp -d "$T/st.XXXXXX"); for t in "$@"; do printf '#!
 # run [VAR=val ...] CMD...: PA (a dir of stubs) comes first on PATH, then the wrappers; caches and ~/.local/bin are throwaway dirs.
 run() { env -i PATH="${PA:+$PA:}$T/farm" HOME="$T/home" TMPDIR="$T/tmp" DCR_CACHE_ROOT="$T/cache" DCR_USER_BIN="$T/ub" "$@"; }
 PT() { run "$BASH_BIN" "$S/provision_tools.sh" "$@"; }
-warm_trivy() { mkdir -p "$T/cache/trivy/db"; echo x >"$T/cache/trivy/db/trivy.db"; }
+warm_trivy() { mkdir -p "$T/cache/trivy/db"; echo x >"$T/cache/trivy/db/trivy.db"; date -u +'{"UpdatedAt":"%Y-%m-%dT%H:%M:%SZ"}' >"$T/cache/trivy/db/metadata.json"; }
 warm_osv() { mkdir -p "$T/cache/osv-scalibr/npm"; echo x >"$T/cache/osv-scalibr/npm/all.zip"; }
 warm_sg() { mkdir -p "$T/cache/dcr-tools/semgrep"; echo 'rules: []' >"$T/cache/dcr-tools/semgrep/p-default.yml"; }
 cd "$T/proj"; PHYS=$(pwd -P); q() { printf '%q' "$1"; }
@@ -101,7 +101,7 @@ cat >"$SCN/trivy" <<X
 echo "trivy \$*" >>$LOG
 d=\${TRIVY_CACHE_DIR:-\$HOME/.cache/trivy}; p=
 for a in "\$@"; do [ "\$p" != --cache-dir ] || d=\$a; p=\$a; done
-case "\$*" in *--download-db-only*) mkdir -p "\$d/db"; echo x >"\$d/db/trivy.db"; exit 0 ;; esac
+case "\$*" in *--download-db-only*) mkdir -p "\$d/db"; echo x >"\$d/db/trivy.db"; date -u +'{"UpdatedAt":"%Y-%m-%dT%H:%M:%SZ"}' >"\$d/db/metadata.json"; exit 0 ;; esac
 [ -z "\${TV_NEEDDB:-}" ] || [ -s "\$d/db/trivy.db" ] || { echo "FATAL vulnerability db is missing in \$d" >&2; exit 1; }
 case "\$*" in *misconfig*) [ -z "\${TV_BUNDLE:-}" ] || { echo "FATAL check bundle: dial check.trivy.dev blocked" >&2; exit 1; } ;; esac
 echo '{"Results":[]}'
@@ -156,8 +156,8 @@ commit() { git add . && git -c user.email=t@example.com -c user.name=t commit -q
 mkrepo repo2; echo 'x = 1' >app.js; printf '{"lockfileVersion":3,"packages":{}}' >package-lock.json; commit
 PA=$SCN; warm_osv
 
-rc_run # a cold trivy cache: trivy's own default dir, no --cache-dir
-! grep -q '^trivy .*--cache-dir' "$LOG" && ok "cold trivy cache: no --cache-dir" || { bad "cold trivy args"; cat "$LOG"; }
+rc_run # a cold trivy cache: still scanned with the provisioned dir, the one the age check reads (never trivy's own default)
+grep -q "^trivy .*--cache-dir $T/cache/trivy " "$LOG" && ok "cold trivy cache: pinned to the provisioned dir" || { bad "cold trivy args"; cat "$LOG"; }
 warm_trivy; rc_run # DCR_CACHE_ROOT moves the warmed cache off trivy's default dir, so it must be passed
 grep -q "^trivy .* --cache-dir $T/cache/trivy --scanners vuln,misconfig " "$LOG" && ok "a warm trivy cache is passed as --cache-dir" || { bad "warm trivy cache not passed"; cat "$LOG"; }
 rc_run REVIEW_TRIVY_CACHE="$T/mine"

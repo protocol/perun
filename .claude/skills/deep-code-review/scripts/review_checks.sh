@@ -172,6 +172,14 @@ lease_take() {
 lease_drop() { [ "$leased" = 1 ] && { python3 "$pp" heavy-release >/dev/null 2>&1 || true; leased=0; }; true; }
 # miss TOOL HINT: queue a tool that could not run (not installed, or its DB is blocked) for the closing "missing tools" row.
 miss() { gap+="${gap:+; }$1 ($2)"; }
+# stale_db KIND DIR TOOL REFRESH: an offline advisory DB (present, in DIR) older than REVIEW_ADVISORY_MAX_AGE_DAYS (default 7), or of unreadable age,
+# cannot show new advisories, so the tool gets a not-checked row naming the age (or "unknown") and the refresh command, never a bare clean pass
+# (its findings still print). audit_sweep.py STALE_DB matches both texts.
+advmax=${REVIEW_ADVISORY_MAX_AGE_DAYS:-7}
+case $advmax in ''|*[!0-9]*) echo "review_checks: REVIEW_ADVISORY_MAX_AGE_DAYS=$advmax is not a whole number of days; using 7" >&2; advmax=7 ;; esac
+stale_db() { local a
+  a=$(bash "$here/provision_tools.sh" --age "$1" "$2" 2>/dev/null) || { skip "$3" "NOT CHECKED: no local advisory DB of known age (REVIEW_ADVISORY_MAX_AGE_DAYS=$advmax); refresh: $4"; return 0; }
+  [ "$a" -gt "$advmax" ] || return 0; skip "$3" "NOT CHECKED: no local advisory DB newer than $advmax days ($a days old, REVIEW_ADVISORY_MAX_AGE_DAYS=$advmax); refresh: $4"; }
 have() {
   command -v "$1" >/dev/null || {
     skip "$1" "not installed"; missing+=" $1"
@@ -943,7 +951,8 @@ elif [ -n "$osvcold" ]; then
   skip osv-scanner "NOT CHECKED: no pre-seeded DB in REVIEW_OSV_DB_DIR=$osvdb; warm it once: OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$osvdb osv-scanner --offline-vulnerabilities --download-offline-databases ."
 elif have osv-scanner; then
   # osvdb: pre-seeded DB, offline run (no TLS to api.osv.dev); the cache-dir env is osv-scanner's documented one.
-  osvx=(); [ -z "$osvdb" ] || { export OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$osvdb; osvx=(--offline-vulnerabilities); }
+  osvx=(); [ -z "$osvdb" ] || { export OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$osvdb; osvx=(--offline-vulnerabilities)
+    stale_db osv "$osvdb" osv-scanner "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$osvdb osv-scanner --offline-vulnerabilities --download-offline-databases ."; }
   while IFS= read -r f; do
     run_one osv-scanner osv-scanner ${osvx[@]+"${osvx[@]}"} --format json -L "./$f" || continue
     if [ "$rc" = 127 ] && grep -q 'no offline version' "$out"; then case "$gap" in *"osv-scanner ("*) ;; *) miss osv-scanner "no offline DB for the ecosystem of $f: run bash $here/provision_tools.sh --print $PWD" ;; esac; fi
@@ -1024,11 +1033,12 @@ if [ -n "$files" ] && have trivy; then
   export TRIVY_DISABLE_TELEMETRY=true
   tv=(trivy fs --quiet --format json --skip-version-check --skip-db-update --offline-scan --skip-dirs node_modules,.claude/worktrees,vendor,dist,build,.git,.venv,venv,target)
   tk=trivy; [ "$lease" != degraded ] || { tv+=(--parallel 1); w1+=" trivy"; }
-  # REVIEW_TRIVY_CACHE: pre-seeded --cache-dir. A missing DB stays "not run" (never clean) and prints the one-line warm command.
-  # Else the cache provision_tools.sh --print warms, once it holds a DB (DCR_CACHE_ROOT moves it off trivy's own default dir, so it must be passed).
-  if [ -n "${REVIEW_TRIVY_CACHE:-}" ]; then tv+=(--cache-dir "$REVIEW_TRIVY_CACHE")
-  elif tvc=$(bash "$here/provision_tools.sh" --cache trivy 2>/dev/null); then tv+=(--cache-dir "$tvc"); fi
-  trivy_hint="warm the DB once: trivy ${REVIEW_TRIVY_CACHE:+--cache-dir $REVIEW_TRIVY_CACHE }image --download-db-only (or bash $here/provision_tools.sh --print)"
+  # A missing DB stays "not run" (never clean) and prints the one-line warm command.
+  # One dir for the scan and the age check: provision_tools.sh --cache trivy-dir (REVIEW_TRIVY_CACHE, TRIVY_CACHE_DIR, else the user cache dir), warm or not.
+  tvd=$(bash "$here/provision_tools.sh" --cache trivy-dir 2>/dev/null) || tvd=; trivy_cmd=$(bash "$here/provision_tools.sh" --cache trivy-cmd 2>/dev/null) || trivy_cmd=
+  if [ -n "$tvd" ]; then tv+=(--cache-dir "$tvd")
+    [ -z "$(find "$tvd" -maxdepth 2 -name trivy.db -size +0 2>/dev/null | head -n1)" ] || stale_db trivy "$tvd" trivy "$trivy_cmd"; fi
+  trivy_hint="warm the DB once: ${trivy_cmd:-trivy image --download-db-only} (or bash $here/provision_tools.sh --print)"
   if run_one trivy "${tv[@]}" --scanners vuln,misconfig . && { [ "$rc" = 0 ] || {
     if ! grep -Eqi 'vulnerability db|trivy-db|download.* db( |$)' "$out" && grep -Eqi 'dial |no such host|connection (refused|reset)|unreachable|x509|TLS|failed to download|download.*(bundle|check)|(bundle|check).*download' "$out"; then
       echo "review_checks: trivy: secret-only (misconfig bundle unreachable)" >&2; tk=trivy-secret; ran+=" trivy(secret-only)"

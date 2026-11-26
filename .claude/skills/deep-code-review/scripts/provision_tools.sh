@@ -12,9 +12,12 @@
 # Caches are the tools' own (trivy and osv-scanner use the OS user cache dir; the semgrep snapshot is ours, under dcr-tools/). Overrides:
 # REVIEW_TRIVY_CACHE (else TRIVY_CACHE_DIR), REVIEW_OSV_DB_DIR (else OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY), DCR_CACHE_ROOT (the user cache dir).
 # A tool found only in ~/.local/bin (pipx, `uv tool`; DCR_USER_BIN overrides, empty disables) counts as installed: review_checks.sh adds that dir to PATH.
-# ponytail: a cache counts as warm when its marker file exists (trivy.db, any osv ecosystem zip, a semgrep snapshot with a `rules:` key); no age or per-ecosystem check.
+# ponytail: a cache counts as warm when its marker file exists (trivy.db, any osv ecosystem zip, a semgrep snapshot with a `rules:` key); no per-ecosystem check.
+# --age trivy|osv DIR: print the advisory DB age in whole days (trivy db/metadata.json UpdatedAt, OLDEST osv *.zip mtime), exit 1 when unreadable.
+# --cache trivy-dir|trivy-cmd: the trivy cache dir (warm or not) and the command that warms it.
+# Warm is not fresh: review_checks.sh compares that age with REVIEW_ADVISORY_MAX_AGE_DAYS (default 7) and adds a not-checked row for an older DB.
 set -euo pipefail
-usage() { echo "usage: provision_tools.sh [--print] [DIR] | --cache trivy|osv|semgrep" >&2; exit 2; }
+usage() { echo "usage: provision_tools.sh [--print] [DIR] | --cache trivy|osv|semgrep | --age trivy|osv DIR" >&2; exit 2; }
 # the OS user cache dir, as Go's os.UserCacheDir (trivy and osv-scanner are Go): Darwin ignores XDG_CACHE_HOME
 case $(uname) in Darwin) ucd=${HOME:-/nonexistent}/Library/Caches ;; *) ucd=${XDG_CACHE_HOME:-${HOME:-/nonexistent}/.cache} ;; esac
 ucd=${DCR_CACHE_ROOT:-$ucd}
@@ -29,11 +32,27 @@ pr=0 dir=. dirset=0 cm=
 while [ $# -gt 0 ]; do case "$1" in
   --print) pr=1 ;;
   --cache) cm=${2:-}; [ $# -ge 2 ] || usage; shift ;;
+  --age) [ $# -ge 3 ] || usage
+    exec python3 -I -c 'import sys, glob, json, time, calendar, os
+k, d = sys.argv[1:3]
+try:
+    if k == "trivy": t = calendar.timegm(time.strptime(json.load(open(d + "/db/metadata.json"))["UpdatedAt"][:19], "%Y-%m-%dT%H:%M:%S"))
+    elif k == "osv":  # the OLDEST zip at any depth sets the age (one refreshed ecosystem must not hide stale ones); under osv-scalibr/osv-scanner when present, so a whole user cache dir is never walked
+        r = [os.path.join(d, s) for s in ("osv-scalibr", "osv-scanner") if os.path.isdir(os.path.join(d, s))] or [d]
+        t = min(os.path.getmtime(os.path.join(a, f)) for x in r for a, _, fs in os.walk(x) for f in fs if f.endswith(".zip"))
+    else: sys.exit(2)
+except Exception: sys.exit(1)
+print(max(0, int((time.time() - t) // 86400)))' "$2" "$3" ;;
   -*) usage ;;
   *) dir=$1 dirset=1 ;;
 esac; shift; done
+q() { printf '%q' "$1"; }
+# trivy's DB download reads ~/.docker/config.json and fails when its credsStore names a missing helper; an empty DOCKER_CONFIG dir avoids that
+trivy_cmd() { local ed=$ucd/dcr-tools/docker-config-empty; echo "mkdir -p $(q "$ed") && DOCKER_CONFIG=$(q "$ed") trivy --cache-dir $(q "$tvd") fs --download-db-only"; }
 case "$cm" in
   "") ;;
+  trivy-dir) echo "$tvd"; exit 0 ;; # where trivy's DB lives, warm or not: the one dir review_checks.sh scans with and age-checks
+  trivy-cmd) trivy_cmd; exit 0 ;;   # the command that warms it (also the COLD line of the dry run)
   trivy) if trivy_warm; then echo "$tvd"; else exit 1; fi; exit 0 ;;
   osv) if osv_warm; then echo "$osvd"; else exit 1; fi; exit 0 ;;
   semgrep) if sg_warm; then echo "$sgf"; else exit 1; fi; exit 0 ;;
@@ -120,13 +139,10 @@ done <<<"$tools"
 [ ${#gem[@]} -eq 0 ] || brew=(ruby ${brew[@]+"${brew[@]}"})
 [ ${#pipx[@]} -eq 0 ] || command -v pipx >/dev/null || brew=(pipx ${brew[@]+"${brew[@]}"})
 [ ${#brew[@]} -eq 0 ] && [ ${#cask[@]} -eq 0 ] || command -v brew >/dev/null || echo "note: brew not found; install Homebrew (https://brew.sh) or use each tool's own installer${gem[0]+"; without it the gem rows fall back to the system ruby, which is too old and may fail"}"
-q() { printf '%q' "$1"; }
 cache() { # NAME WARM-FN PATH COMMAND [FORCE]
   if [ -z "${5:-}" ] && "$2"; then echo "warm     $1 ($3)"; else echo "COLD     $1 ($3)"; cold=$((cold + 1)); fix+=("$4"); fi
 }
-# trivy's DB download reads ~/.docker/config.json and fails when its credsStore names a missing helper; an empty DOCKER_CONFIG dir avoids that
-ed=$ucd/dcr-tools/docker-config-empty
-cache "trivy DB" trivy_warm "$tvd" "mkdir -p $(q "$ed") && DOCKER_CONFIG=$(q "$ed") trivy --cache-dir $(q "$tvd") fs --download-db-only"
+cache "trivy DB" trivy_warm "$tvd" "$(trivy_cmd)"
 cache "osv-scanner offline DB" osv_warm "$osvd" "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=$(q "$osvd") osv-scanner --offline-vulnerabilities --download-offline-databases $(q "$dir")" "$([ "$dirset" = 0 ] || echo force)"
 cache "semgrep p/default snapshot" sg_warm "$sgf" "mkdir -p $(q "$(dirname "$sgf")") && curl -fsSL https://semgrep.dev/c/p/default -o $(q "$sgf.part") && mv $(q "$sgf.part") $(q "$sgf")"
 echo "provision_tools: $miss missing, $cold cold; nothing was installed or downloaded (--print emits the one line to run yourself)"

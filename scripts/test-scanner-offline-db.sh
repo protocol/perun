@@ -63,7 +63,7 @@ git rm -q go.mod go.sum && git -c user.email=t@example.com -c user.name=t commit
 # 3. trivy: DB failure stays not-run (never clean), prints the warm command; REVIEW_TRIVY_CACHE -> --cache-dir
 : >"$LOG"
 REVIEW_TRIVY_CACHE="$T/tc" bash "$S/review_checks.sh" --base base >"$T/out" 2>"$T/err"
-grep -q "^trivy .*--cache-dir $T/tc" "$LOG" && has "$T/err" "trivy: NOT CHECKED, warm the DB once: trivy --cache-dir $T/tc image --download-db-only" && ok "trivy cache dir + warm hint" || { bad "trivy hint"; cat "$T/err"; }
+grep -q "^trivy .*--cache-dir $T/tc" "$LOG" && has "$T/err" "trivy: NOT CHECKED, warm the DB once: " && has "$T/err" "trivy --cache-dir $T/tc fs --download-db-only" && ok "trivy cache dir + warm hint" || { bad "trivy hint"; cat "$T/err"; }
 has "$T/err" "not run: trivy (exit 1)" && ok "trivy DB failure still not-run" || bad "trivy not-run"
 # 3b. a vuln-DB download failure must not fall back to secret-only (fail-open)
 : >"$LOG"
