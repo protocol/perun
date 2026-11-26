@@ -7,6 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 S="$ROOT/.claude/skills/deep-code-review/scripts"
 T=$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-sbfb.XXXXXX"); trap 'rm -rf "$T"' EXIT
 export PERUN_HEAVY_DIR="$T/heavy" REVIEW_LEASE_WAIT=0 LOG="$T/log"; : >"$LOG"
+export DCR_CACHE_ROOT="$T/cache" # hermetic: the host trivy DB age must not decide the trivy rows
 fail=0
 ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=1; }

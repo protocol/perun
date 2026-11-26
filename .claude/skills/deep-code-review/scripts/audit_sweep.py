@@ -17,6 +17,8 @@ Per repo the `--state` JSON keeps the last scanned HEAD sha and the fingerprints
                                            scripts/*.py, templates/semgrep-taint, templates/gitleaks.toml and which `review_checks.sh --list-tools`
                                            tools are on PATH, so a rule upgrade or a tool install re-reads old code (most tools emit no row when missing).
   last --full scan 7+ days old (`FULL_EVERY`) -> the same `rescan`: tool versions, advisory DBs and rule snapshots change outside the stamp.
+                                           The rescan only sees an advisory DB the host refreshed: an offline osv-scanner or trivy DB older than
+                                           REVIEW_ADVISORY_MAX_AGE_DAYS (7) is an ENVGAP row naming its age and the refresh command, not a clean pass.
 Only fingerprints not yet in the state are reported, as TSV on stdout: `repo mode file rule tool fingerprint`; rows the hub hinted
 `test-path` (a code-pattern scanner row in a test-only file) come last, as one `repo TESTPATH "<n> rows" rule tool` count line per tool and rule
 (repo = org/name with --org, the absolute path with --local: the state key and the fingerprint use it, so two orgs or two
@@ -80,7 +82,8 @@ def fingerprint(repo, row, occ=0):
     return hashlib.sha256("|".join([repo, row.get("tool", ""), row.get("rule", ""), row.get("file", ""), ident]).encode()).hexdigest()
 
 
-# seconds between forced --full rescans: a new advisory against an unchanged lockfile or a new built-in detector reaches idle code
+# seconds between forced --full rescans: re-reads idle code with the current detectors and whatever advisory DB is on disk. It reaches a new
+# advisory only if that offline DB (osv-scanner, trivy) was refreshed since; an older one than REVIEW_ADVISORY_MAX_AGE_DAYS gets an ENVGAP row.
 FULL_EVERY = 7 * 86400
 FULL_TIMEOUT = "600"  # per-tool seconds for a --full scan: the hub's 60 s default fits a diff, and a whole big repo's semgrep runs longer
 # review_checks.sh `have` skips these without a row when missing (stderr only): see `stamp` and the CORE COVERAGE row in `sweep_repo`
@@ -213,7 +216,8 @@ NOISE = "noise path excluded by REVIEW_NOISE_RE, not scanned"
 lit = lambda *s: re.compile("|".join(map(re.escape, s)))
 CONFIG_CHANGED = " changed in this diff: "
 PCODE = "it executes project code (its config and plugins); set REVIEW_TEST_CMD to run it"  # eslint-security, psalm, a configured ansible-lint
-ENV = {"osv-scanner": (lit("REVIEW_OSV not set; osv-scanner queries the OSV API"), True),
+STALE_DB = re.compile(r"NOT CHECKED: no local advisory DB (newer than \d+ days \(\d+ days old, |of known age \()REVIEW_ADVISORY_MAX_AGE_DAYS=\d+\); refresh: .+")  # review_checks.sh stale_db: too old, or age unreadable
+ENV = {"osv-scanner": (re.compile(lit("REVIEW_OSV not set; osv-scanner queries the OSV API").pattern + "|" + STALE_DB.pattern), True), "trivy": (STALE_DB, True),
        "dep-scan": (re.compile(DEP_ENV.pattern + "|" + re.escape("no dependency scan ran for this lockfile (no osv-scanner/trivy result and no fallback for its ecosystem)")), False),
        "node-check": (re.compile(r"\d+ \.js files hold JSX or markup that node --check cannot parse \(first 3: .+\); a JSX-aware linter or the project build judges them"), False),
        "eslint-security": (lit("eslint config or package.json changed in this diff: not run", PCODE, "the eslint config names no security plugin"), True),
