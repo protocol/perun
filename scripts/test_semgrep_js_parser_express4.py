@@ -74,7 +74,7 @@ app.post("/config/import", (req, res) => {
   const cfg = yaml.safeLoad(req.body, { schema: yaml.DEFAULT_FULL_SCHEMA });
   // ok: perun.js.parser-code-engine
   const plain = yaml.safeLoad(req.body, { schema: yaml.FAILSAFE_SCHEMA });
-  // perun.js.deserialize-eval owns yaml.load, so this rule stays silent on it (checked below).
+  // perun.js.deserialize-untrusted owns yaml.load, so this rule stays silent on it (checked below).
   // ok: perun.js.parser-code-engine
   const full = yaml.load(req.body, { schema: yaml.DEFAULT_FULL_SCHEMA });
   res.json({ cfg, plain, full });
@@ -319,7 +319,7 @@ if shutil.which("semgrep"):
     want = {(p, ln, rid) for p, body in FILES.items() for ln, rid in annotated(body, "ruleid")}
     assert got == want, ("unexpected", sorted(got - want), "missed", sorted(want - got))
     ln = PARSER_SERVER.split("\n").index("  const full = yaml.load(req.body, { schema: yaml.DEFAULT_FULL_SCHEMA });") + 1
-    assert ("server/notes.js", ln, "perun.js.deserialize-eval") in other, "the yaml.load the parser rule leaves alone is still reported"
+    assert ("server/notes.js", ln, "perun.js.deserialize-untrusted") in other, "the yaml.load the parser rule leaves alone is still reported"
 elif os.environ.get("REQUIRE_SEMGREP") == "1":
     raise SystemExit("FAIL: REQUIRE_SEMGREP=1 but semgrep is not on PATH")
 else:

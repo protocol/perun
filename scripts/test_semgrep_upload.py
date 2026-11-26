@@ -5,8 +5,10 @@ Each rule has positive cases and a clean twin (an extension allowlist or a fileF
 extension, so the canonical Flask save(secure_filename(f.filename)) is a required finding.
 
 Fixtures are annotated like semgrep's own tests: `// ruleid: <id>` (or `# ruleid: <id>`) marks the NEXT line as a required finding, `ok:` marks the
-next line as one that must stay clean, and every unannotated line must stay clean too. A multi-statement pattern reports at its first statement,
-so its annotation sits above that statement. All names are fictional. RULES=<dir> checks another copy of the rules. The live check needs semgrep:
+next line as one that must stay clean, and every unannotated line must stay clean too. The express-fileupload pattern rule reports at its first
+statement, so its annotation sits above that statement; the taint rules (Python, Go, Ruby) report at the sink. One owner per sink: the hub merges
+rows only across tools, so no other bundled rule of the class (CWE-434, or no cwe metadata and "upload" in its id) may report on a required line.
+All names are fictional. RULES=<dir> checks another copy of the rules. The live check needs semgrep:
 it prints SKIP and exits 0 without it, unless REQUIRE_SEMGREP=1, which fails instead. The offline pins always run. Plain asserts."""
 import json, os, re, shutil, subprocess, sys, tempfile
 
@@ -79,35 +81,35 @@ def direct():
 
 
 def via_var():
-    # ruleid: perun.py.upload-save-unrestricted
     f = request.files["doc"]
+    # ruleid: perun.py.upload-save-unrestricted
     f.save(os.path.join(UP, f.filename))
 
 
 def via_get():
-    # ruleid: perun.py.upload-save-unrestricted
     f = request.files.get("doc")
+    # ruleid: perun.py.upload-save-unrestricted
     f.save(UP + "/" + f.filename)
 
 
 def via_name():
-    # ruleid: perun.py.upload-save-unrestricted
     f = request.files["doc"]
     name = f.filename
+    # ruleid: perun.py.upload-save-unrestricted
     f.save(os.path.join(UP, name))
 
 
 def secure_name_keeps_ext():
-    # ruleid: perun.py.upload-save-unrestricted
     f = request.files["doc"]
+    # ruleid: perun.py.upload-save-unrestricted
     f.save(os.path.join(UP, secure_filename(f.filename)))
 
 
 def secure_guard_keeps_ext():
-    # ruleid: perun.py.upload-save-unrestricted
     f = request.files["doc"]
     if secure_filename(f.filename) != f.filename:
         return "bad", 400
+    # ruleid: perun.py.upload-save-unrestricted
     f.save(os.path.join(UP, f.filename))
 
 
@@ -153,14 +155,24 @@ def clean_path_suffix():
 
 
 def helper_no_exit():
-    # ruleid: perun.py.upload-save-unrestricted
     f = request.files["doc"]
     if not allowed_file(f.filename):
         print("odd name")
+    # ruleid: perun.py.upload-save-unrestricted
     f.save(os.path.join(UP, f.filename))
+
+
+def clean_whole_storage(storage):
+    f = request.files["doc"]
+    storage.save(f)
+
+
+def clean_size_name():
+    f = request.files["doc"]
+    f.save("/srv/" + str(len(f.read())))
 '''
 
-GO = '''package bench
+GO ='''package bench
 
 import (
 	"io"
@@ -272,7 +284,8 @@ assert [len(v) for v in want.values()] == [0, 6, 7, 3, 2], [len(v) for v in want
 
 # Offline pins: every rule exists, is CWE-434, and keeps its clean-twin guards.
 rule = open(os.path.join(RULES, "upload.yml")).read()
-assert rule.count('cwe: "CWE-434"') == len(IDS) == rule.count("\n- id: perun.") , "every rule needs CWE-434 metadata"
+# +1: the taint rule perun.js.unrestricted-upload lives here too and is tested by test_semgrep_wired_cwe.py
+assert rule.count('cwe: "CWE-434"') == len(IDS) + 1 == rule.count("\n- id: perun."), "every rule needs CWE-434 metadata"
 for i in IDS:
     assert f"- id: {i}" in rule, i
 assert "<... secure_filename(...) ...>" not in rule, "secure_filename keeps the extension: it must not suppress CWE-434"
@@ -291,7 +304,11 @@ if shutil.which("semgrep"):
     got = {n: {} for n in FILES}
     for x in r["results"]:
         if not re.search(r"\.perun\.\w+\.upload-", x["check_id"]):
-            continue  # another bundled rule firing on a fixture line is not this file's concern
+            # one owner per sink: another bundled rule of the class on a required line is a duplicate row (one tool's rows are never merged)
+            cwe, rid = str(x["extra"].get("metadata", {}).get("cwe", "")), x["check_id"].rsplit("perun.", 1)[-1]
+            dup = re.search(r"\bCWE-434\b", cwe) or (not cwe and "upload" in rid)
+            assert not (dup and x["start"]["line"] in want[x["path"]]), ("duplicate row", rid, x["path"], x["start"]["line"])
+            continue  # any other bundled rule firing on a fixture line is not this file's concern
         assert x["extra"]["metadata"]["cwe"] in ("CWE-434", ["CWE-434"]), x["extra"]["metadata"]
         got[x["path"]][x["start"]["line"]] = re.search(r"perun\.\w+\.upload-[\w-]+$", x["check_id"]).group(0)  # the id is prefixed by the rules path, which can itself start with perun.
     norm = got

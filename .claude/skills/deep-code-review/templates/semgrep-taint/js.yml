@@ -10,7 +10,7 @@
 # Also secret-env-fallback (WARNING: process.env.X, process.env["X"] or import.meta.env.X followed by || or ?? and a non-empty string literal, process.env.X or process.env["X"] assigned with ||= or ??= and a string literal, or a const, let or var destructuring default from process.env (const { X = "..." } = process.env, matched also with other keys around it), where X ends in a secret stem (pass, passwd, password, passcode, passphrase, secret, token, credential, credentials, api_key, apikey, a secret, private, signing, encryption, session, jwt, hmac, master, access, auth, client, app, service, service_role or webhook key compound, or _pwd) after an optional prefix that ends in _ or . or sits at a camelCase boundary; a name behind a public bundler prefix is left to public-env-secret, the literal rule is the one hardcoded-credential-compare uses plus a second check that skips a literal that looks like a file path (it starts with /, ./, ../ or ~/, or ends in .json, .pem, .key, .crt, .cer, .der, .p12, .pfx, .jks, .keystore, .yaml or .yml), and test, fixture and mock paths and playwright.config.*, vitest.config.*, jest.config.* and cypress.config.* files are skipped) and public-env-secret (WARNING: any use, a write included, of process.env.X, process.env["X"] or import.meta.env.X, with or without a fallback, where X starts with NEXT_PUBLIC_, VITE_, REACT_APP_, EXPO_PUBLIC_, NUXT_PUBLIC_, GATSBY_, PUBLIC_, STORYBOOK_ or VUE_APP_ and ends in secret, password, passwd, passcode, passphrase, _pwd, service_role, or a secret, private, signing, encryption or service_role key compound with or without the underscore (secret_key, secretkey), because a bundler inlines such variables into any client code that reads them, so the value can reach every visitor's browser; token, api_key, anon_key, publishable_key and site_key names are not reported because many browser keys are public by design; test, fixture and mock paths are skipped). ponytail: a chained fallback (a || b || "x"), a ternary, a non-null ! read, an alias of process.env, a renamed destructuring ({ K: alias = "x" }) and Deno.env.get are not seen, a template literal with a ${} substitution is not matched, and public-env-secret does not see a destructured read. Not followed: optional chaining (process?.env?.X || "x"), a value first copied to a variable (const s = process.env.X; s || "x") and a value-based fallback (a connection string holding a password under a non-secret name).
 # Also xss-url, xss-response and xss-markdown (WARNING each; DOMPurify.sanitize, sanitizeHtml, escapeHtml, encodeURIComponent, Number, parseInt and parseFloat clear the value in all three, and no test path is skipped, as in xss). xss-url follows location.search and location.hash (also under window. and document., or destructured from location or window.location as search or hash), through new URLSearchParams(...).get or .getAll, decodeURIComponent, string methods, a ?? default, template literals and concatenation, into .innerHTML = and +=, .outerHTML =, the second argument of .insertAdjacentHTML, document.write and document.writeln, and into the __html value of an object literal or an assigned .__html property; textContent, innerText, a redirect through location.href or location.assign, pathname and href reads and constant strings stay clean. xss-response follows request.nextUrl.searchParams and new URL(request.url).searchParams, with or without a base argument (any handler parameter name; read directly, through a variable that holds the URL or its searchParams, or destructured as searchParams) into the first argument of new Response or new NextResponse whose same call has an inline init object with a headers object literal setting a content-type key (any case) to a string literal that starts, after optional spaces, with text/html in any case; Response.json, NextResponse.json, no init and a text/plain or application/json type stay clean. xss-markdown follows the result of marked(...), marked.parse(...), marked.parseInline(...) and a showdown converter's .makeHtml(...) on an argument that is not a string literal into the __html value of an object literal or an assigned .__html property (inline in dangerouslySetInnerHTML or built in a variable first) and the DOM sinks of xss-url; markdown-it render (it escapes raw HTML by default) is not a source, and markdown read straight from fs.readFileSync or readFile (as the argument, or a const declared from it in an enclosing scope) is skipped as repo content. ponytail: only the browser location counts as a URL source (an alias such as const loc = window.location, a renamed destructuring such as { search: s } and a URL built from location.href and a pathname are not followed), a value placed inside an inline script string after encodeURIComponent is treated as safe, route params are not a source for xss-response, headers built elsewhere (a variable, a Headers object, a helper) are not followed, fetched data without markdown, other markdown libraries and a new Marked() instance are not matched, a sink reached inside a helper function or a value returned from a callback such as useMemo is not followed, a markdown variable declared with let or var (reassigned or not), a file read through a helper and a front-matter parser are still reported while reads of user-chosen file paths, uploads included, are skipped like repo content, and Vue, Svelte and Angular templates are not covered.
 # Also postgrest-filter-injection (WARNING: a request value inside a template literal or a + concatenation passed to .or(...) of a PostgREST client, inline or through a local variable assigned one earlier in the same block, or in the third argument of .filter(col, "in", v) or .not(col, "in", v), where it can add filter conditions) and git-argument-injection (WARNING: a request value as an element of the argv array literal passed to execFile, execFileSync, spawn or spawnSync, bare or child_process.-prefixed, when the command is the string git or a path ending /git and no -- or --end-of-options comes before it, so a leading dash makes it an option; an if (value.startsWith("-")) return or throw before the call skips it). sqli, command-injection, ssrf, path-traversal, open-redirect and these two also read app-router input (the URL searchParams and the json, formData and text body of an exported route handler's request; not read: request.nextUrl held in a variable or a destructured name, and a body read through .catch or .then); open-redirect also sinks NextResponse.redirect($S, ...) and Response.redirect($S, ...), not the redirect() of next/navigation; sqli also sinks $X.$queryRawUnsafe, $X.$executeRawUnsafe, sql.raw and sql.unsafe and treats a sql or Prisma.sql tagged template as bound unless it holds a sql.raw call.
-# Also parser-code-engine (ERROR, CWE-94/CWE-502: a function argument, request or upload value reaching gray-matter with its default engines (javascript evals ---js front matter), yaml-front-matter loadFront, front-matter with allowUnsafe: true, or js-yaml load/safeLoad with a schema named like FULL_SCHEMA or js-yaml-js-types (yaml.load and jsyaml.load belong to deserialize-eval); a gray-matter call whose engines or parsers object sets javascript is skipped (gray-matter merges other keys over its defaults, so the eval engine stays), so is text read from a repo file, but not a file read from an upload's .path, .filepath or .tempFilePath; test, fixture, mock, scripts and *.config.* paths are skipped). ponytail: matter.read and options held in a variable are not read, an engines object held in a variable is reported; a js-yaml 3 load with no schema is left to the deserialize rules.
+# Also parser-code-engine (ERROR, CWE-94/CWE-502: a function argument, request or upload value reaching gray-matter with its default engines (javascript evals ---js front matter), yaml-front-matter loadFront, front-matter with allowUnsafe: true, or js-yaml load/safeLoad with a schema named like FULL_SCHEMA or js-yaml-js-types (yaml.load and jsyaml.load belong to deserialize-untrusted); a gray-matter call whose engines or parsers object sets javascript is skipped (gray-matter merges other keys over its defaults, so the eval engine stays), so is text read from a repo file, but not a file read from an upload's .path, .filepath or .tempFilePath; test, fixture, mock, scripts and *.config.* paths are skipped). ponytail: matter.read and options held in a variable are not read, an engines object held in a variable is reported; a js-yaml 3 load with no schema is left to the deserialize rules.
 # Also express4-async-throw (WARNING, CWE-248/CWE-755: decodeURIComponent, decodeURI, JSON.parse or new URL on req/request input outside try, inside an async function passed to app/router get|post|put|patch|delete|del|all|use|options|head, an async (req, ...) function assigned or declared, or a same-file function declaration such a handler calls outside try, before or after it; an asyncHandler(...)-style wrapper, a sync handler, Koa ctx, a Next.js GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS export and pages/api routes are clean). review_checks.sh keeps the row only when the nearest package.json naming express pins major 4 and no manifest lists express-async-errors, express-promise-router or @awaitjs/express. ponytail: helpers in another file or held in a const, a process unhandledRejection handler, and a named handler wrapped at registration are not read; a helper any handler calls inside try is skipped for every caller.
 rules:
 - id: perun.js.sqli
@@ -927,13 +927,16 @@ rules:
         ...
         <... https.get(<... $G ...>, ...) ...>
     - focus-metavariable: $S
-- id: perun.js.deserialize-eval
+- id: perun.js.code-injection
   mode: taint
   languages: [javascript, typescript]
   severity: ERROR
-  message: Untrusted data is evaluated or unsafely deserialized.
+  message: Untrusted request data reaches a JavaScript code evaluator (eval, new Function, the vm module). Never build code from request data; parse it as data (JSON.parse) or map it through an allowlist.
+  metadata:
+    cwe: "CWE-94"
   pattern-sources:
-  - pattern-either:
+  - &js_req_sources
+    pattern-either:
     - pattern: req.query.$P
     - pattern: req.query
     - pattern: req.body.$P
@@ -960,11 +963,29 @@ rules:
     - pattern-either:
       - pattern: eval($S)
       - pattern: new Function(..., $S)
-      - pattern: yaml.load($S, ...)
-      - pattern: jsyaml.load($S, ...)
-      - pattern: unserialize($S, ...)
+      - pattern: Function(..., $S)
       - pattern: vm.runInNewContext($S, ...)
       - pattern: vm.runInThisContext($S, ...)
+      - pattern: vm.runInContext($S, ...)
+      - pattern: new vm.Script($S, ...)
+    - focus-metavariable: $S
+# Sinks are documented unsafe deserializers: node-serialize unserialize() runs code held in the serialized data (GHSA-q4v7-4rhw-9hqm); js-yaml 3.x load() uses the full schema, which builds !!js/function (js-yaml 3.14.1 README). ponytail: js-yaml 4.x load() is safe, and so is a 3.x load() given a safe schema option, so either is a false positive; confirm the version and options.
+- id: perun.js.deserialize-untrusted
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: Untrusted request data reaches an unsafe deserializer (node-serialize unserialize, js-yaml 3.x load). Use JSON.parse, or js-yaml safeLoad (3.x) or load (4.x).
+  metadata:
+    cwe: "CWE-502"
+  pattern-sources:
+  - *js_req_sources
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: unserialize($S, ...)
+      - pattern: $SER.unserialize($S, ...)
+      - pattern: yaml.load($S, ...)
+      - pattern: jsyaml.load($S, ...)
     - focus-metavariable: $S
 - id: perun.js.xss
   mode: taint

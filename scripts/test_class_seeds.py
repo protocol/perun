@@ -136,7 +136,7 @@ CASES = [
     case("CWE-476", "cwe476.c", "cppcheck", "nullPointer", [True, True], NOTE_C),
     case("CWE-20", "cwe20.js", "semgrep", "perun.js.unvalidated-size-or-qty", [True, True], "observed with the whole semgrep-taint/ dir: the rule fires on vuln and mutant; the earlier miss came from loading only js/py/defaults.yml"),
     case("CWE-200", "cwe200.py", "semgrep", "perun.py.exception-in-response", [True, True], "observed with the whole semgrep-taint/ dir: exception-in-response fires on vuln and mutant (mutant also hits secret-field-in-response); earlier miss came from loading only js/py/defaults.yml"),
-    case("LLM05", "llm05.js", "semgrep", "perun.js.llm-output-code-exec", [True, True], "observed with the whole semgrep-taint/ dir: llm-output-code-exec fires on vuln (plus deserialize-eval, xss) and on the mutant; earlier mutant miss came from loading only js/py/defaults.yml"),
+    case("LLM05", "llm05.js", "semgrep", "perun.js.llm-output-code-exec", [True, True], "observed with the whole semgrep-taint/ dir: llm-output-code-exec fires on vuln (plus code-injection, xss) and on the mutant; earlier mutant miss came from loading only js/py/defaults.yml"),
     case("LLM09", "llm09.json", "output_safety_check", "", [True, True]),
     case("safety-unsafe-ai-output", "safety-unsafe-ai-output.json", "output_safety_check", "", [True, True]),
 ]
