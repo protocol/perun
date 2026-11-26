@@ -27,7 +27,7 @@ or `/perun:cost-retro`; every skill is also `/perun:<skill>`.
 **Updates.** Each release bumps `plugin.json`'s `version` (the only version field; the marketplace entry
 carries none), and a user receives a new copy only when that version changes. Background auto-update is off
 unless the user enables it or the managed entry sets `"autoUpdate": true` as above. Without it, run
-`/plugin marketplace update perun` or `claude plugin update perun@perun`.
+`/plugin marketplace update perun` or `claude plugin update perun@perun`, then `/reload-plugins` in the open session (see [Update now](getting-started.md#update-now)).
 
 **Pinning.** Tracking `main` is the default. To hold a team on a release, add the marketplace with a ref:
 `.../perun#<tag-or-branch>` (or `"ref"` in the managed `source`) and set `"autoUpdate": false`.

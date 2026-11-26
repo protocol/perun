@@ -56,15 +56,26 @@ def _vkey(v):
     return tuple(t)
 
 
+def update_cmd(target):
+    """The one command that takes the newest release into `target` (the README "Update Perun" recipe): fast-forward this checkout,
+    then replay the target's recorded install flags. Pure string; run it yourself (with the ! prefix if the agent's sandbox or the
+    permission classifier blocks it)."""
+    return f"git -C {shlex.quote(str(SRC))} pull --ff-only && DCR_NO_PULL=1 bash {shlex.quote(str(SRC / 'scripts/update-installed.sh'))} {shlex.quote(str(target))}"
+
+
 def shadowed_skills(repo, home):
-    """(status, detail) for the "stale local skills" row. A repo-local .claude/skills/<perun skill>/SKILL.md shadows the global
-    (home/.claude/skills) copy, so an older local one silently wins: WARN naming both versions and paths. Plugin skills are
-    namespaced (`plugin:skill`) and coexist with repo-local ones, so they are not compared. Equal or newer local is OK; a missing
-    side, an unparsable version, repo == home, or a local file that is the global file (symlink) compares nothing (INFO n/a). Read-only."""
+    """(status, detail) for the "stale local skills" row. Claude Code resolves a same-named skill personal over project, so the
+    global copy (home/.claude/skills/<perun skill>) wins over a repo-local .claude/skills one. WARN when the GLOBAL copy is older
+    than the repo-local one (the stale global one runs and hides the newer local copy): names both versions and paths and prints
+    the command that updates the home-directory install. INFO when only a repo-local copy is older: unused where a global copy
+    exists, but it still runs for teammates and cloud sessions without one. Only .claude/skills is read (other tools' skill
+    folders have their own precedence rules). Plugin skills are namespaced (`plugin:skill`), so they are not compared. Equal
+    versions give OK; a missing side, an unparsable version, repo == home, or a local file that is the global file (symlink)
+    compares nothing (INFO n/a). Read-only."""
     na = ("INFO", "n/a (no repo-local skill with a distinct global copy to compare)")
     if repo.resolve() == home.resolve():
         return na
-    stale, compared = [], 0
+    old_glob, old_loc, compared = [], [], 0
     for d in sorted((SRC / ".claude/skills").glob("*/SKILL.md")):
         n = d.parent.name
         lp, gp = repo / ".claude/skills" / n / "SKILL.md", home / ".claude/skills" / n / "SKILL.md"
@@ -72,11 +83,86 @@ def shadowed_skills(repo, home):
         if not (lv and gv) or lp.resolve() == gp.resolve():
             continue
         compared += 1
-        if _vkey(gv) > _vkey(lv):
-            stale.append(f"{n}: repo-local {lv} ({lp}) is older than {gv} ({gp})")
-    if stale:
-        return "WARN", f"{len(stale)} repo-local skill(s) shadow a newer copy, so the stale one silently wins: " + "; ".join(stale[:3]) + (" ..." if len(stale) > 3 else "") + ". Fix: remove or update repo-local copy"
-    return ("OK", f"{compared} repo-local skill(s) not older than the global copy") if compared else na
+        if _vkey(gv) < _vkey(lv):
+            old_glob.append(f"{n}: global {gv} ({gp}) is older than repo-local {lv} ({lp})")
+        elif _vkey(gv) > _vkey(lv):
+            old_loc.append(n)
+    if old_glob:
+        return "WARN", f"{len(old_glob)} global skill(s) hide a newer repo-local copy, so the stale global one runs: " + "; ".join(old_glob[:3]) + (" ..." if len(old_glob) > 3 else "") + ". Update the home-directory install: " + update_cmd(home)
+    if old_loc:
+        return "INFO", f"{len(old_loc)} repo-local skill(s) older than the global copy: unused here, but still run for teammates and cloud sessions without a global copy ({', '.join(old_loc[:3])}{' ...' if len(old_loc) > 3 else ''})"
+    return ("OK", f"{compared} repo-local skill(s) match the global copy") if compared else na
+
+
+def auto_update():
+    """perun_auto_update imported from this checkout (tag parsing, canonical remote and the log path live there, not here)."""
+    d = str(SRC / ".claude/skills/agentic-delivery/scripts")
+    if d not in sys.path:
+        sys.path.insert(0, d)
+    import perun_auto_update
+    return perun_auto_update
+
+
+def _last_log(target):
+    """Last updater log line for `target` (the text after its path), or None. Reads only the log's tail."""
+    try:
+        with open(auto_update().cache() / "auto-update.log", "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 65536))
+            lines = f.read().decode(errors="replace").splitlines()
+    except OSError:
+        return None
+    key = f" {target.resolve()} "
+    for ln in reversed(lines):
+        if key in ln:
+            return ln.split(key, 1)[1].strip()
+    return None
+
+
+def newest_release(repo, home):
+    """[(status, row name, detail)] comparing each install that has a `.claude/.perun-install.json` marker (repo; home when
+    distinct) with the newest `vX.Y.Z` tag, from ONE `git ls-remote --tags --refs` (no token, GIT_TERMINAL_PROMPT=0, 10 s
+    timeout). Each row shows the updater's last log line for that target (its skip reason) and the command that takes the release
+    now. Never WARN or FAIL: an unreachable remote or a timeout is INFO "newest release: unknown (offline)"; behind is INFO
+    because the cooldown can legitimately hold a fresh tag. No marker = INFO. Side effect: one git subprocess."""
+    pa = auto_update()
+    targets = [(n, t) for n, t in (("newest release", repo), ("newest release (global)", home)) if (t / ".claude/.perun-install.json").is_file()]
+    if len({t.resolve() for _, t in targets}) < len(targets):
+        targets = targets[:1]
+    if not targets:
+        return [("INFO", "newest release", "n/a (no .claude/.perun-install.json install marker: update by hand, see docs/getting-started.md section 4)")]
+    marks = {}
+    for n, t in targets:
+        try:
+            m = json.loads((t / ".claude/.perun-install.json").read_text())
+            marks[n] = (m["version"], m["remote"])
+        except (OSError, ValueError, KeyError, TypeError):
+            marks[n] = None
+    remote = next((m[1] for m in marks.values() if m and isinstance(m[1], str) and m[1]), None)
+    if remote and pa.is_canonical(remote):
+        remote = pa.CANONICAL_REMOTE
+    tags = []
+    if remote:
+        try:
+            ls = pa.git("ls-remote", "--tags", "--refs", remote, timeout=10)
+            if ls.returncode == 0:
+                tags = [v for r in ls.stdout.splitlines() if "\trefs/tags/" in r for v in [pa.version(r.split("refs/tags/", 1)[1])] if v]
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    rows = []
+    for n, t in targets:
+        m, last = marks[n], _last_log(t)
+        tail = f"; updater log: {last}" if last else "; updater log: no line for this target"
+        have = pa.version(m[0]) if m and isinstance(m[0], str) else None
+        if have is None or not remote:
+            rows.append(("INFO", n, "n/a (install marker has no readable version or remote; reinstall once to record them)" + tail))
+        elif not tags:
+            rows.append(("INFO", n, "newest release: unknown (offline)" + tail))
+        elif max(tags) > have:
+            rows.append(("INFO", n, f"v{'.'.join(map(str, max(tags)))} is out, installed {m[0]} (a tag younger than the cooldown, policy auto_update_delay_h, may still be waiting){tail}. Take it now: {update_cmd(t)}"))
+        else:
+            rows.append(("OK", n, f"installed {m[0]} is the newest release{tail}"))
+    return rows
 
 
 def _git_files(root):
@@ -219,12 +305,17 @@ def check(repo, home):
         add("OK", "installed version", f"{mine} (matches checkout)")
     g = ver(home)
     if g and latest and g != latest:
-        cmd = f"DCR_NO_PULL=1 bash {shlex.quote(str(SRC / 'scripts/update-installed.sh'))} {shlex.quote(str(home))}"
-        add("WARN", "global copy", f"~/.claude has {g}, checkout has {latest} (stale; auto-update and --fix skip it). Run this yourself (type it with the ! prefix if the permission classifier blocks agents): {cmd}")
+        how = ("auto-updates after the cooldown, since ~/.claude has .perun-install.json; to take it now" if (home / ".claude/.perun-install.json").is_file()
+               else "stays manual, since ~/.claude has no .perun-install.json; update it")
+        add("WARN", "global copy", f"~/.claude has {g}, checkout has {latest} (stale; a global install {how}). Run this yourself (type it with the ! prefix if the permission classifier blocks agents or the agent's sandbox write-protects .claude): {update_cmd(home)}")
     else:
         add("OK", "global copy", g or "none")
     st, detail = shadowed_skills(repo, home)
     add(st, "stale local skills", detail)
+    if os.environ.get("DCR_NO_PROBE"):
+        add("INFO", "newest release", "not checked (DCR_NO_PROBE set; it needs the network)")
+    else:
+        rows += newest_release(repo, home)
     if not flags.is_file():
         add("WARN", "install record", ".claude/.dcr-install-flags missing: --fix cannot replay your flags")
     # hooks reference existing files
