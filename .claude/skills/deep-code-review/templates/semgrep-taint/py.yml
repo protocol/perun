@@ -425,7 +425,8 @@ rules:
   severity: ERROR
   message: Untrusted data reaches an unsafe deserializer. Use json or yaml.safe_load. Sources are route-decorated handler and Django/DRF view parameters, any parameter in a module that imports a web framework, and request accessors (request body and form accessors, including await request.post()/read()/body() and self.request.body/data). The bare name `request` is treated as a source even in a module with no web framework, so a non-web local named request can false-positive. A helper in a module with no framework import that a handler calls from another file is not tracked, so audit helper-called sinks by hand.
   pattern-sources:
-  - patterns:
+  - &py_req_sources
+    patterns:
     - pattern: $X
     - pattern-either:
       - pattern-either: *py-entry
@@ -502,6 +503,21 @@ rules:
       - pattern: yaml.full_load($S, ...)
       - pattern: yaml.full_load_all($S, ...)
       - pattern: jsonpickle.decode($S, ...)
+    - focus-metavariable: $S
+- id: perun.py.code-injection
+  mode: taint
+  languages: [python]
+  severity: ERROR
+  message: Untrusted data reaches eval or exec. Never build code from request data; parse it as data (json.loads, ast.literal_eval) or map it through an allowlist. Sources are the same as perun.py.deserialize.
+  metadata:
+    cwe: "CWE-94"
+  pattern-sources:
+  - *py_req_sources
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: eval($S, ...)
+      - pattern: exec($S, ...)
     - focus-metavariable: $S
 - id: perun.py.ssti
   mode: taint

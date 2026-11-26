@@ -88,93 +88,172 @@ rules:
         path.extname(...)
         ...
       }
+# Taint rule beside the pattern rules above: an express-fileupload or multer upload object reaching an fs write path (writeFile, writeFileSync,
+# createWriteStream) with no extension check in the function. .mv calls belong to perun.js.upload-express-fileupload-mv, so the two never report one
+# call (scripts/test_semgrep_upload.py fails on a second CWE-434 row on a required line). ponytail: multer's server-chosen filename, path and
+# destination and express-fileupload's tempFilePath count as clean, so a multer diskStorage filename callback that keeps originalname is missed.
+- id: perun.js.unrestricted-upload
+  mode: taint
+  languages: [javascript, typescript]
+  severity: WARNING
+  message: A client-supplied upload name (express-fileupload name, multer originalname) reaches a write path with no extension check in this function. Allowlist the extension and generate the stored name yourself.
+  metadata:
+    cwe: "CWE-434"
+  pattern-sources:
+  - pattern-either:
+    - pattern: req.files.$K.name
+    - pattern: req.files[...].name
+    - pattern: req.files[...].originalname
+    - pattern: req.file.originalname
+    - patterns:
+      - pattern-either:
+        - pattern: $F.name
+        - pattern: $F.originalname
+      - pattern-either:
+        - pattern-inside: |
+            $F = req.files.$K
+            ...
+        - pattern-inside: |
+            $F = req.files[...]
+            ...
+        - pattern-inside: |
+            $F = req.file
+            ...
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $FS.writeFile($P, ...)
+      - pattern: $FS.writeFileSync($P, ...)
+      - pattern: $FS.createWriteStream($P, ...)
+    - focus-metavariable: $P
+    - pattern-not-inside:
+        pattern-either:
+        - pattern: |
+            function $FN(...) {
+              ...
+              path.extname(...)
+              ...
+            }
+        - pattern: |
+            function (...) {
+              ...
+              path.extname(...)
+              ...
+            }
+        - pattern: |
+            (...) => {
+              ...
+              path.extname(...)
+              ...
+            }
+        - pattern: |
+            async (...) => {
+              ...
+              path.extname(...)
+              ...
+            }
+        - pattern: |
+            async function $FN(...) {
+              ...
+              path.extname(...)
+              ...
+            }
+  pattern-sanitizers:
+  - pattern: path.extname(...)
+  - pattern: $F.filename
+  - pattern: $F.path
+  - pattern: $F.destination
+  - pattern: $F.tempFilePath
+# Taint rule: a client-supplied file name reaching Werkzeug FileStorage.save, followed through variables; it reports at the save call's path argument.
 - id: perun.py.upload-save-unrestricted
+  mode: taint
   languages: [python]
   severity: WARNING
   message: An uploaded file is saved under the client-supplied filename with no extension allowlist in this function (secure_filename keeps the extension, so it does not count). Check the extension against an allowlist and generate the stored name yourself.
   metadata:
     cwe: "CWE-434"
-  patterns:
+  pattern-sources:
   - pattern-either:
-    - pattern: request.files[...].save(<... request.files[...].filename ...>)
-    - pattern: |
-        $F = request.files[...]
-        ...
-        $F.save(<... $F.filename ...>)
-    - pattern: |
-        $F = request.files.get(...)
-        ...
-        $F.save(<... $F.filename ...>)
-    - pattern: |
-        $F = request.files[...]
-        ...
-        $N = $F.filename
-        ...
-        $F.save(<... $N ...>)
-    - pattern: |
-        $F = request.files.get(...)
-        ...
-        $N = $F.filename
-        ...
-        $F.save(<... $N ...>)
-  - pattern-not-inside: |
-      def $FN(...):
-        ...
-        <... os.path.splitext(...) ...>
-        ...
-  - pattern-not-inside: |
-      def $FN(...):
-        ...
-        <... $Z.filename.endswith(...) ...>
-        ...
-  - pattern-not-inside: |
-      def $FN(...):
-        ...
-        <... $Z.filename.rsplit(...) ...>
-        ...
-  - pattern-not-inside:
-      pattern-either:
-      - pattern: |
-          def $FN(...):
-            ...
-            <... $Z.filename.lower().endswith(...) ...>
-            ...
-      - pattern: |
-          def $FN(...):
-            ...
-            <... $Z.filename.lower().rsplit(...) ...>
-            ...
-      - pattern: |
-          def $FN(...):
-            ...
-            <... $P($Z.filename).suffix ...>
-            ...
-  # a helper check (allowed_file) counts only as an early exit (return, raise or abort) in the same function; secure_filename keeps the extension, so it never counts
-  - pattern-not-inside:
-      patterns:
+    - pattern: request.files[...].filename
+    - pattern: request.files.get(...).filename
+    - pattern: flask.request.files[...].filename
+    - pattern: flask.request.files.get(...).filename
+    - patterns:
+      - pattern: $F.filename
       - pattern-either:
+        - pattern-inside: |
+            $F = request.files[...]
+            ...
+        - pattern-inside: |
+            $F = request.files.get(...)
+            ...
+        - pattern-inside: |
+            $F = flask.request.files[...]
+            ...
+        - pattern-inside: |
+            $F = flask.request.files.get(...)
+            ...
+  pattern-sinks:
+  - patterns:
+    - pattern: $F.save($P, ...)
+    - focus-metavariable: $P
+    - pattern-not-inside:
+        pattern-either:
         - pattern: |
             def $FN(...):
               ...
-              if not $CHK(..., $Z.filename, ...):
-                ...
-                return ...
+              <... os.path.splitext(...) ...>
               ...
         - pattern: |
             def $FN(...):
               ...
-              if not $CHK(..., $Z.filename, ...):
-                ...
-                raise $E
+              <... $Z.filename.endswith(...) ...>
               ...
         - pattern: |
             def $FN(...):
               ...
-              if not $CHK(..., $Z.filename, ...):
-                ...
-                abort(...)
+              <... $Z.filename.rsplit(...) ...>
               ...
-      - metavariable-regex: {metavariable: $CHK, regex: '^(?!(\w+\.)*secure_filename$)'}
+        - pattern: |
+            def $FN(...):
+              ...
+              <... $Z.filename.lower().endswith(...) ...>
+              ...
+        - pattern: |
+            def $FN(...):
+              ...
+              <... $Z.filename.lower().rsplit(...) ...>
+              ...
+        - pattern: |
+            def $FN(...):
+              ...
+              <... $P2($Z.filename).suffix ...>
+              ...
+        # a helper check (allowed_file) counts only as an early exit (return, raise or abort) in the same function; secure_filename keeps the extension, so it never counts
+        - patterns:
+          - pattern-either:
+            - pattern: |
+                def $FN(...):
+                  ...
+                  if not $CHK(..., $Z.filename, ...):
+                    ...
+                    return ...
+                  ...
+            - pattern: |
+                def $FN(...):
+                  ...
+                  if not $CHK(..., $Z.filename, ...):
+                    ...
+                    raise $E
+                  ...
+            - pattern: |
+                def $FN(...):
+                  ...
+                  if not $CHK(..., $Z.filename, ...):
+                    ...
+                    abort(...)
+                  ...
+          - metavariable-regex: {metavariable: $CHK, regex: '^(?!(\w+\.)*secure_filename$)'}
 - id: perun.go.upload-filename-path
   mode: taint
   languages: [go]
