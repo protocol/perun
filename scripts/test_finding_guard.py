@@ -18,7 +18,7 @@ class T(unittest.TestCase):
         gh = pathlib.Path(d, "gh")
         gh.write_text(f"#!/bin/sh\n[ {gh_rc} -ne 0 ] && exit {gh_rc}\necho '{gh_out}'\n")
         gh.chmod(0o755)
-        env = {**os.environ, "PATH": f"{d}:{os.environ['PATH']}", "PERUN_FINDING_LOG": f"{d}/force.log"}
+        env = {**os.environ, "PATH": f"{d}:{os.environ['PATH']}", "PERUN_FINDING_LOG": f"{d}/force.log", "PERUN_ISSUE_GATE": "1"}
         r = subprocess.run([sys.executable, str(SCRIPT)], input=json.dumps({"tool_name": tool, "tool_input": {"command": cmd}}),
                            capture_output=True, text=True, env=env)
         return r, pathlib.Path(d, "force.log")
