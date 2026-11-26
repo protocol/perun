@@ -462,6 +462,8 @@ def run(target: Path, now: float | None = None) -> int:
         legacy = False
         try:
             marker = json.loads(mf.read_text())
+            if not isinstance(marker, dict):
+                raise ValueError("marker is not an object")
         except (OSError, ValueError):
             legacy = not mf.exists()
             marker = legacy_marker(target) if legacy else None
@@ -470,8 +472,11 @@ def run(target: Path, now: float | None = None) -> int:
                 return 0
             log(target, f"legacy install (no .perun-install.json): treating as {marker['version']} from {marker['remote']}")
         remote = marker.get("remote")
+        if isinstance(remote, str) and remote.startswith("-"):  # a repository never starts with "-"
+            log(target, "skip: install marker remote is not a repository")
+            return 0
         have = version(marker.get("version") or "")
-        if not remote or have is None:
+        if not isinstance(remote, str) or not remote or have is None:
             log(target, "skip: install marker has no remote or version (reinstall once to record them)")
             return 0
         if is_canonical(remote):  # a legacy-home install migrates: fetch from the canonical remote, not the old one
@@ -487,7 +492,7 @@ def run(target: Path, now: float | None = None) -> int:
             if not is_canonical(o):
                 log(target, f"skip: cache clone origin {o or '(none)'} is not the canonical remote")
                 return 0
-        ls = git("ls-remote", "--tags", "--refs", remote)
+        ls = git("ls-remote", "--tags", "--refs", "--", remote)
         if ls.returncode != 0:
             log(target, f"skip: cannot list tags on {remote}")
             return 0
@@ -502,8 +507,8 @@ def run(target: Path, now: float | None = None) -> int:
         if newest is None:
             log(target, f"skip: newest eligible release after {marker['version']} is waiting cooldown ({delay_h(target)}h)")
             return 0
-        steps =([] if (src / ".git").is_dir() else [["clone", "-q", "--no-checkout", remote, str(src)]]) + [
-            ["-C", str(src), "fetch", "-q", remote, f"+refs/tags/{newest}:refs/tags/{newest}",
+        steps =([] if (src / ".git").is_dir() else [["clone", "-q", "--no-checkout", "--", remote, str(src)]]) + [
+            ["-C", str(src), "fetch", "-q", "--", remote, f"+refs/tags/{newest}:refs/tags/{newest}",
              "+refs/heads/main:refs/remotes/origin/main"],  # forced tag: a stale cached tag must not stall; moves are caught by the sha check below
             ["-C", str(src), "-c", "advice.detachedHead=false", "checkout", "-q", "-f", "--detach", newest]]
         for step in steps:

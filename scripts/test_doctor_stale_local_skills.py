@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""perun_doctor "stale local skills" row: a repo-local .claude/skills/<perun skill> older than the global copy WARNs (it shadows
-the newer one); equal or newer local is OK; plugin copies are never compared (namespaced); a missing side, unparsable or hostile
-version, repo == home, or a symlinked skills dir is INFO n/a. Hermetic: HOME and repo are temp dirs."""
+"""perun_doctor "stale local skills" row. Claude Code runs the personal (global) skill over a same-named project skill, so a GLOBAL
+copy older than the repo-local one WARNs (it hides the newer one) and prints the home-directory update command; an older
+repo-local copy is INFO (unused here, still runs for teammates and cloud sessions without a global copy); equal is OK; plugin
+copies and other tools' skill folders are never compared; a missing side, unparsable or hostile version, repo == home, or a
+symlinked skills dir is INFO n/a. Hermetic: HOME and repo are temp dirs."""
 import os, shutil, sys, tempfile
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -36,10 +38,12 @@ try:
         assert got == [r[::2] for r in perun_doctor.check(repo, home) if r[1] == "stale local skills"][0], got  # check() carries the same row
         return got
 
-    st, d = row('"1.2.3"', '"1.10.0"')  # numeric, not lexical: 1.10 > 1.2
-    assert st == "WARN" and "1.2.3" in d and "1.10.0" in d and str(repo) in d and str(home) in d and "remove or update repo-local copy" in d, (st, d)
+    st, d = row('"1.10.0"', '"1.2.3"')  # global older than project, numeric not lexical (1.10 > 1.2): WARN + home update command
+    assert st == "WARN" and "global 1.2.3" in d and "repo-local 1.10.0" in d and str(repo) in d and str(home) in d, (st, d)
+    assert "update-installed.sh" in d and "DCR_NO_PULL=1" in d and d.rstrip().endswith(str(home)), d
+    st, d = row('"1.2.3"', '"1.10.0"')  # project older than global: the global copy wins here, so only INFO, no command
+    assert st == "INFO" and "teammates" in d and "cloud" in d and "update-installed" not in d, (st, d)
     assert row('"1.2.3"', '"1.2.3"')[0] == "OK"
-    assert row('"2.0.0"', '"1.9.9"')[0] == "OK"
     assert row(None, '"9.0.0"')[0] == "INFO" and row(None, '"9.0.0"')[1].startswith("n/a")
     assert row('"1.0.0"', None)[0] == "INFO"
     for bad in ('"banana"', '"1.2.x"', "", None):  # garbage on either side compares nothing
@@ -47,13 +51,24 @@ try:
         assert row('"1.0.0"', bad)[0] == "INFO", bad
     st, d = row('"1.0.0"', None, '"3.0.0"')  # plugin skills are namespaced, never compared
     assert st == "INFO", (st, d)
-    st, d = row('"1.0.0"', '"2.0.0"', '"3.0.0"')  # newer plugin copy does not make the local one stale vs a newer-or-equal global
-    assert st == "WARN" and "2.0.0" in d and "3.0.0" not in d, (st, d)
+    st, d = row('"2.0.0"', '"1.0.0"', '"3.0.0"')  # a newer plugin copy never changes the comparison
+    assert st == "WARN" and "global 1.0.0" in d and "3.0.0" not in d, (st, d)
     assert row('"1.2"', '"1.2.0"')[0] == "OK" and row('"1.2.0"', '"1.2"')[0] == "OK"  # trailing zeros are not a difference
-    assert row('"1.2"', '"1.2.1"')[0] == "WARN"
+    assert row('"1.2.1"', '"1.2"')[0] == "WARN" and row('"1.2"', '"1.2.1"')[0] == "INFO"
     huge = "9" * 5000  # int() of 5000 digits raises; the 9-digit cap rejects it first
     assert row(huge, '"1.0.0"')[0] == "INFO" and row('"1.0.0"', huge)[0] == "INFO"
     assert row('"1.2.3.4.5"', '"9.0.0"')[0] == "INFO"  # more than 4 parts
+
+    clear()  # one skill older global, another older local: WARN wins, both counted separately
+    shipped0 = [d.parent.name for d in sorted((perun_doctor.SRC / ".claude/skills").glob("*/SKILL.md"))]
+    put(repo, '"2.0.0"', f".claude/skills/{shipped0[0]}/SKILL.md"); put(home, '"1.0.0"', f".claude/skills/{shipped0[0]}/SKILL.md")
+    put(repo, '"1.0.0"', f".claude/skills/{shipped0[1]}/SKILL.md"); put(home, '"2.0.0"', f".claude/skills/{shipped0[1]}/SKILL.md")
+    st, d = perun_doctor.shadowed_skills(repo, home)
+    assert st == "WARN" and d.startswith("1 global skill(s)") and shipped0[0] in d and shipped0[1] not in d, (st, d)
+
+    clear()  # another tool's skill folder (.cursor) with an older global-side copy is never read
+    put(repo, '"9.0.0"', f".cursor/skills/{N}/SKILL.md"); put(home, '"1.0.0"', f".cursor/skills/{N}/SKILL.md")
+    assert perun_doctor.shadowed_skills(repo, home)[0] == "INFO" and perun_doctor.shadowed_skills(repo, home)[1].startswith("n/a")
 
     clear()  # repo == home: the repo's skills dir is the global one
     put(home, '"1.0.0"')
@@ -81,18 +96,24 @@ try:
 
     shipped = [d.parent.name for d in sorted((perun_doctor.SRC / ".claude/skills").glob("*/SKILL.md"))]
     assert len(shipped) > 3, shipped
-    clear()  # every shipped skill stale: count is all, only 3 named, rest truncated with " ..."
+    clear()  # every global copy stale: count is all, only 3 named, rest truncated with " ..."
+    for n in shipped:
+        put(repo, '"2.0.0"', f".claude/skills/{n}/SKILL.md")
+        put(home, '"1.0.0"', f".claude/skills/{n}/SKILL.md")
+    st, d = perun_doctor.shadowed_skills(repo, home)
+    assert st == "WARN" and d.startswith(f"{len(shipped)} global skill(s)") and d.count("is older than") == 3 and " ..." in d, (st, d)
+    clear()  # exactly 3 stale: all named, no truncation marker
+    for n in shipped[:3]:
+        put(repo, '"2.0.0"', f".claude/skills/{n}/SKILL.md")
+        put(home, '"1.0.0"', f".claude/skills/{n}/SKILL.md")
+    st, d = perun_doctor.shadowed_skills(repo, home)
+    assert st == "WARN" and d.startswith("3 global skill(s)") and d.count("is older than") == 3 and " ..." not in d, (st, d)
+    clear()  # every repo-local copy older: INFO names the count
     for n in shipped:
         put(repo, '"1.0.0"', f".claude/skills/{n}/SKILL.md")
         put(home, '"2.0.0"', f".claude/skills/{n}/SKILL.md")
     st, d = perun_doctor.shadowed_skills(repo, home)
-    assert st == "WARN" and d.startswith(f"{len(shipped)} repo-local skill(s)") and d.count("is older than") == 3 and " ..." in d, (st, d)
-    clear()  # exactly 3 stale: all named, no truncation marker
-    for n in shipped[:3]:
-        put(repo, '"1.0.0"', f".claude/skills/{n}/SKILL.md")
-        put(home, '"2.0.0"', f".claude/skills/{n}/SKILL.md")
-    st, d = perun_doctor.shadowed_skills(repo, home)
-    assert st == "WARN" and d.startswith("3 repo-local skill(s)") and d.count("is older than") == 3 and " ..." not in d, (st, d)
+    assert st == "INFO" and d.startswith(f"{len(shipped)} repo-local skill(s) older") and " ..." in d, (st, d)
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
-print("ok: stale local skill WARNs; equal/newer OK; plugin ignored; missing, garbage, hostile, same-file version n/a")
+print("ok: older global WARNs with the update command; older local INFO; equal OK; plugin and other hosts ignored; missing, garbage, hostile, same-file version n/a")
