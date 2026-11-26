@@ -76,6 +76,20 @@ class AutoUpdateTests(unittest.TestCase):
         self.assertEqual((self.proj / ".claude/ran").read_text(), "1 v1.10.0\n")  # 1.10 > 1.9, DCR_NO_PULL=1
         self.assertIn("updated 1.2.0 -> v1.10.0", self.log())
 
+    def test_marker_remote_starting_with_dash_is_skipped(self):
+        sent = self.tmp / "pwned"
+        mf = self.proj / ".claude/.perun-install.json"
+        m = json.loads(mf.read_text()); m["remote"] = f"--upload-pack=touch {sent}"; mf.write_text(json.dumps(m))
+        cwd = self.tmp / "cwdrepo"
+        sh("git", "init", "-q", str(cwd)); sh("git", "remote", "add", "origin", str(self.remote), cwd=cwd)
+        oc = os.getcwd(); os.chdir(cwd)
+        try:
+            self.assertEqual(au.run(self.proj), 0)
+        finally:
+            os.chdir(oc)
+        self.assertFalse(sent.exists())
+        self.assertIn("skip: install marker remote is not a repository", self.log())
+
     def test_up_to_date_does_nothing(self):
         proj = fake_installed(self.tmp / "b", self.remote, version="1.10.0")
         self.assertEqual(au.run(proj), 0)

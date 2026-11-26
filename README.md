@@ -221,6 +221,13 @@ Inbound webhook accepts unsigned body
 "CONFIRMED" means the assistant re-checked the problem against the exact code
 it reviewed, not just suspected it.
 
+## Update Perun
+
+Two install types update differently: the **plugin** install and the **script**
+install (`install.sh`). The steps for both, the 72-hour auto-update cooldown and the
+`!` prefix for commands your agent's sandbox blocks live in one place:
+[Update now](docs/getting-started.md#update-now).
+
 ## About the name
 
 Perun is the project's name (after the Slavic thunder god of order). The

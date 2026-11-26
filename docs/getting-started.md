@@ -99,7 +99,7 @@ a `code-review/` folder. A worked example:
 
 **Update:** with the operating layer (the default for `--with-delivery` and
 `--full`), updates are automatic. A SessionStart/UserPromptSubmit hook checks the
-newest `vX.Y.Z` tag on the remote you installed from, at most once every 6 hours,
+newest `vX.Y.Z` tag on the remote you installed from, at most once every 6 hours (a user-global install is checked too, see below),
 in the background, and re-applies your recorded install flags from it with
 `scripts/update-installed.sh`. Your existing settings win and backups are written.
 It skips while a merge or train lock exists or you edited a Perun-managed file,
@@ -113,12 +113,31 @@ checks the skill files against `SHA256SUMS` (the installer scripts are not in it
 comes from the same tag, so it proves skill-file integrity, not authenticity: trust rests
 on the repository owner's tags and `main`.
 
-**When auto-update cannot reach an install.** Two cases stay manual, and
+**Cooldown.** The updater applies a release tag only after it has been first seen
+for `auto_update_delay_h` hours: default 72, so a bad tag can be caught and
+withdrawn before it reaches you. Set it in the policy file (`$PERUN_POLICY` when set, else the nearest `.perun/policy.json`
+at or above the target; a global install reads `~/.perun/policy.json`); `0` applies a new tag at once. A tag younger than that is logged as "waiting cooldown", not applied.
+
+<a id="update-now"></a>
+**Update now.** To take the newest release without waiting (the one place these
+steps live; the README links here):
+
+1. Clone the repository, or pull your existing clone:
+   `git clone https://github.com/protocol/perun.git` (or `git -C <clone> pull --ff-only`).
+2. On each installed target run `DCR_NO_PULL=1 bash <clone>/scripts/update-installed.sh <target>`:
+   the home directory first (`~`, for a user-global install), then the project root.
+   It replays the install flags recorded for that target. Open sessions pick up the
+   new skills and hooks without a restart; only a model change waits for the next session.
+3. Plugin install: `claude plugin update perun@perun`; a new session loads the updated plugin.
+
+**When auto-update cannot reach an install.** Two cases need you, and
 `python3 scripts/perun_doctor.py` reports both. (1) A user-global install at
-`~/.claude/skills` is not a project, so the hook never updates it: the doctor's
-"global copy" row prints the one command to run (`DCR_NO_PULL=1 bash
-<checkout>/scripts/update-installed.sh ~`). Global and non-git targets skip the git and repo
-checks. (2) If the permission classifier denies the updater ("Code from External"),
+`~/.claude/skills` auto-updates after the cooldown unless auto_update is off in the opened project's policy or in `~/.perun/policy.json`
+(default on), and only when `~/.claude` has the install marker `.perun-install.json`; without it, it stays manual. The doctor's
+"global copy" and "newest release" rows print the command to run, and the latter shows
+the updater's last log line (its skip reason). Global and non-git targets skip the git and
+repo checks. (2) If the permission classifier denies the updater ("Code from External"),
+or the agent's own sandbox write-protects the `.claude` skills, hooks or settings,
 Perun does not bypass it: run the same command yourself, with the `!` prefix inside Claude Code.
 
 **One copy per install.** `install.sh` writes the real skill copy to `.claude/skills`
