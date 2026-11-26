@@ -272,7 +272,8 @@ assert [len(v) for v in want.values()] == [0, 6, 7, 3, 2], [len(v) for v in want
 
 # Offline pins: every rule exists, is CWE-434, and keeps its clean-twin guards.
 rule = open(os.path.join(RULES, "upload.yml")).read()
-assert rule.count('cwe: "CWE-434"') == len(IDS) == rule.count("\n- id: perun.") , "every rule needs CWE-434 metadata"
+# +2: the taint rules perun.{js,py}.unrestricted-upload live here too and are tested by test_semgrep_wired_cwe.py
+assert rule.count('cwe: "CWE-434"') == len(IDS) + 2 == rule.count("\n- id: perun."), "every rule needs CWE-434 metadata"
 for i in IDS:
     assert f"- id: {i}" in rule, i
 assert "<... secure_filename(...) ...>" not in rule, "secure_filename keeps the extension: it must not suppress CWE-434"

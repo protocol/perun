@@ -933,7 +933,8 @@ rules:
   severity: ERROR
   message: Untrusted data is evaluated or unsafely deserialized.
   pattern-sources:
-  - pattern-either:
+  - &js_req_sources
+    pattern-either:
     - pattern: req.query.$P
     - pattern: req.query
     - pattern: req.body.$P
@@ -965,6 +966,43 @@ rules:
       - pattern: unserialize($S, ...)
       - pattern: vm.runInNewContext($S, ...)
       - pattern: vm.runInThisContext($S, ...)
+    - focus-metavariable: $S
+- id: perun.js.code-injection
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: Untrusted request data reaches a JavaScript code evaluator (eval, new Function, the vm module). Never build code from request data; parse it as data (JSON.parse) or map it through an allowlist.
+  metadata:
+    cwe: "CWE-94"
+  pattern-sources:
+  - *js_req_sources
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: eval($S)
+      - pattern: new Function(..., $S)
+      - pattern: vm.runInNewContext($S, ...)
+      - pattern: vm.runInThisContext($S, ...)
+      - pattern: vm.runInContext($S, ...)
+      - pattern: new vm.Script($S, ...)
+    - focus-metavariable: $S
+# Sinks are documented unsafe deserializers: node-serialize unserialize() runs code held in the serialized data (GHSA-q4v7-4rhw-9hqm); js-yaml 3.x load() uses the full schema, which builds !!js/function (js-yaml 3.14.1 README). ponytail: js-yaml 4.x load() is safe, so a one-argument load on 4.x is a false positive; confirm the version.
+- id: perun.js.deserialize-untrusted
+  mode: taint
+  languages: [javascript, typescript]
+  severity: ERROR
+  message: Untrusted request data reaches an unsafe deserializer (node-serialize unserialize, js-yaml 3.x load). Use JSON.parse, or js-yaml safeLoad (3.x) or load (4.x).
+  metadata:
+    cwe: "CWE-502"
+  pattern-sources:
+  - *js_req_sources
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: unserialize($S)
+      - pattern: $SER.unserialize($S)
+      - pattern: yaml.load($S)
+      - pattern: jsyaml.load($S)
     - focus-metavariable: $S
 - id: perun.js.xss
   mode: taint

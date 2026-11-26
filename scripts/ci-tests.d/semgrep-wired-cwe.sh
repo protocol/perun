@@ -1,0 +1,2 @@
+# Source-to-sink semgrep rules behind the wired CWE-94, CWE-502 and CWE-434 rows of references/standards-coverage.md (JavaScript and Python): annotated ruleid fictional fixtures with clean twins (live when semgrep is installed, SKIP otherwise) plus offline pins of each rule, its CWE metadata and that eval-type sinks stay out of the CWE-502 rule.
+python3 -I scripts/test_semgrep_wired_cwe.py
