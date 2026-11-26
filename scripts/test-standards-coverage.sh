@@ -7,7 +7,11 @@
 # perun.* rule in a semgrep row exists in templates/semgrep-taint, and when the probe in the same position is a scripts/test_*.py
 # file, that file carries a ruleid: fixture for the rule. A wired row does not say "via CWE-" (a check of one slice of a class is
 # partial), names a perun.js.* and a perun.py.* semgrep rule, and lists a probe per rule. The per-list row counts hold (10 OWASP
-# Top 10:2025, 10 API Top 10 2023, 25 CWE Top 25 2025, 10 LLM Top 10 2026). With no argument it checks the shipped table, then
+# Top 10:2025, 10 API Top 10 2023, 25 CWE Top 25 2025, 10 LLM Top 10 2026). Every bench/class-seeds/ probe in a row has a
+# scripts/test_class_seeds.py case (built-in or cases.d) for that seed and the row's rule with an expected vuln hit, so the probe
+# is tied to the rule it proves. A non-semgrep rule name in a row (the cell's second backticked token, before any parenthesis)
+# is a literal on a non-comment line of review_checks.sh or the script it runs for that tool, or a test or cases.d entry
+# names it, or (cppcheck only, when installed, version printed) it is in `cppcheck --errorlist`. With no argument it checks the shipped table, then
 # mutated copies, each of which must fail with its own check's message. With a path argument it checks only that file.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -15,11 +19,34 @@ DOC=$ROOT/.claude/skills/deep-code-review/references/standards-coverage.md
 RC=$ROOT/.claude/skills/deep-code-review/scripts/review_checks.sh
 SG=$ROOT/.claude/skills/deep-code-review/templates/semgrep-taint
 # The rows that say wired. Changing a status means changing this list in the same commit.
-WIRED=" API7:2023 CWE-79 CWE-89 CWE-22 CWE-78 CWE-918 "
+WIRED=" API7:2023 CWE-79 CWE-89 CWE-22 CWE-78 CWE-918 CWE-94 CWE-502 CWE-434 "
 
 tick() { sed -nE 's/^[^`]*`([^`]+)`.*/\1/p' <<<"$1"; } # first backticked token of a cell
+rule_exists() { # $1 tool, $2 rule name, $3 hub code without comments: hub or hub-run script literal, a test/cases.d name, or cppcheck's own id list
+  local s sc el
+  grep -qwF -- "$2" <<<"$3" && return 0
+  s=$(grep -E "run_one $1 " <<<"$3" | grep -oE '\$here/[A-Za-z0-9_.-]+' | head -n 1) || true
+  if [ -n "$s" ] && [ -f "$(dirname "$RC")/${s#\$here/}" ]; then
+    sc=$(sed -E '/^[[:space:]]*#/d; s/[[:space:]]#.*$//' "$(dirname "$RC")/${s#\$here/}"); grep -qwF -- "$2" <<<"$sc" && return 0
+  fi
+  grep -rqwF --exclude=test-standards-coverage.sh -- "$2" "$ROOT"/scripts/test[-_]* "$ROOT/bench/class-seeds/cases.d" && return 0
+  if [ "$1" = cppcheck ] && command -v cppcheck >/dev/null; then
+    el=$(cppcheck --errorlist) && grep -qF "id=\"$2\"" <<<"$el" && { echo "note: $2 is in cppcheck $(cppcheck --version | awk '{print $NF}') --errorlist"; return 0; }
+  fi
+  return 1
+}
+# seed|rule|vuln_hit (1/0) of every scripts/test_class_seeds.py case, built-in and cases.d
+CASES=$(python3 -B -I - "$ROOT" <<'PY'
+import importlib.util, glob, json, os, sys
+r = sys.argv[1]
+sp = importlib.util.spec_from_file_location("tcs", os.path.join(r, "scripts", "test_class_seeds.py"))
+m = importlib.util.module_from_spec(sp); sp.loader.exec_module(m)
+for c in m.CASES + [x for f in sorted(glob.glob(os.path.join(r, "bench", "class-seeds", "cases.d", "*.json"))) for x in json.load(open(f))]:
+    print("%s|%s|%d" % (c.get("seed", ""), c.get("rule", ""), bool(c["expect"][0])))
+PY
+)
 check() { # $1 = table file; prints one FAIL line per problem, returns 1 on any
-  local doc=$1 bad=0 line id st tc pc tool rules probes rule p n code seen=" " na=0 napi=0 ncwe=0 nllm=0
+  local doc=$1 bad=0 line id st tc pc tool rules probes rule p n code name seen=" " na=0 napi=0 ncwe=0 nllm=0
   code=$(sed -E '/^[[:space:]]*#/d; s/[[:space:]]#.*$//' "$RC") # review_checks.sh without its comments
   while IFS= read -r line; do
     case "$line" in '| '*) ;; *) continue ;; esac
@@ -55,6 +82,15 @@ check() { # $1 = table file; prints one FAIL line per problem, returns 1 on any
       if ! grep -rqE "id: *[\"']?${rule//./\\.}[\"']?[[:space:]]*\$" "$SG"; then echo "FAIL $id: semgrep rule '$rule' is not in templates/semgrep-taint"; bad=1
       elif [[ $p == scripts/test_*.py ]] && [ -f "$ROOT/$p" ] && ! grep -qE "ruleid: *${rule//./\\.}([^[:alnum:]_.-]|\$)" "$ROOT/$p"; then echo "FAIL $id: $p has no 'ruleid: $rule' fixture"; bad=1; fi
     done < <(paste -d '|' <(printf '%s\n' "$rules") <(printf '%s\n' "$probes"))
+    if [ "$tool" != semgrep ]; then
+      name=$(grep -oE '`[^`]+`' <<<"${tc%% (*}" | sed -n 2p | tr -d '`')
+      if [ -n "$name" ] && ! rule_exists "$tool" "$name" "$code"; then echo "FAIL $id: rule '$name' of tool '$tool' is not in hub code, no test or cases.d entry names it$([ "$tool" = cppcheck ] && echo ", and cppcheck --errorlist does not list it")"; bad=1; fi
+    fi
+    while IFS='|' read -r p rule; do # a class seed probe needs a test_class_seeds.py case for its rule with a vuln hit
+      [[ $p == bench/class-seeds/vuln/* ]] || continue
+      [ "$tool" = semgrep ] || rule=$name
+      grep -Eq "^${p#bench/class-seeds/vuln/}\|${rule//./\.}\|1\$" <<<"$CASES" || { echo "FAIL $id: seed $p has no test_class_seeds.py case for rule '$rule' with an expected vuln hit"; bad=1; }
+    done < <(paste -d '|' <(printf '%s\n' "$probes") <(printf '%s\n' "$rules"))
     [ "$st" = wired ] || continue
     [[ $tc != *"via CWE-"* ]] || { echo "FAIL $id: wired row checks one weakness (via CWE-); mark it partial"; bad=1; }
     if ! grep -q '^perun\.js\.' <<<"$rules" || ! grep -q '^perun\.py\.' <<<"$rules"; then echo "FAIL $id: wired row needs a perun.js and a perun.py semgrep rule"; bad=1; fi
@@ -72,7 +108,7 @@ check "$DOC" || exit 1
 echo "ok - shipped table passes"
 if ! M=$(mktemp "${TMPDIR:-/tmp}/stdcov.XXXXXX") || ! RCM=$(mktemp "${TMPDIR:-/tmp}/stdcov.XXXXXX"); then echo "no temp file" >&2; exit 1; fi
 trap 'rm -f -- "$M" "$RCM"' EXIT
-{ cat "$RC"; printf '%s\n' '  # run_one ghost-tool x' 'x=1 # run_one ghost-tool x'; } >"$RCM" # ghost-tool appears only in comments
+{ cat "$RC"; printf '%s\n' '  # run_one ghost-tool x' 'x=1 # run_one ghost-tool x' '  # ghost-rule-q' 'x=1 # ghost-rule-q'; } >"$RCM" # ghost-tool and ghost-rule-q appear only in comments
 fail=0
 mutant() { # $1 = label, $2 = text the FAIL output must hold, $3 = sed script (or "drop" + $4 row id): the copy must fail with $2
   if [ "$3" = drop ]; then grep -v "^| $4 |" "$DOC" >"$M"; else sed -E "$3" "$DOC" >"$M"; fi
@@ -99,5 +135,10 @@ mutant "allowlisted row not wired" "CWE-79: on the wired allowlist but 'partial'
 mutant "allowlisted row missing" "CWE-79: on the wired allowlist but has no row" 's/^\| CWE-79 \|(.*)\| wired \|/| CWE-1 |\1| partial |/'
 mutant "duplicate row" "CWE-20: duplicate row" 's/^\| CWE-787 \|/| CWE-20 |/'
 mutant "dropped row" "row counts" drop CWE-20
+mutant "class seed without a case" "seed bench/class-seeds/vuln/cwe22.js has no test_class_seeds.py case for rule 'perun.js.xss'" '/^\| CWE-79 \|/s#vuln/cwe79\.js#vuln/cwe22.js#'
+mutant "class seed case for another rule" "seed bench/class-seeds/vuln/cwe77.js has no test_class_seeds.py case for rule 'perun.js.xss'" '/^\| CWE-77 \|/s/perun\.js\.command-injection/perun.js.xss/'
+mutant "unknown hub rule name" "rule 'ghost-rule-q' of tool 'csrf-cookie' is not in hub code, no test or cases.d entry names it" '/^\| CWE-352 \|/s/missing-csrf-protection/ghost-rule-q/'
+RC=$RCM mutant "hub rule name only in a comment" "rule 'ghost-rule-q' of tool 'csrf-cookie' is not in hub code" '/^\| CWE-352 \|/s/missing-csrf-protection/ghost-rule-q/'
+mutant "unknown cppcheck id" "rule 'ghostId' of tool 'cppcheck' is not in hub code, no test or cases.d entry names it" '/^\| CWE-787 \|/s/arrayIndexOutOfBounds/ghostId/'
 [ "$fail" = 0 ] && echo "standards coverage: ok"
 exit "$fail"
